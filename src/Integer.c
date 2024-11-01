@@ -39,7 +39,25 @@ element_t *unsigned_quantum_integer(){
 element_t *classical_integer(int64_t intg){
     element_t *integer = malloc(sizeof(integer));
     integer->qualifier = Cl;
+    integer->type = SIGNED;
     integer->c_address = malloc(sizeof(int64_t));
     *integer->c_address = intg;
     return integer;
+}
+
+element_t *classical_bool(int64_t intg){
+    element_t *integer = malloc(sizeof(integer));
+    integer->qualifier = Cl;
+    integer->type = BOOL;
+    integer->c_address = malloc(sizeof(int64_t));
+    *integer->c_address = intg;
+    return integer;
+}
+
+element_t *bit_of_int(element_t *el1, int bit){
+    element_t *b = malloc(sizeof(element_t));
+    b->type = Qu;
+    b->qualifier = BOOL;
+    b->q_address = el1->q_address + bit;
+    return b;
 }
