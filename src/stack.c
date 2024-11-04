@@ -47,7 +47,7 @@ void execute(instruction_t *instr){
 
     sequence_t *res = instr->routine();
 
-
+    print_sequence(res);
     stack.GPR1[0].type = UNINITIALIZED;
     stack.GPR2[0].type = UNINITIALIZED;
     stack.GPR3[0].type = UNINITIALIZED;

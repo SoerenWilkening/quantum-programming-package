@@ -12,8 +12,6 @@
 
 
 // desired functionality for storing all the gates and operations ======================================================
-#define MAXSTACKSIZE 20
-
 #define MAXCONTROLS 2
 #define TRUE 1
 #define FALSE 0
@@ -85,7 +83,7 @@ typedef struct {
 } circuit_t;
 
 // funcitonality for stack operations and data =========================================================================
-#define INTEGERSIZE 64
+#define INTEGERSIZE 4
 
 #define Qu 0
 #define Cl 1
