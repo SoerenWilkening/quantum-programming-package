@@ -7,7 +7,7 @@
 
 #include <stdlib.h>
 
-#define INTEGERSIZE 4
+#define INTEGERSIZE 64
 
 #define POINTER 1
 #define VALUE 0
