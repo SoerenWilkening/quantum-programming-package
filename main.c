@@ -29,12 +29,12 @@ int main(void) {
     element_t *Cq = quantum_bool();
     element_t *Dq = quantum_bool();
     element_t *Eq = quantum_bool();
-    element_t *Cc = classical_integer(12);
+    element_t *Cc = classical_integer(0);
     element_t *Dc = classical_integer(24);
 
     // ._main
     clock_t t1 = clock();
-    GE(Cq, Aq, Cc);
+    LEQ(Cq, Aq, Bq);
 //    AND(Aq, Dc, Bq);
 //    IF(Cq);
 //    IDIV(Aq, Bq, Rq);

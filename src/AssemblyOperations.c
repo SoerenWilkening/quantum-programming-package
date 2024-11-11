@@ -167,10 +167,7 @@ void TSTBIT(element_t *el1, element_t *el2, int bit) {
     instruction_t *ins = &stack.instruction_list[stack.instruction_counter];
     MOV(ins->el1, el1, POINTER); // return value
 
-    element_t *qbit = malloc(sizeof(element_t));
-    qbit->qualifier = Qu;
-    qbit->type = BOOL;
-    qbit->q_address[0] = el2->q_address[bit];
+    element_t *qbit = bit_of_int(el2, bit);
 
     MOV(ins->el2, qbit, POINTER);
     ins->routine = cx_gate;
@@ -209,14 +206,47 @@ void AND(element_t *bool_res, element_t *bool_1, element_t *bool_2){
     stack.instruction_counter++;
 }
 
-void GE(element_t *bool_res, element_t *bool_1, element_t *bool_2){
+void EQ(element_t *bool_res, element_t *bool_1, element_t *bool_2){
+    if (bool_1->qualifier == Qu && bool_2->qualifier == Qu){
+        SUB(bool_1, bool_2);
+    }
+
     instruction_t *ins = &stack.instruction_list[stack.instruction_counter];
     MOV(ins->el1, bool_res, POINTER);
     MOV(ins->el2, bool_1, POINTER);
-    MOV(ins->el3, bool_2, POINTER);
 
-    ins->routine = CQ_equal;
+    if (bool_1->qualifier == Qu && bool_2->qualifier == Qu){
+        element_t *zero = classical_integer(0);
+        MOV(ins->el3, zero, POINTER);
+    }else {
+        MOV(ins->el3, bool_2, POINTER);
+    }
+
+    if (bool_1->qualifier == Cl && bool_2->qualifier == Cl) ins->routine = CC_equal;
+    else ins->routine = CQ_equal;
 
     ins->invert = NOTINVERTED;
     stack.instruction_counter++;
+
+    if (bool_1->qualifier == Qu && bool_2->qualifier == Qu){
+        ADD(bool_1, bool_2);
+    }
+}
+
+void LEQ(element_t *bool_res, element_t *bool_1, element_t *bool_2){
+
+    SUB(bool_1, bool_2);
+
+    TSTBIT(bool_res, bool_1, 0);
+
+    ADD(bool_1, bool_2);
+}
+
+void GEQ(element_t *bool_res, element_t *bool_1, element_t *bool_2){
+
+    SUB(bool_2, bool_1);
+
+    TSTBIT(bool_res, bool_2, 0);
+
+    ADD(bool_2, bool_1);
 }
