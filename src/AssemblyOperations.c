@@ -208,3 +208,15 @@ void AND(element_t *bool_res, element_t *bool_1, element_t *bool_2){
     ins->invert = NOTINVERTED;
     stack.instruction_counter++;
 }
+
+void GE(element_t *bool_res, element_t *bool_1, element_t *bool_2){
+    instruction_t *ins = &stack.instruction_list[stack.instruction_counter];
+    MOV(ins->el1, bool_res, POINTER);
+    MOV(ins->el2, bool_1, POINTER);
+    MOV(ins->el3, bool_2, POINTER);
+
+    ins->routine = CQ_equal;
+
+    ins->invert = NOTINVERTED;
+    stack.instruction_counter++;
+}

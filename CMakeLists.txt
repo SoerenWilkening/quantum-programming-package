@@ -10,7 +10,9 @@ add_executable(CQ_backend_improved main.c
         src/IntegerAddition.c
         src/IntegerMultiplication.c
         src/AssemblyOperations.c
-        src/LogicOperations.c)
+        src/LogicOperations.c
+        src/IntegerComparison.c
+        src/IntegerComparison.h)
 
 add_executable(bench benchmark/benchmark.c
         src/Integer.c
@@ -19,5 +21,7 @@ add_executable(bench benchmark/benchmark.c
         src/IntegerAddition.c
         src/IntegerMultiplication.c
         src/AssemblyOperations.c
-        src/LogicOperations.c)
+        src/LogicOperations.c
+        src/IntegerComparison.c
+        src/IntegerComparison.h)
 

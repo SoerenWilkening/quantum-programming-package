@@ -9,6 +9,7 @@
 #include "gate.h"
 #include "QPU.h"
 #include "LogicOperations.h"
+#include "IntegerComparison.h"
 
 void MOV(element_t *el1, element_t *el2, int pov);
 
@@ -33,5 +34,7 @@ void AND(element_t *bool_res, element_t *bool_1, element_t *bool_2);
 void init_instruction(instruction_t *instr);
 
 void execute(instruction_t *instr);
+
+void GE(element_t *bool_res, element_t *bool_1, element_t *bool_2);
 
 #endif //CQ_BACKEND_IMPROVED_ASSEMBLYOPERATIONS_H

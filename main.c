@@ -34,7 +34,8 @@ int main(void) {
 
     // ._main
     clock_t t1 = clock();
-    AND(Aq, Dc, Bq);
+    GE(Cq, Aq, Cc);
+//    AND(Aq, Dc, Bq);
 //    IF(Cq);
 //    IDIV(Aq, Bq, Rq);
 //    IMUL(Aq, Rq, Bq);
