@@ -3,7 +3,7 @@
 //
 #include "../include/AssemblyOperations.h"
 
-void qubit__mapping(qubit_t qubit_arrray[]) {
+void qubit_mapping(qubit_t qubit_arrray[]) {
     int start = 0;
     if (stack.GPR1[0].type != UNINITIALIZED && stack.GPR1[0].qualifier == Qu) {
         int value =(stack.GPR1[0].type == BOOL) ? 1 : INTEGERSIZE;
@@ -19,6 +19,14 @@ void qubit__mapping(qubit_t qubit_arrray[]) {
         int value = (stack.GPR3[0].type == BOOL) ? 1 : INTEGERSIZE;
         memcpy(&qubit_arrray[start], stack.GPR3[0].q_address, value * sizeof(qubit_t));
         start += value;
+    }
+    if (stack.GPC[0].type != UNINITIALIZED && stack.GPC[0].qualifier == Qu){
+        int value = 1;
+        memcpy(&qubit_arrray[start], stack.GPC[0].q_address, value * sizeof(qubit_t));
+        start += value;
+    }
+    for (int i = 0; i < 5 * INTEGERSIZE - start; ++i) {
+        qubit_arrray[start + i] = stack.circuit->ancilla[i];
     }
 }
 
@@ -42,11 +50,25 @@ void init_instruction(instruction_t *instr) {
 }
 
 // apply the sequences to the desired qubits
-void run_instruction(sequence_t *res){
+void run_instruction(sequence_t *res, qubit_t qubit_array[], bool_t invert){
     if (res == NULL) return;
+    int direction = (invert) ? -1 : 1;
 
+    for (int layer_index = 0; layer_index < res->used_layer; ++layer_index) {
+        layer_t layer = invert * res->used_layer + direction * layer_index - invert;
+        for (int gate_index = 0; gate_index < res->gates_per_layer[layer]; ++gate_index) {
+            layer_t gate = invert * res->gates_per_layer[layer] + direction * gate_index - invert;
+            gate_t *g = malloc(sizeof(gate_t));
+            memcpy(g, &res->seq[layer][gate], sizeof(gate_t));
+            g->Target = qubit_array[g->Target];
+            for (int i = 0; i < g->NumControls; ++i) {
+                g->Control[i] = qubit_array[g->Control[i]];
+            }
+            g->GateValue *= pow(-1, invert);
 
-
+            add_gate(stack.circuit, g);
+        }
+    }
 }
 
 void execute(instruction_t *instr) {
@@ -57,9 +79,11 @@ void execute(instruction_t *instr) {
     if (instr->control->type != UNINITIALIZED) MOV(stack.GPC, instr->control, POINTER);
 
     qubit_t qubit_array[5 * INTEGERSIZE];
-    qubit__mapping(qubit_array);
+    qubit_mapping(qubit_array);
 
     sequence_t *res = instr->routine();
+
+    run_instruction(res, qubit_array, instr->invert);
 
     stack.GPR1[0].type = UNINITIALIZED;
     stack.GPR2[0].type = UNINITIALIZED;
@@ -89,11 +113,6 @@ void IADD(element_t *el1, element_t *el2) {
     // copy values instruction registers
     MOV(ins->el1, el1, POINTER);
     MOV(ins->el2, el2, POINTER);
-//    printf("elements\n");
-//    for (int i = 0; i < INTEGERSIZE; ++i) printf("%d ", ins->el1->q_address[i]);
-//    printf("\n");
-//    for (int i = 0; i < INTEGERSIZE; ++i) printf("%d ", ins->el2->q_address[i]);
-//    printf("\n");
 
     // routine assignments
     ins->routine = NULL;
@@ -108,7 +127,7 @@ void IADD(element_t *el1, element_t *el2) {
         printf("Cannot add quantum integer to classical integer!\n");
         exit(6);
     }
-    ins->invert = NOTINVERTED;
+//    ins->invert = NOTINVERTED;
     stack.instruction_counter++;
 }
 
@@ -234,6 +253,7 @@ void IF(element_t *el1) {
 }
 
 void INV() {
+//    printf("%d\n", stack.instruction_counter);
     stack.instruction_list[stack.instruction_counter].invert = INVERTED;
 }
 

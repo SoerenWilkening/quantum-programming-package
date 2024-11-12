@@ -13,7 +13,7 @@ sequence_t *QQ_equal() {
 
 sequence_t *CQ_equal() {
     // the ancilla count starts at 1 + 2 * INTEGERSIZE
-    int ancilla = 1 + 2 * INTEGERSIZE; // reference
+    int ancilla = 1 + INTEGERSIZE; // reference
 
     sequence_t *seq = malloc(sizeof(sequence_t));
 
@@ -27,7 +27,7 @@ sequence_t *CQ_equal() {
     } else {
         quantum_element = stack.GPR3;
         classical_element = stack.GPR2;
-        factor = 1 + INTEGERSIZE;
+//        factor = 1 + INTEGERSIZE;
     }
 
     int *bin = two_complement(*classical_element->c_address, INTEGERSIZE);

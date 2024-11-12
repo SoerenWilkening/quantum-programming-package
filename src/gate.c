@@ -193,3 +193,14 @@ sequence_t *QFT_inverse(sequence_t *qft) {
 
     return qft;
 }
+
+bool_t is_inverse(gate_t *G1, gate_t *G2) {
+    if (G1->Target != G2->Target) return false;
+    if (G1->NumControls != G2->NumControls) return false;
+    for (int i = 0; i < G1->NumControls; ++i) if (G1->Control[i] != G2->Control[i]) return false;
+    if (G1->Gate != G2->Gate) return false;
+    if (G1->Gate == P) { if (G1->GateValue != -G2->GateValue) return false; }
+    else if (G1->GateValue != G2->GateValue) return false;
+
+    return true;
+}

@@ -56,7 +56,9 @@ typedef struct {
     element_t *el2;
     element_t *el3;
     element_t *control;
+
     sequence_t *(*routine)();
+
     bool_t invert;
 } instruction_t;
 
@@ -75,5 +77,9 @@ typedef struct {
 extern hybrid_stack_t stack;
 
 circuit_t *init_circuit();
+
+void print_circuit(circuit_t *circ);
+
+void add_gate(circuit_t *circ, gate_t *g);
 
 #endif //CQ_BACKEND_IMPROVED_QPU_H
