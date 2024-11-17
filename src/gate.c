@@ -4,6 +4,13 @@
 
 #include "../include/gate.h"
 
+void print_dash(int k){
+    for (int i = 0; i < k; ++i) {
+        printf("\u2500");
+    }
+}
+
+
 qubit_t MinQubit(gate_t *g) {
     qubit_t min = g->Target;
     for (int i = 0; i < g->NumControls; ++i) {
@@ -33,46 +40,58 @@ void print_sequence(sequence_t *seq) {
     printf("cycles = %d\n", seq->used_layer);
     printf("gates = %d\n", count);
     if (seq->used_layer > 300) return;
+
+
+    int width[count];
+    int counter = 0;
+    for (int layer_index = 0; layer_index < seq->used_layer; ++layer_index) {
+        for (int gate_index = 0; gate_index < seq->gates_per_layer[layer_index]; ++gate_index) {
+            if (seq->seq[layer_index][gate_index].Gate == P){
+                width[counter++] = 8;
+            }else{
+                width[counter++] = 3;
+            }
+        }
+    }
+
+
     for (int qubit = 0; qubit < 4 * INTEGERSIZE + 2; ++qubit) {
+        counter = 0;
         for (int layer = 0; layer < seq->used_layer; ++layer) {
             for (int gate = 0; gate < seq->gates_per_layer[layer]; ++gate) {
+                int skip_dash = 0;
                 gate_t *g = &seq->seq[layer][gate];
                 if ((g->NumControls > 0) && g->Control[0] == qubit || (g->NumControls > 1) && g->Control[1] == qubit) {
-                    printf("*------");
+                    printf("@");
                 } else if (g->Target == qubit) {
                     switch (g->Gate) {
                         case X:
-                            printf("X------");
+                            printf("X");
                             break;
                         case H:
-                            printf("H------");
-                            break;
-                        case R:
-                            printf("R_%2.0f---", g->GateValue);
-                            break;
-                        case Rx:
-                            printf("Rx_%.1f_", g->GateValue);
-                            break;
-                        case Ry:
-                            printf("Ry_%.1f_", g->GateValue);
-                            break;
-                        case Rz:
-                            printf("Rz_%.1f_", g->GateValue);
+                            printf("H");
                             break;
                         case P:
-                            printf("P%5.1f-", g->GateValue);
+                            printf("P%5.1f", g->GateValue);
+                            print_dash(1);
+                            skip_dash = 1;
                             break;
                         case Z:
-                            printf("Z------");
+                            printf("Z");
                             break;
                         case M:
-                            printf("M------");
+                            printf("M");
                             break;
                     }
-                } else if (qubit > MinQubit(g) && qubit < MaxQubit(g)) printf("|------");
-                else printf("-------");
+                } else if (qubit > MinQubit(g) && qubit < MaxQubit(g)) {
+                    printf("\xE2\x94\x82");
+                }
+                else print_dash(1);
+                if (width[counter] == 3) print_dash(1);
+                else if(skip_dash == 0) print_dash(6);
+                counter++;
             }
-            printf("|");
+            printf("\u250A");
         }
         printf("\n");
     }

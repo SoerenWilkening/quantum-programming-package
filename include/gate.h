@@ -36,6 +36,7 @@ typedef struct {
     num_t gates_per_layer[MAXLAYERINSEQUENCE];
 } sequence_t;
 
+void print_dash(int k);
 void print_sequence(sequence_t *seq);
 
 sequence_t *QFT(sequence_t *seq);

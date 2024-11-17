@@ -58,51 +58,63 @@ void print_circuit(circuit_t *circ) {
     printf("Number of qubits = %d\n\n", circ->used_qubits);
 
     if (circ->used > 2000) return;
+    // 3, 8
+    int width[circ->used];
+    int counter = 0;
+    for (int layer_index = 0; layer_index < circ->used_layer; ++layer_index) {
+        for (int gate_index = 0; gate_index < circ->used_gates_per_layer[layer_index]; ++gate_index) {
+            if (circ->sequence[layer_index][gate_index].Gate == P){
+                width[counter++] = 8;
+            }else{
+                width[counter++] = 3;
+            }
+        }
+    }
+
     for (int qubit = 0; qubit < QUBITBLOCK; ++qubit) {
         if (circ->used_layer_per_qubit[qubit] != 0) {
-            printf("%3d -", qubit);
+            printf("%3d ", qubit);
+            counter = 0;
             for (int layer_index = 0; layer_index < circ->used_layer; ++layer_index) {
-                for (int i = 0; i < circ->used_gates_per_layer[layer_index]; ++i) {
-                    qubit_t *ctrl = circ->sequence[layer_index][i].Control;
-                    if (circ->sequence[layer_index][i].NumControls > 2) ctrl = circ->sequence[layer_index][i].large_control;
+                for (int gate_index = 0; gate_index < circ->used_gates_per_layer[layer_index]; ++gate_index) {
+                    int skip_dash = 0;
+                    qubit_t *ctrl = circ->sequence[layer_index][gate_index].Control;
+                    if (circ->sequence[layer_index][gate_index].NumControls > 2) ctrl = circ->sequence[layer_index][gate_index].large_control;
 
-                    if (ValueInArray(ctrl, circ->sequence[layer_index][i].NumControls, qubit))
-                        printf("*------");
-                    else if (circ->sequence[layer_index][i].Target == qubit) {
-                        switch (circ->sequence[layer_index][i].Gate) {
+                    if (ValueInArray(ctrl, circ->sequence[layer_index][gate_index].NumControls, qubit)) {
+//                        printf("\u25CF");
+                        printf("@");
+                    }
+                    else if (circ->sequence[layer_index][gate_index].Target == qubit) {
+                        switch (circ->sequence[layer_index][gate_index].Gate) {
+                            case P:
+                                printf("P%5.1f", circ->sequence[layer_index][gate_index].GateValue);
+                                print_dash(1);
+                                skip_dash = 1;
+                                break;
                             case X:
-                                printf("X------");
+                                printf("X");
                                 break;
                             case H:
-                                printf("H------");
-                                break;
-                            case R:
-                                printf("R_%2.0f---", circ->sequence[layer_index][i].GateValue);
-                                break;
-                            case Rx:
-                                printf("Rx_%.1f_", circ->sequence[layer_index][i].GateValue);
-                                break;
-                            case Ry:
-                                printf("Ry_%.1f_", circ->sequence[layer_index][i].GateValue);
-                                break;
-                            case Rz:
-                                printf("Rz_%.1f_", circ->sequence[layer_index][i].GateValue);
-                                break;
-                            case P:
-                                printf("P%5.1f-", circ->sequence[layer_index][i].GateValue);
+                                printf("H");
                                 break;
                             case Z:
-                                printf("Z------");
+                                printf("Z");
                                 break;
                             case M:
-                                printf("M------");
+                                printf("M");
                                 break;
                         }
-                    } else if (qubit > MinQubit(&circ->sequence[layer_index][i]) && qubit < MaxQubit(&circ->sequence[layer_index][i]))
-                        printf("|------");
-                    else printf("-------");
+                    } else if (qubit > MinQubit(&circ->sequence[layer_index][gate_index]) && qubit < MaxQubit(&circ->sequence[layer_index][gate_index])) {
+                        printf("\xE2\x94\x82");
+//                        printf("\u2503");
+                    }
+                    else print_dash(1);
+                    if (width[counter] == 3) print_dash(1);
+                    else if(skip_dash == 0) print_dash(6);
+                    counter++;
                 }
-                printf("|");
+//                printf("\u250A");
             }
             printf("\n");
         }

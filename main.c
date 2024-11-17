@@ -60,7 +60,7 @@ int main(void) {
     BRANCH(state, 2);
     BRANCH(state, 3);
 
-    // second grover iteration
+    // second grover iteration ---------------------------------------------------------------------------------------
     IMOD(mod, state, constant_5);
     EQ(bool1, mod, constant_0);
     PMUL(bool1, phase);
@@ -84,7 +84,7 @@ int main(void) {
     BRANCH(state, 1);
     BRANCH(state, 2);
     BRANCH(state, 3);
-//
+
 //     Include measurement
 
     // ._execute
