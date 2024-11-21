@@ -5,7 +5,10 @@
 #ifndef CQ_BACKEND_IMPROVED_ASSEMBLYREADER_H
 #define CQ_BACKEND_IMPROVED_ASSEMBLYREADER_H
 
-#include "AssemblyOperations.h"
+#include "AssemblyComparison.h"
+#include "AssemblyBasics.h"
+#include "AssemblyArithmetic.h"
+#include "AssemblyLogic.h"
 
 void ReadAssembly(char *asmb[], int num);
 

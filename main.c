@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <time.h>
-#include "include/AssemblyOperations.h"
-#include "include/AssemblyReader.h"
+#include "AssemblyComparison.h"
+#include "AssemblyReader.h"
+#include "execution.h"
 
 hybrid_stack_t stack;
 
@@ -17,80 +18,15 @@ int main(void) {
 
     // initialize the rest of the stack
     // prepare exerything for the execution
+    stack.GPR1[0].type = UNINITIALIZED;
+    stack.GPR2[0].type = UNINITIALIZED;
+    stack.GPR3[0].type = UNINITIALIZED;
+    stack.GPC[0].type = UNINITIALIZED;
     stack.circuit = init_circuit();
     stack.instruction_counter = 0;
-    for (int i = 0; i < 10000; ++i) {
-        init_instruction(&stack.instruction_list[i]);
-    }
+    for (int i = 0; i < 10000; ++i) init_instruction(&stack.instruction_list[i]);
 
     AsmbFromFile();
-
-//
-//    // ._main
-//    element_t *state = QUINT();
-//    element_t *mod = QUINT();
-//    element_t *constant_0 = INT(0);
-//    element_t *constant_5 = INT(5);
-//    element_t *phase = INT(3);
-//    element_t *bool1 = QBOOL();
-//
-//
-//    BRANCH(state, 0);
-//    BRANCH(state, 1);
-//    BRANCH(state, 2);
-//    BRANCH(state, 3);
-//
-//    // function oracle
-//    IMOD(mod, state, constant_5);
-//    EQ(bool1, mod, constant_0);
-//    PADD(bool1, phase);
-//    INV();
-//    EQ(bool1, mod, constant_0);
-//    INV();
-//    IMOD(mod, state, constant_5);
-//
-//    BRANCH(state, 0);
-//    BRANCH(state, 1);
-//    BRANCH(state, 2);
-//    BRANCH(state, 3);
-//
-//    // phase oracle for 0 state
-//    EQ(bool1, state, constant_0);
-//    PADD(bool1, phase);
-//    INV();
-//    EQ(bool1, state, constant_0);
-//
-//    BRANCH(state, 0);
-//    BRANCH(state, 1);
-//    BRANCH(state, 2);
-//    BRANCH(state, 3);
-//
-//    // second grover iteration ---------------------------------------------------------------------------------------
-//    IMOD(mod, state, constant_5);
-//    EQ(bool1, mod, constant_0);
-//    PADD(bool1, phase);
-//    INV();
-//    EQ(bool1, mod, constant_0);
-//    INV();
-//    IMOD(mod, state, constant_5);
-//
-//    BRANCH(state, 0);
-//    BRANCH(state, 1);
-//    BRANCH(state, 2);
-//    BRANCH(state, 3);
-//
-//    // phase oracle for 0 state
-//    EQ(bool1, state, constant_0);
-//    PADD(bool1, phase);
-//    INV();
-//    EQ(bool1, state, constant_0);
-//
-//    BRANCH(state, 0);
-//    BRANCH(state, 1);
-//    BRANCH(state, 2);
-//    BRANCH(state, 3);
-
-//     Include measurement
 
     // ._execute
     clock_t t1 = clock();

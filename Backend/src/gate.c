@@ -2,7 +2,7 @@
 // Created by Sören Wilkening on 27.10.24.
 //
 
-#include "../include/gate.h"
+#include "gate.h"
 
 void print_dash(int k){
     for (int i = 0; i < k; ++i) {

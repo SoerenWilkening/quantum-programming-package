@@ -2,7 +2,7 @@
 // Created by Sören Wilkening on 05.11.24.
 //
 
-#include "../include/LogicOperations.h"
+#include "LogicOperations.h"
 
 sequence_t *not_seq() {
     int number = INTEGERSIZE;

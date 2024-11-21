@@ -1,7 +1,7 @@
 //
 // Created by Sören Wilkening on 26.10.24.
 //
-#include "../include/QPU.h"
+#include "QPU.h"
 
 element_t *QBOOL(){
     element_t *integer = malloc(sizeof(element_t));
@@ -10,7 +10,6 @@ element_t *QBOOL(){
     integer->q_address[0] = stack.circuit->used_qubit_indices;
     stack.circuit->ancilla += 1;
     stack.circuit->used_qubit_indices += 1;
-    integer->c_address = NULL;
     return integer;
 }
 
@@ -37,7 +36,7 @@ element_t *QUINT(){
         stack.circuit->used_qubit_indices++;
     }
     stack.circuit->used_qubit_indices++; // allocate one more qubit
-    stack.circuit->ancilla += INTEGERSIZE;
+    stack.circuit->ancilla += INTEGERSIZE + 1;
 //    integer->c_address = NULL;
     return integer;
 }

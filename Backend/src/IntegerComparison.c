@@ -2,7 +2,7 @@
 // Created by Sören Wilkening on 09.11.24.
 //
 
-#include "../include/IntegerComparison.h"
+#include "IntegerComparison.h"
 
 
 sequence_t *QQ_equal() {

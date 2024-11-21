@@ -2,10 +2,9 @@
 // Created by Sören Wilkening on 20.11.24.
 //
 
-#include "../include/AssemblyReader.h"
+#include "AssemblyReader.h"
 
 #include <ctype.h>
-#include <stdbool.h>
 #include <string.h>
 
 #define MAX_LINE_LENGTH 1024 // Maximum length of a line
@@ -200,16 +199,27 @@ void lines_to_call(char *line){
 
 void run_instr(){
     if(calls[counter].instruction == NULL) return;
-    printf("%s %s, %s, %s, %d\n", calls[counter].instruction, calls[counter].var1, calls[counter].var2, calls[counter].var3, calls[counter].value);
+//    printf("%s %s, %s, %s, %d\n", calls[counter].instruction, calls[counter].var1, calls[counter].var2, calls[counter].var3, calls[counter].value);
     if (strcmp(calls[counter].instruction, "BRANCH") == 0) {
         BRANCH(add_get_element(calls[counter].var1), calls[counter].value);
+    }
+    if (strcmp(calls[counter].instruction, "PADD") == 0) {
+        element_t *el3 = add_get_element(calls[counter].var3);
+        if (el3 == NULL) el3 = INT(calls[counter].value);
+        PADD(add_get_element(calls[counter].var1), el3);
     }
     if (strcmp(calls[counter].instruction, "MOD") == 0){
         element_t *el3 = add_get_element(calls[counter].var3);
         if (el3 == NULL) el3 = INT(calls[counter].value);
-        printf("%llu\n", *el3->c_address);
-        fflush(stdout);
         IMOD(add_get_element(calls[counter].var1), add_get_element(calls[counter].var2), el3);
+    }
+    if (strcmp(calls[counter].instruction, "EQ") == 0){
+        element_t *el3 = add_get_element(calls[counter].var3);
+        if (el3 == NULL) el3 = INT(calls[counter].value);
+        EQ(add_get_element(calls[counter].var1), add_get_element(calls[counter].var2), el3);
+    }
+    if (strcmp(calls[counter].instruction, "IF") == 0){
+        IF(add_get_element(calls[counter].var1));
     }
 }
 
@@ -218,8 +228,7 @@ void execute_assembly(){
     total = counter;
     counter = 0;
 
-//    for (int i = 0; i < total; ++i) {
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < total; ++i) {
         // create the variables and store in hash table
         element_t *var = NULL;
         if (calls[counter].addon != NULL) var = add_get_element(calls[counter].var1);
@@ -227,14 +236,13 @@ void execute_assembly(){
         // run instructions ------------------------------------
 
         // call inverse
-        if (calls[counter].addon != NULL && var == NULL) INV();
+        if (calls[counter].addon != NULL) if (strcmp(calls[counter].addon, "INV") == 0) INV();
 
+        // run instruction
         run_instr();
 
         counter++;
     }
-
-
 }
 
 void ReadAssembly(char *asmb[], int num){
@@ -274,8 +282,4 @@ void AsmbFromFile(){
     ReadAssembly(lines, line_count);
 
     execute_assembly();
-
-//    for (int i = 0; i < hash_size; ++i) {
-//        printf("%p\n", hash_table[i].integer);
-//    }
 }

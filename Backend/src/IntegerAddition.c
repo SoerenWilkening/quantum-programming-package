@@ -2,7 +2,7 @@
 // Created by Sören Wilkening on 05.11.24.
 //
 
-#include "../include/Integer.h"
+#include "Integer.h"
 
 sequence_t *QQ_add() {
     if (precompiled_QQ_add != NULL) return precompiled_QQ_add;
@@ -13,12 +13,6 @@ sequence_t *QQ_add() {
     add->used_layer = 0;
     add->num_layer = 4 * INTEGERSIZE - 2 + INTEGERSIZE;
     memset(add->gates_per_layer, 0, add->num_layer * sizeof(num_t));
-//    add->gates_per_layer = calloc(add->num_layer, sizeof(num_t));
-//    add->seq = malloc(add->num_layer * sizeof(gate_t *));
-//    for (int i = 0; i < add->num_layer; ++i) {
-//        add->seq[i] = malloc(INTEGERSIZE * sizeof(gate_t));
-//    }
-//    num_t starting_layer = INTEGERSIZE;
     QFT(add);
     int rounds = 0;
     for (int bit = (int) INTEGERSIZE - 1; bit >= 0; --bit) {
@@ -49,11 +43,6 @@ sequence_t *cQQ_add() {
     add->num_layer = INTEGERSIZE * (INTEGERSIZE + 1) / 2 * 4 + 4 * INTEGERSIZE - 2 - INTEGERSIZE / 4 * 4 + 3;
     memset(add->gates_per_layer, 0, add->num_layer * sizeof(num_t));
 
-//    add->gates_per_layer = calloc(add->num_layer, sizeof(num_t));
-//    add->seq = malloc(add->num_layer * sizeof(gate_t *));
-//    for (int i = 0; i < add->num_layer; ++i) {
-//        add->seq[i] = malloc(INTEGERSIZE * sizeof(gate_t));
-//    }
     QFT(add);
 
     int rounds;
@@ -135,11 +124,6 @@ sequence_t *CQ_add() {
     add->used_layer = 0;
     add->num_layer = 4 * INTEGERSIZE - 1;
     memset(add->gates_per_layer, 0, add->num_layer * sizeof(num_t));
-//    add->seq = malloc(add->num_layer * sizeof(gate_t *));
-//    add->gates_per_layer = calloc(add->num_layer, sizeof(num_t));
-//    for (int i = 0; i < add->num_layer; ++i) {
-//        add->seq[i] = malloc(INTEGERSIZE * sizeof(gate_t));
-//    }
     QFT(add);
 
     for (int i = 0; i < INTEGERSIZE; ++i) {
@@ -185,11 +169,6 @@ sequence_t *cCQ_add() {
     add->used_layer = 0;
     add->num_layer = 4 * INTEGERSIZE - 1;
     memset(add->gates_per_layer, 0, add->num_layer * sizeof(num_t));
-//    add->seq = malloc(add->num_layer * sizeof(gate_t *));
-//    add->gates_per_layer = calloc(add->num_layer, sizeof(num_t));
-//    for (int i = 0; i < add->num_layer; ++i) {
-//        add->seq[i] = malloc(INTEGERSIZE * sizeof(gate_t));
-//    }
     QFT(add);
 
     for (int i = 0; i < INTEGERSIZE; ++i) {
@@ -205,11 +184,6 @@ sequence_t *cCQ_add() {
 }
 
 sequence_t *CC_add() {
-//    sequence_t *seq = malloc(sizeof(sequence_t));
-//    seq->seq = NULL;
-//    seq->gates_per_layer = NULL;
-//    seq->used_layer = 0;
-
     *stack.GPR1->c_address += *stack.GPR2->c_address;
     return NULL;
 }

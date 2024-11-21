@@ -1,7 +1,7 @@
 //
 // Created by Sören Wilkening on 05.11.24.
 //
-#include "../include/Integer.h"
+#include "Integer.h"
 
 
 void CP_sequence(sequence_t *mul, num_t *layer, int rounds, num_t control, double multiplyer, int inverted) {

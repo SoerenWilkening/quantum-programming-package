@@ -1,7 +1,7 @@
 //
 // Created by Sören Wilkening on 27.10.24.
 //
-#include "../include/QPU.h"
+#include "QPU.h"
 
 circuit_t *init_circuit() {
     circuit_t *circ = malloc(sizeof(circuit_t));
