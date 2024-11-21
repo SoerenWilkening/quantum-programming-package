@@ -319,7 +319,7 @@ sequence_t *cCQ_mul() {
 }
 
 
-sequence_t *phase_addition(){
+sequence_t *P_add(){
     sequence_t *seq = malloc(sizeof(sequence_t));
 
     seq->gates_per_layer[0] = 1;

@@ -63,6 +63,7 @@ void run_instruction(sequence_t *res, qubit_t qubit_array[], bool_t invert){
             memcpy(g, &res->seq[layer][gate], sizeof(gate_t));
             g->Target = qubit_array[g->Target];
             for (int i = 0; i < g->NumControls; ++i) {
+//                printf("%d %d\n", g->Control[i], qubit_array[g->Control[i]]);
                 g->Control[i] = qubit_array[g->Control[i]];
             }
             g->GateValue *= pow(-1, invert);

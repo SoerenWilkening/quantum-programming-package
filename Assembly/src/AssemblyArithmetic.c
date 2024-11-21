@@ -119,7 +119,7 @@ void PADD(element_t *el1, element_t *phase) {
     MOV(ins->el1, el1, POINTER);
     MOV(ins->el2, phase, POINTER);
 
-    ins->routine = phase_addition;
+    ins->routine = P_add;
 
     ins->invert = NOTINVERTED;
     stack.instruction_counter++;

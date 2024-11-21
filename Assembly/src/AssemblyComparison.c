@@ -41,10 +41,10 @@ void LEQ(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
 
 void GEQ(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
 
-    ISUB(bool_2, bool_1);
+    ISUB(bool_1, bool_2);
 
-    TSTBIT(bool_res, bool_2, 0);
+    TSTBIT(bool_res, bool_1, 0);
 
-    IADD(bool_2, bool_1);
+    IADD(bool_1, bool_2);
 }
 

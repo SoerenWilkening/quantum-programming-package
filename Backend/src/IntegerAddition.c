@@ -109,8 +109,8 @@ sequence_t *CQ_add() {
     free(bin);
     int start_layer = INTEGERSIZE;
 
-    if (precompiled_cCQ_add != NULL) {
-        sequence_t *add = precompiled_cCQ_add;
+    if (precompiled_CQ_add != NULL) {
+        sequence_t *add = precompiled_CQ_add;
 
         for (int i = 0; i < INTEGERSIZE; ++i) {
             add->seq[start_layer + i][add->gates_per_layer[start_layer + i] - 1].GateValue = rotations[i];
@@ -172,7 +172,7 @@ sequence_t *cCQ_add() {
     QFT(add);
 
     for (int i = 0; i < INTEGERSIZE; ++i) {
-        cp(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i, INTEGERSIZE + 1, rotations[i]);
+        cp(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i, INTEGERSIZE, rotations[i]);
     }
     free(rotations);
     add->used_layer++;

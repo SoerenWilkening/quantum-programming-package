@@ -91,5 +91,9 @@ sequence_t *branch(){
     seq->seq[0][0].Gate = H;
     seq->seq[0][0].Target = 0;
     seq->seq[0][0].NumControls = 0;
+    if (stack.GPC[0].type != UNINITIALIZED){
+        seq->seq[0][0].NumControls = 1;
+        seq->seq[0][0].Control[0] = 1;
+    }
     return seq;
 }
