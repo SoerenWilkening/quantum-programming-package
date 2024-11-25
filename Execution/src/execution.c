@@ -48,6 +48,9 @@ void init_instruction(instruction_t *instr) {
     instr->control->c_address = malloc(sizeof(int64_t));
     instr->control->type = UNINITIALIZED;
 
+	instr->next_instruction = NULL;
+	instr->routine = NULL;
+	instr->invert = NOTINVERTED;
 }
 
 // apply the sequences to the desired qubits
@@ -80,6 +83,8 @@ void execute(instruction_t *instr) {
 
     if (instr->control->type != UNINITIALIZED) MOV(stack.GPC, instr->control, POINTER);
 
+	if (instr->routine == NULL) return;
+
     qubit_t qubit_array[10 * INTEGERSIZE];
     qubit_mapping(qubit_array);
     sequence_t *res = instr->routine();
@@ -91,5 +96,7 @@ void execute(instruction_t *instr) {
     stack.GPR3[0].type = UNINITIALIZED;
     stack.GPC[0].type = UNINITIALIZED;
 
-    if (instr->next_instruction != NULL) execute(instr->next_instruction);
+	instruction_t *pointer = instr + 1;
+    if (instr->next_instruction != NULL) pointer = (instruction_t *) instr->next_instruction;
+	execute(pointer);
 }

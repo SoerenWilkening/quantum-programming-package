@@ -26,8 +26,7 @@ void TSTBIT(element_t *el1, element_t *el2, int bit) {
 
     MOV(ins->el2, qbit, POINTER);
     ins->routine = cx_gate;
-//    ins->invert = NOTINVERTED;
-    stack.instruction_list[stack.instruction_counter].next_instruction = &stack.instruction_list[stack.instruction_counter + 1];
+//    stack.instruction_list[stack.instruction_counter].next_instruction = &stack.instruction_list[stack.instruction_counter + 1];
     stack.instruction_counter++;
 }
 
@@ -37,4 +36,19 @@ void IF(element_t *el1) {
 
 void INV() {
     stack.instruction_list[stack.instruction_counter].invert = INVERTED;
+}
+
+void LABEL(char label[]){
+	labels[label_counter].label = label;
+	labels[label_counter++].ins_ptr = &stack.instruction_list[stack.instruction_counter];
+}
+
+void JMP(){ // Non Conditional Jump
+
+}
+
+void JNZ(element_t *bool1, label_t *label){ // Jump if bool1 is not 0 (1)
+	// proper jump, only if bool is classical
+	MOV(stack.instruction_list[stack.instruction_counter].control, bool1, POINTER);
+	stack.instruction_list[stack.instruction_counter].next_instruction = (struct instruction_t *) label->ins_ptr;
 }

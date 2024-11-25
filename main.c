@@ -14,6 +14,9 @@ sequence_t *precompiled_cCQ_add = NULL;
 sequence_t *precompiled_cQQ_mul = NULL;
 sequence_t *precompiled_QQ_mul = NULL;
 
+int label_counter = 0;
+label_t labels[100];
+
 int main(void) {
 
     // initialize the rest of the stack
@@ -27,9 +30,15 @@ int main(void) {
     for (int i = 0; i < 10000; ++i) init_instruction(&stack.instruction_list[i]);
 
     AsmbFromFile();
-    stack.instruction_list[stack.instruction_counter - 1].next_instruction = NULL;
 
+	printf("%s ", labels[0].label);
+	printf("%p\n", labels[0].ins_ptr);
+	printf("%s ", labels[1].label);
+	printf("%p\n", labels[1].ins_ptr);
+	printf("%p\n", &stack.instruction_list[0]);
+	printf("%p\n", &stack.instruction_list[1]);
 
+	stack.instruction_list[stack.instruction_counter - 1].next_instruction = NULL;
     // ._execute
     clock_t t1 = clock();
     execute(stack.instruction_list);

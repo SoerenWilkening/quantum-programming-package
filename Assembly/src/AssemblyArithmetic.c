@@ -26,7 +26,6 @@ void IADD(element_t *el1, element_t *el2) {
         printf("Cannot add quantum integer to classical integer!\n");
         exit(6);
     }
-    stack.instruction_list[stack.instruction_counter].next_instruction = &stack.instruction_list[stack.instruction_counter + 1];
     stack.instruction_counter++;
 }
 
@@ -51,7 +50,6 @@ void IMUL(element_t *el1, element_t *el2, element_t *res) {
         else ins->routine = QQ_mul;
     }
 
-    stack.instruction_list[stack.instruction_counter].next_instruction = &stack.instruction_list[stack.instruction_counter + 1];
     stack.instruction_counter++;
 }
 
@@ -122,8 +120,6 @@ void PADD(element_t *el1, element_t *phase) {
 
     ins->routine = P_add;
 
-    stack.instruction_list[stack.instruction_counter].next_instruction = &stack.instruction_list[stack.instruction_counter + 1];
-//    ins->invert = NOTINVERTED;
     stack.instruction_counter++;
 }
 

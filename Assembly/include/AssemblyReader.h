@@ -16,6 +16,7 @@
 #define hash_size 128
 
 typedef struct {
+	char *label;
     char *addon;
     char *instruction;
     char *var1;

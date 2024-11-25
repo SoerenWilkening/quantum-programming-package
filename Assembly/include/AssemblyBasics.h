@@ -12,6 +12,14 @@
 #include "IntegerComparison.h"
 #include "AssemblyBasics.h"
 
+typedef struct {
+	char *label;
+	instruction_t *ins_ptr;
+} label_t;
+
+extern int label_counter;
+extern label_t labels[100];
+
 void MOV(element_t *el1, element_t *el2, int pov);
 
 void NEG(element_t *el1);
@@ -22,5 +30,7 @@ void TSTBIT(element_t *el1, element_t *el2, int bit);
 void IF(element_t *el1);
 void ELSE(element_t *el1);
 void INV();
+
+void LABEL(char label[]);
 
 #endif //CQ_BACKEND_IMPROVED_ASSEMBLYBASICS_H

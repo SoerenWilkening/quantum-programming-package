@@ -107,9 +107,42 @@ int is_instruction(char *word) {
     return false;
 }
 
+int is_label(char *str){
+	bool only_spaces;
+	char *cleaned_line;
+	if (!str) {
+		cleaned_line = NULL;
+		only_spaces = true; // Treat null string as only spaces
+		return 0; // No spaces
+	}
+
+	// Count leading spaces
+	int leading_spaces = 0;
+	while (str[leading_spaces] && isspace((unsigned char)str[leading_spaces])) {
+		leading_spaces++;
+	}
+
+	// Pointer to the cleaned line (skipping leading spaces)
+	cleaned_line = str + leading_spaces;
+
+	// Remove trailing spaces or non-printable characters
+	char* end = cleaned_line + strlen(cleaned_line) - 1;
+	while (end >= cleaned_line && isspace((unsigned char)*end)) {
+		*end = '\0';
+		end--;
+	}
+
+	// Detect if the line contains only spaces
+	only_spaces = (*cleaned_line == '\0');
+
+//	printf("%s %d\n", str, leading_spaces == 0 && !only_spaces);
+	return leading_spaces == 0 && !only_spaces;
+}
+
 void word_to_call(char *word) {
     if (!is_word(word)) return;
     if (is_addon(word)) calls[counter].addon = word;
+//    else if (is_label(word)) calls[counter].label = word;
     else if (is_instruction(word)) calls[counter].instruction = word;
     else {
         if (variable_counter == 0) calls[counter].var1 = word;
@@ -158,16 +191,21 @@ char **extract_items_from_line(const char *line, size_t *item_count) {
 }
 
 void lines_to_call(char *line) {
-    if (line[0] == *"/" && line[1] == *"/") return;
-    printf("%s\n", line);
+    if (line[0] == *"/" || line[5] == *"/") return;
 
     calls[counter].value = 0;
     calls[counter].addon = NULL;
+    calls[counter].label = NULL;
     calls[counter].instruction = NULL;
     calls[counter].var1 = NULL;
     calls[counter].var2 = NULL;
     calls[counter].var3 = NULL;
     size_t count = 0;
+
+	// check if label
+	if (is_label(line)){
+		calls[counter].label = line;
+	}
 
     char **words = extract_items_from_line(line, &count);
     if (count == 0) return;
@@ -183,85 +221,95 @@ void lines_to_call(char *line) {
     counter++;
 }
 
-void run_instr() {
-    if (calls[counter].instruction == NULL) return;
-//    printf("%s %s, %s, %s, %d\n", calls[counter].instruction, calls[counter].var1, calls[counter].var2, calls[counter].var3, calls[counter].value);
-    if (strcmp(calls[counter].instruction, "BRANCH") == 0) {
-        BRANCH(hash_element(calls[counter].var1), calls[counter].value);
-    }
-    if (strcmp(calls[counter].instruction, "IADD") == 0) {
-        element_t *el3 = hash_element(calls[counter].var2);
-        if (el3 == NULL) el3 = INT(calls[counter].value);
-        IADD(hash_element(calls[counter].var1), el3);
-    }
-    if (strcmp(calls[counter].instruction, "ISUB") == 0) {
-        element_t *el3 = hash_element(calls[counter].var2);
-        if (el3 == NULL) el3 = INT(calls[counter].value);
-        ISUB(hash_element(calls[counter].var1), el3);
-    }
-    if (strcmp(calls[counter].instruction, "PADD") == 0) {
-        element_t *el3 = hash_element(calls[counter].var2);
-        if (el3 == NULL) el3 = INT(calls[counter].value);
-        PADD(hash_element(calls[counter].var1), el3);
-    }
-    if (strcmp(calls[counter].instruction, "MOD") == 0) {
-        element_t *el3 = hash_element(calls[counter].var3);
-        if (el3 == NULL) el3 = INT(calls[counter].value);
-        IMOD(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
-    }
-    if (strcmp(calls[counter].instruction, "EQ") == 0) {
-        element_t *el3 = hash_element(calls[counter].var3);
-        if (el3 == NULL) el3 = INT(calls[counter].value);
-        EQ(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
-    }
-    if (strcmp(calls[counter].instruction, "GEQ") == 0) {
-        element_t *el3 = hash_element(calls[counter].var3);
-        if (el3 == NULL) el3 = INT(calls[counter].value);
-        GEQ(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
-    }
-    if (strcmp(calls[counter].instruction, "LEQ") == 0) {
-        element_t *el3 = hash_element(calls[counter].var3);
-        if (el3 == NULL) el3 = INT(calls[counter].value);
-        LEQ(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
-    }
-    if (strcmp(calls[counter].instruction, "AND") == 0) {
-        element_t *el3 = hash_element(calls[counter].var3);
-        if (el3 == NULL) el3 = INT(calls[counter].value);
-        AND(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
-    }
-    if (strcmp(calls[counter].instruction, "IF") == 0) {
-        IF(hash_element(calls[counter].var1));
-    }
-}
-
-void execute_assembly() {
-    total = counter;
-    counter = 0;
-
-    for (int i = 0; i < total; ++i) {
-        // create the variables and store in hash table
-        element_t *var = NULL;
-        if (calls[counter].addon != NULL) var = hash_element(calls[counter].var1);
-
-        // run instructions ------------------------------------
-
-        // call inverse
-        if (calls[counter].addon != NULL) if (strcmp(calls[counter].addon, "INV") == 0) INV();
-
-        // run instruction
-        run_instr();
-
-        counter++;
-    }
-}
-
 void ReadAssembly(char *asmb[], int num) {
     for (int i = 0; i < hash_size; ++i) variables[i].integer = NULL;
+
     for (int i = 0; i < num; ++i) {
         variable_counter = 0;
+
         // go through every line
         lines_to_call(asmb[i]);
     }
+}
+
+void create_instruction() {
+	if (calls[counter].instruction == NULL) return;
+//    printf("%s %s, %s, %s, %d\n", calls[counter].instruction, calls[counter].var1, calls[counter].var2, calls[counter].var3, calls[counter].value);
+	if (strcmp(calls[counter].instruction, "BRANCH") == 0) {
+		BRANCH(hash_element(calls[counter].var1), calls[counter].value);
+	}
+	if (strcmp(calls[counter].instruction, "IADD") == 0) {
+		element_t *el3 = hash_element(calls[counter].var2);
+		if (el3 == NULL) el3 = INT(calls[counter].value);
+		IADD(hash_element(calls[counter].var1), el3);
+	}
+	if (strcmp(calls[counter].instruction, "ISUB") == 0) {
+		element_t *el3 = hash_element(calls[counter].var2);
+		if (el3 == NULL) el3 = INT(calls[counter].value);
+		ISUB(hash_element(calls[counter].var1), el3);
+	}
+	if (strcmp(calls[counter].instruction, "PADD") == 0) {
+		element_t *el3 = hash_element(calls[counter].var2);
+		if (el3 == NULL) el3 = INT(calls[counter].value);
+		PADD(hash_element(calls[counter].var1), el3);
+	}
+	if (strcmp(calls[counter].instruction, "MOD") == 0) {
+		element_t *el3 = hash_element(calls[counter].var3);
+		if (el3 == NULL) el3 = INT(calls[counter].value);
+		IMOD(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+	}
+	if (strcmp(calls[counter].instruction, "EQ") == 0) {
+		element_t *el3 = hash_element(calls[counter].var3);
+		if (el3 == NULL) el3 = INT(calls[counter].value);
+		EQ(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+	}
+	if (strcmp(calls[counter].instruction, "GEQ") == 0) {
+		element_t *el3 = hash_element(calls[counter].var3);
+		if (el3 == NULL) el3 = INT(calls[counter].value);
+		GEQ(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+	}
+	if (strcmp(calls[counter].instruction, "LEQ") == 0) {
+		element_t *el3 = hash_element(calls[counter].var3);
+		if (el3 == NULL) el3 = INT(calls[counter].value);
+		LEQ(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+	}
+	if (strcmp(calls[counter].instruction, "AND") == 0) {
+		element_t *el3 = hash_element(calls[counter].var3);
+		if (el3 == NULL) el3 = INT(calls[counter].value);
+		AND(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+	}
+	if (strcmp(calls[counter].instruction, "IF") == 0) {
+		IF(hash_element(calls[counter].var1));
+	}
+}
+
+
+void create_label(){
+	if (calls[counter].label == NULL) return;
+	LABEL(calls[counter].label);
+}
+
+void create_executable() {
+	total = counter;
+	counter = 0;
+
+	for (int i = 0; i < total; ++i) {
+		// create the variables and store in hash table
+		element_t *var = NULL;
+		if (calls[counter].addon != NULL) var = hash_element(calls[counter].var1);
+
+		// run instructions ------------------------------------
+
+		// call inverse
+		if (calls[counter].addon != NULL) if (strcmp(calls[counter].addon, "INV") == 0) INV();
+
+		// run instruction
+		create_instruction();
+
+		create_label();
+
+		counter++;
+	}
 }
 
 void AsmbFromFile() {
@@ -291,5 +339,9 @@ void AsmbFromFile() {
     }
     ReadAssembly(lines, line_count);
 
-//    execute_assembly();
+	create_executable();
+	for (int i = 0; i < counter; ++i) {
+		printf("%s %s %s %s %s %s %d\n", calls[i].label, calls[i].addon, calls[i].instruction, calls[i].var1, calls[i].var2, calls[i].var3, calls[i].value);
+	}
+	stack.instruction_list[stack.instruction_counter - 1].next_instruction = NULL;
 }
