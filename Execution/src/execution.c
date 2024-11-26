@@ -26,7 +26,7 @@ void qubit_mapping(qubit_t qubit_arrray[]) {
         memcpy(&qubit_arrray[start], stack.GPC[0].q_address, value * sizeof(qubit_t));
         start += value;
     }
-    for (int i = 0; i < 10 * INTEGERSIZE - start; ++i) {
+    for (int i = 0; i < 5 * INTEGERSIZE - start; ++i) {
         qubit_arrray[start + i] = stack.circuit->ancilla[i];
     }
 }
@@ -77,6 +77,9 @@ void run_instruction(sequence_t *res, qubit_t qubit_array[], bool_t invert){
 }
 
 void execute(instruction_t *instr) {
+	printf("%p\n", instr);
+	fflush(stdout);
+
     if (instr->el1->type != UNINITIALIZED) MOV(stack.GPR1, instr->el1, POINTER);
     if (instr->el2->type != UNINITIALIZED) MOV(stack.GPR2, instr->el2, POINTER);
     if (instr->el3->type != UNINITIALIZED) MOV(stack.GPR3, instr->el3, POINTER);
@@ -85,11 +88,17 @@ void execute(instruction_t *instr) {
 
 	if (instr->routine == NULL) return;
 
-    qubit_t qubit_array[10 * INTEGERSIZE];
+    qubit_t qubit_array[5 * INTEGERSIZE];
     qubit_mapping(qubit_array);
     sequence_t *res = instr->routine();
+	print_sequence(res);
 
     run_instruction(res, qubit_array, instr->invert);
+
+	bool will_jump = 0;
+	if (stack.GPR1[0].qualifier == Cl) {
+		if (stack.GPR1[0].type != UNINITIALIZED && *stack.GPR1[0].c_address == 0) will_jump = 1;
+	}
 
     stack.GPR1[0].type = UNINITIALIZED;
     stack.GPR2[0].type = UNINITIALIZED;
@@ -97,6 +106,12 @@ void execute(instruction_t *instr) {
     stack.GPC[0].type = UNINITIALIZED;
 
 	instruction_t *pointer = instr + 1;
-    if (instr->next_instruction != NULL) pointer = (instruction_t *) instr->next_instruction;
+	printf("next = %p\n", instr->next_instruction);
+    if (instr->next_instruction != NULL && will_jump) {
+		pointer = (instruction_t *) instr->next_instruction;
+	    printf("jump \n");
+	}
+
+
 	execute(pointer);
 }

@@ -10,6 +10,8 @@
 #include "QPU.h"
 #include "Integer.h"
 
+sequence_t *void_seq();
+
 sequence_t *not_seq();
 
 sequence_t *and_sequence();

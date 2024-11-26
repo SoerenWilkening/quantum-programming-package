@@ -20,6 +20,8 @@ element_t *QUINT();
 
 element_t *INT(int64_t intg);
 
+element_t *BOOL(bool intg);
+
 element_t *bit_of_int(element_t *el1, int bit);
 
 

@@ -23,6 +23,7 @@ typedef struct {
     char *var2;
     char *var3;
     int value;
+	instruction_t *ptr;
 } call_t;
 
 typedef struct {

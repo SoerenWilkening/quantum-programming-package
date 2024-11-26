@@ -20,6 +20,14 @@ unsigned int hash(const char *word) {
     return hash % hash_size;
 }
 
+
+int label_index(char *label){
+	for (int i = 0; i < label_counter; ++i) {
+		if (strcmp(label, labels[i].label) == 0) return i;
+	}
+	return -1;
+}
+
 element_t *hash_element(char *word) {
     if (word == NULL) return NULL;
     unsigned int h = hash(word);
@@ -51,7 +59,7 @@ element_t *hash_element(char *word) {
     }
     if (strcmp(calls[counter].addon, "BOOL") == 0) {
         all_false = 0;
-	    variables[h].integer = INT(calls[counter].value);
+	    variables[h].integer = BOOL(calls[counter].value);
     }
     if (!all_false) {
 	    variables[h].word = word;
@@ -60,23 +68,32 @@ element_t *hash_element(char *word) {
     return NULL;
 }
 
-// Function to check if the string is a word (alphabetic characters only)
-bool is_word(const char *str) {
-    if (!str || *str == '\0') {
-        return false; // Empty or null string is not a word
-    }
-    bool has_alpha = false;
+// Function to check if a string is a valid integer
+bool is_integer(const char* str) {
+	if (!str || *str == '\0') {
+		return false; // Null or empty string is not an integer
+	}
 
-    for (size_t i = 0; str[i] != '\0'; i++) {
-        if (!isalnum((unsigned char) str[i])) {
-            return false; // Contains non-alphanumeric characters
-        }
-        if (isalpha((unsigned char) str[i])) {
-            has_alpha = true; // Contains at least one alphabetic character
-        }
-    }
-    return has_alpha;
+	// Optional leading sign
+	if (*str == '+' || *str == '-') {
+		str++; // Skip the sign
+	}
+
+	// Ensure there's at least one digit
+	if (!isdigit((unsigned char)*str)) {
+		return false; // No digits after the sign
+	}
+
+	// Check remaining characters are all digits
+	for (; *str != '\0'; str++) {
+		if (!isdigit((unsigned char)*str)) {
+			return false; // Non-digit character found
+		}
+	}
+
+	return true; // All checks passed
 }
+
 
 int is_addon(char *word) {
     if (strcmp(word, "INV") == 0) return true;
@@ -104,6 +121,7 @@ int is_instruction(char *word) {
     if (strcmp(word, "LEQ") == 0) return true;
     if (strcmp(word, "MEASURE") == 0) return true;
     if (strcmp(word, "IF") == 0) return true;
+    if (strcmp(word, "JNZ") == 0) return true;
     return false;
 }
 
@@ -140,9 +158,8 @@ int is_label(char *str){
 }
 
 void word_to_call(char *word) {
-    if (!is_word(word)) return;
+    if (is_integer(word)) return;
     if (is_addon(word)) calls[counter].addon = word;
-//    else if (is_label(word)) calls[counter].label = word;
     else if (is_instruction(word)) calls[counter].instruction = word;
     else {
         if (variable_counter == 0) calls[counter].var1 = word;
@@ -153,7 +170,7 @@ void word_to_call(char *word) {
 }
 
 void value_to_call(char *word) {
-    if (is_word(word)) return;
+    if (!is_integer(word)) return;
     char *succ;
     calls[counter].value = (int) strtol(word, &succ, 10);
 }
@@ -200,6 +217,7 @@ void lines_to_call(char *line) {
     calls[counter].var1 = NULL;
     calls[counter].var2 = NULL;
     calls[counter].var3 = NULL;
+    calls[counter].ptr = NULL;
     size_t count = 0;
 
 	// check if label
@@ -281,12 +299,27 @@ void create_instruction() {
 	if (strcmp(calls[counter].instruction, "IF") == 0) {
 		IF(hash_element(calls[counter].var1));
 	}
+	if (strcmp(calls[counter].instruction, "JNZ") == 0) {
+		JNZ(hash_element(calls[counter].var1));
+	}
+	calls[counter].ptr = &stack.instruction_list[stack.instruction_counter - 1];
 }
 
 
 void create_label(){
 	if (calls[counter].label == NULL) return;
 	LABEL(calls[counter].label);
+}
+
+void apply_label(){
+	for (int i = 0; i < counter; ++i) {
+		if (calls[i].instruction != NULL) {
+			if (strcmp(calls[i].instruction, "JNZ") == 0) {
+				printf("label_ptr = %p\n", labels[label_index(calls[i].var2)].ins_ptr);
+				calls[i].ptr->next_instruction = (struct instruction_t *) labels[label_index(calls[i].var2)].ins_ptr;
+			}
+		}
+	}
 }
 
 void create_executable() {
@@ -340,8 +373,16 @@ void AsmbFromFile() {
     ReadAssembly(lines, line_count);
 
 	create_executable();
-	for (int i = 0; i < counter; ++i) {
-		printf("%s %s %s %s %s %s %d\n", calls[i].label, calls[i].addon, calls[i].instruction, calls[i].var1, calls[i].var2, calls[i].var3, calls[i].value);
-	}
-	stack.instruction_list[stack.instruction_counter - 1].next_instruction = NULL;
+
+	// apply labels to jumps
+	apply_label();
+
+//	for (int i = 0; i < counter; ++i) {
+//		printf("%s %s %s %s %s %s %d\n", calls[i].label, calls[i].addon, calls[i].instruction, calls[i].var1, calls[i].var2, calls[i].var3, calls[i].value);
+//	}
+//
+//	printf("%lld\n", *hash_element("CI1")->c_address);
+//	printf("%p\n", stack.instruction_list);
+//	printf("%p\n", labels[label_index(calls[counter - 1].var2)].ins_ptr);
+//	stack.instruction_list[stack.instruction_counter - 1].next_instruction = NULL;
 }

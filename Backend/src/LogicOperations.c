@@ -4,6 +4,11 @@
 
 #include "LogicOperations.h"
 
+sequence_t *void_seq(){
+	return NULL;
+}
+
+
 sequence_t *not_seq() {
     int number = INTEGERSIZE;
     if (stack.GPR1[0].type == BOOLEAN) number = 1;

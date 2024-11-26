@@ -50,7 +50,7 @@ element_t *INT(int64_t intg){
     return integer;
 }
 
-element_t *BOOL(int64_t intg){
+element_t *BOOL(bool intg){
     element_t *integer = malloc(sizeof(integer));
     integer->qualifier = Cl;
     integer->type = BOOLEAN;

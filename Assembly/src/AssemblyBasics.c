@@ -26,7 +26,6 @@ void TSTBIT(element_t *el1, element_t *el2, int bit) {
 
     MOV(ins->el2, qbit, POINTER);
     ins->routine = cx_gate;
-//    stack.instruction_list[stack.instruction_counter].next_instruction = &stack.instruction_list[stack.instruction_counter + 1];
     stack.instruction_counter++;
 }
 
@@ -47,8 +46,10 @@ void JMP(){ // Non Conditional Jump
 
 }
 
-void JNZ(element_t *bool1, label_t *label){ // Jump if bool1 is not 0 (1)
+void JNZ(element_t *bool1){ // Jump if bool1 is not 0 (1)
 	// proper jump, only if bool is classical
-	MOV(stack.instruction_list[stack.instruction_counter].control, bool1, POINTER);
-	stack.instruction_list[stack.instruction_counter].next_instruction = (struct instruction_t *) label->ins_ptr;
+	MOV(stack.instruction_list[stack.instruction_counter].el1, bool1, POINTER);
+
+	stack.instruction_list[stack.instruction_counter].routine = void_seq;
+	stack.instruction_counter++;
 }
