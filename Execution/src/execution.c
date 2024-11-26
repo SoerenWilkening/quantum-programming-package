@@ -78,7 +78,6 @@ void run_instruction(sequence_t *res, qubit_t qubit_array[], bool_t invert){
 
 void execute(instruction_t *instr) {
 	printf("%p\n", instr);
-	fflush(stdout);
 
     if (instr->el1->type != UNINITIALIZED) MOV(stack.GPR1, instr->el1, POINTER);
     if (instr->el2->type != UNINITIALIZED) MOV(stack.GPR2, instr->el2, POINTER);
@@ -91,7 +90,6 @@ void execute(instruction_t *instr) {
     qubit_t qubit_array[5 * INTEGERSIZE];
     qubit_mapping(qubit_array);
     sequence_t *res = instr->routine();
-	print_sequence(res);
 
     run_instruction(res, qubit_array, instr->invert);
 
@@ -106,12 +104,10 @@ void execute(instruction_t *instr) {
     stack.GPC[0].type = UNINITIALIZED;
 
 	instruction_t *pointer = instr + 1;
-	printf("next = %p\n", instr->next_instruction);
     if (instr->next_instruction != NULL && will_jump) {
 		pointer = (instruction_t *) instr->next_instruction;
 	    printf("jump \n");
 	}
-
 
 	execute(pointer);
 }

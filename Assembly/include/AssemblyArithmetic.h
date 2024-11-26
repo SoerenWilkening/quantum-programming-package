@@ -16,9 +16,11 @@
 // integer arithmetic
 void IADD(element_t *el1, element_t *el2);
 void ISUB(element_t *el1, element_t *el2);
+void INC(element_t *el1);
+void DCR(element_t *el1);
 void IMUL(element_t *el1, element_t *el2, element_t *res);
 void IDIV(element_t *el1, element_t *el2, element_t *remainder);
-void IMOD(element_t *mod, element_t *el1, element_t *el2);
+void MOD(element_t *mod, element_t *el1, element_t *el2);
 // phase operations
 void PADD(element_t *el1, element_t *phase);
 

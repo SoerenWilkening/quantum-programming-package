@@ -33,6 +33,6 @@ void INV();
 
 void LABEL(char label[]);
 
-void JNZ(element_t *bool1);
+void JMP(element_t *bool1);
 
 #endif //CQ_BACKEND_IMPROVED_ASSEMBLYBASICS_H

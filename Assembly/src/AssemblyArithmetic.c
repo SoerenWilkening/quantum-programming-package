@@ -34,6 +34,16 @@ void ISUB(element_t *el1, element_t *el2) {
     stack.instruction_list[stack.instruction_counter - 1].invert = INVERTED;
 }
 
+void INC(element_t *el1){
+	element_t *cint = INT(1);
+	IADD(el1, cint);
+}
+
+void DCR(element_t *el1){
+	element_t *cint = INT(1);
+	ISUB(el1, cint);
+}
+
 void IMUL(element_t *el1, element_t *el2, element_t *res) {
     instruction_t *ins = &stack.instruction_list[stack.instruction_counter];
 
@@ -109,7 +119,7 @@ void IDIV(element_t *el1, element_t *el2, element_t *remainder) {
 
 }
 
-void IMOD(element_t *mod, element_t *el1, element_t *el2) {
+void MOD(element_t *mod, element_t *el1, element_t *el2) {
     IDIV(el1, el2, mod);
 }
 

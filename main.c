@@ -31,18 +31,13 @@ int main(void) {
 
     AsmbFromFile();
 
-//	printf("%s ", labels[0].label);
-//	printf("%p\n", labels[0].ins_ptr);
-//	printf("%s ", labels[1].label);
-//	printf("%p\n", labels[1].ins_ptr);
-//	printf("%p\n", &stack.instruction_list[0]);
-//	printf("%p\n", &stack.instruction_list[1]);
+	printf("initial pointer %p\n", stack.instruction_list);
 
 //    // ._execute
     clock_t t1 = clock();
     execute(stack.instruction_list);
 
-//    print_circuit(stack.circuit);
+    print_circuit(stack.circuit);
 
     printf("%f\n", (double) (clock() - t1) / CLOCKS_PER_SEC);
     return 0;

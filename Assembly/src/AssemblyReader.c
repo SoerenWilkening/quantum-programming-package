@@ -110,6 +110,7 @@ int is_instruction(char *word) {
     if (strcmp(word, "BRANCH") == 0) return true;
     if (strcmp(word, "MOV") == 0) return true;
     if (strcmp(word, "IADD") == 0) return true;
+    if (strcmp(word, "INC") == 0) return true;
     if (strcmp(word, "PADD") == 0) return true;
     if (strcmp(word, "ISUB") == 0) return true;
     if (strcmp(word, "IMUL") == 0) return true;
@@ -121,7 +122,7 @@ int is_instruction(char *word) {
     if (strcmp(word, "LEQ") == 0) return true;
     if (strcmp(word, "MEASURE") == 0) return true;
     if (strcmp(word, "IF") == 0) return true;
-    if (strcmp(word, "JNZ") == 0) return true;
+    if (strcmp(word, "JMP") == 0) return true;
     return false;
 }
 
@@ -261,6 +262,7 @@ void create_instruction() {
 		if (el3 == NULL) el3 = INT(calls[counter].value);
 		IADD(hash_element(calls[counter].var1), el3);
 	}
+	if (strcmp(calls[counter].instruction, "INC") == 0) {INC(hash_element(calls[counter].var1));}
 	if (strcmp(calls[counter].instruction, "ISUB") == 0) {
 		element_t *el3 = hash_element(calls[counter].var2);
 		if (el3 == NULL) el3 = INT(calls[counter].value);
@@ -274,7 +276,7 @@ void create_instruction() {
 	if (strcmp(calls[counter].instruction, "MOD") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) el3 = INT(calls[counter].value);
-		IMOD(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+		MOD(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
 	if (strcmp(calls[counter].instruction, "EQ") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
@@ -299,8 +301,8 @@ void create_instruction() {
 	if (strcmp(calls[counter].instruction, "IF") == 0) {
 		IF(hash_element(calls[counter].var1));
 	}
-	if (strcmp(calls[counter].instruction, "JNZ") == 0) {
-		JNZ(hash_element(calls[counter].var1));
+	if (strcmp(calls[counter].instruction, "JMP") == 0) {
+		JMP(hash_element(calls[counter].var1));
 	}
 	calls[counter].ptr = &stack.instruction_list[stack.instruction_counter - 1];
 }
@@ -314,7 +316,7 @@ void create_label(){
 void apply_label(){
 	for (int i = 0; i < counter; ++i) {
 		if (calls[i].instruction != NULL) {
-			if (strcmp(calls[i].instruction, "JNZ") == 0) {
+			if (strcmp(calls[i].instruction, "JMP") == 0) {
 				printf("label_ptr = %p\n", labels[label_index(calls[i].var2)].ins_ptr);
 				calls[i].ptr->next_instruction = (struct instruction_t *) labels[label_index(calls[i].var2)].ins_ptr;
 			}
@@ -347,7 +349,7 @@ void create_executable() {
 
 void AsmbFromFile() {
 
-    FILE *file = fopen("../assembly.pqsm", "r");
+    FILE *file = fopen("../assembly_loop.pqsm", "r");
     int line_count = 0;
 
     size_t capacity = 128; // Initial capacity for the array of lines
