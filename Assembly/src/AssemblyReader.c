@@ -4,7 +4,7 @@
 
 #include "AssemblyReader.h"
 
-call_t calls[1024];
+call_t calls[65536];
 int counter = 0;
 int total = 0;
 int variable_counter = 0;
@@ -111,6 +111,7 @@ int is_instruction(char *word) {
     if (strcmp(word, "MOV") == 0) return true;
     if (strcmp(word, "IADD") == 0) return true;
     if (strcmp(word, "INC") == 0) return true;
+    if (strcmp(word, "DCR") == 0) return true;
     if (strcmp(word, "PADD") == 0) return true;
     if (strcmp(word, "ISUB") == 0) return true;
     if (strcmp(word, "IMUL") == 0) return true;
@@ -122,6 +123,8 @@ int is_instruction(char *word) {
     if (strcmp(word, "LEQ") == 0) return true;
     if (strcmp(word, "MEASURE") == 0) return true;
     if (strcmp(word, "IF") == 0) return true;
+    if (strcmp(word, "NOT") == 0) return true;
+    if (strcmp(word, "JNZ") == 0) return true;
     if (strcmp(word, "JMP") == 0) return true;
     return false;
 }
@@ -160,6 +163,7 @@ int is_label(char *str){
 
 void word_to_call(char *word) {
     if (is_integer(word)) return;
+//	printf("is not integer \n");
     if (is_addon(word)) calls[counter].addon = word;
     else if (is_instruction(word)) calls[counter].instruction = word;
     else {
@@ -172,6 +176,7 @@ void word_to_call(char *word) {
 
 void value_to_call(char *word) {
     if (!is_integer(word)) return;
+//	printf("is integer \n");
     char *succ;
     calls[counter].value = (int) strtol(word, &succ, 10);
 }
@@ -231,6 +236,7 @@ void lines_to_call(char *line) {
     int comment = 0;
     for (int j = 0; j < count; ++j) {
         if (words[j][0] != *"/" && !comment) {
+//	        printf("%s %d ", words[j], is_integer(words[j]));
             word_to_call(words[j]);
             value_to_call(words[j]);
         } else { comment = 1; }
@@ -259,13 +265,20 @@ void create_instruction() {
 	}
 	if (strcmp(calls[counter].instruction, "IADD") == 0) {
 		element_t *el3 = hash_element(calls[counter].var2);
-		if (el3 == NULL) el3 = INT(calls[counter].value);
+		if (el3 == NULL) {
+			el3 = INT(calls[counter].value);
+			el3->qualifier = Cl;
+		}
 		IADD(hash_element(calls[counter].var1), el3);
 	}
 	if (strcmp(calls[counter].instruction, "INC") == 0) {INC(hash_element(calls[counter].var1));}
+	if (strcmp(calls[counter].instruction, "DCR") == 0) {DCR(hash_element(calls[counter].var1));}
 	if (strcmp(calls[counter].instruction, "ISUB") == 0) {
 		element_t *el3 = hash_element(calls[counter].var2);
-		if (el3 == NULL) el3 = INT(calls[counter].value);
+		if (el3 == NULL) {
+			el3 = INT(calls[counter].value);
+			el3->qualifier = Cl;
+		}
 		ISUB(hash_element(calls[counter].var1), el3);
 	}
 	if (strcmp(calls[counter].instruction, "PADD") == 0) {
@@ -285,7 +298,10 @@ void create_instruction() {
 	}
 	if (strcmp(calls[counter].instruction, "GEQ") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
-		if (el3 == NULL) el3 = INT(calls[counter].value);
+		if (el3 == NULL) {
+			el3 = INT(calls[counter].value);
+			el3->qualifier = Cl;
+		}
 		GEQ(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
 	if (strcmp(calls[counter].instruction, "LEQ") == 0) {
@@ -298,12 +314,10 @@ void create_instruction() {
 		if (el3 == NULL) el3 = INT(calls[counter].value);
 		AND(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
-	if (strcmp(calls[counter].instruction, "IF") == 0) {
-		IF(hash_element(calls[counter].var1));
-	}
-	if (strcmp(calls[counter].instruction, "JMP") == 0) {
-		JMP(hash_element(calls[counter].var1));
-	}
+	if (strcmp(calls[counter].instruction, "IF") == 0) IF(hash_element(calls[counter].var1));
+	if (strcmp(calls[counter].instruction, "NOT") == 0) NOT(hash_element(calls[counter].var1));
+	if (strcmp(calls[counter].instruction, "JNZ") == 0) JNZ(hash_element(calls[counter].var1));
+	if (strcmp(calls[counter].instruction, "JMP") == 0) JMP();
 	calls[counter].ptr = &stack.instruction_list[stack.instruction_counter - 1];
 }
 
@@ -316,9 +330,12 @@ void create_label(){
 void apply_label(){
 	for (int i = 0; i < counter; ++i) {
 		if (calls[i].instruction != NULL) {
-			if (strcmp(calls[i].instruction, "JMP") == 0) {
+			if (strcmp(calls[i].instruction, "JNZ") == 0) {
 				printf("label_ptr = %p\n", labels[label_index(calls[i].var2)].ins_ptr);
 				calls[i].ptr->next_instruction = (struct instruction_t *) labels[label_index(calls[i].var2)].ins_ptr;
+			}
+			if (strcmp(calls[i].instruction, "JMP") == 0) {
+				calls[i].ptr->next_instruction = (struct instruction_t *) labels[label_index(calls[i].var1)].ins_ptr;
 			}
 		}
 	}
@@ -349,10 +366,10 @@ void create_executable() {
 
 void AsmbFromFile() {
 
-    FILE *file = fopen("../assembly_loop.pqsm", "r");
+    FILE *file = fopen("assembly.pqsm", "r");
     int line_count = 0;
 
-    size_t capacity = 128; // Initial capacity for the array of lines
+    size_t capacity = 256; // Initial capacity for the array of lines
     char **lines = malloc(capacity * sizeof(char *));
 
     char buffer[MAX_LINE_LENGTH];
@@ -379,12 +396,4 @@ void AsmbFromFile() {
 	// apply labels to jumps
 	apply_label();
 
-//	for (int i = 0; i < counter; ++i) {
-//		printf("%s %s %s %s %s %s %d\n", calls[i].label, calls[i].addon, calls[i].instruction, calls[i].var1, calls[i].var2, calls[i].var3, calls[i].value);
-//	}
-//
-//	printf("%lld\n", *hash_element("CI1")->c_address);
-//	printf("%p\n", stack.instruction_list);
-//	printf("%p\n", labels[label_index(calls[counter - 1].var2)].ins_ptr);
-//	stack.instruction_list[stack.instruction_counter - 1].next_instruction = NULL;
 }

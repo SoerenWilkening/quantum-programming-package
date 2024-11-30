@@ -18,7 +18,7 @@ typedef struct {
 } label_t;
 
 extern int label_counter;
-extern label_t labels[100];
+extern label_t labels[3000];
 
 void MOV(element_t *el1, element_t *el2, int pov);
 
@@ -33,6 +33,8 @@ void INV();
 
 void LABEL(char label[]);
 
-void JMP(element_t *bool1);
+void JMP();
+
+void JNZ(element_t *bool1);
 
 #endif //CQ_BACKEND_IMPROVED_ASSEMBLYBASICS_H

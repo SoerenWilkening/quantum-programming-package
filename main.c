@@ -15,7 +15,7 @@ sequence_t *precompiled_cQQ_mul = NULL;
 sequence_t *precompiled_QQ_mul = NULL;
 
 int label_counter = 0;
-label_t labels[100];
+label_t labels[3000];
 
 int main(void) {
 
@@ -27,7 +27,7 @@ int main(void) {
     stack.GPC[0].type = UNINITIALIZED;
     stack.circuit = init_circuit();
     stack.instruction_counter = 0;
-    for (int i = 0; i < 10000; ++i) init_instruction(&stack.instruction_list[i]);
+    for (int i = 0; i < MAXINSTRUCTIONS; ++i) init_instruction(&stack.instruction_list[i]);
 
     AsmbFromFile();
 

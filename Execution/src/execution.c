@@ -77,7 +77,7 @@ void run_instruction(sequence_t *res, qubit_t qubit_array[], bool_t invert){
 }
 
 void execute(instruction_t *instr) {
-	printf("%p\n", instr);
+//	printf("%p\n", instr);
 
     if (instr->el1->type != UNINITIALIZED) MOV(stack.GPR1, instr->el1, POINTER);
     if (instr->el2->type != UNINITIALIZED) MOV(stack.GPR2, instr->el2, POINTER);
@@ -95,7 +95,7 @@ void execute(instruction_t *instr) {
 
 	bool will_jump = 0;
 	if (stack.GPR1[0].qualifier == Cl) {
-		if (stack.GPR1[0].type != UNINITIALIZED && *stack.GPR1[0].c_address == 0) will_jump = 1;
+		if (stack.GPR1[0].type != UNINITIALIZED && *stack.GPR1[0].c_address == 1) will_jump = 1;
 	}
 
     stack.GPR1[0].type = UNINITIALIZED;

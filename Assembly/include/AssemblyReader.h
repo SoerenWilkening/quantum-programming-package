@@ -13,7 +13,7 @@
 #include <ctype.h>
 
 #define MAX_LINE_LENGTH 1024 // Maximum length of a line
-#define hash_size 128
+#define hash_size 4096
 
 typedef struct {
 	char *label;

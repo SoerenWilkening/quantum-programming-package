@@ -14,6 +14,8 @@
 #define LAYERQUBITBLOCK 5000
 #define MAXQUBITS 10000
 
+#define MAXINSTRUCTIONS 1000000
+
 typedef struct {
     gate_t **sequence; // [layer][used_gates_per_layer]
     num_t used_layer;
@@ -69,7 +71,7 @@ typedef struct {
     element_t GPR3[1];
     element_t GPC[1];
 
-    instruction_t instruction_list[10000];
+    instruction_t instruction_list[MAXINSTRUCTIONS];
     int instruction_counter;
 
     circuit_t *circuit;

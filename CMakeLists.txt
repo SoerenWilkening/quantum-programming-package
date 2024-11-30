@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 project(CQ_backend_improved C)
 
 set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 
 # Add the include directory (make sure to use the correct path)
 #include_directories(${PROJECT_SOURCE_DIR}/Assembly/include)

@@ -20,6 +20,10 @@ sequence_t *not_seq() {
     seq->num_layer = 1;
     for (int i = 0; i < number; ++i) {
         x(&seq->seq[0][i], i);
+	    if (stack.GPC[0].type != UNINITIALIZED){
+		    seq->seq[0][i].NumControls = 1;
+		    seq->seq[0][i].Control[0] = 1;
+	    }
     }
     return seq;
 }

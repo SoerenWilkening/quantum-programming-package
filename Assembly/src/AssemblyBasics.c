@@ -6,7 +6,8 @@
 
 void MOV(element_t *el1, element_t *el2, int pov) {
     if (el2 == NULL) return;
-    *el1 = *el2;
+//    *el1 = *el2;
+	memcpy(el1, el2, sizeof(element_t));
 
     if (el2->qualifier == Qu) {
         if (pov == POINTER)
@@ -42,7 +43,12 @@ void LABEL(char label[]){
 	labels[label_counter++].ins_ptr = &stack.instruction_list[stack.instruction_counter];
 }
 
-void JMP(element_t *bool1){ // Jump if bool1 is not 0 (1)
+void JMP(){
+	element_t *cb = BOOL(1);
+	JNZ(cb);
+}
+
+void JNZ(element_t *bool1){ // Jump if bool1 is not 0 (1)
 	// proper jump, only if bool is classical
 	MOV(stack.instruction_list[stack.instruction_counter].el1, bool1, POINTER);
 
