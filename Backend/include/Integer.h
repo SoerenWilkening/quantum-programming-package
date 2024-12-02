@@ -24,6 +24,7 @@ element_t *BOOL(bool intg);
 
 element_t *bit_of_int(element_t *el1, int bit);
 
+void free_element(element_t *el1);
 
 // implementation of Integer operations gate sequences
 sequence_t *QQ_mul();

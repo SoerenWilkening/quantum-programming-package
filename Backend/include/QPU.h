@@ -80,7 +80,7 @@ typedef struct {
 
 extern hybrid_stack_t stack;
 
-void init_instruction(instruction_t *instr);
+//void init_instruction(instruction_t *instr);
 
 circuit_t *init_circuit();
 

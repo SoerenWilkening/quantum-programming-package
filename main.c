@@ -17,6 +17,9 @@ sequence_t *precompiled_QQ_mul = NULL;
 int label_counter = 0;
 label_t labels[3000];
 
+active_label_t active_label[20];
+int active_label_counter = 0;
+
 int main(void) {
 
     // initialize the rest of the stack
@@ -27,16 +30,10 @@ int main(void) {
     stack.GPC[0].type = UNINITIALIZED;
     stack.circuit = init_circuit();
     stack.instruction_counter = 0;
-//    for (int i = 0; i < MAXINSTRUCTIONS; ++i) init_instruction(&stack.instruction_list[i]);
+
+	active_label[0].ctrl[0].type = UNINITIALIZED;
 
     AsmbFromFile();
-
-
-	instruction_t *ptr = stack.instruction_list;
-	for (int i = 0; i < stack.instruction_counter; ++i) {
-		printf("%s %d %d\n", ptr->name, ptr->control->type, UNINITIALIZED);
-		ptr++;
-	}
 
     // ._execute
     clock_t t1 = clock();

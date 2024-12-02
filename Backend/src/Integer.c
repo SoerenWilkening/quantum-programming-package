@@ -80,3 +80,11 @@ int *two_complement(int64_t x, int n) {
     }
     return bin;
 }
+
+void free_element(element_t *el1){
+	if (el1->qualifier == Cl) free(el1->c_address);
+	else {
+		stack.circuit->ancilla--;
+		stack.circuit->used_qubit_indices--;
+	}
+}

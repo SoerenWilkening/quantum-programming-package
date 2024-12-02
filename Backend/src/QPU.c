@@ -3,36 +3,6 @@
 //
 #include "QPU.h"
 
-void init_instruction(instruction_t *instr) {
-	instr->el1 = malloc(sizeof(element_t));
-	instr->el1->c_address = malloc(sizeof(int64_t));
-	instr->el1->type = UNINITIALIZED;
-
-	instr->el2 = malloc(sizeof(element_t));
-	instr->el2->c_address = malloc(sizeof(int64_t));
-	instr->el2->type = UNINITIALIZED;
-
-	instr->el3 = malloc(sizeof(element_t));
-	instr->el3->c_address = malloc(sizeof(int64_t));
-	instr->el3->type = UNINITIALIZED;
-
-	instr->control = malloc(sizeof(element_t));
-	instr->control->c_address = malloc(sizeof(int64_t));
-	instr->control->type = UNINITIALIZED;
-
-	instr->routine = NULL;
-	instr->invert = NOTINVERTED;
-	instr->next_instruction = NULL;
-	if (stack.instruction_counter == 0) return;
-
-	instruction_t *prev = instr;
-	prev--;
-	if (prev->control->type != UNINITIALIZED){
-		instr->control->type = prev->control->type;
-		memcpy(instr->control->q_address, prev->control->q_address, INTEGERSIZE * sizeof(qubit_t));
-	}
-}
-
 circuit_t *init_circuit() {
     circuit_t *circ = malloc(sizeof(circuit_t));
     circ->used = 0;
