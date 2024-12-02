@@ -54,6 +54,7 @@ typedef struct {
 } element_t;
 
 typedef struct {
+	char *name;
     element_t *el1;
     element_t *el2;
     element_t *el3;

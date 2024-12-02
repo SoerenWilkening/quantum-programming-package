@@ -31,9 +31,14 @@ int main(void) {
 
     AsmbFromFile();
 
-	printf("initial pointer %p\n", stack.instruction_list);
 
-//    // ._execute
+	instruction_t *ptr = stack.instruction_list;
+	for (int i = 0; i < stack.instruction_counter; ++i) {
+		printf("%s %d %d\n", ptr->name, ptr->control->type, UNINITIALIZED);
+		ptr++;
+	}
+
+    // ._execute
     clock_t t1 = clock();
     execute(stack.instruction_list);
 

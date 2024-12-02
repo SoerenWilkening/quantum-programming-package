@@ -18,12 +18,27 @@ void IADD(element_t *el1, element_t *el2) {
     // routine assignments
     ins->routine = NULL;
     if (el1->qualifier == Qu && el2->qualifier == Qu) {
-        if (ins->control->type != UNINITIALIZED) ins->routine = cQQ_add;
-        else ins->routine = QQ_add;
+        if (ins->control->type != UNINITIALIZED) {
+			ins->name = "cQQ_add ";
+			ins->routine = cQQ_add;
+		}
+        else {
+	        ins->name = "QQ_add ";
+			ins->routine = QQ_add;
+		}
     } else if (el1->qualifier == Qu && el2->qualifier == Cl) {
-        if (ins->control->type != UNINITIALIZED) ins->routine = cCQ_add;
-        else ins->routine = CQ_add;
-    } else if (el1->qualifier == Cl && el2->qualifier == Cl) ins->routine = CC_add;
+        if (ins->control->type != UNINITIALIZED) {
+	        ins->name = "cCQ_add ";
+			ins->routine = cCQ_add;
+		}
+        else {
+	        ins->name = "CQ_add ";
+			ins->routine = CQ_add;
+		}
+    } else if (el1->qualifier == Cl && el2->qualifier == Cl) {
+	    ins->name = "CC_add ";
+		ins->routine = CC_add;
+	}
     else {
         printf("Cannot add quantum integer to classical integer!\n");
         exit(6);
@@ -90,8 +105,10 @@ void IDIV(element_t *el1, element_t *el2, element_t *remainder) {
 //            AND(bool_intermediate, ctrl, bit);
 //            IF(bool_intermediate);
 //        } else IF(bit); // create control for the next instruction
-	    IF(bit);
+//	    IF(bit);
+	    JEZ(bit);
         IADD(Y, el2); // Add bq back to Aq (controlled by Cq)
+	    LABEL("internal_ctrl_add1");
 
         // Uncompute and
 //        if (ctrl->type != UNINITIALIZED) AND(bool_intermediate, ctrl, bit);
@@ -110,8 +127,10 @@ void IDIV(element_t *el1, element_t *el2, element_t *remainder) {
 //        AND(bool_intermediate, ctrl, bit);
 //        IF(bool_intermediate);
 //    } else IF(bit); // create control for the next instruction
-	IF(bit);
+//	IF(bit);
+	JEZ(bit);
     IADD(el1, el2); // Add bq back to Aq (controlled by Cq)
+	LABEL("internal_ctrl_add2");
 
     // Uncompute and
 //    if (ctrl->type != UNINITIALIZED) AND(bool_intermediate, ctrl, bit);

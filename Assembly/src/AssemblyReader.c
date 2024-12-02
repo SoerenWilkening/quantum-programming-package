@@ -124,7 +124,7 @@ int is_instruction(char *word) {
     if (strcmp(word, "MEASURE") == 0) return true;
     if (strcmp(word, "IF") == 0) return true;
     if (strcmp(word, "NOT") == 0) return true;
-    if (strcmp(word, "JNZ") == 0) return true;
+    if (strcmp(word, "JEZ") == 0) return true;
     if (strcmp(word, "JMP") == 0) return true;
     return false;
 }
@@ -291,6 +291,11 @@ void create_instruction() {
 		if (el3 == NULL) el3 = INT(calls[counter].value);
 		MOD(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
+	if (strcmp(calls[counter].instruction, "IDIV") == 0) {
+		element_t *el3 = hash_element(calls[counter].var3);
+		if (el3 == NULL) el3 = INT(calls[counter].value);
+		IDIV(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+	}
 	if (strcmp(calls[counter].instruction, "EQ") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) el3 = INT(calls[counter].value);
@@ -316,7 +321,7 @@ void create_instruction() {
 	}
 	if (strcmp(calls[counter].instruction, "IF") == 0) IF(hash_element(calls[counter].var1));
 	if (strcmp(calls[counter].instruction, "NOT") == 0) NOT(hash_element(calls[counter].var1));
-	if (strcmp(calls[counter].instruction, "JNZ") == 0) JNZ(hash_element(calls[counter].var1));
+	if (strcmp(calls[counter].instruction, "JEZ") == 0) JEZ(hash_element(calls[counter].var1));
 	if (strcmp(calls[counter].instruction, "JMP") == 0) JMP();
 	calls[counter].ptr = &stack.instruction_list[stack.instruction_counter - 1];
 }
@@ -330,7 +335,7 @@ void create_label(){
 void apply_label(){
 	for (int i = 0; i < counter; ++i) {
 		if (calls[i].instruction != NULL) {
-			if (strcmp(calls[i].instruction, "JNZ") == 0) {
+			if (strcmp(calls[i].instruction, "JEZ") == 0) {
 				printf("label_ptr = %p\n", labels[label_index(calls[i].var2)].ins_ptr);
 				calls[i].ptr->next_instruction = (struct instruction_t *) labels[label_index(calls[i].var2)].ins_ptr;
 			}

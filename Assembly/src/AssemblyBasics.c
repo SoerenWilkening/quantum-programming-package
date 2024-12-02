@@ -22,6 +22,7 @@ void MOV(element_t *el1, element_t *el2, int pov) {
 void TSTBIT(element_t *el1, element_t *el2, int bit) {
     instruction_t *ins = &stack.instruction_list[stack.instruction_counter];
 	init_instruction(ins);
+	ins->name = "testbit ";
     MOV(ins->el1, el1, POINTER); // return value
 
     element_t *qbit = bit_of_int(el2, bit);
@@ -42,17 +43,25 @@ void INV() {
 void LABEL(char label[]){
 	labels[label_counter].label = label;
 	labels[label_counter++].ins_ptr = &stack.instruction_list[stack.instruction_counter];
+	instruction_t *ins = &stack.instruction_list[stack.instruction_counter];
+	init_instruction(ins);
+	ins->name = "label ";
+	ins->routine = void_seq;
+	if (stack.instruction_counter != 0) stack.instruction_list[stack.instruction_counter].control->type = UNINITIALIZED;
+	stack.instruction_counter++;
 }
 
 void JMP(){
 	element_t *cb = BOOL(1);
-	JNZ(cb);
+	JEZ(cb);
 }
 
-void JNZ(element_t *bool1){ // Jump if bool1 is not 0 (1)
+void JEZ(element_t *bool1){ // Jump if bool1 is not 0 (1)
 	// proper jump, only if bool is classical
 	instruction_t *ins = &stack.instruction_list[stack.instruction_counter];
 	init_instruction(ins);
+	ins->name = "jnz ";
+	if (bool1->qualifier == Qu) MOV(ins->control, bool1, POINTER);
 	MOV(ins->el1, bool1, POINTER);
 
 	ins->routine = void_seq;

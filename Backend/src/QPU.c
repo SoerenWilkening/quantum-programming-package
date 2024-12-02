@@ -25,7 +25,8 @@ void init_instruction(instruction_t *instr) {
 	instr->next_instruction = NULL;
 	if (stack.instruction_counter == 0) return;
 
-	instruction_t *prev = instr--;
+	instruction_t *prev = instr;
+	prev--;
 	if (prev->control->type != UNINITIALIZED){
 		instr->control->type = prev->control->type;
 		memcpy(instr->control->q_address, prev->control->q_address, INTEGERSIZE * sizeof(qubit_t));
