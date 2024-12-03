@@ -36,7 +36,8 @@ add_executable(bench benchmark/benchmark.c
         Assembly/src/AssemblyReader.c
         Assembly/src/AssemblyLogic.c
         Assembly/src/AssemblyArithmetic.c
-        Assembly/src/AssemblyBasics.c)
+        Assembly/src/AssemblyBasics.c
+        Assembly/include/AssemblyOperations.h)
 
 
 target_include_directories(CQ_backend_improved PRIVATE ${PROJECT_SOURCE_DIR}/Assembly/include)

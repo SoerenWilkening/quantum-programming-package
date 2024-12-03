@@ -293,8 +293,12 @@ void create_instruction() {
 	}
 	if (strcmp(calls[counter].instruction, "IDIV") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
-		if (el3 == NULL) el3 = INT(calls[counter].value);
-		IDIV(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+		if (el3 == NULL) {
+			printf("classical\n");
+			el3 = INT(calls[counter].value);
+			el3->qualifier = Cl;
+		}
+		IDIV(hash_element(calls[counter].var1), el3, hash_element(calls[counter].var2));
 	}
 	if (strcmp(calls[counter].instruction, "EQ") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
@@ -319,7 +323,6 @@ void create_instruction() {
 		if (el3 == NULL) el3 = INT(calls[counter].value);
 		AND(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
-	if (strcmp(calls[counter].instruction, "IF") == 0) IF(hash_element(calls[counter].var1));
 	if (strcmp(calls[counter].instruction, "NOT") == 0) NOT(hash_element(calls[counter].var1));
 	if (strcmp(calls[counter].instruction, "JEZ") == 0) JEZ(hash_element(calls[counter].var1));
 	if (strcmp(calls[counter].instruction, "JMP") == 0) JMP();

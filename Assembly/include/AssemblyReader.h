@@ -5,10 +5,7 @@
 #ifndef CQ_BACKEND_IMPROVED_ASSEMBLYREADER_H
 #define CQ_BACKEND_IMPROVED_ASSEMBLYREADER_H
 
-#include "AssemblyComparison.h"
-#include "AssemblyBasics.h"
-#include "AssemblyArithmetic.h"
-#include "AssemblyLogic.h"
+#include "AssemblyOperations.h"
 
 #include <ctype.h>
 

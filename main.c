@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <time.h>
-#include "AssemblyComparison.h"
+#include "AssemblyOperations.h"
 #include "AssemblyReader.h"
 #include "execution.h"
 

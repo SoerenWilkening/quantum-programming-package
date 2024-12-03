@@ -6,9 +6,7 @@
 #define CQ_BACKEND_IMPROVED_EXECUTION_H
 
 
-#include "AssemblyArithmetic.h"
-#include "AssemblyBasics.h"
-#include "AssemblyLogic.h"
+#include "AssemblyOperations.h"
 #include "QPU.h"
 
 // functionality for C

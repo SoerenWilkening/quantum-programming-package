@@ -1,7 +1,7 @@
 //
 // Created by Sören Wilkening on 05.11.24.
 //
-#include "AssemblyComparison.h"
+#include "AssemblyOperations.h"
 
 void EQ(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
     if (bool_1->qualifier == Qu && bool_2->qualifier == Qu) {

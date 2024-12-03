@@ -2,7 +2,7 @@
 // Created by Sören Wilkening on 21.11.24.
 //
 
-#include "AssemblyArithmetic.h"
+#include "AssemblyOperations.h"
 
 void IADD(element_t *el1, element_t *el2) {
     if (el1->qualifier == Cl && el2->qualifier == Qu) exit(5);
@@ -84,8 +84,6 @@ void IMUL(element_t *el1, element_t *el2, element_t *res) {
 
 void IDIV(element_t *el1, element_t *el2, element_t *remainder) {
     // create IDIV sequence to Divide Aq / Bq
-//    element_t *ctrl = stack.instruction_list[stack.instruction_counter].control;
-//    element_t *bool_intermediate = QBOOL();
 
     element_t *Y = malloc(sizeof(element_t));
     memcpy(Y, el1, sizeof(element_t));
@@ -160,10 +158,10 @@ void PADD(element_t *el1, element_t *phase) {
 
 void NEG(element_t *el1){
     element_t *ctrl = stack.instruction_list[stack.instruction_counter].control;
-    IF(ctrl);
-    NOT(el1);
-    element_t *constant = INT(1);
-    IF(ctrl);
+	element_t *constant = INT(1);
+	JEZ(ctrl);
+	NOT(el1);
     ISUB(el1, constant);
+	LABEL("");
 }
 
