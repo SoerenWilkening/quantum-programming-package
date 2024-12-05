@@ -28,19 +28,20 @@ extern int active_label_counter;
 extern int label_counter;
 extern label_t labels[3000];
 
-void init_instruction(instruction_t *instr);
+instruction_t *init_instruction();
 
 void MOV(element_t *el1, element_t *el2, int pov);
-void TSTBIT(element_t *el1, element_t *el2, int bit);
+void tstbit(element_t *el1, element_t *el2, int bit);
+void qtstbit(element_t *el1, element_t *el2, int bit);
 void INV();
 
 void JEZ(element_t *bool1);
 void JMP();
 void LABEL(char label[]);
 
-void BRANCH(element_t *el1, int bit);
-void NOT(element_t *el1);
-void AND(element_t *bool_res, element_t *bool_1, element_t *bool_2);
+void branch(element_t *el1, int bit);
+void qnot(element_t *el1);
+void qqand(element_t *bool_res, element_t *bool_1, element_t *bool_2);
 void OR();
 void XOR();
 
@@ -50,13 +51,13 @@ void LEQ(element_t *bool_res, element_t *bool_1, element_t *bool_2);
 
 // integer arithmetic
 void NEG(element_t *el1);
-void INC(element_t *el1);
-void DCR(element_t *el1);
-void IADD(element_t *el1, element_t *el2);
-void ISUB(element_t *el1, element_t *el2);
-void IMUL(element_t *el1, element_t *el2, element_t *res);
-void IDIV(element_t *el1, element_t *el2, element_t *remainder);
-void MOD(element_t *mod, element_t *el1, element_t *el2);
+void inc(element_t *el1);
+void dcr(element_t *el1);
+void qqadd(element_t *el1, element_t *el2);
+void qqsub(element_t *el1, element_t *el2);
+void qqmul(element_t *el1, element_t *el2, element_t *res);
+void qqsdiv(element_t *el1, element_t *el2, element_t *remainder);
+void qqsmod(element_t *mod, element_t *el1, element_t *el2);
 // phase operations
 void PADD(element_t *el1, element_t *phase);
 

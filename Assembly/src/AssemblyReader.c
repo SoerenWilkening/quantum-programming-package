@@ -71,7 +71,7 @@ element_t *hash_element(char *word) {
 // Function to check if a string is a valid integer
 bool is_integer(const char* str) {
 	if (!str || *str == '\0') {
-		return false; // Null or empty string is not an integer
+		return false; // Null or empty string is qnot an integer
 	}
 
 	// Optional leading sign
@@ -107,23 +107,23 @@ int is_addon(char *word) {
 }
 
 int is_instruction(char *word) {
-    if (strcmp(word, "BRANCH") == 0) return true;
+    if (strcmp(word, "branch") == 0) return true;
     if (strcmp(word, "MOV") == 0) return true;
-    if (strcmp(word, "IADD") == 0) return true;
-    if (strcmp(word, "INC") == 0) return true;
-    if (strcmp(word, "DCR") == 0) return true;
+    if (strcmp(word, "qqadd") == 0) return true;
+    if (strcmp(word, "inc") == 0) return true;
+    if (strcmp(word, "dcr") == 0) return true;
     if (strcmp(word, "PADD") == 0) return true;
-    if (strcmp(word, "ISUB") == 0) return true;
-    if (strcmp(word, "IMUL") == 0) return true;
-    if (strcmp(word, "IDIV") == 0) return true;
-    if (strcmp(word, "MOD") == 0) return true;
-    if (strcmp(word, "AND") == 0) return true;
+    if (strcmp(word, "qqsub") == 0) return true;
+    if (strcmp(word, "qqmul") == 0) return true;
+    if (strcmp(word, "qqsdiv") == 0) return true;
+    if (strcmp(word, "qqsmod") == 0) return true;
+    if (strcmp(word, "qqand") == 0) return true;
     if (strcmp(word, "EQ") == 0) return true;
     if (strcmp(word, "GEQ") == 0) return true;
     if (strcmp(word, "LEQ") == 0) return true;
     if (strcmp(word, "MEASURE") == 0) return true;
     if (strcmp(word, "IF") == 0) return true;
-    if (strcmp(word, "NOT") == 0) return true;
+    if (strcmp(word, "qnot") == 0) return true;
     if (strcmp(word, "JEZ") == 0) return true;
     if (strcmp(word, "JMP") == 0) return true;
     return false;
@@ -163,7 +163,7 @@ int is_label(char *str){
 
 void word_to_call(char *word) {
     if (is_integer(word)) return;
-//	printf("is not integer \n");
+//	printf("is qnot integer \n");
     if (is_addon(word)) calls[counter].addon = word;
     else if (is_instruction(word)) calls[counter].instruction = word;
     else {
@@ -260,45 +260,45 @@ void ReadAssembly(char *asmb[], int num) {
 void create_instruction() {
 	if (calls[counter].instruction == NULL) return;
 //    printf("%s %s, %s, %s, %d\n", calls[counter].instruction, calls[counter].var1, calls[counter].var2, calls[counter].var3, calls[counter].value);
-	if (strcmp(calls[counter].instruction, "BRANCH") == 0) {
-		BRANCH(hash_element(calls[counter].var1), calls[counter].value);
+	if (strcmp(calls[counter].instruction, "branch") == 0) {
+		branch(hash_element(calls[counter].var1), calls[counter].value);
 	}
-	if (strcmp(calls[counter].instruction, "IADD") == 0) {
+	if (strcmp(calls[counter].instruction, "qqadd") == 0) {
 		element_t *el3 = hash_element(calls[counter].var2);
 		if (el3 == NULL) {
 			el3 = INT(calls[counter].value);
 			el3->qualifier = Cl;
 		}
-		IADD(hash_element(calls[counter].var1), el3);
+		qqadd(hash_element(calls[counter].var1), el3);
 	}
-	if (strcmp(calls[counter].instruction, "INC") == 0) {INC(hash_element(calls[counter].var1));}
-	if (strcmp(calls[counter].instruction, "DCR") == 0) {DCR(hash_element(calls[counter].var1));}
-	if (strcmp(calls[counter].instruction, "ISUB") == 0) {
+	if (strcmp(calls[counter].instruction, "inc") == 0) { inc(hash_element(calls[counter].var1));}
+	if (strcmp(calls[counter].instruction, "dcr") == 0) { dcr(hash_element(calls[counter].var1));}
+	if (strcmp(calls[counter].instruction, "qqsub") == 0) {
 		element_t *el3 = hash_element(calls[counter].var2);
 		if (el3 == NULL) {
 			el3 = INT(calls[counter].value);
 			el3->qualifier = Cl;
 		}
-		ISUB(hash_element(calls[counter].var1), el3);
+		qqsub(hash_element(calls[counter].var1), el3);
 	}
 	if (strcmp(calls[counter].instruction, "PADD") == 0) {
 		element_t *el3 = hash_element(calls[counter].var2);
 		if (el3 == NULL) el3 = INT(calls[counter].value);
 		PADD(hash_element(calls[counter].var1), el3);
 	}
-	if (strcmp(calls[counter].instruction, "MOD") == 0) {
+	if (strcmp(calls[counter].instruction, "qqsmod") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) el3 = INT(calls[counter].value);
-		MOD(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+		qqsmod(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
-	if (strcmp(calls[counter].instruction, "IDIV") == 0) {
+	if (strcmp(calls[counter].instruction, "qqsdiv") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) {
 			printf("classical\n");
 			el3 = INT(calls[counter].value);
 			el3->qualifier = Cl;
 		}
-		IDIV(hash_element(calls[counter].var1), el3, hash_element(calls[counter].var2));
+		qqsdiv(hash_element(calls[counter].var1), el3, hash_element(calls[counter].var2));
 	}
 	if (strcmp(calls[counter].instruction, "EQ") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
@@ -318,12 +318,12 @@ void create_instruction() {
 		if (el3 == NULL) el3 = INT(calls[counter].value);
 		LEQ(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
-	if (strcmp(calls[counter].instruction, "AND") == 0) {
+	if (strcmp(calls[counter].instruction, "qqand") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) el3 = INT(calls[counter].value);
-		AND(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+		qqand(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
-	if (strcmp(calls[counter].instruction, "NOT") == 0) NOT(hash_element(calls[counter].var1));
+	if (strcmp(calls[counter].instruction, "qnot") == 0) qnot(hash_element(calls[counter].var1));
 	if (strcmp(calls[counter].instruction, "JEZ") == 0) JEZ(hash_element(calls[counter].var1));
 	if (strcmp(calls[counter].instruction, "JMP") == 0) JMP();
 	calls[counter].ptr = &stack.instruction_list[stack.instruction_counter - 1];

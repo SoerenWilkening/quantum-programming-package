@@ -5,11 +5,9 @@
 
 void EQ(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
     if (bool_1->qualifier == Qu && bool_2->qualifier == Qu) {
-        ISUB(bool_1, bool_2);
+	    qqsub(bool_1, bool_2);
     }
-
-    instruction_t *ins = &stack.instruction_list[stack.instruction_counter];
-	init_instruction(ins);
+	instruction_t *ins = init_instruction();
 
     MOV(ins->el1, bool_res, POINTER);
     MOV(ins->el2, bool_1, POINTER);
@@ -25,28 +23,27 @@ void EQ(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
     else ins->routine = CQ_equal;
 
     ins->invert = NOTINVERTED;
-    stack.instruction_counter++;
 
     if (bool_1->qualifier == Qu && bool_2->qualifier == Qu) {
-        IADD(bool_1, bool_2);
+	    qqadd(bool_1, bool_2);
     }
 }
 
 void LEQ(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
 
-    ISUB(bool_1, bool_2);
+	qqsub(bool_1, bool_2);
 
-    TSTBIT(bool_res, bool_1, 0);
+	tstbit(bool_res, bool_1, 0);
 
-    IADD(bool_1, bool_2);
+	qqadd(bool_1, bool_2);
 }
 
 void GEQ(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
 
-    ISUB(bool_1, bool_2);
+	qqsub(bool_1, bool_2);
 
-    TSTBIT(bool_res, bool_1, 0);
+	tstbit(bool_res, bool_1, 0);
 
-    IADD(bool_1, bool_2);
+	qqadd(bool_1, bool_2);
 }
 

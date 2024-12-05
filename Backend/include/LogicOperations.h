@@ -16,6 +16,6 @@ sequence_t *not_seq();
 
 sequence_t *and_sequence();
 
-sequence_t *branch();
+sequence_t *branch_seq();
 
 #endif //CQ_BACKEND_IMPROVED_LOGICOPERATIONS_H

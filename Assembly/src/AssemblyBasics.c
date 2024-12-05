@@ -4,7 +4,8 @@
 
 #include "AssemblyOperations.h"
 
-void init_instruction(instruction_t *instr) {
+instruction_t *init_instruction() {
+	instruction_t *instr = &stack.instruction_list[stack.instruction_counter];
 	instr->el1 = malloc(sizeof(element_t));
 	instr->el1->c_address = malloc(sizeof(int64_t));
 	instr->el1->type = UNINITIALIZED;
@@ -24,11 +25,11 @@ void init_instruction(instruction_t *instr) {
 	instr->routine = NULL;
 	instr->invert = NOTINVERTED;
 	instr->next_instruction = NULL;
-	if (stack.instruction_counter == 0) return;
+	stack.instruction_counter++;
+	if (stack.instruction_counter == 0) return instr;
 
-	instruction_t *prev = instr;
-	prev--;
 	MOV(instr->control, active_label[active_label_counter].ctrl, POINTER);
+	return instr;
 }
 
 void MOV(element_t *el1, element_t *el2, int pov) {
@@ -45,9 +46,19 @@ void MOV(element_t *el1, element_t *el2, int pov) {
     }
 }
 
-void TSTBIT(element_t *el1, element_t *el2, int bit) {
-    instruction_t *ins = &stack.instruction_list[stack.instruction_counter];
-	init_instruction(ins);
+void tstbit(element_t *el1, element_t *el2, int bit) {
+	instruction_t *ins = init_instruction();
+	ins->name = "testbit ";
+	MOV(ins->el1, el1, POINTER); // return value
+
+	element_t *qbit = bit_of_int(el2, bit);
+
+	MOV(ins->el2, qbit, POINTER);
+	ins->routine = void_seq;
+}
+
+void qtstbit(element_t *el1, element_t *el2, int bit) {
+	instruction_t *ins = init_instruction();
 	ins->name = "testbit ";
     MOV(ins->el1, el1, POINTER); // return value
 
@@ -55,7 +66,6 @@ void TSTBIT(element_t *el1, element_t *el2, int bit) {
 
     MOV(ins->el2, qbit, POINTER);
     ins->routine = cx_gate;
-    stack.instruction_counter++;
 }
 
 void INV() {
@@ -67,30 +77,29 @@ void JMP(){
 	JEZ(cb);
 }
 
-void JEZ(element_t *bool1){ // Jump if bool1 is not 0 (1)
+void JEZ(element_t *bool1){ // Jump if bool1 is qnot 0 (1)
 	// proper jump, only if bool is classical
 	element_t *step;
 	if (active_label_counter > 0) {
 		step = QBOOL();
-		AND(step, active_label[active_label_counter].ctrl, bool1);
+		qqand(step, active_label[active_label_counter].ctrl, bool1);
 		MOV(active_label[active_label_counter].step, bool1, POINTER);
 	} else step = bool1;
 
-	instruction_t *ins = &stack.instruction_list[stack.instruction_counter];
-	init_instruction(ins);
+	instruction_t *ins = init_instruction();
 	ins->name = "jez ";
 	if (step->qualifier == Qu) {
 		MOV(active_label[active_label_counter + 1].ctrl, step, POINTER);
 		active_label_counter++;
 	}
 	ins->routine = void_seq;
-	stack.instruction_counter++;
 
 }
 
 void LABEL(char label[]){
 	if (active_label_counter > 1){
-		AND(active_label[active_label_counter].ctrl, active_label[active_label_counter - 1].ctrl, active_label[active_label_counter - 1].step);
+		qqand(active_label[active_label_counter].ctrl, active_label[active_label_counter - 1].ctrl,
+		      active_label[active_label_counter - 1].step);
 		free_element(active_label[active_label_counter].ctrl);
 	}
 	if (stack.instruction_counter > 0) active_label_counter--;
@@ -98,9 +107,7 @@ void LABEL(char label[]){
 	labels[label_counter].label = label;
 	labels[label_counter++].ins_ptr = &stack.instruction_list[stack.instruction_counter];
 
-	instruction_t *ins = &stack.instruction_list[stack.instruction_counter];
-	init_instruction(ins);
+	instruction_t *ins = init_instruction();
 	ins->name = "label ";
 	ins->routine = void_seq;
-	stack.instruction_counter++;
 }

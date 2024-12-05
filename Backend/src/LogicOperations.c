@@ -90,7 +90,7 @@ sequence_t *and_sequence() {
     return seq;
 }
 
-sequence_t *branch(){
+sequence_t *branch_seq(){
     sequence_t *seq = malloc(sizeof(sequence_t *));
 
     seq->used_layer = 1;

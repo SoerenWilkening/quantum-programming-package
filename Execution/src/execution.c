@@ -65,10 +65,9 @@ void execute(instruction_t *instr) {
     if (instr->control->type != UNINITIALIZED) MOV(stack.GPC, instr->control, POINTER);
 
 	if (instr->routine == NULL) return;
-
-    qubit_t qubit_array[5 * INTEGERSIZE];
-    qubit_mapping(qubit_array);
-    sequence_t *res = instr->routine();
+	qubit_t qubit_array[5 * INTEGERSIZE];
+	qubit_mapping(qubit_array);
+	sequence_t *res = instr->routine();
 
     run_instruction(res, qubit_array, instr->invert);
 
