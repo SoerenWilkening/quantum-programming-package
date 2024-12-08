@@ -21,7 +21,9 @@ add_executable(CQ_backend_improved main.c
         Assembly/src/AssemblyReader.c
         Assembly/src/AssemblyLogic.c
         Assembly/src/AssemblyArithmetic.c
-        Assembly/src/AssemblyBasics.c)
+        Assembly/src/AssemblyBasics.c
+        Assembly/src/AssemblyIntegerMultiplication.c
+        Assembly/src/AssemblyIntegerDivision.c)
 
 add_executable(bench benchmark/benchmark.c
         Backend/src/Integer.c
@@ -37,7 +39,10 @@ add_executable(bench benchmark/benchmark.c
         Assembly/src/AssemblyLogic.c
         Assembly/src/AssemblyArithmetic.c
         Assembly/src/AssemblyBasics.c
-        Assembly/include/AssemblyOperations.h)
+        Assembly/include/AssemblyOperations.h
+        Assembly/src/AssemblyIntegerAddition.c
+        Assembly/src/AssemblyIntegerMultiplication.c
+        Assembly/src/AssemblyIntegerDivision.c)
 
 
 target_include_directories(CQ_backend_improved PRIVATE ${PROJECT_SOURCE_DIR}/Assembly/include)

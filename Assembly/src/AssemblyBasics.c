@@ -68,16 +68,28 @@ void qtstbit(element_t *el1, element_t *el2, int bit) {
     ins->routine = cx_gate;
 }
 
-void INV() {
+void cqtstbit(element_t *el1, element_t *el2, element_t *ctrl, int bit) {
+	instruction_t *ins = init_instruction();
+	ins->name = "testbit ";
+    MOV(ins->el1, el1, POINTER); // return value
+
+    element_t *qbit = bit_of_int(el2, bit);
+
+    MOV(ins->el2, qbit, POINTER);
+    MOV(ins->control, ctrl, POINTER);
+    ins->routine = ccx_gate;
+}
+
+void inv() {
     stack.instruction_list[stack.instruction_counter].invert = INVERTED;
 }
 
-void JMP(){
+void jmp(){
 	element_t *cb = BOOL(0);
-	JEZ(cb);
+	jez(cb);
 }
 
-void JEZ(element_t *bool1){ // Jump if bool1 is qnot 0 (1)
+void jez(element_t *bool1){ // Jump if bool1 is qnot 0 (1)
 	// proper jump, only if bool is classical
 	element_t *step;
 	if (active_label_counter > 0) {
@@ -96,7 +108,7 @@ void JEZ(element_t *bool1){ // Jump if bool1 is qnot 0 (1)
 
 }
 
-void LABEL(char label[]){
+void label(char label[]){
 	if (active_label_counter > 1){
 		qqand(active_label[active_label_counter].ctrl, active_label[active_label_counter - 1].ctrl,
 		      active_label[active_label_counter - 1].step);

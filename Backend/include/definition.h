@@ -8,6 +8,11 @@
 #include <stdlib.h>
 
 #define INTEGERSIZE 64
+#define QBITSIZE 1
+#define QBYTESIZE 8
+#define QHWORDSIZE 16
+#define QWORDSIZE 32
+#define QDWORDSIZE 64
 
 #define POINTER 1
 #define VALUE 0

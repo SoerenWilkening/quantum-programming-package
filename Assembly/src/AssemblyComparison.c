@@ -30,20 +30,14 @@ void EQ(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
 }
 
 void LEQ(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
-
 	qqsub(bool_1, bool_2);
-
 	tstbit(bool_res, bool_1, 0);
-
 	qqadd(bool_1, bool_2);
 }
 
 void GEQ(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
-
 	qqsub(bool_1, bool_2);
-
 	tstbit(bool_res, bool_1, 0);
-
 	qqadd(bool_1, bool_2);
 }
 

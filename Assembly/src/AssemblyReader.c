@@ -96,7 +96,7 @@ bool is_integer(const char* str) {
 
 
 int is_addon(char *word) {
-    if (strcmp(word, "INV") == 0) return true;
+    if (strcmp(word, "inv") == 0) return true;
     if (strcmp(word, "QUINT") == 0) return true;
     if (strcmp(word, "QINT") == 0) return true;
     if (strcmp(word, "UINT") == 0) return true;
@@ -112,7 +112,7 @@ int is_instruction(char *word) {
     if (strcmp(word, "qqadd") == 0) return true;
     if (strcmp(word, "inc") == 0) return true;
     if (strcmp(word, "dcr") == 0) return true;
-    if (strcmp(word, "PADD") == 0) return true;
+    if (strcmp(word, "padd") == 0) return true;
     if (strcmp(word, "qqsub") == 0) return true;
     if (strcmp(word, "qqmul") == 0) return true;
     if (strcmp(word, "qqsdiv") == 0) return true;
@@ -124,8 +124,8 @@ int is_instruction(char *word) {
     if (strcmp(word, "MEASURE") == 0) return true;
     if (strcmp(word, "IF") == 0) return true;
     if (strcmp(word, "qnot") == 0) return true;
-    if (strcmp(word, "JEZ") == 0) return true;
-    if (strcmp(word, "JMP") == 0) return true;
+    if (strcmp(word, "jez") == 0) return true;
+    if (strcmp(word, "jmp") == 0) return true;
     return false;
 }
 
@@ -281,10 +281,10 @@ void create_instruction() {
 		}
 		qqsub(hash_element(calls[counter].var1), el3);
 	}
-	if (strcmp(calls[counter].instruction, "PADD") == 0) {
+	if (strcmp(calls[counter].instruction, "padd") == 0) {
 		element_t *el3 = hash_element(calls[counter].var2);
 		if (el3 == NULL) el3 = INT(calls[counter].value);
-		PADD(hash_element(calls[counter].var1), el3);
+		padd(hash_element(calls[counter].var1), el3);
 	}
 	if (strcmp(calls[counter].instruction, "qqsmod") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
@@ -324,25 +324,25 @@ void create_instruction() {
 		qqand(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
 	if (strcmp(calls[counter].instruction, "qnot") == 0) qnot(hash_element(calls[counter].var1));
-	if (strcmp(calls[counter].instruction, "JEZ") == 0) JEZ(hash_element(calls[counter].var1));
-	if (strcmp(calls[counter].instruction, "JMP") == 0) JMP();
+	if (strcmp(calls[counter].instruction, "jez") == 0) jez(hash_element(calls[counter].var1));
+	if (strcmp(calls[counter].instruction, "jmp") == 0) jmp();
 	calls[counter].ptr = &stack.instruction_list[stack.instruction_counter - 1];
 }
 
 
 void create_label(){
 	if (calls[counter].label == NULL) return;
-	LABEL(calls[counter].label);
+	label(calls[counter].label);
 }
 
 void apply_label(){
 	for (int i = 0; i < counter; ++i) {
 		if (calls[i].instruction != NULL) {
-			if (strcmp(calls[i].instruction, "JEZ") == 0) {
+			if (strcmp(calls[i].instruction, "jez") == 0) {
 				printf("label_ptr = %p\n", labels[label_index(calls[i].var2)].ins_ptr);
 				calls[i].ptr->next_instruction = (struct instruction_t *) labels[label_index(calls[i].var2)].ins_ptr;
 			}
-			if (strcmp(calls[i].instruction, "JMP") == 0) {
+			if (strcmp(calls[i].instruction, "jmp") == 0) {
 				calls[i].ptr->next_instruction = (struct instruction_t *) labels[label_index(calls[i].var1)].ins_ptr;
 			}
 		}
@@ -361,7 +361,7 @@ void create_executable() {
 		// run instructions ------------------------------------
 
 		// call inverse
-		if (calls[counter].addon != NULL) if (strcmp(calls[counter].addon, "INV") == 0) INV();
+		if (calls[counter].addon != NULL) if (strcmp(calls[counter].addon, "inv") == 0) inv();
 
 		// run instruction
 		create_instruction();

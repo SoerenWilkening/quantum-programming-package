@@ -30,6 +30,14 @@ void qnot(element_t *el1) {
     ins->routine = not_seq;
 }
 
+void cqnot(element_t *el1, element_t *ctrl) {
+	instruction_t *ins = init_instruction();
+	ins->name = "qnot ";
+	MOV(ins->el1, el1, POINTER);
+
+	ins->routine = cx_gate;
+}
+
 void and(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
 	instruction_t *ins = init_instruction();
 	ins->name = "and ";

@@ -156,6 +156,17 @@ sequence_t *cx_gate() {
     return seq;
 }
 
+sequence_t *ccx_gate() {
+	sequence_t *seq = malloc(sizeof(sequence_t *));
+
+	seq->used_layer = 1;
+	seq->num_layer = 1;
+	seq->gates_per_layer[0] = 1;
+	ccx(&seq->seq[0][0], 0, 1, 2);
+
+	return seq;
+}
+
 sequence_t *QFT(sequence_t *qft) {
     num_t sum[2 * INTEGERSIZE - 1];
     memset(sum, 0, (2 * INTEGERSIZE - 1) * sizeof(num_t));
