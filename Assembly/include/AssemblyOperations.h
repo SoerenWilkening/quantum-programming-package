@@ -16,46 +16,71 @@ typedef struct {
 	instruction_t *ins_ptr;
 } label_t;
 
-typedef struct {
-	element_t ctrl[1];
-	element_t step[1];
-	char *label;
-} active_label_t;
-
-extern active_label_t active_label[20];
-extern int active_label_counter;
-
 extern int label_counter;
 extern label_t labels[3000];
 
 instruction_t *init_instruction();
 
-void MOV(element_t *el1, element_t *el2, int pov);
+void mov(element_t *el1, element_t *el2, int pov);
+void inv();
 void tstbit(element_t *el1, element_t *el2, int bit);
 void qtstbit(element_t *el1, element_t *el2, int bit);
 void cqtstbit(element_t *el1, element_t *el2, element_t *ctrl, int bit);
-void inv();
 
 void jez(element_t *bool1);
 void jmp();
 void label(char label[]);
 
 void branch(element_t *el1, int bit);
+void not(element_t *el1);
 void qnot(element_t *el1);
 void cqnot(element_t *el1, element_t *ctrl);
 
+void and(element_t *bool_res, element_t *bool_1, element_t *bool_2);
+void qand(element_t *bool_res, element_t *bool_1, element_t *bool_2);
 void qqand(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void OR();
-void XOR();
 
-void EQ(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void GEQ(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void LEQ(element_t *bool_res, element_t *bool_1, element_t *bool_2);
+void or();
+void qor();
+void qqor();
+void cqor();
+void ccqqor();
+
+void xor();
+void qxor();
+void qqxor();
+void cqxor();
+void cqqxor();
+
+void eq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
+void qeq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
+void qqeq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
+void cqeq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
+void cqqeq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
+
+void geq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
+void qgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
+void qqgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
+void cqgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
+void cqqgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
+
+void leq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
+void qleq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
+void qqleq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
+void cqleq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
+void cqqleq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
 
 // integer arithmetic
-void neg(element_t *el1);
 void inc(element_t *el1);
+void qinc(element_t *el1);
+void cqinc(element_t *el1, element_t *ctrl);
 void dcr(element_t *el1);
+void qdcr(element_t *el1);
+void cqdcr(element_t *el1, element_t *ctrl);
+
+// phase operations
+void padd(element_t *el1, element_t *phase);
+void cpadd(element_t *el1, element_t *phase, element_t *ctrl);
 
 void add(element_t *el1, element_t *el2);
 void qadd(element_t *el1, element_t *el2);
@@ -75,6 +100,8 @@ void qqmul(element_t *el1, element_t *el2, element_t *res);
 void cqmul(element_t *el1, element_t *el2, element_t *res, element_t *ctrl);
 void cqqmul(element_t *el1, element_t *el2, element_t *res, element_t *ctrl);
 
+void qneg(element_t *el1);
+void cqneg(element_t *el1, element_t *ctrl);
 
 void sdiv(element_t *el1, element_t *el2, element_t *remainder);
 void qsdiv(element_t *A, element_t *B, element_t *remainder);
@@ -99,7 +126,5 @@ void qumod(element_t *mod, element_t *el1, element_t *el2);
 void qqumod(element_t *mod, element_t *el1, element_t *el2);
 void cqumod(element_t *mod, element_t *el1, element_t *el2, element_t *ctrl);
 void cqqumod(element_t *mod, element_t *el1, element_t *el2, element_t *ctrl);
-// phase operations
-void padd(element_t *el1, element_t *phase);
 
 #endif //CQ_BACKEND_IMPROVED_ASSEMBLYOPERATIONS_H

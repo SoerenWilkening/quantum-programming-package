@@ -20,7 +20,6 @@ add_executable(CQ_backend_improved main.c
         Assembly/src/AssemblyComparison.c
         Assembly/src/AssemblyReader.c
         Assembly/src/AssemblyLogic.c
-        Assembly/src/AssemblyArithmetic.c
         Assembly/src/AssemblyBasics.c
         Assembly/src/AssemblyIntegerAddition.c
         Assembly/src/AssemblyIntegerMultiplication.c
@@ -38,7 +37,6 @@ add_executable(bench benchmark/benchmark.c
         Assembly/src/AssemblyComparison.c
         Assembly/src/AssemblyReader.c
         Assembly/src/AssemblyLogic.c
-        Assembly/src/AssemblyArithmetic.c
         Assembly/src/AssemblyBasics.c
         Assembly/include/AssemblyOperations.h
         Assembly/src/AssemblyIntegerAddition.c

@@ -69,7 +69,7 @@ element_t *hash_element(char *word) {
 
 int is_instruction(char *word) {
 	if (strcmp(word, "branch") == 0) return true;
-	if (strcmp(word, "MOV") == 0) return true;
+	if (strcmp(word, "mov") == 0) return true;
 	if (strcmp(word, "inc") == 0) return true;
 	if (strcmp(word, "dcr") == 0) return true;
 	if (strcmp(word, "padd") == 0) return true;
@@ -105,9 +105,9 @@ int is_instruction(char *word) {
 	if (strcmp(word, "cqqsmod") == 0) return true;
 
 	if (strcmp(word, "qqand") == 0) return true;
-	if (strcmp(word, "EQ") == 0) return true;
-	if (strcmp(word, "GEQ") == 0) return true;
-	if (strcmp(word, "LEQ") == 0) return true;
+	if (strcmp(word, "qeq") == 0) return true;
+	if (strcmp(word, "qgeq") == 0) return true;
+	if (strcmp(word, "qleq") == 0) return true;
 	if (strcmp(word, "MEASURE") == 0) return true;
 	if (strcmp(word, "IF") == 0) return true;
 	if (strcmp(word, "qnot") == 0) return true;
@@ -306,23 +306,23 @@ void create_instruction() {
 
 	if (strcmp(calls[counter].instruction, "qqsmod") == 0) qqsmod(hash_element(calls[counter].var1), hash_element(calls[counter].var2), hash_element(calls[counter].var3));
 
-	if (strcmp(calls[counter].instruction, "EQ") == 0) {
+	if (strcmp(calls[counter].instruction, "qeq") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) el3 = INT(calls[counter].value);
-		EQ(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+		qeq(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
-	if (strcmp(calls[counter].instruction, "GEQ") == 0) {
+	if (strcmp(calls[counter].instruction, "qgeq") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) {
 			el3 = INT(calls[counter].value);
 			el3->qualifier = Cl;
 		}
-		GEQ(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+		qgeq(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
-	if (strcmp(calls[counter].instruction, "LEQ") == 0) {
+	if (strcmp(calls[counter].instruction, "qleq") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) el3 = INT(calls[counter].value);
-		LEQ(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
+		qleq(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
 	if (strcmp(calls[counter].instruction, "qqand") == 0) {
 		element_t *el3 = hash_element(calls[counter].var3);

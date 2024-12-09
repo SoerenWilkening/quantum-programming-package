@@ -6,16 +6,16 @@
 
 void add(element_t *el1, element_t *el2) {
 	instruction_t *ins = init_instruction();
-	MOV(ins->el1, el1, POINTER);
-	MOV(ins->el2, el2, POINTER);
+	mov(ins->el1, el1, POINTER);
+	mov(ins->el2, el2, POINTER);
 	ins->name = "CC_add ";
 	ins->routine = CC_add;
 }
 
 void qadd(element_t *el1, element_t *el2) {
 	instruction_t *ins = init_instruction();
-	MOV(ins->el1, el1, POINTER);
-	MOV(ins->el2, el2, POINTER);
+	mov(ins->el1, el1, POINTER);
+	mov(ins->el2, el2, POINTER);
 
 	ins->name = "CQ_add ";
 	ins->routine = CQ_add;
@@ -23,8 +23,8 @@ void qadd(element_t *el1, element_t *el2) {
 
 void cqadd(element_t *el1, element_t *el2, element_t *ctrl) {
 	instruction_t *ins = init_instruction();
-	MOV(ins->el1, el1, POINTER);
-	MOV(ins->el2, el2, POINTER);
+	mov(ins->el1, el1, POINTER);
+	mov(ins->el2, el2, POINTER);
 
 	ins->name = "cCQ_add ";
 	ins->routine = cCQ_add;
@@ -32,8 +32,8 @@ void cqadd(element_t *el1, element_t *el2, element_t *ctrl) {
 
 void qqadd(element_t *el1, element_t *el2) {
 	instruction_t *ins = init_instruction();
-	MOV(ins->el1, el1, POINTER);
-	MOV(ins->el2, el2, POINTER);
+	mov(ins->el1, el1, POINTER);
+	mov(ins->el2, el2, POINTER);
 
 	// routine assignments
 	ins->name = "QQ_add ";
@@ -42,9 +42,9 @@ void qqadd(element_t *el1, element_t *el2) {
 
 void cqqadd(element_t *el1, element_t *el2, element_t *ctrl) {
 	instruction_t *ins = init_instruction();
-	MOV(ins->el1, el1, POINTER);
-	MOV(ins->el2, el2, POINTER);
-	MOV(ins->control, ctrl, POINTER);
+	mov(ins->el1, el1, POINTER);
+	mov(ins->el2, el2, POINTER);
+	mov(ins->control, ctrl, POINTER);
 
 	// routine assignments
 	ins->name = "cQQ_add ";
@@ -74,4 +74,51 @@ void qqsub(element_t *el1, element_t *el2) {
 void cqqsub(element_t *el1, element_t *el2, element_t *ctrl) {
 	cqqadd(el1, el2, ctrl);
 	stack.instruction_list[stack.instruction_counter - 1].invert = INVERTED;
+}
+
+void inc(element_t *el1) {
+	element_t *cint = INT(1);
+	add(el1, cint);
+}
+
+void qinc(element_t *el1) {
+	element_t *cint = INT(1);
+	qadd(el1, cint);
+}
+
+void cqinc(element_t *el1, element_t *ctrl) {
+	element_t *cint = INT(1);
+	cqadd(el1, cint, ctrl);
+}
+
+void dcr(element_t *el1) {
+	element_t *cint = INT(1);
+	sub(el1, cint);
+}
+
+void qdcr(element_t *el1) {
+	element_t *cint = INT(1);
+	qsub(el1, cint);
+}
+
+void cqdcr(element_t *el1, element_t *ctrl) {
+	element_t *cint = INT(1);
+	cqsub(el1, cint, ctrl);
+}
+
+void padd(element_t *el1, element_t *phase) {
+	instruction_t *ins = init_instruction();
+	mov(ins->el1, el1, POINTER);
+	mov(ins->el2, phase, POINTER);
+
+	ins->routine = P_add;
+}
+
+void cpadd(element_t *el1, element_t *phase, element_t *ctrl) {
+	instruction_t *ins = init_instruction();
+	mov(ins->el1, el1, POINTER);
+	mov(ins->el2, phase, POINTER);
+	mov(ins->control, ctrl, POINTER);
+
+	ins->routine = P_add;
 }

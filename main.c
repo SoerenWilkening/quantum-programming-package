@@ -17,9 +17,6 @@ sequence_t *precompiled_QQ_mul = NULL;
 int label_counter = 0;
 label_t labels[3000];
 
-active_label_t active_label[20];
-int active_label_counter = 0;
-
 int main(void) {
 
     // initialize the rest of the stack

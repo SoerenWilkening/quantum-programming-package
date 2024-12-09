@@ -187,3 +187,27 @@ sequence_t *CC_add() {
     *stack.GPR1->c_address += *stack.GPR2->c_address;
     return NULL;
 }
+
+sequence_t *P_add(){
+	sequence_t *seq = malloc(sizeof(sequence_t));
+
+	seq->gates_per_layer[0] = 1;
+	seq->used_layer = 1;
+	seq->num_layer = 1;
+	// implement correct phase multiplication
+	p(&seq->seq[0][0], 0, *stack.GPR2[0].c_address);
+
+	return seq;
+}
+
+sequence_t *cP_add(){
+	sequence_t *seq = malloc(sizeof(sequence_t));
+
+	seq->gates_per_layer[0] = 1;
+	seq->used_layer = 1;
+	seq->num_layer = 1;
+	// implement correct phase multiplication
+	cp(&seq->seq[0][0], 0, 1, *stack.GPR2[0].c_address);
+
+	return seq;
+}

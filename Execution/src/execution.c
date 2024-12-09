@@ -58,11 +58,11 @@ void execute(instruction_t *instr) {
 
 	if (instr->el1 == NULL) return;
 
-    if (instr->el1->type != UNINITIALIZED) MOV(stack.GPR1, instr->el1, POINTER);
-    if (instr->el2->type != UNINITIALIZED) MOV(stack.GPR2, instr->el2, POINTER);
-    if (instr->el3->type != UNINITIALIZED) MOV(stack.GPR3, instr->el3, POINTER);
+    if (instr->el1->type != UNINITIALIZED) mov(stack.GPR1, instr->el1, POINTER);
+    if (instr->el2->type != UNINITIALIZED) mov(stack.GPR2, instr->el2, POINTER);
+    if (instr->el3->type != UNINITIALIZED) mov(stack.GPR3, instr->el3, POINTER);
 
-    if (instr->control->type != UNINITIALIZED) MOV(stack.GPC, instr->control, POINTER);
+    if (instr->control->type != UNINITIALIZED) mov(stack.GPC, instr->control, POINTER);
 
 	if (instr->routine == NULL) return;
 	qubit_t qubit_array[5 * INTEGERSIZE];

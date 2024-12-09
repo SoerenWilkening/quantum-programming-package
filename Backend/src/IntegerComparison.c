@@ -27,7 +27,6 @@ sequence_t *CQ_equal() {
     } else {
         quantum_element = stack.GPR3;
         classical_element = stack.GPR2;
-//        factor = 1 + INTEGERSIZE;
     }
 
     int *bin = two_complement(*classical_element->c_address, INTEGERSIZE);
