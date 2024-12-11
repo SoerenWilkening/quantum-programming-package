@@ -56,20 +56,23 @@ sequence_t *CQ_mul() {
 	memset(mul->gates_per_layer, 0, mul->num_layer * sizeof(num_t));
 
 	QFT(mul);
-	num_t layer = INTEGERSIZE;
+	num_t layer = 2 * INTEGERSIZE - 1;
 	int rounds = 0;
 
-	// First blocks of CCP decompositions
 	// all the CP block of the first decomp step can be merged
 	for (int bit = INTEGERSIZE - 1; bit >= 0; --bit) {
-		layer = INTEGERSIZE + 2 * rounds;
+		layer = 2 * INTEGERSIZE + 2 * rounds - 1;
 		num_t control = INTEGERSIZE + bit;
 		for (int i = 0; i < INTEGERSIZE - rounds; ++i) {
-			num_t target = i + rounds;
+//			num_t target = i + rounds;
+			num_t target = INTEGERSIZE - i - 1 - rounds;
 			double value = 0;
 			for (int bit_int2 = 0; bit_int2 < INTEGERSIZE; ++bit_int2) {
-				value += bin[bit_int2] * M_PI / (pow(2, i + 1)) * pow(2, INTEGERSIZE - bit_int2 - 1);
+//				printf("%d ", bin[bit_int2]);
+				value += bin[bit_int2] * 2 * M_PI / (pow(2, i + 1)) * pow(2, INTEGERSIZE - bit_int2 - 1);
+				printf("%d %f ", bit_int2, 2 * M_PI / (pow(2, i + 1)) * pow(2, INTEGERSIZE - bit_int2 - 1));
 			}
+			printf("\n");
 			gate_t *g = &mul->seq[layer][mul->gates_per_layer[layer]++];
 			cp(g, target, control, value);
 			layer++;

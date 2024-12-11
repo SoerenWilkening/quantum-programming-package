@@ -40,6 +40,7 @@ sequence_t *not_seq() {
 }
 sequence_t *q_not_seq() {
 	int number = INTEGERSIZE;
+	if (stack.Q0->type != BOOLEAN) number = 1;
 
 	sequence_t *seq = malloc(sizeof(sequence_t));
 

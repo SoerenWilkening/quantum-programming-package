@@ -30,16 +30,19 @@ int main(void) {
 
 	element_t *q1 = QINT();
 	element_t *q2 = QINT();
-//	element_t *q3 = QINT();
+	element_t *q3 = QINT();
 	element_t *q4 = QBOOL();
 	element_t *r0 = INT(3);
 //	element_t *r0 = BOOL(1);
 
-//	qadd(q1, r0);
+	qqadd(q1, q2);
+	qmul(q1, r0, q2);
+//	cqneg(q1, q4);
+//	qsub(q1, r0);
 //	qadd(q1, r0);
 //	cqadd(q1, r0, q4);
 //	qqadd(q1, q2);
-	cqqadd(q1, q2, q4);
+//	cqqadd(q1, q2, q4);
 //	qqsdiv(q1, q2, q3);
 //	qor(q1, q2, r0);
 //	qqor(q1, q2, q3);
