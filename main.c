@@ -28,13 +28,32 @@ int main(void) {
     stack.circuit = init_circuit();
     stack.instruction_counter = 0;
 
-	element_t *q1 = QINT();
-	element_t *q2 = QINT();
+	element_t *q1 = QBOOL();
+	element_t *q2 = QBOOL();
 	element_t *q3 = QBOOL();
-	element_t *r0 = INT(123);
+	element_t *q4 = QBOOL();
+//	element_t *r0 = INT(123);
+	element_t *r0 = BOOL(1);
 
-    // ._execute
-    clock_t t1 = clock();
+//	qqsdiv(q1, q2, q3);
+
+//	qor(q1, q2, r0);
+//	qqor(q1, q2, q3);
+//	cqor(q1, q2, r0, q4);
+//	cqqor(q1, q2, q3, q4);
+
+//	qxor(q1, r0);
+//	qqxor(q1, q3);
+//	cqxor(q1, r0, q4);
+//	cqqxor(q1, q3, q4);
+
+//	qand(q1, q2, r0);
+//	cqand(q1, q2, r0, q4);
+//	qqand(q1, q2, q3);
+//	cqqand(q1, q2, q3, q4);
+
+	// ._execute
+	clock_t t1 = clock();
     execute(stack.instruction_list);
 
     print_circuit(stack.circuit);

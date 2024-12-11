@@ -82,7 +82,7 @@ sequence_t *q_and_seq() {
 	sequence_t *seq = malloc(sizeof(sequence_t));
 	seq->used_layer = 1;
 	seq->num_layer = 1;
-	seq->gates_per_layer[0] = 0;
+	for (int i = 0; i < INTEGERSIZE; ++i) seq->gates_per_layer[i] = 0;
 
 	for (int i = number - 1; i < INTEGERSIZE; ++i) {
 		int control = INTEGERSIZE + i;
@@ -90,30 +90,6 @@ sequence_t *q_and_seq() {
 		if (bin[i] == 1) {
 			gate_t *g = &seq->seq[0][seq->gates_per_layer[0]++];
 			cx(g, target, control);
-		}
-	}
-	free(bin);
-	return seq;
-}
-sequence_t *ctrl_q_and_seq() {
-	// semiclassical and
-	// -> GRP2 always has to be the quantum element
-	int number = INTEGERSIZE;
-	if (stack.Q0->type != BOOLEAN) number = 1;
-
-	int *bin = two_complement(*((int *) stack.Q2), INTEGERSIZE);
-
-	sequence_t *seq = malloc(sizeof(sequence_t));
-	seq->used_layer = 1;
-	seq->num_layer = 1;
-	seq->gates_per_layer[0] = 0;
-
-	for (int i = number - 1; i < INTEGERSIZE; ++i) {
-		int control = INTEGERSIZE + i;
-		int target = i;
-		if (bin[i] == 1) {
-			gate_t *g = &seq->seq[0][seq->gates_per_layer[0]++];
-			ccx(g, target, control, 2 * INTEGERSIZE);
 		}
 	}
 	free(bin);
@@ -128,11 +104,62 @@ sequence_t *qq_and_seq() {
 
 	seq->used_layer = 1;
 	seq->num_layer = 1;
-
 	seq->gates_per_layer[0] = INTEGERSIZE - number + 1;
 	int counter = 0;
 	for (int i = number - 1; i < INTEGERSIZE; ++i) {
-		ccx(&seq->seq[0][counter++], i, number + i, 2 * number + i);
+		ccx(&seq->seq[0][counter++], i, INTEGERSIZE + i, 2 * INTEGERSIZE + i);
+	}
+
+	return seq;
+}
+sequence_t *cq_and_seq() {
+	// semiclassical and
+	// -> GRP2 always has to be the quantum element
+	int number = INTEGERSIZE;
+	if (stack.Q0->type != BOOLEAN) number = 1;
+
+	int *bin = two_complement(*((int *) stack.R0), INTEGERSIZE);
+
+	sequence_t *seq = malloc(sizeof(sequence_t));
+	seq->used_layer = 0;
+	seq->num_layer = INTEGERSIZE;
+
+	for (int i = 0; i < INTEGERSIZE; ++i) seq->gates_per_layer[i] = 0;
+
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		if (bin[i] == 1) {
+			gate_t *g = &seq->seq[seq->used_layer][seq->gates_per_layer[seq->used_layer]++];
+			ccx(g, i, INTEGERSIZE + i, 4 * INTEGERSIZE - 1);
+			seq->used_layer++;
+		}
+	}
+	free(bin);
+	return seq;
+}
+sequence_t *cqq_and_seq() {
+	// pure quantum
+	sequence_t *seq = malloc(sizeof(sequence_t));
+
+	int number = INTEGERSIZE;
+	if (stack.Q0->type != BOOLEAN) number = 1;
+
+	seq->used_layer = 0;
+	seq->num_layer = 3 * INTEGERSIZE;
+
+	for (int i = 0; i < 3 * INTEGERSIZE; ++i) seq->gates_per_layer[i] = 0;
+
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		gate_t *g = &seq->seq[seq->used_layer][seq->gates_per_layer[seq->used_layer]++];
+		seq->used_layer++;
+		ccx(g, 4 * INTEGERSIZE, INTEGERSIZE + i, 2 * INTEGERSIZE);
+
+		g = &seq->seq[seq->used_layer][seq->gates_per_layer[seq->used_layer]++];
+		seq->used_layer++;
+		ccx(g, i, 4 * INTEGERSIZE, 4 * INTEGERSIZE - 1);
+
+		g = &seq->seq[seq->used_layer][seq->gates_per_layer[seq->used_layer]++];
+		seq->used_layer++;
+		ccx(g, 4 * INTEGERSIZE, INTEGERSIZE + i, 2 * INTEGERSIZE);
 	}
 
 	return seq;
@@ -168,17 +195,15 @@ sequence_t *cq_xor_seq() {
 	int *bin = two_complement(*(stack.R0), INTEGERSIZE);
 
 	sequence_t *seq = malloc(sizeof(sequence_t));
-	seq->used_layer = 4;
-	seq->num_layer = 4;
+	seq->used_layer = 0;
+	seq->num_layer = INTEGERSIZE;
 
-	seq->gates_per_layer[0] = 0;
-	seq->gates_per_layer[1] = 0;
-	seq->gates_per_layer[2] = 0;
-	seq->gates_per_layer[3] = 0;
+	for (int i = 0; i < INTEGERSIZE; ++i) seq->gates_per_layer[i] = 0;
 	for (int i = number - 1; i < INTEGERSIZE; ++i) {
 		if (bin[i] == 1) {
-			gate_t *g = &seq->seq[i][seq->gates_per_layer[i]++];
+			gate_t *g = &seq->seq[seq->used_layer][seq->gates_per_layer[seq->used_layer]++];
 			cx(g, i, 2 * INTEGERSIZE - 1);
+			seq->used_layer++;
 		}
 	}
 
@@ -208,15 +233,148 @@ sequence_t *cqq_xor_seq() {
 	int number = INTEGERSIZE;
 	if (stack.Q0->type != BOOLEAN) number = 1;
 
-	seq->used_layer = 4;
-	seq->num_layer = 4;
+	seq->used_layer = 0;
+	seq->num_layer = INTEGERSIZE;
 
-	seq->gates_per_layer[0] = 1;
-	seq->gates_per_layer[1] = 1;
-	seq->gates_per_layer[2] = 1;
-	seq->gates_per_layer[3] = 1;
-	int counter = 0;
-	for (int i = number - 1; i < INTEGERSIZE; ++i) ccx(&seq->seq[counter++][0], i, INTEGERSIZE + i, 3 * INTEGERSIZE - 1);
+	for (int i = 0; i < INTEGERSIZE; ++i) {
+		seq->gates_per_layer[i] = 0;
+	}
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		ccx(&seq->seq[seq->used_layer][0], i, INTEGERSIZE + i, 3 * INTEGERSIZE - 1);
+		seq->gates_per_layer[seq->used_layer]++;
+		seq->used_layer++;
+	}
+
+	return seq;
+}
+
+sequence_t *q_or_seq() {
+	// pure quantum
+
+	int number = INTEGERSIZE;
+	if (stack.Q0->type != BOOLEAN) number = 1;
+	int *bin = two_complement(*(stack.R0), INTEGERSIZE);
+
+	sequence_t *seq = malloc(sizeof(sequence_t));
+	seq->used_layer = 1;
+	seq->num_layer = 1;
+
+	seq->gates_per_layer[0] = 0;
+	seq->gates_per_layer[1] = 0;
+	seq->gates_per_layer[2] = 0;
+
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		if (bin[i] == 0) {
+			gate_t *g = &seq->seq[0][seq->gates_per_layer[0]++];
+			cx(g, i, INTEGERSIZE + i);
+		}
+	}
+
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		if (bin[i] == 1) {
+			gate_t *g = &seq->seq[0][seq->gates_per_layer[0]++];
+			x(g, i);
+		}
+	}
+	free(bin);
+	return seq;
+}
+sequence_t *qq_or_seq() {
+	// pure quantum
+
+	int number = INTEGERSIZE;
+	if (stack.Q0->type != BOOLEAN) number = 1;
+
+	sequence_t *seq = malloc(sizeof(sequence_t));
+	seq->used_layer = 3;
+	seq->num_layer = 3;
+
+	seq->gates_per_layer[0] = 0;
+	seq->gates_per_layer[1] = 0;
+	seq->gates_per_layer[2] = 0;
+
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		gate_t *g = &seq->seq[0][seq->gates_per_layer[0]++];
+		cx(g, i, INTEGERSIZE + i);
+	}
+
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		gate_t *g = &seq->seq[1][seq->gates_per_layer[1]++];
+		cx(g, i, 2 * INTEGERSIZE + i);
+	}
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		gate_t *g = &seq->seq[2][seq->gates_per_layer[2]++];
+		ccx(g, i, INTEGERSIZE + i, 2 * INTEGERSIZE + i);
+	}
+
+	return seq;
+}
+sequence_t *cq_or_seq() {
+	// pure quantum
+
+	int number = INTEGERSIZE;
+	if (stack.Q0->type != BOOLEAN) number = 1;
+	int *bin = two_complement(*(stack.R0), INTEGERSIZE);
+
+	sequence_t *seq = malloc(sizeof(sequence_t));
+	seq->num_layer = INTEGERSIZE;
+
+	for (int i = 0; i < INTEGERSIZE; ++i) seq->gates_per_layer[i] = 0;
+
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		if (bin[i] == 0) {
+			gate_t *g = &seq->seq[seq->used_layer][seq->gates_per_layer[seq->used_layer]++];
+			ccx(g, i, INTEGERSIZE + i, 2 * INTEGERSIZE - 1);
+			seq->used_layer++;
+		}
+	}
+
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		if (bin[i] == 1) {
+			gate_t *g = &seq->seq[seq->used_layer][seq->gates_per_layer[seq->used_layer]++];
+			cx(g, i, 2 * INTEGERSIZE - 1);
+			seq->used_layer++;
+		}
+	}
+	free(bin);
+	return seq;
+}
+sequence_t *cqq_or_seq() {
+	// pure quantum
+
+	int number = INTEGERSIZE;
+	if (stack.Q0->type != BOOLEAN) number = 1;
+
+	sequence_t *seq = malloc(sizeof(sequence_t));
+	seq->used_layer = 0;
+	seq->num_layer = 5 * INTEGERSIZE;
+
+	for (int i = 0; i < 5 * INTEGERSIZE; ++i) {
+		seq->gates_per_layer[i] = 0;
+	}
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		gate_t *g = &seq->seq[seq->used_layer][seq->gates_per_layer[seq->used_layer]++];
+		ccx(g, i, INTEGERSIZE + i, 4 * INTEGERSIZE - 1);
+		seq->used_layer++;
+	}
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		gate_t *g = &seq->seq[seq->used_layer][seq->gates_per_layer[seq->used_layer]++];
+		ccx(g, i, 2 * INTEGERSIZE + i, 4 * INTEGERSIZE - 1);
+		seq->used_layer++;
+	}
+	for (int i = number - 1; i < INTEGERSIZE; ++i) {
+		gate_t *g = &seq->seq[seq->used_layer][seq->gates_per_layer[seq->used_layer]++];
+		ccx(g, 4 * INTEGERSIZE, 2 * INTEGERSIZE + i, 4 * INTEGERSIZE - 1);
+		seq->used_layer++;
+
+		g = &seq->seq[seq->used_layer][seq->gates_per_layer[seq->used_layer]++];
+		ccx(g, i, 4 * INTEGERSIZE, INTEGERSIZE + i);
+		seq->used_layer++;
+
+		g = &seq->seq[seq->used_layer][seq->gates_per_layer[seq->used_layer]++];
+		ccx(g, 4 * INTEGERSIZE, 2 * INTEGERSIZE + i, 4 * INTEGERSIZE - 1);
+		seq->used_layer++;
+	}
 
 	return seq;
 }

@@ -62,7 +62,7 @@ void execute(instruction_t *instr) {
 //	if (instr->Q0 == NULL) return;
 
 	if (instr->routine == NULL) return;
-	qubit_t qubit_array[5 * INTEGERSIZE];
+	qubit_t qubit_array[6 * INTEGERSIZE];
 	qubit_mapping(qubit_array);
 	sequence_t *res = instr->routine();
 

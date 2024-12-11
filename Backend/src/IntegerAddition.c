@@ -32,7 +32,6 @@ sequence_t *QQ_add() {
 
 	return add;
 }
-
 sequence_t *cQQ_add() {
 	if (precompiled_cQQ_add != NULL) return precompiled_cQQ_add;
 
@@ -93,7 +92,6 @@ sequence_t *cQQ_add() {
 
 	return add;
 }
-
 sequence_t *CQ_add() {
 	// Compute rotation angles
 	int NonZeroCount = 0;
@@ -138,7 +136,6 @@ sequence_t *CQ_add() {
 	precompiled_CQ_add = add;
 	return add;
 }
-
 sequence_t *cCQ_add() {
 	// Compute rotation angles
 	int NonZeroCount = 0;
@@ -183,12 +180,10 @@ sequence_t *cCQ_add() {
 	precompiled_cCQ_add = add;
 	return add;
 }
-
 sequence_t *CC_add() {
 	*((int *) stack.Q0) += *((int *) stack.Q1);
 	return NULL;
 }
-
 sequence_t *P_add() {
 	sequence_t *seq = malloc(sizeof(sequence_t));
 
@@ -200,7 +195,6 @@ sequence_t *P_add() {
 
 	return seq;
 }
-
 sequence_t *cP_add() {
 	sequence_t *seq = malloc(sizeof(sequence_t));
 
