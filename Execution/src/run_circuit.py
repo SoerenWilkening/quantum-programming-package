@@ -21,8 +21,9 @@ n = len(read.qubits)
 # circuit = read
 circuit = QuantumCircuit(n)
 circuit.x(2)
-# circuit.x(3)
-circuit.x(6)
+circuit.x(3)
+circuit.x(5)
+circuit.x(7)
 if n == 9:
     circuit.x(8)
 

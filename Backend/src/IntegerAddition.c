@@ -138,18 +138,21 @@ sequence_t *cQQ_add() {
 
 	int control = 3 * INTEGERSIZE - 1;
 	int rounds;
-	int layer = INTEGERSIZE;
+	int layer = 2 * INTEGERSIZE - 1;
+
+	// block 1
 	for (int bit = (int) INTEGERSIZE - 1; bit >= 0; --bit) {
 		double value = 0;
 		for (int i = 0; i < INTEGERSIZE - bit; ++i) {
 			value += 2 * M_PI / (pow(2, i + 1)) / 2;
 		}
 		gate_t *g = &add->seq[layer][add->gates_per_layer[layer]++];
-		cp(g, INTEGERSIZE - bit - 1, control, value);
+		cp(g, bit, control, value);
 		layer++;
 	}
 
 
+	// block 2
 	rounds = 0;
 	for (int bit = (int) INTEGERSIZE - 1; bit >= 0; --bit) {
 		gate_t *g = &add->seq[layer][add->gates_per_layer[layer]++];
@@ -158,7 +161,7 @@ sequence_t *cQQ_add() {
 		for (int i = 0; i < INTEGERSIZE - rounds; ++i) {
 			double value = 2 * M_PI / (pow(2, i + 1)) / 2;
 			g = &add->seq[layer][add->gates_per_layer[layer]++];
-			cp(g, i + rounds, control, -value);
+			cp(g, bit - i, control, -value);
 			layer++;
 		}
 		g = &add->seq[layer][add->gates_per_layer[layer]++];
@@ -167,18 +170,19 @@ sequence_t *cQQ_add() {
 		rounds++;
 	}
 
+	// block 3
 	rounds = 0;
 	for (int bit = (int) INTEGERSIZE - 1; bit >= 0; --bit) {
 		for (int i = 0; i < INTEGERSIZE - rounds; ++i) {
 			double value = 2 * M_PI / (pow(2, i + 1)) / 2;
 			gate_t *g = &add->seq[layer][add->gates_per_layer[layer]++];
-			cp(g, i + rounds, INTEGERSIZE + bit, value);
+			cp(g, bit - i, INTEGERSIZE + bit, value);
 			layer++;
 		}
 		layer -= INTEGERSIZE - rounds;
 		rounds++;
 	}
-	add->used_layer = layer + INTEGERSIZE;
+	add->used_layer = layer + 1;
 	QFT_inverse(add);
 	precompiled_cQQ_add = add;
 
