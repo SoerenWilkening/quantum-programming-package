@@ -177,7 +177,7 @@ sequence_t *QFT(sequence_t *qft) {
         h(&qft->seq[qft->used_layer + 2 * j][sum[2 * j]], j);
         sum[2 * j]++;
         for (int i = 0; i < INTEGERSIZE - 1 - j; ++i) {
-            cp(&qft->seq[qft->used_layer + 2 * j + i + 1][sum[2 * j + i + 1]], j, j + i + 1, 2 * M_PI / pow(2, i + 1));
+            cp(&qft->seq[qft->used_layer + 2 * j + i + 1][sum[2 * j + i + 1]], j, j + i + 1, M_PI / pow(2, i + 1));
             sum[2 * j + i + 1]++;
         }
     }
@@ -203,7 +203,7 @@ sequence_t *QFT_inverse(sequence_t *qft) {
     for (int j = 0; j < INTEGERSIZE; ++j) {
         for (int i = 0; i < INTEGERSIZE - 1 - j; ++i) {
             num_t layer = qft->used_layer + 2 * INTEGERSIZE - 1 - (2 * j + i + 1) - 1;
-            cp(&qft->seq[layer][qft->gates_per_layer[layer]++], j, j + i + 1, -2 * M_PI / pow(2, i + 1));
+            cp(&qft->seq[layer][qft->gates_per_layer[layer]++], j, j + i + 1, - M_PI / pow(2, i + 1));
         }
         num_t layer = qft->used_layer + 2 * INTEGERSIZE - 1 - 2 * j - 1;
         h(&qft->seq[layer][qft->gates_per_layer[layer]++], j);

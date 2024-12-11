@@ -17,7 +17,7 @@ sequence_t *CQ_add() {
 	double *rotations = calloc(INTEGERSIZE, sizeof(double));
 	for (int i = 0; i < INTEGERSIZE; ++i) {
 		for (int j = 0; j < INTEGERSIZE - i; ++j) {
-			rotations[j + i] += bin[INTEGERSIZE - i - 1] * 2 * M_PI / (Z * pow(2, j + 1));
+			rotations[j + i] += bin[INTEGERSIZE - i - 1] * 2 * M_PI / (pow(2, j + 1));
 		}
 		if (rotations[i] != 0) NonZeroCount++;
 	}
@@ -28,7 +28,7 @@ sequence_t *CQ_add() {
 		sequence_t *add = precompiled_CQ_add;
 
 		for (int i = 0; i < INTEGERSIZE; ++i) {
-			add->seq[start_layer + i][add->gates_per_layer[start_layer + i] - 1].GateValue = rotations[i];
+			add->seq[start_layer + i][add->gates_per_layer[start_layer + i] - 1].GateValue = rotations[INTEGERSIZE - i - 1];
 		}
 		free(rotations);
 		return add;
@@ -42,7 +42,7 @@ sequence_t *CQ_add() {
 	QFT(add);
 
 	for (int i = 0; i < INTEGERSIZE; ++i) {
-		p(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i, rotations[i]);
+		p(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i, rotations[INTEGERSIZE - i - 1]);
 	}
 	free(rotations);
 	add->used_layer++;
@@ -65,8 +65,8 @@ sequence_t *QQ_add() {
 	int rounds = 0;
 	for (int bit = (int) INTEGERSIZE - 1; bit >= 0; --bit) {
 		for (int i = 0; i < INTEGERSIZE - rounds; ++i) {
-			num_t layer = INTEGERSIZE + i + 2 * rounds;
-			num_t target = i + rounds;
+			num_t layer = 2 * INTEGERSIZE + i + 2 * rounds - 1;
+			num_t target = INTEGERSIZE - i - 1 - rounds;
 			num_t control = INTEGERSIZE + bit;
 			double value = 2 * M_PI / (pow(2, i + 1));
 			gate_t *g = &add->seq[layer][add->gates_per_layer[layer]++];
@@ -89,7 +89,7 @@ sequence_t *cCQ_add() {
 	double *rotations = calloc(INTEGERSIZE, sizeof(double));
 	for (int i = 0; i < INTEGERSIZE; ++i) {
 		for (int j = 0; j < INTEGERSIZE - i; ++j) {
-			rotations[j + i] += bin[INTEGERSIZE - i - 1] * 2 * M_PI / (Z * pow(2, j + 1));
+			rotations[j + i] += bin[INTEGERSIZE - i - 1] * 2 * M_PI / (pow(2, j + 1));
 		}
 		if (rotations[i] != 0) NonZeroCount++;
 	}
@@ -114,7 +114,7 @@ sequence_t *cCQ_add() {
 	QFT(add);
 
 	for (int i = 0; i < INTEGERSIZE; ++i) {
-		cp(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i, 2 * INTEGERSIZE - 1, rotations[i]);
+		cp(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i, 2 * INTEGERSIZE - 1, rotations[INTEGERSIZE - i - 1]);
 	}
 	free(rotations);
 	add->used_layer++;

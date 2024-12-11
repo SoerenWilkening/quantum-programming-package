@@ -3,3 +3,5 @@ benchmark/CQ_inprov_qtf.csv
 .idea
 */DS_Store
 assembly*.pqsm
+circuit.qasm
+.venv

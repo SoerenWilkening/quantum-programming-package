@@ -141,7 +141,6 @@ bool is_integer(const char* str) {
 
 	return true; // All checks passed
 }
-
 int is_addon(char *word) {
     if (strcmp(word, "inv") == 0) return true;
     if (strcmp(word, "QUINT") == 0) return true;
@@ -152,7 +151,6 @@ int is_addon(char *word) {
     if (strcmp(word, "BOOL") == 0) return true;
     return false;
 }
-
 int is_label(char *str){
 	bool only_spaces;
 	char *cleaned_line;
@@ -197,7 +195,6 @@ void word_to_call(char *word) {
         variable_counter++;
     }
 }
-
 void value_to_call(char *word) {
     if (!is_integer(word)) return;
     char *succ;
@@ -235,7 +232,6 @@ char **extract_items_from_line(const char *line, size_t *item_count) {
     free(line_copy); // Free the duplicated line
     return items;
 }
-
 void lines_to_call(char *line) {
     if (line[0] == *"/" || line[5] == *"/") return;
 
@@ -334,13 +330,10 @@ void create_instruction() {
 	if (strcmp(calls[counter].instruction, "jmp") == 0) jmp();
 	calls[counter].ptr = &stack.instruction_list[stack.instruction_counter - 1];
 }
-
-
 void create_label(){
 	if (calls[counter].label == NULL) return;
 	label(calls[counter].label);
 }
-
 void apply_label(){
 	for (int i = 0; i < counter; ++i) {
 		if (calls[i].instruction != NULL) {

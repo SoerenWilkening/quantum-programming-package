@@ -66,7 +66,7 @@ void execute(instruction_t *instr) {
 	qubit_mapping(qubit_array);
 	sequence_t *res = instr->routine();
 
-//	print_sequence(res);
+	print_sequence(res);
     run_instruction(res, qubit_array, instr->invert);
 
     stack.Q0 = NULL;
