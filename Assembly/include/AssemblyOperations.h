@@ -39,17 +39,17 @@ void and(element_t *bool_res, element_t *bool_1, element_t *bool_2);
 void qand(element_t *bool_res, element_t *bool_1, element_t *bool_2);
 void qqand(element_t *bool_res, element_t *bool_1, element_t *bool_2);
 
-void or();
-void qor();
-void qqor();
-void cqor();
-void ccqqor();
+void or(element_t *R0, element_t *R1);
+void qor(element_t *Q0, element_t *R0);
+void qqor(element_t *Q0, element_t *Q1);
+void cqor(element_t *Q0, element_t *R0, element_t *ctrl);
+void cqqor(element_t *Q0, element_t *Q1, element_t *ctrl);
 
-void xor();
-void qxor();
-void qqxor();
-void cqxor();
-void cqqxor();
+void xor(element_t *R0, element_t *R1);
+void qxor(element_t *Q0, element_t *R0);
+void qqxor(element_t *Q0, element_t *Q1);
+void cqxor(element_t *Q0, element_t *R0, element_t *ctrl);
+void cqqxor(element_t *Q0, element_t *Q1, element_t *ctrl);
 
 void eq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
 void qeq(element_t *Q0, element_t *Q1, element_t *R0);
