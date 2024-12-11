@@ -1,10 +1,5 @@
-//
-// Created by Sören Wilkening on 08.12.24.
-//
-
 #include "AssemblyOperations.h"
 
-// include functionality for unsigned integers
 void udiv(element_t *Q0, element_t *Q1, element_t *remainder) {
 	// include functionality
 }
@@ -244,13 +239,16 @@ void cqqudiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) 
 	}
 }
 
-// TODO :
-//  for signed implementation include
+
 void sdiv(element_t *el1, element_t *el2, element_t *remainder) {
 	// include functionality
 }
 void qsdiv(element_t *A, element_t *B, element_t *remainder) {
 	// create qqsdiv sequence to Divide Aq / Bq
+	element_t *sign_A = QBOOL();
+	qtstbit(sign_A, A, 0);
+	cqneg(A, sign_A);
+
 
 	for (int i = 2; i < INTEGERSIZE + 1; ++i) {
 		element_t *Y = malloc(sizeof(element_t));
@@ -263,9 +261,22 @@ void qsdiv(element_t *A, element_t *B, element_t *remainder) {
 		cqadd(Y, B, bit); // Add bq back to Y (controlled by bit)
 		qnot(bit); // Invert Cq
 	}
+	cqneg(A, sign_A);
+	cqneg(remainder, sign_A);
+	qtstbit(sign_A, A, 0);
+
+	free_element(sign_A);
 }
 void qqsdiv(element_t *A, element_t *B, element_t *remainder) {
 	// create qqsdiv sequence to Divide Aq / Bq
+	element_t *sign_A = QBOOL();
+	element_t *sign_B = QBOOL();
+
+	qtstbit(sign_A, A, 0);
+	qtstbit(sign_B, B, 0);
+
+	cqneg(A, sign_A);
+	cqneg(B, sign_B);
 
 	for (int i = 2; i < INTEGERSIZE + 1; ++i) {
 		element_t *Y = malloc(sizeof(element_t));
@@ -278,9 +289,25 @@ void qqsdiv(element_t *A, element_t *B, element_t *remainder) {
 		cqqadd(Y, B, bit); // Add B back to Y (controlled by bit)
 		qnot(bit); // Invert bit
 	}
+
+	cqnot(sign_A, sign_B);
+	cqneg(A, sign_A);
+	cqneg(remainder, sign_A);
+	cqneg(B, sign_B);
+	cqnot(sign_A, sign_B);
+
+	qtstbit(sign_A, A, 0);
+	qtstbit(sign_B, B, 0);
+
+	free_element(sign_A);
+	free_element(sign_B);
+
 }
 void cqsdiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) {
 	// create qqsdiv sequence to Divide Aq / Bq
+	element_t *sign_A = QBOOL();
+	qtstbit(sign_A, A, 0);
+	cqneg(A, sign_A);
 
 	for (int i = 2; i < INTEGERSIZE + 1; ++i) {
 		element_t *Y = malloc(sizeof(element_t));
@@ -301,9 +328,22 @@ void cqsdiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) {
 
 		cqnot(bit, ctrl); // Invert Cq
 	}
+	cqneg(A, sign_A);
+	cqneg(remainder, sign_A);
+	qtstbit(sign_A, A, 0);
+
+	free_element(sign_A);
 }
 void cqqsdiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) {
 	// create qqsdiv sequence to Divide Aq / Bq
+	element_t *sign_A = QBOOL();
+	element_t *sign_B = QBOOL();
+
+	qtstbit(sign_A, A, 0);
+	qtstbit(sign_B, B, 0);
+
+	cqneg(A, sign_A);
+	cqneg(B, sign_B);
 
 	for (int i = 2; i < INTEGERSIZE + 1; ++i) {
 		element_t *Y = malloc(sizeof(element_t));
@@ -324,6 +364,18 @@ void cqqsdiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) 
 
 		cqnot(bit, ctrl); // Invert Cq
 	}
+
+	cqnot(sign_A, sign_B);
+	cqneg(A, sign_A);
+	cqneg(remainder, sign_A);
+	cqneg(B, sign_B);
+	cqnot(sign_A, sign_B);
+
+	qtstbit(sign_A, A, 0);
+	qtstbit(sign_B, B, 0);
+
+	free_element(sign_A);
+	free_element(sign_B);
 }
 
 

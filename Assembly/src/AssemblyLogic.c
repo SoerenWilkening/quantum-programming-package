@@ -56,7 +56,7 @@ void qand(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
 	ins->name = "qand ";
 	ins->Q0 = bool_res;
 	ins->Q1 = bool_1;
-	ins->Q2 = bool_2;
+	ins->R0 = (int *) bool_2->c_address;
 
 	ins->routine = q_and_seq;
 
@@ -69,7 +69,6 @@ void qqand(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
 	ins->Q0 = bool_res;
 	ins->Q1 = bool_1;
 	ins->Q2 = bool_2;
-//	printf("%d %d %d\n", bool_res->q_address[INTEGERSIZE - 1], bool_1->q_address[INTEGERSIZE - 1], bool_2->q_address[INTEGERSIZE - 1]);
 
 	ins->routine = qq_and_seq;
 

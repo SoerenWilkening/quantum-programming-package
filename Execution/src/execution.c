@@ -22,7 +22,7 @@ void qubit_mapping(qubit_t qubit_arrray[]) {
 		start += INTEGERSIZE;
 		memcpy(&qubit_arrray[3 * INTEGERSIZE], stack.Q3->q_address, INTEGERSIZE * sizeof(int));
 	}
-	memcpy(&qubit_arrray[start], stack.circuit->ancilla, INTEGERSIZE * sizeof(int));
+	memcpy(&qubit_arrray[start], stack.circuit->ancilla, 2 * INTEGERSIZE * sizeof(int));
 }
 
 // apply the sequences to the desired qubits
@@ -54,20 +54,20 @@ void execute(instruction_t *instr) {
 	stack.Q2 = instr->Q2;
 	stack.Q3 = instr->Q3;
 
-	if (instr->Q0 == NULL) return;
+	stack.R0 = instr->R0;
+	stack.R1 = instr->R1;
+	stack.R2 = instr->R2;
+	stack.R3 = instr->R3;
+
+//	if (instr->Q0 == NULL) return;
 
 	if (instr->routine == NULL) return;
 	qubit_t qubit_array[5 * INTEGERSIZE];
 	qubit_mapping(qubit_array);
 	sequence_t *res = instr->routine();
 
+//	print_sequence(res);
     run_instruction(res, qubit_array, instr->invert);
-
-	printf("%s ", instr->name);
-	for (int i = 0; i < 3 * INTEGERSIZE; ++i) {
-		printf("%d ", qubit_array[i]);
-	}
-	printf("\n");
 
     stack.Q0 = NULL;
     stack.Q1 = NULL;

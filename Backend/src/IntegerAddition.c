@@ -45,6 +45,7 @@ sequence_t *cQQ_add() {
 
 	QFT(add);
 
+	int control = 3 * INTEGERSIZE - 1;
 	int rounds;
 	int layer = INTEGERSIZE;
 	for (int bit = (int) INTEGERSIZE - 1; bit >= 0; --bit) {
@@ -53,7 +54,7 @@ sequence_t *cQQ_add() {
 			value += 2 * M_PI / (pow(2, i + 1)) / 2;
 		}
 		gate_t *g = &add->seq[layer][add->gates_per_layer[layer]++];
-		cp(g, INTEGERSIZE - bit - 1, 2 * INTEGERSIZE, value);
+		cp(g, INTEGERSIZE - bit - 1, control, value);
 		layer++;
 	}
 
@@ -61,16 +62,16 @@ sequence_t *cQQ_add() {
 	rounds = 0;
 	for (int bit = (int) INTEGERSIZE - 1; bit >= 0; --bit) {
 		gate_t *g = &add->seq[layer][add->gates_per_layer[layer]++];
-		cx(g, 2 * INTEGERSIZE, INTEGERSIZE + bit);
+		cx(g, control, INTEGERSIZE + bit);
 		layer++;
 		for (int i = 0; i < INTEGERSIZE - rounds; ++i) {
 			double value = 2 * M_PI / (pow(2, i + 1)) / 2;
 			g = &add->seq[layer][add->gates_per_layer[layer]++];
-			cp(g, i + rounds, 2 * INTEGERSIZE, -value);
+			cp(g, i + rounds, control, -value);
 			layer++;
 		}
 		g = &add->seq[layer][add->gates_per_layer[layer]++];
-		cx(g, 2 * INTEGERSIZE, INTEGERSIZE + bit);
+		cx(g, control, INTEGERSIZE + bit);
 		layer++;
 		rounds++;
 	}
@@ -96,7 +97,7 @@ sequence_t *cQQ_add() {
 sequence_t *CQ_add() {
 	// Compute rotation angles
 	int NonZeroCount = 0;
-	int *bin = two_complement(*((int *) stack.Q1), INTEGERSIZE);
+	int *bin = two_complement(*(stack.R0), INTEGERSIZE);
 
 	// Compute rotations for addition
 	double *rotations = calloc(INTEGERSIZE, sizeof(double));
@@ -141,7 +142,7 @@ sequence_t *CQ_add() {
 sequence_t *cCQ_add() {
 	// Compute rotation angles
 	int NonZeroCount = 0;
-	int *bin = two_complement(*((int *) stack.Q1), INTEGERSIZE);
+	int *bin = two_complement(*(stack.R0), INTEGERSIZE);
 
 	// Compute rotations for addition
 	double *rotations = calloc(INTEGERSIZE, sizeof(double));
@@ -172,7 +173,7 @@ sequence_t *cCQ_add() {
 	QFT(add);
 
 	for (int i = 0; i < INTEGERSIZE; ++i) {
-		cp(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i, INTEGERSIZE, rotations[i]);
+		cp(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i, 2 * INTEGERSIZE - 1, rotations[i]);
 	}
 	free(rotations);
 	add->used_layer++;

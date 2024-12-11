@@ -28,11 +28,7 @@ int main(void) {
     stack.circuit = init_circuit();
     stack.instruction_counter = 0;
 
-	element_t *a = QUINT();
-	element_t *b = QUINT();
-	element_t *c = QUINT();
-	qqudiv(a, b, c);
-//    AsmbFromFile();
+    AsmbFromFile();
 
     // ._execute
     clock_t t1 = clock();

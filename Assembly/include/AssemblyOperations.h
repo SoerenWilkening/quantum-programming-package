@@ -52,10 +52,10 @@ void cqxor();
 void cqqxor();
 
 void eq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void qeq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void qqeq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void cqeq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
-void cqqeq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
+void qeq(element_t *Q0, element_t *Q1, element_t *R0);
+void qqeq(element_t *Q0, element_t *Q1, element_t *Q2);
+void cqeq(element_t *Q0, element_t *Q1, element_t *R0, element_t *ctrl);
+void cqqeq(element_t *Q0, element_t *Q1, element_t *Q2, element_t *ctrl);
 
 void geq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
 void qgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2);

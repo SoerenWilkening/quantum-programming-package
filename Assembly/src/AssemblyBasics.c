@@ -41,7 +41,6 @@ void qtstbit(element_t *el1, element_t *el2, int bit) {
 	ins->Q0 = el1; // return value
 
 	element_t *qbit = bit_of_int(el2, bit);
-//	printf("qubit = %d\n", qbit->q_address[0]);
 
 	ins->Q1 = qbit;
 	ins->routine = cx_gate;

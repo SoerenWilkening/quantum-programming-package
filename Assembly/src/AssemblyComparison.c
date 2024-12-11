@@ -12,54 +12,52 @@ void eq(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
 
     ins->routine = CC_equal;
 }
-void qeq(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
+void qeq(element_t *Q0, element_t *Q1, element_t *R0) {
 	instruction_t *ins = init_instruction();
 
-	ins->Q0 = bool_res;
-	ins->Q1 = bool_1;
-	ins->Q2 = bool_2;
+	ins->Q0 = Q0;
+	ins->Q1 = Q1;
+	ins->R0 = (int *) R0->c_address;
 
     ins->routine = CQ_equal;
 }
-void qqeq(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
-	qqsub(bool_1, bool_2);
-	instruction_t *ins = init_instruction();
+void qqeq(element_t *Q0, element_t *Q1, element_t *Q2) {
+	qqsub(Q1, Q2);
 
 	element_t *zero = INT(0);
 
-	ins->Q0 = bool_res;
-	ins->Q1 = bool_1;
-	ins->Q2 = zero;
-
+	instruction_t *ins = init_instruction();
+	ins->Q0 = Q0;
+	ins->Q1 = Q1;
+	ins->R0 = (int *) zero->c_address;
 	ins->routine = CQ_equal;
-	qqadd(bool_1, bool_2);
+
+	qqadd(Q1, Q2);
 }
-void cqeq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl) {
+void cqeq(element_t *Q0, element_t *Q1, element_t *R0, element_t *ctrl) {
 	instruction_t *ins = init_instruction();
 
-	ins->Q0 = bool_res;
-	ins->Q1 = bool_1;
-	ins->Q2 = bool_2;
-	ins->Q3 = ctrl;
+	ins->Q0 = Q0;
+	ins->Q1 = Q1;
+	ins->Q2 = ctrl;
+	ins->R0 = (int *) R0->c_address;
 
-	// TODO: needs controlled version !!
-    ins->routine = CQ_equal;
+    ins->routine = cCQ_equal;
 }
-void cqqeq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl) {
-    qqsub(bool_1, bool_2);
+void cqqeq(element_t *Q0, element_t *Q1, element_t *Q2, element_t *ctrl) {
+    qqsub(Q1, Q2);
 
 	instruction_t *ins = init_instruction();
 	element_t *zero = INT(0);
 
-	ins->Q0 = bool_res;
-	ins->Q1 = bool_1;
-	ins->Q2 = zero;
-	ins->Q3 = ctrl;
+	ins->Q0 = Q0;
+	ins->Q1 = Q1;
+	ins->Q2 = ctrl;
+	ins->R0 = (int *) zero->c_address;
 
-	// TODO: needs controlled sequence
-    ins->routine = CQ_equal;
+    ins->routine = cCQ_equal;
 
-    qqadd(bool_1, bool_2);
+    qqadd(Q1, Q2);
 }
 
 void leq(element_t *bool_res, element_t *bool_1, element_t *bool_2) {

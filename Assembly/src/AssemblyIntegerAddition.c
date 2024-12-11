@@ -15,7 +15,7 @@ void add(element_t *el1, element_t *el2) {
 void qadd(element_t *el1, element_t *el2) {
 	instruction_t *ins = init_instruction();
 	ins->Q0 = el1;
-	ins->Q1 = el2;
+	ins->R0 = (int *) el2->c_address;
 
 	ins->name = "CQ_add ";
 	ins->routine = CQ_add;
@@ -24,7 +24,8 @@ void qadd(element_t *el1, element_t *el2) {
 void cqadd(element_t *el1, element_t *el2, element_t *ctrl) {
 	instruction_t *ins = init_instruction();
 	ins->Q0 = el1;
-	ins->Q1 = el2;
+	ins->R0 = (int *) el2->c_address;
+	ins->Q1 = ctrl;
 
 	ins->name = "cCQ_add ";
 	ins->routine = cCQ_add;
