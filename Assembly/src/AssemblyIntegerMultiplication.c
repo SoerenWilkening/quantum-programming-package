@@ -34,7 +34,7 @@ void cqmul(element_t *el1, element_t *el2, element_t *res, element_t *ctrl) {
 	ins->Q0 = res;
 	ins->Q1 = el1;
 	ins->R0 = (int *)el2->c_address;
-	ins->Q3 = ctrl;
+	ins->Q2 = ctrl;
 
 	ins->routine = cCQ_mul;
 }

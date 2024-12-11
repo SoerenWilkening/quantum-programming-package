@@ -147,23 +147,24 @@ sequence_t *cCQ_mul() {
     memset(values, 0, INTEGERSIZE * sizeof(double));
     for (int i = 0; i < INTEGERSIZE; ++i) {
         for (int bit_int2 = 0; bit_int2 < INTEGERSIZE; ++bit_int2) {
-            values[i] += bin[bit_int2] * M_PI / (pow(2, i + 1)) * pow(2, INTEGERSIZE - bit_int2 - 1);
+            values[i] += bin[bit_int2] * 2 * M_PI / (pow(2, i + 1)) * pow(2, INTEGERSIZE - bit_int2 - 1);
         }
     }
 
+	// block 1
     int rounds;
-    int layer = INTEGERSIZE;
+    int layer = 2 * INTEGERSIZE - 1;
     for (int bit = (int) INTEGERSIZE - 1; bit >= 0; --bit) {
         double value = 0;
         for (int i = 0; i < INTEGERSIZE - bit; ++i) {
             value += values[i] / 2;
         }
         gate_t *g = &mul->seq[layer][mul->gates_per_layer[layer]++];
-        cp(g, INTEGERSIZE - bit - 1, control, value);
+        cp(g, bit, control, value);
         layer++;
     }
 
-
+	// block 2
     rounds = 0;
     for (int bit = (int) INTEGERSIZE - 1; bit >= 0; --bit) {
         gate_t *g = &mul->seq[layer][mul->gates_per_layer[layer]++];
@@ -171,7 +172,7 @@ sequence_t *cCQ_mul() {
         layer++;
         for (int i = 0; i < INTEGERSIZE - rounds; ++i) {
             g = &mul->seq[layer][mul->gates_per_layer[layer]++];
-            cp(g, i + rounds, control, -values[i] / 2);
+            cp(g, bit - i, control, -values[i] / 2);
             layer++;
         }
         g = &mul->seq[layer][mul->gates_per_layer[layer]++];
@@ -180,17 +181,18 @@ sequence_t *cCQ_mul() {
         rounds++;
     }
 
+	// block 3
     rounds = 0;
     for (int bit = (int) INTEGERSIZE - 1; bit >= 0; --bit) {
         for (int i = 0; i < INTEGERSIZE - rounds; ++i) {
             gate_t *g = &mul->seq[layer][mul->gates_per_layer[layer]++];
-            cp(g, i + rounds, INTEGERSIZE + bit, values[i] / 2);
+            cp(g, bit - i, INTEGERSIZE + bit, values[i] / 2);
             layer++;
         }
         layer -= INTEGERSIZE - rounds;
         rounds++;
     }
-    mul->used_layer = layer + INTEGERSIZE;
+    mul->used_layer = layer + 1;
 
     QFT_inverse(mul);
 

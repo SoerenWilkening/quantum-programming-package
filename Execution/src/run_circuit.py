@@ -22,17 +22,18 @@ n = len(read.qubits)
 circuit = QuantumCircuit(n)
 # circuit.x(0)
 # circuit.x(1)
-# circuit.x(2)
+circuit.x(2)
 circuit.x(3)
 # if n > 4:
     # circuit.x(4)
     # circuit.x(5)
     # circuit.x(6)
     # circuit.x(7)
-if n == 9:
-    circuit.x(8)
+# if n == 9:
+#     circuit.x(8)
 if n == 13:
     circuit.x(12)
+
 
 circuit.append(read, range(n))
 circuit.measure_all()
