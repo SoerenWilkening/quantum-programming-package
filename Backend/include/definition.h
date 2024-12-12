@@ -7,7 +7,7 @@
 
 #include <stdlib.h>
 
-#define INTEGERSIZE 4
+#define INTEGERSIZE 64
 #define QBITSIZE 1
 #define QBYTESIZE 8
 #define QHWORDSIZE 16

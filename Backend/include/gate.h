@@ -26,7 +26,7 @@ typedef struct {
     // store range of multiqubit gates
 } gate_t;
 
-#define MAXLAYERINSEQUENCE 30000
+#define MAXLAYERINSEQUENCE 50000
 #define MAXGATESPERLAYER INTEGERSIZE
 
 typedef struct {

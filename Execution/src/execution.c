@@ -59,8 +59,6 @@ void execute(instruction_t *instr) {
 	stack.R2 = instr->R2;
 	stack.R3 = instr->R3;
 
-//	if (instr->Q0 == NULL) return;
-
 	if (instr->routine == NULL) return;
 	qubit_t qubit_array[6 * INTEGERSIZE];
 	qubit_mapping(qubit_array);
@@ -73,6 +71,11 @@ void execute(instruction_t *instr) {
     stack.Q1 = NULL;
     stack.Q2 = NULL;
     stack.Q3 = NULL;
+
+	stack.R0 = NULL;
+	stack.R1 = NULL;
+	stack.R2 = NULL;
+	stack.R3 = NULL;
 
 	instruction_t *pointer = instr + 1;
     if (instr->next_instruction != NULL) {

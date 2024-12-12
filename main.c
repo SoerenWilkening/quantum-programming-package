@@ -37,7 +37,9 @@ int main(void) {
 
 //	qqadd(q1, q2);
 //	cqqadd(q1, q2, q4);
-	qqmul(q1, q2, q3);
+//	cqqadd(q1, q2, q3);
+//	qqmul(q1, q2, q3);
+	cqqmul(q1, q2, q3, q4);
 //	cqneg(q1, q4);
 //	qsub(q1, r0);
 //	qadd(q1, r0);
