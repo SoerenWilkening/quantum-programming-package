@@ -27,11 +27,11 @@ int main(void) {
 	instruction_counter = 0;
 	QPU_state = instruction_list;
 
-	element_t *A = QINT();
-	element_t *B = QINT();
-	element_t *C = QINT();
-	element_t *D = QBOOL();
-	element_t *klass = INT(123);
+	quantum_int_t *A = QINT();
+	quantum_int_t *B = QINT();
+	quantum_int_t *C = QINT();
+	quantum_int_t *D = QBOOL();
+	quantum_int_t *klass = INT(123);
 
 //	qnot(A);
 //	cqnot(A, D);
@@ -48,7 +48,7 @@ int main(void) {
 //	qqand(A, B, C);
 //	cqqand(A, B, C, D);
 
-//	AsmbFromFile();
+	AsmbFromFile();
 
 	// ._execute
 	clock_t t1 = clock();

@@ -12,12 +12,12 @@
 
 int *two_complement(int64_t x, int n);
 
-element_t *QBOOL();
-element_t *QINT();
-element_t *INT(int64_t intg);
-element_t *BOOL(bool intg);
-element_t *bit_of_int(element_t *el1, int bit);
-void free_element(element_t *el1);
+quantum_int_t *QBOOL();
+quantum_int_t *QINT();
+quantum_int_t *INT(int64_t intg);
+quantum_int_t *BOOL(bool intg);
+quantum_int_t *bit_of_int(quantum_int_t *el1, int bit);
+void free_element(quantum_int_t *el1);
 
 // implementation of Integer operations gate sequences
 sequence_t *CC_mul();

@@ -4,43 +4,43 @@
 
 #include "AssemblyOperations.h"
 
-void add(element_t *el1, element_t *el2) {
+void add(int *R0, int *R1) {
 	instruction_t *ins = init_instruction();
-	ins->R0 = (int *) el1->c_address;
-	ins->R1 = (int *) el2->c_address;
+	ins->R0 = R0;
+	ins->R1 = R1;
 	ins->name = "CC_add ";
 	ins->routine = CC_add;
 }
-void qadd(element_t *el1, element_t *el2) {
+void qadd(quantum_int_t *Q0, int *R0) {
 	instruction_t *ins = init_instruction();
-	ins->Q0 = el1;
-	ins->R0 = (int *) el2->c_address;
+	ins->Q0 = Q0;
+	ins->R0 = R0;
 
 	ins->name = "CQ_add ";
 	ins->routine = CQ_add;
 }
-void cqadd(element_t *el1, element_t *el2, element_t *ctrl) {
+void cqadd(quantum_int_t *Q0, int *R0, quantum_int_t *ctrl) {
 	instruction_t *ins = init_instruction();
-	ins->Q0 = el1;
-	ins->R0 = (int *) el2->c_address;
+	ins->Q0 = Q0;
+	ins->R0 = R0;
 	ins->Q1 = ctrl;
 
 	ins->name = "cCQ_add ";
 	ins->routine = cCQ_add;
 }
-void qqadd(element_t *el1, element_t *el2) {
+void qqadd(quantum_int_t *Q0, quantum_int_t *Q1) {
 	instruction_t *ins = init_instruction();
-	ins->Q0 = el1;
-	ins->Q1 = el2;
+	ins->Q0 = Q0;
+	ins->Q1 = Q1;
 
 	// routine assignments
 	ins->name = "QQ_add ";
 	ins->routine = QQ_add;
 }
-void cqqadd(element_t *el1, element_t *el2, element_t *ctrl) {
+void cqqadd(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *ctrl) {
 	instruction_t *ins = init_instruction();
-	ins->Q0 = el1;
-	ins->Q1 = el2;
+	ins->Q0 = Q0;
+	ins->Q1 = Q1;
 	ins->Q2 = ctrl;
 
 	// routine assignments
@@ -48,65 +48,72 @@ void cqqadd(element_t *el1, element_t *el2, element_t *ctrl) {
 	ins->routine = cQQ_add;
 }
 
-void sub(element_t *el1, element_t *el2) {
-	add(el1, el2);
+void sub(int *R0, int *R1) {
+	add(R0, R1);
 	instruction_list[instruction_counter - 1].invert = INVERTED;
 }
-void qsub(element_t *el1, element_t *el2) {
-	qadd(el1, el2);
+void qsub(quantum_int_t *Q0, int *R0) {
+	qadd(Q0, R0);
 	instruction_list[instruction_counter - 1].invert = INVERTED;
 }
-void cqsub(element_t *el1, element_t *el2, element_t *ctrl) {
-	cqadd(el1, el2, ctrl);
+void cqsub(quantum_int_t *Q0, int *R0, quantum_int_t *ctrl) {
+	cqadd(Q0, R0, ctrl);
 	instruction_list[instruction_counter - 1].invert = INVERTED;
 }
-void qqsub(element_t *el1, element_t *el2) {
-	qqadd(el1, el2);
+void qqsub(quantum_int_t *Q0, quantum_int_t *Q1) {
+	qqadd(Q0, Q1);
 	instruction_list[instruction_counter - 1].invert = INVERTED;
 }
-void cqqsub(element_t *el1, element_t *el2, element_t *ctrl) {
-	cqqadd(el1, el2, ctrl);
+void cqqsub(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *ctrl) {
+	cqqadd(Q0, Q1, ctrl);
 	instruction_list[instruction_counter - 1].invert = INVERTED;
 }
 
-void inc(element_t *el1) {
-	element_t *cint = INT(1);
-	add(el1, cint);
+void inc(int *R0) {
+	int *cint = malloc(sizeof(int));
+	cint[0] = 1;
+	add(R0, cint);
 }
-void qinc(element_t *el1) {
-	element_t *cint = INT(1);
-	qadd(el1, cint);
+void qinc(quantum_int_t *Q0) {
+	int *cint = malloc(sizeof(int));
+	cint[0] = 1;
+	qadd(Q0, cint);
 }
-void cqinc(element_t *el1, element_t *ctrl) {
-	element_t *cint = INT(1);
-	cqadd(el1, cint, ctrl);
-}
-
-void dcr(element_t *el1) {
-	element_t *cint = INT(1);
-	sub(el1, cint);
-}
-void qdcr(element_t *el1) {
-	element_t *cint = INT(1);
-	qsub(el1, cint);
-}
-void cqdcr(element_t *el1, element_t *ctrl) {
-	element_t *cint = INT(1);
-	cqsub(el1, cint, ctrl);
+void cqinc(quantum_int_t *Q0, quantum_int_t *ctrl) {
+	int *cint = malloc(sizeof(int));
+	cint[0] = 1;
+	cqadd(Q0, cint, ctrl);
 }
 
-void padd(element_t *el1, element_t *phase) {
+void dcr(int *R0) {
+	int *cint = malloc(sizeof(int));
+	cint[0] = 1;
+	sub(R0, cint);
+}
+void qdcr(quantum_int_t *Q0) {
+	int *cint = malloc(sizeof(int));
+	cint[0] = 1;
+	qsub(Q0, cint);
+}
+void cqdcr(quantum_int_t *Q0, quantum_int_t *ctrl) {
+	int *cint = malloc(sizeof(int));
+	cint[0] = 1;
+	cqsub(Q0, cint, ctrl);
+}
+
+void padd(quantum_int_t *el1, int *phase) {
 	instruction_t *ins = init_instruction();
 	ins->Q0 = el1;
-	ins->Q1 = phase;
+	ins->R0 = phase;
 
 	ins->routine = P_add;
 }
-void cpadd(element_t *el1, element_t *phase, element_t *ctrl) {
+void cpadd(quantum_int_t *Q0, int *phase, quantum_int_t *ctrl) {
 	instruction_t *ins = init_instruction();
-	ins->Q0 = el1;
-	ins->Q1 = phase;
-	ins->Q2 = ctrl;
+	ins->Q0 = Q0;
+	ins->Q1 = ctrl;
+	ins->R0 = phase;
 
+	// TODO: controlled version
 	ins->routine = P_add;
 }

@@ -22,110 +22,110 @@ extern label_t labels[3000];
 instruction_t *init_instruction();
 
 void inv();
-void tstbit(element_t *el1, element_t *el2, int bit);
-void qtstbit(element_t *el1, element_t *el2, int bit);
-void cqtstbit(element_t *el1, element_t *el2, element_t *ctrl, int bit);
+//void tstbit(bool *res, int *integer, int bit);
+void qtstbit(quantum_int_t *res, quantum_int_t *integer, int bit);
+void cqtstbit(quantum_int_t *res, quantum_int_t *integer, quantum_int_t *ctrl, int bit);
 
-void jez(element_t *bool1);
+void jez(int *bool1);
 void jmp();
 void label(char label[]);
 
-void branch(element_t *el1, int bit);
-void not(element_t *el1);
-void qnot(element_t *el1);
-void cqnot(element_t *el1, element_t *ctrl);
+void branch(quantum_int_t *Q0, int bit);
+void not(int *R0);
+void qnot(quantum_int_t *Q0);
+void cqnot(quantum_int_t *Q0, quantum_int_t *ctrl);
 
-void and(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void qand(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void qqand(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void cqand(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
-void cqqand(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
+void and(int *R0, int *R1, int *R2);
+void qand(quantum_int_t *Q0, quantum_int_t *Q1, int *R0);
+void qqand(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2);
+void cqand(quantum_int_t *Q0, quantum_int_t *Q1, int *R0, quantum_int_t *ctrl);
+void cqqand(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2, quantum_int_t *ctrl);
 
-void or(element_t *R0, element_t *R1);
-void qor(element_t *Q0, element_t *Q1, element_t *R0);
-void qqor(element_t *Q0, element_t *Q1, element_t *Q2);
-void cqor(element_t *Q0, element_t *Q1, element_t *R0, element_t *ctrl);
-void cqqor(element_t *Q0, element_t *Q1, element_t *Q2, element_t *ctrl);
+void or(int *R0, int *R1);
+void qor(quantum_int_t *Q0, quantum_int_t *Q1, int *R0);
+void qqor(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2);
+void cqor(quantum_int_t *Q0, quantum_int_t *Q1, int *R0, quantum_int_t *ctrl);
+void cqqor(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2, quantum_int_t *ctrl);
 
-void xor(element_t *R0, element_t *R1);
-void qxor(element_t *Q0, element_t *R0);
-void qqxor(element_t *Q0, element_t *Q1);
-void cqxor(element_t *Q0, element_t *R0, element_t *ctrl);
-void cqqxor(element_t *Q0, element_t *Q1, element_t *ctrl);
+void xor(int *R0, int *R1);
+void qxor(quantum_int_t *Q0, int *R0);
+void qqxor(quantum_int_t *Q0, quantum_int_t *Q1);
+void cqxor(quantum_int_t *Q0, int *R0, quantum_int_t *ctrl);
+void cqqxor(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *ctrl);
 
-void eq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void qeq(element_t *Q0, element_t *Q1, element_t *R0);
-void qqeq(element_t *Q0, element_t *Q1, element_t *Q2);
-void cqeq(element_t *Q0, element_t *Q1, element_t *R0, element_t *ctrl);
-void cqqeq(element_t *Q0, element_t *Q1, element_t *Q2, element_t *ctrl);
+void eq(int *bool_res, int *bool_1, int *bool_2);
+void qeq(quantum_int_t *Q0, quantum_int_t *Q1, int *R0);
+void qqeq(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2);
+void cqeq(quantum_int_t *Q0, quantum_int_t *Q1, int *R0, quantum_int_t *ctrl);
+void cqqeq(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2, quantum_int_t *ctrl);
 
-void geq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void qgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void qqgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void cqgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
-void cqqgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
+void geq(int *bool_res, int *bool_1, int *bool_2);
+void qgeq(quantum_int_t *Q0, int *R0, quantum_int_t *Q1);
+void qqgeq(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2);
+void cqgeq(quantum_int_t *Q0, int *R0, quantum_int_t *Q1, quantum_int_t *ctrl);
+void cqqgeq(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2, quantum_int_t *ctrl);
 
-void leq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void qleq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void qqleq(element_t *bool_res, element_t *bool_1, element_t *bool_2);
-void cqleq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
-void cqqleq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl);
+void leq(int *R0, int *R1, int *R2);
+void qleq(quantum_int_t *Q0, quantum_int_t *Q1, int *R0);
+void qqleq(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2);
+void cqleq(quantum_int_t *Q0, quantum_int_t *Q1, int *R0, quantum_int_t *ctrl);
+void cqqleq(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2, quantum_int_t *ctrl);
 
 // integer arithmetic
-void inc(element_t *el1);
-void qinc(element_t *el1);
-void cqinc(element_t *el1, element_t *ctrl);
-void dcr(element_t *el1);
-void qdcr(element_t *el1);
-void cqdcr(element_t *el1, element_t *ctrl);
+void inc(int *R0);
+void qinc(quantum_int_t *Q0);
+void cqinc(quantum_int_t *Q0, quantum_int_t *ctrl);
+void dcr(int *R0);
+void qdcr(quantum_int_t *Q0);
+void cqdcr(quantum_int_t *Q0, quantum_int_t *ctrl);
 
 // phase operations
-void padd(element_t *el1, element_t *phase);
-void cpadd(element_t *el1, element_t *phase, element_t *ctrl);
+void padd(quantum_int_t *Q0, int *phase);
+void cpadd(quantum_int_t *Q0, int *phase, quantum_int_t *ctrl);
 
-void add(element_t *el1, element_t *el2);
-void qadd(element_t *el1, element_t *el2);
-void qqadd(element_t *el1, element_t *el2);
-void cqadd(element_t *el1, element_t *el2, element_t *ctrl);
-void cqqadd(element_t *el1, element_t *el2, element_t *ctrl);
+void add(int *R0, int *R1);
+void qadd(quantum_int_t *Q0, int *R0);
+void qqadd(quantum_int_t *Q0, quantum_int_t *Q1);
+void cqadd(quantum_int_t *Q0, int *R0, quantum_int_t *ctrl);
+void cqqadd(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *ctrl);
 
-void sub(element_t *el1, element_t *el2);
-void qsub(element_t *el1, element_t *el2);
-void qqsub(element_t *el1, element_t *el2);
-void cqsub(element_t *el1, element_t *el2, element_t *ctrl);
-void cqqsub(element_t *el1, element_t *el2, element_t *ctrl);
+void sub(int *R0, int *R1);
+void qsub(quantum_int_t *Q0, int *R0);
+void qqsub(quantum_int_t *Q0, quantum_int_t *Q1);
+void cqsub(quantum_int_t *Q0, int *R0, quantum_int_t *ctrl);
+void cqqsub(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *ctrl);
 
-void mul(element_t *el1, element_t *el2, element_t *res);
-void qmul(element_t *el1, element_t *el2, element_t *res);
-void qqmul(element_t *el1, element_t *el2, element_t *res);
-void cqmul(element_t *el1, element_t *el2, element_t *res, element_t *ctrl);
-void cqqmul(element_t *el1, element_t *el2, element_t *res, element_t *ctrl);
+void mul(int *R0, int *R1, int *R2);
+void qmul(quantum_int_t *Q0, quantum_int_t *Q1, int *R0);
+void qqmul(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2);
+void cqmul(quantum_int_t *Q0, quantum_int_t *Q1, int *R0, quantum_int_t *ctrl);
+void cqqmul(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2, quantum_int_t *ctrl);
 
-void qneg(element_t *el1);
-void cqneg(element_t *el1, element_t *ctrl);
+void qneg(quantum_int_t *Q0);
+void cqneg(quantum_int_t *Q0, quantum_int_t *ctrl);
 
-void sdiv(element_t *A, element_t *B);
-void qsdiv(element_t *A, element_t *B, element_t *remainder);
-void qqsdiv(element_t *A, element_t *B, element_t *remainder);
-void cqsdiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl);
-void cqqsdiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl);
+void sdiv(int *A, int *B);
+void qsdiv(quantum_int_t *A, int *B, quantum_int_t *remainder);
+void qqsdiv(quantum_int_t *A, quantum_int_t *B, quantum_int_t *remainder);
+void cqsdiv(quantum_int_t *A, int *B, quantum_int_t *remainder, quantum_int_t *ctrl);
+void cqqsdiv(quantum_int_t *A, quantum_int_t *B, quantum_int_t *remainder, quantum_int_t *ctrl);
 
-void udiv(element_t *R0, element_t *R1);
-void qudiv(element_t *A, element_t *B, element_t *remainder);
-void qqudiv(element_t *A, element_t *B, element_t *remainder);
-void cqudiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl);
-void cqqudiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl);
+void udiv(int *R0, int *R1);
+void qudiv(quantum_int_t *A, int *B, quantum_int_t *remainder);
+void qqudiv(quantum_int_t *A, quantum_int_t *B, quantum_int_t *remainder);
+void cqudiv(quantum_int_t *A, int *B, quantum_int_t *remainder, quantum_int_t *ctrl);
+void cqqudiv(quantum_int_t *A, quantum_int_t *B, quantum_int_t *remainder, quantum_int_t *ctrl);
 
-void smod(element_t *el1, element_t *el2);
-void qsmod(element_t *mod, element_t *el1, element_t *el2);
-void qqsmod(element_t *mod, element_t *el1, element_t *el2);
-void cqsmod(element_t *mod, element_t *el1, element_t *el2, element_t *ctrl);
-void cqqsmod(element_t *mod, element_t *el1, element_t *el2, element_t *ctrl);
+void smod(int *R0, int *R1);
+void qsmod(quantum_int_t *mod, quantum_int_t *Q0, int *R0);
+void qqsmod(quantum_int_t *mod, quantum_int_t *Q0, quantum_int_t *Q1);
+void cqsmod(quantum_int_t *mod, quantum_int_t *Q0, int *R0, quantum_int_t *ctrl);
+void cqqsmod(quantum_int_t *mod, quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *ctrl);
 
-void umod(element_t *el1, element_t *el2);
-void qumod(element_t *mod, element_t *el1, element_t *el2);
-void qqumod(element_t *mod, element_t *el1, element_t *el2);
-void cqumod(element_t *mod, element_t *el1, element_t *el2, element_t *ctrl);
-void cqqumod(element_t *mod, element_t *el1, element_t *el2, element_t *ctrl);
+void umod(int *R0, int *R1);
+void qumod(quantum_int_t *mod, quantum_int_t *el1, int *R0);
+void qqumod(quantum_int_t *mod, quantum_int_t *el1, quantum_int_t *el2);
+void cqumod(quantum_int_t *mod, quantum_int_t *el1, int *R0, quantum_int_t *ctrl);
+void cqqumod(quantum_int_t *mod, quantum_int_t *el1, quantum_int_t *el2, quantum_int_t *ctrl);
 
 #endif //CQ_BACKEND_IMPROVED_ASSEMBLYOPERATIONS_H

@@ -27,7 +27,7 @@ int label_index(char *label){
 	return -1;
 }
 
-element_t *hash_element(char *word) {
+quantum_int_t *hash_element(char *word) {
     if (word == NULL) return NULL;
     unsigned int h = hash(word);
     while (variables[h].integer != NULL && strcmp(variables[h].word, word) != 0) {
@@ -299,24 +299,24 @@ void create_instruction() {
 	if (strcmp(calls[counter].instruction, "qqsmod") == 0) qqsmod(hash_element(calls[counter].var1), hash_element(calls[counter].var2), hash_element(calls[counter].var3));
 
 	if (strcmp(calls[counter].instruction, "qeq") == 0) {
-		element_t *el3 = hash_element(calls[counter].var3);
+		quantum_int_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) el3 = INT(calls[counter].value);
 		qeq(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
 	if (strcmp(calls[counter].instruction, "qgeq") == 0) {
-		element_t *el3 = hash_element(calls[counter].var3);
+		quantum_int_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) {
 			el3 = INT(calls[counter].value);
 		}
 		qgeq(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
 	if (strcmp(calls[counter].instruction, "qleq") == 0) {
-		element_t *el3 = hash_element(calls[counter].var3);
+		quantum_int_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) el3 = INT(calls[counter].value);
 		qleq(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
 	if (strcmp(calls[counter].instruction, "qqand") == 0) {
-		element_t *el3 = hash_element(calls[counter].var3);
+		quantum_int_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) el3 = INT(calls[counter].value);
 		qqand(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}
@@ -351,7 +351,7 @@ void create_executable() {
 
 	for (int i = 0; i < total; ++i) {
 		// create the variables and store in hash table
-		element_t *var = NULL;
+		quantum_int_t *var = NULL;
 		if (calls[counter].addon != NULL) var = hash_element(calls[counter].var1);
 
 		// run instructions ------------------------------------

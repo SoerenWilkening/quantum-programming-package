@@ -17,19 +17,19 @@ sequence_t *smod_seq(){
 	return NULL;
 }
 
-void udiv(element_t *R0, element_t *R1) {
+void udiv(int *R0, int *R1) {
 	instruction_t *ins = init_instruction();
-	ins->R0 = (int *) R0->c_address;
-	ins->R1 = (int *) R1->c_address;
+	ins->R0 = R0;
+	ins->R1 = R1;
 	ins->name = "udiv ";
 	ins->routine = udiv_seq;
 }
-void qudiv(element_t *A, element_t *B, element_t *remainder) {
+void qudiv(quantum_int_t *A, int *B, quantum_int_t *remainder) {
 	// create qqsdiv sequence to Divide Aq / Bq
 	// increase size of Y to unsigned operations
 
 	for (int i = 1; i < INTEGERSIZE + 1; ++i) {
-		element_t *Y = malloc(sizeof(element_t));
+		quantum_int_t *Y = malloc(sizeof(quantum_int_t));
 		memcpy(Y->q_address, &remainder->q_address[i], (INTEGERSIZE - i) * sizeof(int));
 		memcpy(&Y->q_address[(INTEGERSIZE - i)], A->q_address, i * sizeof(int));
 
@@ -46,16 +46,16 @@ void qudiv(element_t *A, element_t *B, element_t *remainder) {
 		// if bit -> Y + B
 		// cnot MSB(Y) -> bool2
 		// XOR MSB(Y) MSB(B) -> bool1
-		element_t *bit = bit_of_int(remainder, i - 1);
-		element_t *MSB_Y = bit_of_int(Y, i - 1);
-		element_t *MSB_B = bit_of_int(B, i - 1);
+		quantum_int_t *bit = bit_of_int(remainder, i - 1);
+		quantum_int_t *MSB_Y = bit_of_int(Y, i - 1);
+//		quantum_int_t *MSB_B = bit_of_int(B, i - 1);
 
-		element_t *bool1 = QBOOL();
-		element_t *bool2 = QBOOL();
-		element_t *step = QBOOL();
+		quantum_int_t *bool1 = QBOOL();
+		quantum_int_t *bool2 = QBOOL();
+		quantum_int_t *step = QBOOL();
 
 		cqnot(bool1, MSB_Y); // XOR
-		cqnot(bool1, MSB_B); // XOR
+//		cqnot(bool1, MSB_B); // XOR
 		cqnot(bool2, MSB_Y); // MSB before subtraction
 
 		qsub(Y, B); // subtract Bq from Aq
@@ -75,17 +75,17 @@ void qudiv(element_t *A, element_t *B, element_t *remainder) {
 
 		cqnot(bool2, MSB_Y); // uncomputation
 		cqnot(bool1, MSB_Y); // uncomputation
-		cqnot(bool1, MSB_B); // uncomputation
+//		cqnot(bool1, MSB_B); // uncomputation
 
 		qnot(bit); // Invert Cq
 	}
 }
-void qqudiv(element_t *A, element_t *B, element_t *remainder) {
+void qqudiv(quantum_int_t *A, quantum_int_t *B, quantum_int_t *remainder) {
 	// create qqsdiv sequence to Divide Aq / Bq
 	// increase size of Y to unsigned operations
 
 	for (int i = 1; i < INTEGERSIZE + 1; ++i) {
-		element_t *Y = malloc(sizeof(element_t));
+		quantum_int_t *Y = malloc(sizeof(quantum_int_t));
 		memcpy(Y->q_address, &remainder->q_address[i], (INTEGERSIZE - i) * sizeof(int));
 		memcpy(&Y->q_address[(INTEGERSIZE - i)], A->q_address, i * sizeof(int));
 
@@ -102,13 +102,13 @@ void qqudiv(element_t *A, element_t *B, element_t *remainder) {
 		// if bit -> Y + B
 		// cnot MSB(Y) -> bool2
 		// XOR MSB(Y) MSB(B) -> bool1
-		element_t *bit = bit_of_int(remainder, i - 1);
-		element_t *MSB_Y = bit_of_int(Y, i - 1);
-		element_t *MSB_B = bit_of_int(B, i - 1);
+		quantum_int_t *bit = bit_of_int(remainder, i - 1);
+		quantum_int_t *MSB_Y = bit_of_int(Y, i - 1);
+		quantum_int_t *MSB_B = bit_of_int(B, i - 1);
 
-		element_t *bool1 = QBOOL();
-		element_t *bool2 = QBOOL();
-		element_t *step = QBOOL();
+		quantum_int_t *bool1 = QBOOL();
+		quantum_int_t *bool2 = QBOOL();
+		quantum_int_t *step = QBOOL();
 
 		cqnot(bool1, MSB_Y); // XOR
 		cqnot(bool1, MSB_B); // XOR
@@ -140,12 +140,12 @@ void qqudiv(element_t *A, element_t *B, element_t *remainder) {
 		free_element(step);
 	}
 }
-void cqudiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) {
+void cqudiv(quantum_int_t *A, int *B, quantum_int_t *remainder, quantum_int_t *ctrl) {
 	// create qqsdiv sequence to Divide Aq / Bq
 	// increase size of Y to unsigned operations
 
 	for (int i = 1; i < INTEGERSIZE + 1; ++i) {
-		element_t *Y = malloc(sizeof(element_t));
+		quantum_int_t *Y = malloc(sizeof(quantum_int_t));
 		memcpy(Y->q_address, &remainder->q_address[i], (INTEGERSIZE - i) * sizeof(int));
 		memcpy(&Y->q_address[(INTEGERSIZE - i)], A->q_address, i * sizeof(int));
 
@@ -162,16 +162,16 @@ void cqudiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) {
 		// if bit -> Y + B
 		// cnot MSB(Y) -> bool2
 		// XOR MSB(Y) MSB(B) -> bool1
-		element_t *bit = bit_of_int(remainder, i - 1);
-		element_t *MSB_Y = bit_of_int(Y, i - 1);
-		element_t *MSB_B = bit_of_int(B, i - 1);
+		quantum_int_t *bit = bit_of_int(remainder, i - 1);
+		quantum_int_t *MSB_Y = bit_of_int(Y, i - 1);
+//		quantum_int_t *MSB_B = bit_of_int(B, i - 1);
 
-		element_t *bool1 = QBOOL();
-		element_t *bool2 = QBOOL();
-		element_t *step = QBOOL();
+		quantum_int_t *bool1 = QBOOL();
+		quantum_int_t *bool2 = QBOOL();
+		quantum_int_t *step = QBOOL();
 
 		cqnot(bool1, MSB_Y); // XOR
-		cqnot(bool1, MSB_B); // XOR
+//		cqnot(bool1, MSB_B); // XOR
 		cqnot(bool2, MSB_Y); // MSB before subtraction
 
 		cqsub(Y, B, ctrl); // subtract Bq from Aq
@@ -187,24 +187,24 @@ void cqudiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) {
 		qqand(step, bool1, bool2); // if !bool1 && bool2 -> flip bit
 		qnot(bool1);
 
-		element_t *step2 = QBOOL();
+		quantum_int_t *step2 = QBOOL();
 		qqand(step2, bit, ctrl);
 		cqadd(Y, B, step2); // Add bq back to Aq (controlled by step2)
 		qqand(step2, bit, ctrl);
 
 		cqnot(bool2, MSB_Y); // uncomputation
 		cqnot(bool1, MSB_Y); // uncomputation
-		cqnot(bool1, MSB_B); // uncomputation
+//		cqnot(bool1, MSB_B); // uncomputation
 
 		cqnot(bit, ctrl); // Invert Cq
 	}
 }
-void cqqudiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) {
+void cqqudiv(quantum_int_t *A, quantum_int_t *B, quantum_int_t *remainder, quantum_int_t *ctrl) {
 	// create qqsdiv sequence to Divide Aq / Bq
 	// increase size of Y to unsigned operations
 
 	for (int i = 1; i < INTEGERSIZE + 1; ++i) {
-		element_t *Y = malloc(sizeof(element_t));
+		quantum_int_t *Y = malloc(sizeof(quantum_int_t));
 		memcpy(Y->q_address, &remainder->q_address[i], (INTEGERSIZE - i) * sizeof(int));
 		memcpy(&Y->q_address[(INTEGERSIZE - i)], A->q_address, i * sizeof(int));
 
@@ -222,13 +222,13 @@ void cqqudiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) 
 		// if bit -> Y + B
 		// cnot MSB(Y) -> bool2
 		// XOR MSB(Y) MSB(B) -> bool1
-		element_t *bit = bit_of_int(remainder, i - 1);
-		element_t *MSB_Y = bit_of_int(Y, i - 1);
-		element_t *MSB_B = bit_of_int(B, i - 1);
+		quantum_int_t *bit = bit_of_int(remainder, i - 1);
+		quantum_int_t *MSB_Y = bit_of_int(Y, i - 1);
+		quantum_int_t *MSB_B = bit_of_int(B, i - 1);
 
-		element_t *bool1 = QBOOL();
-		element_t *bool2 = QBOOL();
-		element_t *step = QBOOL();
+		quantum_int_t *bool1 = QBOOL();
+		quantum_int_t *bool2 = QBOOL();
+		quantum_int_t *step = QBOOL();
 
 		cqnot(bool1, MSB_Y); // XOR
 		cqnot(bool1, MSB_B); // XOR
@@ -247,7 +247,7 @@ void cqqudiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) 
 		qqand(step, bool1, bool2); // if !bool1 && bool2 -> flip bit
 		qnot(bool1);
 
-		element_t *step2 = QBOOL();
+		quantum_int_t *step2 = QBOOL();
 		qqand(step2, bit, ctrl);
 		cqqadd(Y, B, step2); // Add bq back to Aq (controlled by step2)
 		qqand(step2, bit, ctrl);
@@ -260,27 +260,27 @@ void cqqudiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) 
 	}
 }
 
-void sdiv(element_t *A, element_t *B) {
+void sdiv(int *A, int *B) {
 	instruction_t *ins = init_instruction();
-	ins->R0 = (int *) A->c_address;
-	ins->R1 = (int *) B->c_address;
+	ins->R0 = A;
+	ins->R1 = B;
 	ins->name = "sdiv ";
 	ins->routine = sdiv_seq;
 }
-void qsdiv(element_t *A, element_t *B, element_t *remainder) {
+void qsdiv(quantum_int_t *A, int *B, quantum_int_t *remainder) {
 	// create qqsdiv sequence to Divide Aq / Bq
-	element_t *sign_A = QBOOL();
+	quantum_int_t *sign_A = QBOOL();
 	qtstbit(sign_A, A, 0);
 	cqneg(A, sign_A);
 
 
 	for (int i = 2; i < INTEGERSIZE + 1; ++i) {
-		element_t *Y = malloc(sizeof(element_t));
+		quantum_int_t *Y = malloc(sizeof(quantum_int_t));
 		memcpy(Y->q_address, &remainder->q_address[i], (INTEGERSIZE - i) * sizeof(int));
 		memcpy(&Y->q_address[(INTEGERSIZE - i)], A->q_address, i * sizeof(int));
 
 		qsub(Y, B); // subtract Bq from Y
-		element_t *bit = bit_of_int(remainder, i - 1);
+		quantum_int_t *bit = bit_of_int(remainder, i - 1);
 		qtstbit(bit, Y, 0); // check if Aq is negative, stored in Cq
 		cqadd(Y, B, bit); // Add bq back to Y (controlled by bit)
 		qnot(bit); // Invert Cq
@@ -291,10 +291,10 @@ void qsdiv(element_t *A, element_t *B, element_t *remainder) {
 
 	free_element(sign_A);
 }
-void qqsdiv(element_t *A, element_t *B, element_t *remainder) {
+void qqsdiv(quantum_int_t *A, quantum_int_t *B, quantum_int_t *remainder) {
 	// create qqsdiv sequence to Divide Aq / Bq
-	element_t *sign_A = QBOOL();
-	element_t *sign_B = QBOOL();
+	quantum_int_t *sign_A = QBOOL();
+	quantum_int_t *sign_B = QBOOL();
 
 	qtstbit(sign_A, A, 0);
 	qtstbit(sign_B, B, 0);
@@ -303,12 +303,12 @@ void qqsdiv(element_t *A, element_t *B, element_t *remainder) {
 	cqneg(B, sign_B);
 
 	for (int i = 2; i < INTEGERSIZE + 1; ++i) {
-		element_t *Y = malloc(sizeof(element_t));
+		quantum_int_t *Y = malloc(sizeof(quantum_int_t));
 		memcpy(Y->q_address, &remainder->q_address[i], (INTEGERSIZE - i) * sizeof(int));
 		memcpy(&Y->q_address[(INTEGERSIZE - i)], A->q_address, i * sizeof(int));
 
 		qqsub(Y, B); // subtract B from Y
-		element_t *bit = bit_of_int(remainder, i - 1);
+		quantum_int_t *bit = bit_of_int(remainder, i - 1);
 		qtstbit(bit, Y, 0); // check if Aq is negative, stored in Y
 		cqqadd(Y, B, bit); // Add B back to Y (controlled by bit)
 		qnot(bit); // Invert bit
@@ -327,24 +327,24 @@ void qqsdiv(element_t *A, element_t *B, element_t *remainder) {
 	free_element(sign_B);
 
 }
-void cqsdiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) {
+void cqsdiv(quantum_int_t *A, int *B, quantum_int_t *remainder, quantum_int_t *ctrl) {
 	// create qqsdiv sequence to Divide Aq / Bq
-	element_t *sign_A = QBOOL();
+	quantum_int_t *sign_A = QBOOL();
 	qtstbit(sign_A, A, 0);
 	cqneg(A, sign_A);
 
 	for (int i = 2; i < INTEGERSIZE + 1; ++i) {
-		element_t *Y = malloc(sizeof(element_t));
+		quantum_int_t *Y = malloc(sizeof(quantum_int_t));
 		memcpy(Y->q_address, &remainder->q_address[i], (INTEGERSIZE - i) * sizeof(int));
 		memcpy(&Y->q_address[(INTEGERSIZE - i)], A->q_address, i * sizeof(int));
 
 		cqsub(Y, B, ctrl); // subtract B from Y
 
-		element_t *bit = bit_of_int(remainder, i - 1);
+		quantum_int_t *bit = bit_of_int(remainder, i - 1);
 		cqtstbit(bit, Y, ctrl, 0); // check if Y is negative, stored in bit
 
 		// store double control in step and controll addition by step
-		element_t *step = QBOOL();
+		quantum_int_t *step = QBOOL();
 		qqand(step, bit, ctrl);
 		cqadd(Y, B, step); // Add bq back to Aq (controlled by Cq)
 		qqand(step, bit, ctrl);
@@ -358,10 +358,10 @@ void cqsdiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) {
 
 	free_element(sign_A);
 }
-void cqqsdiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) {
+void cqqsdiv(quantum_int_t *A, quantum_int_t *B, quantum_int_t *remainder, quantum_int_t *ctrl) {
 	// create qqsdiv sequence to Divide Aq / Bq
-	element_t *sign_A = QBOOL();
-	element_t *sign_B = QBOOL();
+	quantum_int_t *sign_A = QBOOL();
+	quantum_int_t *sign_B = QBOOL();
 
 	qtstbit(sign_A, A, 0);
 	qtstbit(sign_B, B, 0);
@@ -370,17 +370,17 @@ void cqqsdiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) 
 	cqneg(B, sign_B);
 
 	for (int i = 2; i < INTEGERSIZE + 1; ++i) {
-		element_t *Y = malloc(sizeof(element_t));
+		quantum_int_t *Y = malloc(sizeof(quantum_int_t));
 		memcpy(Y->q_address, &remainder->q_address[i], (INTEGERSIZE - i) * sizeof(int));
 		memcpy(&Y->q_address[(INTEGERSIZE - i)], A->q_address, i * sizeof(int));
 
 		cqqsub(Y, B, ctrl); // subtract Bq from Y
 
-		element_t *bit = bit_of_int(remainder, i - 1);
+		quantum_int_t *bit = bit_of_int(remainder, i - 1);
 		cqtstbit(bit, Y, ctrl, 0); // check if Aq is negative, stored in Cq
 
 		// store double control in step and controll addition by step
-		element_t *step = QBOOL();
+		quantum_int_t *step = QBOOL();
 		qqand(step, bit, ctrl);
 		cqqadd(Y, B, step); // Add bq back to Aq (controlled by Cq)
 		qqand(step, bit, ctrl);
@@ -402,42 +402,42 @@ void cqqsdiv(element_t *A, element_t *B, element_t *remainder, element_t *ctrl) 
 	free_element(sign_B);
 }
 
-void umod(element_t *Q0, element_t *Q1) {
+void umod(int *R0, int *R1) {
 	instruction_t *ins = init_instruction();
-	ins->R0 = (int *) Q0->c_address;
-	ins->R1 = (int *) Q1->c_address;
+	ins->R0 = R0;
+	ins->R1 = R1;
 	ins->name = "umod ";
 	ins->routine = umod_seq;
 }
-void qumod(element_t *mod, element_t *Q0, element_t *Q1) {
-	qudiv(Q0, Q1, mod);
+void qumod(quantum_int_t *mod, quantum_int_t *Q0, int *R0) {
+	qudiv(Q0, R0, mod);
 }
-void qqumod(element_t *mod, element_t *Q0, element_t *Q1) {
+void qqumod(quantum_int_t *mod, quantum_int_t *Q0, quantum_int_t *Q1) {
 	qqudiv(Q0, Q1, mod);
 }
-void cqumod(element_t *mod, element_t *Q0, element_t *Q1, element_t *ctrl) {
-	cqudiv(Q0, Q1, mod, ctrl);
+void cqumod(quantum_int_t *mod, quantum_int_t *Q0, int *R0, quantum_int_t *ctrl) {
+	cqudiv(Q0, R0, mod, ctrl);
 }
-void cqqumod(element_t *mod, element_t *Q0, element_t *Q1, element_t *ctrl) {
+void cqqumod(quantum_int_t *mod, quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *ctrl) {
 	cqqudiv(Q0, Q1, mod, ctrl);
 }
 
-void smod(element_t *el1, element_t *el2) {
+void smod(int *R0, int *R1) {
 	instruction_t *ins = init_instruction();
-	ins->R0 = (int *) el1->c_address;
-	ins->R1 = (int *) el2->c_address;
+	ins->R0 = R0;
+	ins->R1 = R1;
 	ins->name = "smod ";
 	ins->routine = smod_seq;
 }
-void qsmod(element_t *mod, element_t *el1, element_t *el2) {
-	qsdiv(el1, el2, mod);
+void qsmod(quantum_int_t *mod, quantum_int_t *Q0, int *R0) {
+	qsdiv(Q0, R0, mod);
 }
-void qqsmod(element_t *mod, element_t *el1, element_t *el2) {
-	qqsdiv(el1, el2, mod);
+void qqsmod(quantum_int_t *mod, quantum_int_t *Q0, quantum_int_t *Q1) {
+	qqsdiv(Q0, Q1, mod);
 }
-void cqsmod(element_t *mod, element_t *el1, element_t *el2, element_t *ctrl) {
-	cqsdiv(el1, el2, mod, ctrl);
+void cqsmod(quantum_int_t *mod, quantum_int_t *Q0, int *R0, quantum_int_t *ctrl) {
+	cqsdiv(Q0, R0, mod, ctrl);
 }
-void cqqsmod(element_t *mod, element_t *el1, element_t *el2, element_t *ctrl) {
-	cqqsdiv(el1, el2, mod, ctrl);
+void cqqsmod(quantum_int_t *mod, quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *ctrl) {
+	cqqsdiv(Q0, Q1, mod, ctrl);
 }

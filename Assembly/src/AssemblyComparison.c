@@ -3,108 +3,109 @@
 //
 #include "AssemblyOperations.h"
 
-void eq(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
+void eq(int *bool_res, int *bool_1, int *bool_2) {
 	instruction_t *ins = init_instruction();
 
-	ins->Q0 = bool_res;
-	ins->Q1 = bool_1;
-	ins->Q2 = bool_2;
+	ins->R0 = bool_res;
+	ins->R1 = bool_1;
+	ins->R2 = bool_2;
 
     ins->routine = CC_equal;
 }
-void qeq(element_t *Q0, element_t *Q1, element_t *R0) {
+void qeq(quantum_int_t *Q0, quantum_int_t *Q1, int *R0) {
 	instruction_t *ins = init_instruction();
 
 	ins->Q0 = Q0;
 	ins->Q1 = Q1;
-	ins->R0 = (int *) R0->c_address;
+	ins->R0 = R0;
 
     ins->routine = CQ_equal;
 }
-void qqeq(element_t *Q0, element_t *Q1, element_t *Q2) {
+void qqeq(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2) {
 	qqsub(Q1, Q2);
 
-	element_t *zero = INT(0);
+	int *cint = malloc(sizeof(int));
+	cint[0] = 1;
 
 	instruction_t *ins = init_instruction();
 	ins->Q0 = Q0;
 	ins->Q1 = Q1;
-	ins->R0 = (int *) zero->c_address;
+	ins->R0 = cint;
 	ins->routine = CQ_equal;
 
 	qqadd(Q1, Q2);
 }
-void cqeq(element_t *Q0, element_t *Q1, element_t *R0, element_t *ctrl) {
+void cqeq(quantum_int_t *Q0, quantum_int_t *Q1, int *R0, quantum_int_t *ctrl) {
 	instruction_t *ins = init_instruction();
 
 	ins->Q0 = Q0;
 	ins->Q1 = Q1;
 	ins->Q2 = ctrl;
-	ins->R0 = (int *) R0->c_address;
+	ins->R0 = R0;
 
     ins->routine = cCQ_equal;
 }
-void cqqeq(element_t *Q0, element_t *Q1, element_t *Q2, element_t *ctrl) {
+void cqqeq(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2, quantum_int_t *ctrl) {
     qqsub(Q1, Q2);
 
 	instruction_t *ins = init_instruction();
-	element_t *zero = INT(0);
+	int *cint = malloc(sizeof(int));
+	cint[0] = 1;
 
 	ins->Q0 = Q0;
 	ins->Q1 = Q1;
 	ins->Q2 = ctrl;
-	ins->R0 = (int *) zero->c_address;
+	ins->R0 = cint;
 
     ins->routine = cCQ_equal;
 
     qqadd(Q1, Q2);
 }
 
-void leq(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
+void leq(int *R0, int *R1, int *R2) {
 	// TODO: implement proper version
 }
-void qleq(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
-	qsub(bool_1, bool_2);
-	qtstbit(bool_res, bool_1, 0);
-	qadd(bool_1, bool_2);
+void qleq(quantum_int_t *Q0, quantum_int_t *Q1, int *R0) {
+	qsub(Q1, R0);
+	qtstbit(Q0, Q1, 0);
+	qadd(Q1, R0);
 }
-void qqleq(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
-	qqsub(bool_1, bool_2);
-	qtstbit(bool_res, bool_1, 0);
-	qqadd(bool_1, bool_2);
+void qqleq(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2) {
+	qqsub(Q1, Q2);
+	qtstbit(Q0, Q1, 0);
+	qqadd(Q1, Q2);
 }
-void cqleq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl) {
-	qsub(bool_1, bool_2);
-	cqtstbit(bool_res, bool_1, ctrl, 0);
-	qqadd(bool_1, bool_2);
+void cqleq(quantum_int_t *Q0, quantum_int_t *Q1, int *R0, quantum_int_t *ctrl) {
+	qsub(Q1, R0);
+	cqtstbit(Q0, Q1, ctrl, 0);
+	qadd(Q1, R0);
 }
-void cqqleq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl) {
-	qqsub(bool_1, bool_2);
-	cqtstbit(bool_res, bool_1, ctrl, 0);
-	qqadd(bool_1, bool_2);
+void cqqleq(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2, quantum_int_t *ctrl) {
+	qqsub(Q1, Q2);
+	cqtstbit(Q0, Q1, ctrl, 0);
+	qqadd(Q1, Q2);
 }
 
-void geq(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
+void geq(int *bool_res, int *bool_1, int *bool_2) {
 	// TODO: implement proper version
 }
-void qgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
-	qsub(bool_2, bool_1);
-	qtstbit(bool_res, bool_2, 0);
-	qadd(bool_2, bool_1);
+void qgeq(quantum_int_t *Q0, int *R0, quantum_int_t *Q1) {
+	qsub(Q1, R0);
+	qtstbit(Q0, Q1, 0);
+	qadd(Q1, R0);
 }
-void qqgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2) {
-	qqsub(bool_2, bool_1);
-	qtstbit(bool_res, bool_2, 0);
-	qqadd(bool_2, bool_1);
+void qqgeq(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2) {
+	qqsub(Q2, Q1);
+	qtstbit(Q0, Q2, 0);
+	qqadd(Q2, Q1);
 }
-void cqgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl) {
-	qsub(bool_2, bool_1);
-	cqtstbit(bool_res, bool_2, ctrl, 0);
-	qadd(bool_2, bool_1);
+void cqgeq(quantum_int_t *Q0, int *R0, quantum_int_t *Q1, quantum_int_t *ctrl) {
+	qsub(Q1, R0);
+	cqtstbit(Q0, Q1, ctrl, 0);
+	qadd(Q1, R0);
 }
-void cqqgeq(element_t *bool_res, element_t *bool_1, element_t *bool_2, element_t *ctrl) {
-	qqsub(bool_2, bool_1);
-	cqtstbit(bool_res, bool_2, ctrl, 0);
-	qqadd(bool_2, bool_1);
+void cqqgeq(quantum_int_t *Q0, quantum_int_t *Q1, quantum_int_t *Q2, quantum_int_t *ctrl) {
+	qqsub(Q2, Q1);
+	cqtstbit(Q0, Q2, ctrl, 0);
+	qqadd(Q2, Q1);
 }
-

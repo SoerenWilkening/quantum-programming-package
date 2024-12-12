@@ -24,34 +24,34 @@ instruction_t *init_instruction() {
 	return instr;
 }
 
-void tstbit(element_t *el1, element_t *el2, int bit) {
+void tstbit(quantum_int_t *el1, quantum_int_t *el2, int bit) {
 	instruction_t *ins = init_instruction();
 	ins->name = "testbit ";
 	ins->Q0 = el1;
 
-	element_t *qbit = bit_of_int(el2, bit);
+	quantum_int_t *qbit = bit_of_int(el2, bit);
 
 	ins->Q1 = qbit;
 	ins->routine = void_seq;
 }
 
-void qtstbit(element_t *el1, element_t *el2, int bit) {
+void qtstbit(quantum_int_t *res, quantum_int_t *integer, int bit) {
 	instruction_t *ins = init_instruction();
 	ins->name = "testbit ";
-	ins->Q0 = el1; // return value
+	ins->Q0 = res; // return value
 
-	element_t *qbit = bit_of_int(el2, bit);
+	quantum_int_t *qbit = bit_of_int(integer, bit);
 
 	ins->Q1 = qbit;
 	ins->routine = cx_gate;
 }
 
-void cqtstbit(element_t *el1, element_t *el2, element_t *ctrl, int bit) {
+void cqtstbit(quantum_int_t *res, quantum_int_t *integer, quantum_int_t *ctrl, int bit) {
 	instruction_t *ins = init_instruction();
 	ins->name = "testbit ";
-	ins->Q0 = el1; // return value
+	ins->Q0 = res; // return value
 
-	element_t *qbit = bit_of_int(el2, bit);
+	quantum_int_t *qbit = bit_of_int(integer, bit);
 
 	ins->Q1 = qbit;
 	ins->Q2 = ctrl;
@@ -63,15 +63,16 @@ void inv() {
 }
 
 void jmp() {
-	element_t *cb = BOOL(0);
-	jez(cb);
+	int *cint = malloc(sizeof(int));
+	cint[0] = 0;
+	jez(cint);
 }
 
-void jez(element_t *bool1) {
+void jez(int *bool1) {
 	// jumps are purely classical
 
 	instruction_t *ins = init_instruction();
-	ins->R0 = (int *) bool1->c_address;
+	ins->R0 = bool1;
 	ins->name = "jez ";
 
 	ins->routine = jmp_seq;

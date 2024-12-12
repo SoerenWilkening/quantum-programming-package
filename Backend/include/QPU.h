@@ -40,17 +40,17 @@ typedef struct {
 typedef struct {
 	char MSB;
     qubit_t q_address[INTEGERSIZE];
-    int64_t *c_address;
-} element_t;
+//    int64_t *c_address;
+} quantum_int_t;
 
 typedef struct instruction_t {
 	char *name;
 
 	// quantum storing registers
-    element_t *Q0;
-    element_t *Q1;
-    element_t *Q2;
-	element_t *Q3;
+    quantum_int_t *Q0;
+    quantum_int_t *Q1;
+    quantum_int_t *Q2;
+	quantum_int_t *Q3;
 
 	// classical storing registers
 	int *R0;
