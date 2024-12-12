@@ -27,7 +27,28 @@ int main(void) {
 	instruction_counter = 0;
 	QPU_state = instruction_list;
 
-	AsmbFromFile();
+	element_t *A = QINT();
+	element_t *B = QINT();
+	element_t *C = QINT();
+	element_t *D = QBOOL();
+	element_t *klass = INT(123);
+
+//	qnot(A);
+//	cqnot(A, D);
+
+//	qxor(A, klass);
+//	qqxor(A, B);
+//	cqqxor(A, B, D);
+
+//	qor(A, B, klass);
+//	qqor(A, B, C);
+//	cqqor(A, B, C, D);
+
+//	qand(A, B, klass);
+//	qqand(A, B, C);
+//	cqqand(A, B, C, D);
+
+//	AsmbFromFile();
 
 	// ._execute
 	clock_t t1 = clock();

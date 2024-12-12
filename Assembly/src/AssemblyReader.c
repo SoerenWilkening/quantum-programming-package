@@ -36,10 +36,6 @@ element_t *hash_element(char *word) {
     if (variables[h].integer != NULL && strcmp(variables[h].word, word) == 0) return variables[h].integer;
 
     int all_false = 1;
-    if (strcmp(calls[counter].addon, "QUINT") == 0) {
-        all_false = 0;
-	    variables[h].integer = QUINT();
-    }
     if (strcmp(calls[counter].addon, "QINT") == 0) {
         all_false = 0;
 	    variables[h].integer = QINT();
@@ -311,7 +307,6 @@ void create_instruction() {
 		element_t *el3 = hash_element(calls[counter].var3);
 		if (el3 == NULL) {
 			el3 = INT(calls[counter].value);
-			el3->qualifier = Cl;
 		}
 		qgeq(hash_element(calls[counter].var1), hash_element(calls[counter].var2), el3);
 	}

@@ -44,8 +44,7 @@ sequence_t *not_seq() {
 	return NULL;
 }
 sequence_t *q_not_seq() {
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
 
 	sequence_t *seq = malloc(sizeof(sequence_t));
 
@@ -59,8 +58,7 @@ sequence_t *q_not_seq() {
 	return seq;
 }
 sequence_t *cq_not_seq() {
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
 
 	sequence_t *seq = malloc(sizeof(sequence_t));
 
@@ -82,8 +80,7 @@ sequence_t *and_seq() {
 sequence_t *q_and_seq() {
 	// semiclassical and
 	// -> GRP2 always has to be the quantum element
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
 
 	int *bin = two_complement(*(QPU_state->R0), INTEGERSIZE);
 
@@ -107,8 +104,8 @@ sequence_t *qq_and_seq() {
 	// pure quantum
 	sequence_t *seq = malloc(sizeof(sequence_t));
 
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
+	printf("%d\n", number);
 
 	seq->used_layer = 1;
 	seq->num_layer = 1;
@@ -123,8 +120,7 @@ sequence_t *qq_and_seq() {
 sequence_t *cq_and_seq() {
 	// semiclassical and
 	// -> GRP2 always has to be the quantum element
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
 
 	int *bin = two_complement(*(QPU_state->R0), INTEGERSIZE);
 
@@ -148,8 +144,7 @@ sequence_t *cqq_and_seq() {
 	// pure quantum
 	sequence_t *seq = malloc(sizeof(sequence_t));
 
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
 
 	seq->used_layer = 0;
 	seq->num_layer = 3 * INTEGERSIZE;
@@ -180,8 +175,8 @@ sequence_t *xor_seq() {
 sequence_t *q_xor_seq() {
 	// pure quantum
 
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
+
 	int *bin = two_complement(*(QPU_state->R0), INTEGERSIZE);
 
 	sequence_t *seq = malloc(sizeof(sequence_t));
@@ -202,8 +197,7 @@ sequence_t *q_xor_seq() {
 sequence_t *cq_xor_seq() {
 	// pure quantum
 
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
 	int *bin = two_complement(*(QPU_state->R0), INTEGERSIZE);
 
 	sequence_t *seq = malloc(sizeof(sequence_t));
@@ -226,8 +220,7 @@ sequence_t *qq_xor_seq() {
 	// pure quantum
 	sequence_t *seq = malloc(sizeof(sequence_t *));
 
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
 
 	seq->used_layer = 1;
 	seq->num_layer = 1;
@@ -242,8 +235,7 @@ sequence_t *cqq_xor_seq() {
 	// pure quantum
 	sequence_t *seq = malloc(sizeof(sequence_t *));
 
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
 
 	seq->used_layer = 0;
 	seq->num_layer = INTEGERSIZE;
@@ -267,8 +259,7 @@ sequence_t *or_seq() {
 sequence_t *q_or_seq() {
 	// pure quantum
 
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
 	int *bin = two_complement(*(QPU_state->R0), INTEGERSIZE);
 
 	sequence_t *seq = malloc(sizeof(sequence_t));
@@ -298,8 +289,7 @@ sequence_t *q_or_seq() {
 sequence_t *qq_or_seq() {
 	// pure quantum
 
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
 
 	sequence_t *seq = malloc(sizeof(sequence_t));
 	seq->used_layer = 3;
@@ -328,8 +318,8 @@ sequence_t *qq_or_seq() {
 sequence_t *cq_or_seq() {
 	// pure quantum
 
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
+
 	int *bin = two_complement(*(QPU_state->R0), INTEGERSIZE);
 
 	sequence_t *seq = malloc(sizeof(sequence_t));
@@ -358,8 +348,7 @@ sequence_t *cq_or_seq() {
 sequence_t *cqq_or_seq() {
 	// pure quantum
 
-	int number = INTEGERSIZE;
-	if (QPU_state->Q0->type != BOOLEAN) number = 1;
+	int number = QPU_state->Q0->MSB + 1;
 
 	sequence_t *seq = malloc(sizeof(sequence_t));
 	seq->used_layer = 0;

@@ -14,7 +14,6 @@ int *two_complement(int64_t x, int n);
 
 element_t *QBOOL();
 element_t *QINT();
-element_t *QUINT();
 element_t *INT(int64_t intg);
 element_t *BOOL(bool intg);
 element_t *bit_of_int(element_t *el1, int bit);

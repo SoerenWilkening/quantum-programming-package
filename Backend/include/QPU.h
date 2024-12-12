@@ -37,26 +37,11 @@ typedef struct {
     qubit_t *ancilla;
 } circuit_t;
 
-typedef enum {
-    BOOLEAN,
-    SIGNED,
-    UNSIGNED,
-    UNINITIALIZED
-} type_t;
-
-typedef struct {
-    bool qualifier;
-    union {
-        qubit_t q_address[INTEGERSIZE];
-        int64_t *c_address;
-    };
-    type_t type;
-} element_t;
-
 typedef struct {
 	char MSB;
-	unsigned int qubits[INTEGERSIZE];
-} quantum_int_t;
+    qubit_t q_address[INTEGERSIZE];
+    int64_t *c_address;
+} element_t;
 
 typedef struct instruction_t {
 	char *name;
