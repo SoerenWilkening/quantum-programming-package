@@ -50,23 +50,23 @@ void cqqadd(element_t *el1, element_t *el2, element_t *ctrl) {
 
 void sub(element_t *el1, element_t *el2) {
 	add(el1, el2);
-	stack.instruction_list[stack.instruction_counter - 1].invert = INVERTED;
+	instruction_list[instruction_counter - 1].invert = INVERTED;
 }
 void qsub(element_t *el1, element_t *el2) {
 	qadd(el1, el2);
-	stack.instruction_list[stack.instruction_counter - 1].invert = INVERTED;
+	instruction_list[instruction_counter - 1].invert = INVERTED;
 }
 void cqsub(element_t *el1, element_t *el2, element_t *ctrl) {
 	cqadd(el1, el2, ctrl);
-	stack.instruction_list[stack.instruction_counter - 1].invert = INVERTED;
+	instruction_list[instruction_counter - 1].invert = INVERTED;
 }
 void qqsub(element_t *el1, element_t *el2) {
 	qqadd(el1, el2);
-	stack.instruction_list[stack.instruction_counter - 1].invert = INVERTED;
+	instruction_list[instruction_counter - 1].invert = INVERTED;
 }
 void cqqsub(element_t *el1, element_t *el2, element_t *ctrl) {
 	cqqadd(el1, el2, ctrl);
-	stack.instruction_list[stack.instruction_counter - 1].invert = INVERTED;
+	instruction_list[instruction_counter - 1].invert = INVERTED;
 }
 
 void inc(element_t *el1) {

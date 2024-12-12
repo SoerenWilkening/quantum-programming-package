@@ -1,19 +1,19 @@
 #include "AssemblyOperations.h"
 
 sequence_t *udiv_seq(){
-	*((int *) stack.R0) /= *((int *) stack.R1);
+	*(QPU_state->R0) /= *(QPU_state->R1);
 	return NULL;
 }
 sequence_t *sdiv_seq(){
-	*((int *) stack.R0) /= *((int *) stack.R1);
+	*(QPU_state->R0) /= *(QPU_state->R1);
 	return NULL;
 }
 sequence_t *umod_seq(){
-	*((int *) stack.R0) %= *((int *) stack.R1);
+	*(QPU_state->R0) %= *(QPU_state->R1);
 	return NULL;
 }
 sequence_t *smod_seq(){
-	*((int *) stack.R0) %= *((int *) stack.R1);
+	*(QPU_state->R0) %= *(QPU_state->R1);
 	return NULL;
 }
 

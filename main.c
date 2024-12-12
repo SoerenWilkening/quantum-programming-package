@@ -4,7 +4,10 @@
 #include "AssemblyReader.h"
 #include "execution.h"
 
-hybrid_stack_t stack;
+instruction_t instruction_list[MAXINSTRUCTIONS];
+int instruction_counter = 0;
+instruction_t *QPU_state;
+circuit_t *circuit;
 
 sequence_t *precompiled_QQ_add = NULL;
 sequence_t *precompiled_cQQ_add = NULL;
@@ -18,16 +21,11 @@ int label_counter = 0;
 label_t labels[3000];
 
 int main(void) {
-
-    // initialize the rest of the stack
-    // prepare exerything for the execution
-    stack.Q0 = NULL;
-    stack.Q1 = NULL;
-    stack.Q2 = NULL;
-    stack.Q3 = NULL;
-    stack.circuit = init_circuit();
-    stack.instruction_counter = 0;
-	stack.QPU_state = stack.instruction_list;
+	// initialize the rest of the stack
+	// prepare exerything for the execution
+	circuit = init_circuit();
+	instruction_counter = 0;
+	QPU_state = instruction_list;
 
 	AsmbFromFile();
 
@@ -35,10 +33,10 @@ int main(void) {
 	clock_t t1 = clock();
 	execute();
 
-	CircuitToOPANQASM(stack.circuit, "..");
+	CircuitToOPANQASM(circuit, "..");
 
-    print_circuit(stack.circuit);
+	print_circuit(circuit);
 
-    printf("%f\n", (double) (clock() - t1) / CLOCKS_PER_SEC);
-    return 0;
+	printf("%f\n", (double) (clock() - t1) / CLOCKS_PER_SEC);
+	return 0;
 }

@@ -5,13 +5,13 @@
 #include "Integer.h"
 
 sequence_t *CC_add() {
-	*((int *) stack.R0) += *((int *) stack.R1);
+	*(QPU_state->R0) += *(QPU_state->R1);
 	return NULL;
 }
 sequence_t *CQ_add() {
 	// Compute rotation angles
 	int NonZeroCount = 0;
-	int *bin = two_complement(*(stack.R0), INTEGERSIZE);
+	int *bin = two_complement(*(QPU_state->R0), INTEGERSIZE);
 
 	// Compute rotations for addition
 	double *rotations = calloc(INTEGERSIZE, sizeof(double));
@@ -83,7 +83,7 @@ sequence_t *QQ_add() {
 sequence_t *cCQ_add() {
 	// Compute rotation angles
 	int NonZeroCount = 0;
-	int *bin = two_complement(*(stack.R0), INTEGERSIZE);
+	int *bin = two_complement(*(QPU_state->R0), INTEGERSIZE);
 
 	// Compute rotations for addition
 	double *rotations = calloc(INTEGERSIZE, sizeof(double));
@@ -196,7 +196,7 @@ sequence_t *P_add() {
 	seq->used_layer = 1;
 	seq->num_layer = 1;
 	// implement correct phase multiplication
-	p(&seq->seq[0][0], 0, *((int *) stack.R0));
+	p(&seq->seq[0][0], 0, *(QPU_state->R0));
 
 	return seq;
 }
@@ -207,7 +207,7 @@ sequence_t *cP_add() {
 	seq->used_layer = 1;
 	seq->num_layer = 1;
 	// implement correct phase multiplication
-	cp(&seq->seq[0][0], 0, 1, *((int *) stack.R0));
+	cp(&seq->seq[0][0], 0, 1, *(QPU_state->R0));
 
 	return seq;
 }

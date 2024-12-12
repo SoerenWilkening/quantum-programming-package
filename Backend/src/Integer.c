@@ -7,20 +7,20 @@ element_t *QBOOL(){
     element_t *integer = malloc(sizeof(element_t));
     integer->type = BOOLEAN;
     integer->qualifier = Qu;
-    integer->q_address[INTEGERSIZE - 1] = stack.circuit->used_qubit_indices;
-    stack.circuit->ancilla += 1;
-    stack.circuit->used_qubit_indices += 1;
+    integer->q_address[INTEGERSIZE - 1] = circuit->used_qubit_indices;
+    circuit->ancilla += 1;
+    circuit->used_qubit_indices += 1;
     return integer;
 }
 element_t *QINT(){
     element_t *integer = malloc(sizeof(element_t));
     integer->type = SIGNED;
     integer->qualifier = Qu;
-    stack.circuit->ancilla += INTEGERSIZE;
+    circuit->ancilla += INTEGERSIZE;
     integer->c_address = NULL;
     for (int i = 0; i < INTEGERSIZE; ++i) {
-        integer->q_address[i] = stack.circuit->used_qubit_indices;
-        stack.circuit->used_qubit_indices++;
+        integer->q_address[i] = circuit->used_qubit_indices;
+        circuit->used_qubit_indices++;
     }
     return integer;
 }
@@ -29,12 +29,10 @@ element_t *QUINT(){
     integer->type = UNSIGNED;
     integer->qualifier = Qu;
     for (int i = 0; i < INTEGERSIZE; ++i) {
-//        printf("%d %d\n", i, stack.circuit->used_qubit_indices + 1);
-        integer->q_address[i] = (qubit_t) stack.circuit->used_qubit_indices;
-        stack.circuit->used_qubit_indices++;
+        integer->q_address[i] = (qubit_t) circuit->used_qubit_indices;
+        circuit->used_qubit_indices++;
     }
-    stack.circuit->ancilla += INTEGERSIZE;
-//    integer->c_address = NULL;
+    circuit->ancilla += INTEGERSIZE;
     return integer;
 }
 element_t *INT(int64_t intg){
@@ -78,7 +76,7 @@ int *two_complement(int64_t x, int n) {
 void free_element(element_t *el1){
 	if (el1->qualifier == Cl) free(el1->c_address);
 	else {
-		stack.circuit->ancilla--;
-		stack.circuit->used_qubit_indices--;
+		circuit->ancilla--;
+		circuit->used_qubit_indices--;
 	}
 }

@@ -5,7 +5,7 @@
 #include "AssemblyOperations.h"
 
 instruction_t *init_instruction() {
-	instruction_t *instr = &stack.instruction_list[stack.instruction_counter];
+	instruction_t *instr = &instruction_list[instruction_counter];
 	instr->Q0 = NULL;
 	instr->Q1 = NULL;
 	instr->Q2 = NULL;
@@ -19,7 +19,7 @@ instruction_t *init_instruction() {
 	instr->routine = NULL;
 	instr->invert = NOTINVERTED;
 	instr->next_instruction = NULL;
-	stack.instruction_counter++;
+	instruction_counter++;
 
 	return instr;
 }
@@ -59,7 +59,7 @@ void cqtstbit(element_t *el1, element_t *el2, element_t *ctrl, int bit) {
 }
 
 void inv() {
-	stack.instruction_list[stack.instruction_counter].invert = INVERTED;
+	instruction_list[instruction_counter].invert = INVERTED;
 }
 
 void jmp() {

@@ -6,23 +6,23 @@
 
 void qubit_mapping(qubit_t qubit_arrray[]) {
 	int start = 0;
-	if (stack.Q0 != NULL){
+	if (QPU_state->Q0 != NULL){
 		start += INTEGERSIZE;
-		memcpy(qubit_arrray, stack.Q0->q_address, INTEGERSIZE * sizeof(int));
+		memcpy(qubit_arrray, QPU_state->Q0->q_address, INTEGERSIZE * sizeof(int));
 	}
-	if (stack.Q1 != NULL){
+	if (QPU_state->Q1 != NULL){
 		start += INTEGERSIZE;
-		memcpy(&qubit_arrray[INTEGERSIZE], stack.Q1->q_address, INTEGERSIZE * sizeof(int));
+		memcpy(&qubit_arrray[INTEGERSIZE], QPU_state->Q1->q_address, INTEGERSIZE * sizeof(int));
 	}
-	if (stack.Q2 != NULL){
+	if (QPU_state->Q2 != NULL){
 		start += INTEGERSIZE;
-		memcpy(&qubit_arrray[2 * INTEGERSIZE], stack.Q2->q_address, INTEGERSIZE * sizeof(int));
+		memcpy(&qubit_arrray[2 * INTEGERSIZE], QPU_state->Q2->q_address, INTEGERSIZE * sizeof(int));
 	}
-	if (stack.Q3 != NULL){
+	if (QPU_state->Q3 != NULL){
 		start += INTEGERSIZE;
-		memcpy(&qubit_arrray[3 * INTEGERSIZE], stack.Q3->q_address, INTEGERSIZE * sizeof(int));
+		memcpy(&qubit_arrray[3 * INTEGERSIZE], QPU_state->Q3->q_address, INTEGERSIZE * sizeof(int));
 	}
-	memcpy(&qubit_arrray[start], stack.circuit->ancilla, 2 * INTEGERSIZE * sizeof(int));
+	memcpy(&qubit_arrray[start], circuit->ancilla, 2 * INTEGERSIZE * sizeof(int));
 }
 
 // apply the sequences to the desired qubits
@@ -42,43 +42,24 @@ void run_instruction(sequence_t *res, qubit_t qubit_array[], bool invert){
             }
             g->GateValue *= pow(-1, invert);
 
-            add_gate(stack.circuit, g);
+            add_gate(circuit, g);
         }
     }
 }
 
 void execute() {
 
-	instruction_t *instr = stack.QPU_state;
-
-	stack.Q0 = instr->Q0;
-	stack.Q1 = instr->Q1;
-	stack.Q2 = instr->Q2;
-	stack.Q3 = instr->Q3;
-
-	stack.R0 = instr->R0;
-	stack.R1 = instr->R1;
-	stack.R2 = instr->R2;
-	stack.R3 = instr->R3;
+	instruction_t *instr = QPU_state;
 
 	if (instr->routine == NULL) return;
+
 	qubit_t qubit_array[6 * INTEGERSIZE];
 	qubit_mapping(qubit_array);
 	sequence_t *res = instr->routine();
 
     run_instruction(res, qubit_array, instr->invert);
 
-    stack.Q0 = NULL;
-    stack.Q1 = NULL;
-    stack.Q2 = NULL;
-    stack.Q3 = NULL;
-
-	stack.R0 = NULL;
-	stack.R1 = NULL;
-	stack.R2 = NULL;
-	stack.R3 = NULL;
-
-	if (instr == stack.QPU_state) stack.QPU_state++;
+	if (instr == QPU_state) QPU_state++;
 
 	execute();
 }

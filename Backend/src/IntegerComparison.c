@@ -5,7 +5,7 @@
 #include "IntegerComparison.h"
 
 sequence_t *CC_equal() {
-	*((int *) stack.R0) = *((int *) stack.R1) == *((int *) stack.R2);
+	*(QPU_state->R0) = *(QPU_state->R1) == *(QPU_state->R2);
 	return NULL;
 }
 sequence_t *CQ_equal() {
@@ -16,7 +16,7 @@ sequence_t *CQ_equal() {
 
 	int factor = INTEGERSIZE;
 
-    int *bin = two_complement(*(stack.R0), INTEGERSIZE);
+    int *bin = two_complement(*(QPU_state->R0), INTEGERSIZE);
     int Zeros = 0;
     for (int i = 0; i < INTEGERSIZE; ++i) Zeros += (1 - bin[i]);
 
@@ -105,7 +105,7 @@ sequence_t *cCQ_equal() {
 
 	int factor = INTEGERSIZE;
 
-	int *bin = two_complement(*(stack.R0), INTEGERSIZE);
+	int *bin = two_complement(*(QPU_state->R0), INTEGERSIZE);
 	int Zeros = 0;
 	for (int i = 0; i < INTEGERSIZE; ++i) Zeros += (1 - bin[i]);
 

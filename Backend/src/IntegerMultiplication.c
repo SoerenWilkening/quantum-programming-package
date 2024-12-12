@@ -60,11 +60,11 @@ void all_rot_final_block(sequence_t *mul, num_t *layer, int rounds, num_t contro
 }
 
 sequence_t *CC_mul(){
-	*((int *) stack.R0) = *((int *) stack.R1) * *((int *) stack.R2);
+	*(QPU_state->R0) = *(QPU_state->R1) * *(QPU_state->R2);
 	return NULL;
 }
 sequence_t *CQ_mul() {
-	int *bin = two_complement(*(stack.R0), INTEGERSIZE);
+	int *bin = two_complement(*(QPU_state->R0), INTEGERSIZE);
 
 	sequence_t *mul = malloc(sizeof(sequence_t));
 	mul->used_layer = 0;
@@ -80,11 +80,10 @@ sequence_t *CQ_mul() {
 		layer = 2 * INTEGERSIZE + 2 * rounds - 1;
 		num_t control = INTEGERSIZE + bit;
 		for (int i = 0; i < INTEGERSIZE - rounds; ++i) {
-//			num_t target = i + rounds;
 			num_t target = INTEGERSIZE - i - 1 - rounds;
+
 			double value = 0;
 			for (int bit_int2 = 0; bit_int2 < INTEGERSIZE; ++bit_int2) {
-//				printf("%d ", bin[bit_int2]);
 				value += bin[bit_int2] * 2 * M_PI / (pow(2, i + 1)) * pow(2, INTEGERSIZE - bit_int2 - 1);
 				printf("%d %f ", bit_int2, 2 * M_PI / (pow(2, i + 1)) * pow(2, INTEGERSIZE - bit_int2 - 1));
 			}
@@ -151,7 +150,7 @@ sequence_t *QQ_mul() {
     return mul;
 }
 sequence_t *cCQ_mul() {
-    int *bin = two_complement(*(stack.R0), INTEGERSIZE);
+    int *bin = two_complement(*(QPU_state->R0), INTEGERSIZE);
 
     sequence_t *mul = malloc(sizeof(sequence_t));
     mul->used_layer = 0;

@@ -79,26 +79,10 @@ typedef struct instruction_t {
     struct instruction_t *next_instruction; // used for jumps
 } instruction_t;
 
-typedef struct {
-    element_t *Q0;
-    element_t *Q1;
-    element_t *Q2;
-    element_t *Q3;
-
-	int *R0;
-	int *R1;
-	int *R2;
-	int *R3;
-
-    instruction_t instruction_list[MAXINSTRUCTIONS];
-    int instruction_counter;
-
-	instruction_t *QPU_state;
-
-    circuit_t *circuit;
-} hybrid_stack_t;
-
-extern hybrid_stack_t stack;
+extern instruction_t instruction_list[MAXINSTRUCTIONS];
+extern int instruction_counter;
+extern instruction_t *QPU_state;
+extern circuit_t *circuit;
 
 circuit_t *init_circuit();
 

@@ -328,7 +328,7 @@ void create_instruction() {
 	if (strcmp(calls[counter].instruction, "qnot") == 0) qnot(hash_element(calls[counter].var1));
 	if (strcmp(calls[counter].instruction, "jez") == 0) jez(hash_element(calls[counter].var1));
 	if (strcmp(calls[counter].instruction, "jmp") == 0) jmp();
-	calls[counter].ptr = &stack.instruction_list[stack.instruction_counter - 1];
+	calls[counter].ptr = &instruction_list[instruction_counter - 1];
 }
 void create_label(){
 	if (calls[counter].label == NULL) return;
