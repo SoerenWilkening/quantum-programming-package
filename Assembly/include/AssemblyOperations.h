@@ -21,6 +21,8 @@ extern label_t labels[3000];
 
 instruction_t *init_instruction();
 
+void qset(quantum_int_t *Q0, int *R0);
+
 void inv();
 //void tstbit(bool *res, int *integer, int bit);
 void qtstbit(quantum_int_t *res, quantum_int_t *integer, int bit);

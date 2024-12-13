@@ -57,14 +57,14 @@ void execute() {
 	qubit_mapping(qubit_array);
 	sequence_t *res = instr->routine();
 
-	printf("%s\n", instr->name);
-	for (int i = 0; i < 3 * INTEGERSIZE; ++i) {
-		printf("%d ", qubit_array[i]);
-		if (i % 4 == 3) printf("  ");
-	}
-	printf("\n");
-
-	print_sequence(res);
+//	printf("%s\n", instr->name);
+//	for (int i = 0; i < 3 * INTEGERSIZE; ++i) {
+//		printf("%d ", qubit_array[i]);
+//		if (i % 4 == 3) printf("  ");
+//	}
+//	printf("\n");
+//
+//	print_sequence(res);
     run_instruction(res, qubit_array, instr->invert);
 
 	if (instr == QPU_state) QPU_state++;

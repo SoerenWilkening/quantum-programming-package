@@ -24,6 +24,15 @@ instruction_t *init_instruction() {
 	return instr;
 }
 
+void qset(quantum_int_t *Q0, int *R0){
+	instruction_t *ins = init_instruction();
+	ins->name = "qset ";
+	ins->Q0 = Q0;
+	ins->R0 = R0;
+
+	ins->routine = setting_seq;
+}
+
 void tstbit(quantum_int_t *el1, quantum_int_t *el2, int bit) {
 	instruction_t *ins = init_instruction();
 	ins->name = "testbit ";

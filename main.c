@@ -27,12 +27,10 @@ int main(void) {
 	instruction_counter = 0;
 	QPU_state = instruction_list;
 
-//	quantum_int_t *D = QBOOL();
 //	quantum_int_t *A = QINT();
-//	quantum_int_t *B = QINT();
-//	quantum_int_t *C = QINT();
-//
-//	cqqsdiv(A, B, C, D);
+//	quantum_int_t *B = QBOOL();
+//	int C = 123;
+//	qset(A, &C);
 	AsmbFromFile();
 
 	// ._execute

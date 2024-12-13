@@ -25,7 +25,7 @@ typedef struct {
 } call_t;
 
 typedef struct {
-    quantum_int_t *integer;
+    void *integer;
     char *word;
 } hash_element_t;
 

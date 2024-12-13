@@ -62,3 +62,18 @@ void free_element(quantum_int_t *el1){
 	circuit->ancilla--;
 	circuit->used_qubit_indices--;
 }
+
+sequence_t *setting_seq(){
+	int *bin = two_complement(*QPU_state->R0, INTEGERSIZE);
+	sequence_t *seq;
+	seq = malloc(sizeof(sequence_t));
+	seq->used_layer = 1;
+	seq->num_layer = 1;
+	seq->gates_per_layer[0] = 0;
+	for (int i = QPU_state->Q0->MSB; i < INTEGERSIZE; ++i) {
+		if (bin[i]) x(&seq->seq[0][seq->gates_per_layer[0]++], i);
+	}
+
+	free(bin);
+	return seq;
+}

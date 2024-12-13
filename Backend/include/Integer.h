@@ -17,6 +17,7 @@ quantum_int_t *QINT();
 quantum_int_t *INT(int64_t intg);
 quantum_int_t *BOOL(bool intg);
 quantum_int_t *bit_of_int(quantum_int_t *el1, int bit);
+sequence_t *setting_seq();
 void free_element(quantum_int_t *el1);
 
 // implementation of Integer operations gate sequences

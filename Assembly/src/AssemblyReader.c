@@ -53,7 +53,7 @@ int label_index(char *label){
 	return -1;
 }
 
-quantum_int_t *hash_element(char *word) {
+void *hash_element(char *word) {
     if (word == NULL) return NULL;
 //    if (calls[counter].addon == NULL) return NULL;
     unsigned int h = hash(word);
@@ -137,10 +137,10 @@ int is_instruction(char *word) {
 	if (strcmp(word, "qgeq") == 0) return true;
 	if (strcmp(word, "qleq") == 0) return true;
 	if (strcmp(word, "MEASURE") == 0) return true;
-	if (strcmp(word, "IF") == 0) return true;
 	if (strcmp(word, "qnot") == 0) return true;
 	if (strcmp(word, "jez") == 0) return true;
 	if (strcmp(word, "jmp") == 0) return true;
+	if (strcmp(word, "qset") == 0) return true;
 	return false;
 }
 
@@ -282,10 +282,10 @@ void create_instruction() {
 	if (calls[counter].instruction == NULL) return;
 	if (!is_instruction(calls[counter].instruction)) return;
 //    printf("%s %s, %s, %s, %d\n", calls[counter].instruction, calls[counter].var1, calls[counter].var2, calls[counter].var3, calls[counter].value);
-	quantum_int_t *var1 = hash_element(calls[counter].var1);
-	quantum_int_t *var2 = hash_element(calls[counter].var2);
-	quantum_int_t *var3 = hash_element(calls[counter].var3);
-	quantum_int_t *var4 = hash_element(calls[counter].var4);
+	void *var1 = hash_element(calls[counter].var1);
+	void *var2 = hash_element(calls[counter].var2);
+	void *var3 = hash_element(calls[counter].var3);
+	void *var4 = hash_element(calls[counter].var4);
 	if (strcmp(calls[counter].instruction, "branch") == 0) branch(var1, *((int *) var2));
 	if (strcmp(calls[counter].instruction, "inc") == 0)  inc(hash_element(calls[counter].var1));
 	if (strcmp(calls[counter].instruction, "dcr") == 0)  dcr(hash_element(calls[counter].var1));
@@ -304,8 +304,7 @@ void create_instruction() {
 	if (strcmp(calls[counter].instruction, "qsdiv") == 0) qsdiv(hash_element(calls[counter].var1), INT(calls[counter].value), hash_element(calls[counter].var2));
 	if (strcmp(calls[counter].instruction, "qqsdiv") == 0) qqsdiv(hash_element(calls[counter].var1), hash_element(calls[counter].var2), hash_element(calls[counter].var3));
 	if (strcmp(calls[counter].instruction, "cqsdiv") == 0) cqsdiv(hash_element(calls[counter].var1), hash_element(calls[counter].var2), hash_element(calls[counter].var3), hash_element(calls[counter].var4));
-	if (strcmp(calls[counter].instruction, "cqqsdiv") == 0)
-		cqqsdiv((quantum_int_t *)var1, (quantum_int_t *)var2, (quantum_int_t *)var3, (quantum_int_t *) var4);
+	if (strcmp(calls[counter].instruction, "cqqsdiv") == 0) cqqsdiv(var1, var2, var3, var4);
 
 	if (strcmp(calls[counter].instruction, "qqsmod") == 0) qqsmod(hash_element(calls[counter].var1), hash_element(calls[counter].var2), hash_element(calls[counter].var3));
 
@@ -326,6 +325,7 @@ void create_instruction() {
 	if (strcmp(calls[counter].instruction, "qnot") == 0) qnot(hash_element(calls[counter].var1));
 	if (strcmp(calls[counter].instruction, "jez") == 0) jez(hash_element(calls[counter].var1));
 	if (strcmp(calls[counter].instruction, "jmp") == 0) jmp();
+	if (strcmp(calls[counter].instruction, "qset") == 0) qset(var1, var2);
 	calls[counter].ptr = &instruction_list[instruction_counter - 1];
 }
 void create_label(){
