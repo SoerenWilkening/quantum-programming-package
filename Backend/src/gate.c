@@ -7,6 +7,7 @@
 void print_dash(int k){
     for (int i = 0; i < k; ++i) {
         printf("\u2500");
+//	    printf("-");
     }
 }
 void print_empty(int k){

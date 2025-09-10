@@ -27,11 +27,6 @@ int main(int argc, char *argv[]) {
 	instruction_counter = 0;
 	QPU_state = instruction_list;
 
-//	quantum_int_t *A = QINT();
-//	quantum_int_t *B = QBOOL();
-//	int C = 123;
-//	qset(A, &C);
-
 	AsmbFromFile(argv[1]);
 
 	// ._execute
