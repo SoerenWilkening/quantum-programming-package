@@ -7,7 +7,10 @@
 
 #include <stdlib.h>
 
-#define INTEGERSIZE 8
+//#define INTEGERSIZE 500
+#ifndef INTEGERSIZE
+#define INTEGERSIZE 800
+#endif
 #define QBITSIZE 1
 #define QBYTESIZE 8
 #define QHWORDSIZE 16

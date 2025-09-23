@@ -11,6 +11,8 @@
 
 // functionality for C
 //void init_instruction(instruction_t *instr);
+void qubit_mapping(qubit_t qubit_arrray[]);
+void run_instruction(sequence_t *res, qubit_t qubit_array[], bool invert);
 int execute();
 
 #endif //CQ_BACKEND_IMPROVED_EXECUTION_H

@@ -7,3 +7,4 @@ circuit.qasm
 .venv
 old_stuff
 circ.pqsm
+#tests

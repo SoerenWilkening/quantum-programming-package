@@ -1,0 +1,334 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "QuantumProject/1.0.0": {
+        "dependencies": {
+          "Microsoft.Quantum.QSharp.Foundation": "0.28.302812",
+          "Microsoft.Quantum.Standard": "0.28.302812"
+        },
+        "runtime": {
+          "QuantumProject.dll": {}
+        }
+      },
+      "Microsoft.Quantum.QSharp.Core/0.28.302812": {
+        "dependencies": {
+          "Microsoft.Quantum.QSharp.Foundation": "0.28.302812",
+          "Microsoft.Quantum.Runtime.Core": "0.28.302812",
+          "Microsoft.Quantum.Simulators": "0.28.302812",
+          "Microsoft.Quantum.Targets.Interfaces": "0.28.302812"
+        },
+        "runtime": {
+          "lib/net6.0/Microsoft.Quantum.QSharp.Core.dll": {
+            "assemblyVersion": "0.28.0.0",
+            "fileVersion": "0.28.0.0"
+          }
+        }
+      },
+      "Microsoft.Quantum.QSharp.Foundation/0.28.302812": {
+        "dependencies": {
+          "Microsoft.Quantum.Runtime.Core": "0.28.302812",
+          "Microsoft.Quantum.Targets.Interfaces": "0.28.302812"
+        },
+        "runtime": {
+          "lib/net6.0/Microsoft.Quantum.QSharp.Foundation.dll": {
+            "assemblyVersion": "0.28.0.0",
+            "fileVersion": "0.28.0.0"
+          }
+        }
+      },
+      "Microsoft.Quantum.Runtime.Core/0.28.302812": {
+        "dependencies": {
+          "Newtonsoft.Json": "13.0.1",
+          "System.Collections.Immutable": "1.6.0"
+        },
+        "runtime": {
+          "lib/net6.0/Microsoft.Quantum.Runtime.Core.dll": {
+            "assemblyVersion": "0.28.0.0",
+            "fileVersion": "0.28.0.0"
+          }
+        }
+      },
+      "Microsoft.Quantum.Simulators/0.28.302812": {
+        "dependencies": {
+          "Microsoft.Quantum.QSharp.Foundation": "0.28.302812",
+          "Microsoft.Quantum.Runtime.Core": "0.28.302812",
+          "NumSharp": "0.20.5",
+          "System.Reflection.Metadata": "1.7.0",
+          "System.Text.Json": "6.0.3"
+        },
+        "runtime": {
+          "lib/net6.0/Microsoft.Quantum.Simulation.Common.dll": {
+            "assemblyVersion": "0.28.0.0",
+            "fileVersion": "0.28.0.0"
+          },
+          "lib/net6.0/Microsoft.Quantum.Simulation.QCTraceSimulatorRuntime.dll": {
+            "assemblyVersion": "0.28.0.0",
+            "fileVersion": "0.28.0.0"
+          },
+          "lib/net6.0/Microsoft.Quantum.Simulators.dll": {
+            "assemblyVersion": "0.28.0.0",
+            "fileVersion": "0.28.0.0"
+          }
+        },
+        "runtimeTargets": {
+          "runtimes/linux-x64/native/Microsoft.Quantum.Experimental.Simulators.Runtime.dll": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/Microsoft.Quantum.QdkSimRs.Runtime.dll": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libMicrosoft.Quantum.Simulator.Runtime.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libMicrosoft.Quantum.SparseSimulator.Runtime.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libomp.so": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/linux-x64/native/libomp.so.5": {
+            "rid": "linux-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-x64/native/Microsoft.Quantum.Experimental.Simulators.Runtime.dll": {
+            "rid": "osx-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-x64/native/Microsoft.Quantum.QdkSimRs.Runtime.dll": {
+            "rid": "osx-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-x64/native/libMicrosoft.Quantum.Simulator.Runtime.dylib": {
+            "rid": "osx-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-x64/native/libMicrosoft.Quantum.SparseSimulator.Runtime.dylib": {
+            "rid": "osx-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/osx-x64/native/libomp.dylib": {
+            "rid": "osx-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/Microsoft.Quantum.Experimental.Simulators.Runtime.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/Microsoft.Quantum.QdkSimRs.Runtime.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/Microsoft.Quantum.Simulator.Runtime.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/Microsoft.Quantum.Simulator.Runtime.lib": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/Microsoft.Quantum.SparseSimulator.Runtime.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          },
+          "runtimes/win-x64/native/libomp140.x86_64.dll": {
+            "rid": "win-x64",
+            "assetType": "native",
+            "fileVersion": "0.0.0.0"
+          }
+        }
+      },
+      "Microsoft.Quantum.Standard/0.28.302812": {
+        "dependencies": {
+          "Microsoft.Quantum.QSharp.Core": "0.28.302812",
+          "Microsoft.Quantum.Runtime.Core": "0.28.302812",
+          "Microsoft.Quantum.Simulators": "0.28.302812",
+          "Microsoft.Quantum.Targets.Interfaces": "0.28.302812",
+          "NumSharp": "0.20.5"
+        },
+        "runtime": {
+          "lib/net6.0/Microsoft.Quantum.Standard.dll": {
+            "assemblyVersion": "0.28.0.0",
+            "fileVersion": "0.28.0.0"
+          }
+        }
+      },
+      "Microsoft.Quantum.Targets.Interfaces/0.28.302812": {
+        "dependencies": {
+          "Microsoft.Quantum.Runtime.Core": "0.28.302812"
+        },
+        "runtime": {
+          "lib/net6.0/Microsoft.Quantum.Targets.Interfaces.dll": {
+            "assemblyVersion": "0.28.0.0",
+            "fileVersion": "0.28.0.0"
+          }
+        }
+      },
+      "Newtonsoft.Json/13.0.1": {
+        "runtime": {
+          "lib/netstandard2.0/Newtonsoft.Json.dll": {
+            "assemblyVersion": "13.0.0.0",
+            "fileVersion": "13.0.1.25517"
+          }
+        }
+      },
+      "NumSharp/0.20.5": {
+        "dependencies": {
+          "System.Memory": "4.5.3",
+          "System.Runtime.CompilerServices.Unsafe": "6.0.0"
+        },
+        "runtime": {
+          "lib/netstandard2.0/NumSharp.Core.dll": {
+            "assemblyVersion": "0.20.5.0",
+            "fileVersion": "0.20.5.0"
+          }
+        }
+      },
+      "System.Collections.Immutable/1.6.0": {},
+      "System.Memory/4.5.3": {},
+      "System.Reflection.Metadata/1.7.0": {},
+      "System.Runtime.CompilerServices.Unsafe/6.0.0": {},
+      "System.Text.Encodings.Web/6.0.0": {
+        "dependencies": {
+          "System.Runtime.CompilerServices.Unsafe": "6.0.0"
+        }
+      },
+      "System.Text.Json/6.0.3": {
+        "dependencies": {
+          "System.Runtime.CompilerServices.Unsafe": "6.0.0",
+          "System.Text.Encodings.Web": "6.0.0"
+        }
+      }
+    }
+  },
+  "libraries": {
+    "QuantumProject/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Microsoft.Quantum.QSharp.Core/0.28.302812": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-J7UBsaDzz79X/jxiber6T8VEYu53uacEh5YJd7VkxrJ12hdR5Qn5m9SNkaLkZCuQzzw2q81O6ltQ1cwzWpIIlQ==",
+      "path": "microsoft.quantum.qsharp.core/0.28.302812",
+      "hashPath": "microsoft.quantum.qsharp.core.0.28.302812.nupkg.sha512"
+    },
+    "Microsoft.Quantum.QSharp.Foundation/0.28.302812": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-GJaNAzD/A1RGYNPjPRZH6ikjr+U/T6OODz0t0c9obX6pi1IS7h5aYGSY4MrLw6NMJozKy3c0L/83XK2K4RNUvA==",
+      "path": "microsoft.quantum.qsharp.foundation/0.28.302812",
+      "hashPath": "microsoft.quantum.qsharp.foundation.0.28.302812.nupkg.sha512"
+    },
+    "Microsoft.Quantum.Runtime.Core/0.28.302812": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ShhHBEyP/ZXq3FaKk7kk9r3WigmiA49Q5y2MdchltiYaN9UAof69a5Rxirci2pF1CryqRhLew88p3+D2ObYU3g==",
+      "path": "microsoft.quantum.runtime.core/0.28.302812",
+      "hashPath": "microsoft.quantum.runtime.core.0.28.302812.nupkg.sha512"
+    },
+    "Microsoft.Quantum.Simulators/0.28.302812": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-y12YGwLE6i0i1dcYxtnZL1rkKXMDmQRZhsF+7ZhryIS0dXP4RhrT+g7l3R5vEJokVkGpBmqa02Nvk1dzWAr4Rw==",
+      "path": "microsoft.quantum.simulators/0.28.302812",
+      "hashPath": "microsoft.quantum.simulators.0.28.302812.nupkg.sha512"
+    },
+    "Microsoft.Quantum.Standard/0.28.302812": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-47K7dMn8TfwON+oQAKxtCzElk2W4f07rvwMaEtjAS3sig46lMQ7xeNKNM7YliY83hwWvViJcXEbbXBJU0Y+s3Q==",
+      "path": "microsoft.quantum.standard/0.28.302812",
+      "hashPath": "microsoft.quantum.standard.0.28.302812.nupkg.sha512"
+    },
+    "Microsoft.Quantum.Targets.Interfaces/0.28.302812": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-uKUO7iimY8qvFgRbJG6WMiYcb1bCxb2C7bMiSSlKmwUc2kU71Fxq0egcMI7wqFmS3Au+BAS83BAvw0/jvZEjPw==",
+      "path": "microsoft.quantum.targets.interfaces/0.28.302812",
+      "hashPath": "microsoft.quantum.targets.interfaces.0.28.302812.nupkg.sha512"
+    },
+    "Newtonsoft.Json/13.0.1": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-ppPFpBcvxdsfUonNcvITKqLl3bqxWbDCZIzDWHzjpdAHRFfZe0Dw9HmA0+za13IdyrgJwpkDTDA9fHaxOrt20A==",
+      "path": "newtonsoft.json/13.0.1",
+      "hashPath": "newtonsoft.json.13.0.1.nupkg.sha512"
+    },
+    "NumSharp/0.20.5": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-4ovXO3cVFqiZSoLLFaYji1nxibLJdrZlZI74LCQWC4TpPZbwUOn6vn1hT8ueO+V7/AS5CNUXcwa76E+2AG+rKQ==",
+      "path": "numsharp/0.20.5",
+      "hashPath": "numsharp.0.20.5.nupkg.sha512"
+    },
+    "System.Collections.Immutable/1.6.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-+aL946rTSJyo4PqstwsVZ5RBfaxfkIx+nTMfpmaxzorqgifRJwndBZhXPWNWGJpys7cQ1/vCvilYN9ugM05JFA==",
+      "path": "system.collections.immutable/1.6.0",
+      "hashPath": "system.collections.immutable.1.6.0.nupkg.sha512"
+    },
+    "System.Memory/4.5.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-3oDzvc/zzetpTKWMShs1AADwZjQ/36HnsufHRPcOjyRAAMLDlu2iD33MBI2opxnezcVUtXyqDXXjoFMOU9c7SA==",
+      "path": "system.memory/4.5.3",
+      "hashPath": "system.memory.4.5.3.nupkg.sha512"
+    },
+    "System.Reflection.Metadata/1.7.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-PodRDaRRNI3BcF3zuEsrzn1jm/zws5UevTzIv5FqcOwWB3VPaU4jS6vt0tSxu+i38Wtn9vXFNgDHw09nDv8y5Q==",
+      "path": "system.reflection.metadata/1.7.0",
+      "hashPath": "system.reflection.metadata.1.7.0.nupkg.sha512"
+    },
+    "System.Runtime.CompilerServices.Unsafe/6.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-/iUeP3tq1S0XdNNoMz5C9twLSrM/TH+qElHkXWaPvuNOt+99G75NrV0OS2EqHx5wMN7popYjpc8oTjC1y16DLg==",
+      "path": "system.runtime.compilerservices.unsafe/6.0.0",
+      "hashPath": "system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512"
+    },
+    "System.Text.Encodings.Web/6.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-Vg8eB5Tawm1IFqj4TVK1czJX89rhFxJo9ELqc/Eiq0eXy13RK00eubyU6TJE6y+GQXjyV5gSfiewDUZjQgSE0w==",
+      "path": "system.text.encodings.web/6.0.0",
+      "hashPath": "system.text.encodings.web.6.0.0.nupkg.sha512"
+    },
+    "System.Text.Json/6.0.3": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-1Bi8pSdTTVNVKcGFiU1o9Iq6FwFyGQmgBgGHxy9pPvZANXc1cT6D72j+r/H/NsyVnWxKIxOgI3o7DrAwC3zcaA==",
+      "path": "system.text.json/6.0.3",
+      "hashPath": "system.text.json.6.0.3.nupkg.sha512"
+    }
+  }
+}

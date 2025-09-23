@@ -14,7 +14,7 @@
 #define LAYERQUBITBLOCK 10000
 #define MAXQUBITS 10000
 
-#define MAXINSTRUCTIONS 7000000
+#define MAXINSTRUCTIONS 7000
 
 typedef struct {
     gate_t **sequence; // [layer][used_gates_per_layer]
