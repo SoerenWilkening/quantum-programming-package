@@ -77,14 +77,19 @@ def run_quipper(s):
     store("quipper", s, t / 1e12, m)
     # return t / 1e12, m
 
+def run_straw(s):
+    res = subprocess.run(["/usr/bin/time", "-l", "/Users/sorenwilkening/.pyenv/versions/Solvers/bin/python", "strawberry_fields/run_straw.py", f"{s}"], capture_output=True, text = True)
+    t, mem = extract(res)
+    store("strawberry", s, t, mem)
+
 import numpy as np
 import os
 
 # Suppose we want 10 evenly spaced points between 1 and 1000
 x = np.unique(np.round(np.logspace(np.log10(1), np.log10(2000), num=50)).astype(int))
 print(x)
-# for s in x:
-for s in [226, 331]:
+# for s in x[x >= 1075]:
+for s in [266, 311, 363]:
     print(s)
     # if s <= 30: run_aria(s)
     if s <= 331: run_projectq(s)
@@ -97,3 +102,4 @@ for s in [226, 331]:
     # if s <= 1000: run_qsharp(s)
     # run_pytket(s)
     # run_quipper(s)
+    # run_straw(s)
