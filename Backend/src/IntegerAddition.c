@@ -39,7 +39,7 @@ sequence_t *CQ_add() {
 	add->used_layer = 0;
 	add->num_layer = 4 * INTEGERSIZE - 1;
 	memset(add->gates_per_layer, 0, add->num_layer * sizeof(num_t));
-	QFT(add);
+	QFT(add, INTEGERSIZE);
 
 	for (int i = 0; i < INTEGERSIZE; ++i) {
 		p(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i, rotations[INTEGERSIZE - i - 1]);
@@ -61,7 +61,7 @@ sequence_t *QQ_add() {
 	add->used_layer = 0;
 	add->num_layer = 4 * INTEGERSIZE - 2 + INTEGERSIZE;
 	memset(add->gates_per_layer, 0, add->num_layer * sizeof(num_t));
-	QFT(add);
+	QFT(add, INTEGERSIZE);
 	int rounds = 0;
 	for (int bit = (int) INTEGERSIZE - 1; bit >= 0; --bit) {
 		for (int i = 0; i < INTEGERSIZE - rounds; ++i) {
@@ -111,7 +111,7 @@ sequence_t *cCQ_add() {
 	add->used_layer = 0;
 	add->num_layer = 4 * INTEGERSIZE - 1;
 	memset(add->gates_per_layer, 0, add->num_layer * sizeof(num_t));
-	QFT(add);
+	QFT(add, INTEGERSIZE);
 
 	for (int i = 0; i < INTEGERSIZE; ++i) {
 		cp(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i, 2 * INTEGERSIZE - 1, rotations[INTEGERSIZE - i - 1]);
@@ -134,7 +134,7 @@ sequence_t *cQQ_add() {
 	add->num_layer = INTEGERSIZE * (INTEGERSIZE + 1) / 2 * 4 + 4 * INTEGERSIZE - 2 - INTEGERSIZE / 4 * 4 + 3;
 	memset(add->gates_per_layer, 0, add->num_layer * sizeof(num_t));
 
-	QFT(add);
+	QFT(add, INTEGERSIZE);
 
 	int control = 3 * INTEGERSIZE - 1;
 	int rounds;

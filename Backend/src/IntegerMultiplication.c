@@ -71,7 +71,7 @@ sequence_t *CQ_mul() {
 	mul->num_layer = INTEGERSIZE * (2 * INTEGERSIZE + 6) - 1;
 	memset(mul->gates_per_layer, 0, mul->num_layer * sizeof(num_t));
 
-	QFT(mul);
+	QFT(mul, INTEGERSIZE);
 	num_t layer = 2 * INTEGERSIZE - 1;
 	int rounds = 0;
 
@@ -109,7 +109,7 @@ sequence_t *QQ_mul() {
     mul->num_layer = INTEGERSIZE * (2 * INTEGERSIZE + 6) - 1;
     memset(mul->gates_per_layer, 0, mul->num_layer * sizeof(num_t));
 
-    QFT(mul);
+    QFT(mul, INTEGERSIZE);
     num_t layer = INTEGERSIZE;
 
 	// block 1
@@ -157,7 +157,7 @@ sequence_t *cCQ_mul() {
     mul->num_layer = INTEGERSIZE * (2 * INTEGERSIZE + 6) - 1;
     memset(mul->gates_per_layer, 0, mul->num_layer * sizeof(num_t));
 
-    QFT(mul);
+    QFT(mul, INTEGERSIZE);
 
 	int control = 3 * INTEGERSIZE - 1;
     // precompute all the rotation angles
@@ -227,7 +227,7 @@ sequence_t *cQQ_mul() {
 	mul->num_layer = MAXLAYERINSEQUENCE;
 	memset(mul->gates_per_layer, 0, mul->num_layer * sizeof(num_t));
 
-	QFT(mul);
+	QFT(mul, INTEGERSIZE);
 	// start after qft
 	num_t layer = 2 * INTEGERSIZE - 1;
 

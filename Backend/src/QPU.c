@@ -231,6 +231,7 @@ void apply_layer(circuit_t *circ, gate_t *g, layer_t MinPossibleLayer) {
 int AppendGate(circuit_t *circ, gate_t *g, layer_t MinPossibleLayer) {
 //	qubit_t *ctrl = g->Control;
 	int added = merge_gates(circ, g, MinPossibleLayer);
+//	int added = true;
 	// check every gate within the previous layer to check, if gates will eradicate themselves
 	if (!added) return added;
 

@@ -9,12 +9,12 @@
 
 // functionality to store the circuit structure ========================================================================
 #define QUBITBLOCK 100
-#define LAYERBLOCK 10000
+#define LAYERBLOCK 2000
 #define GATESPERLAYERBLOCK 50
-#define LAYERQUBITBLOCK 10000
-#define MAXQUBITS 10000
+#define LAYERQUBITBLOCK 2000
+#define MAXQUBITS 2000
 
-#define MAXINSTRUCTIONS 7000
+#define MAXINSTRUCTIONS 7
 
 typedef struct {
     gate_t **sequence; // [layer][used_gates_per_layer]

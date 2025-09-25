@@ -1,5 +1,5 @@
 from time import time
-from ket import Process, QFT
+from ket import Process, QFT, adj
 import numpy as np
 
 import os, psutil
@@ -9,11 +9,11 @@ sys.setrecursionlimit(3000)
 try:
     n = int(sys.argv[1])
 except:
-    n = 30
+    n = 20
 
 p = Process(num_qubits=n)
 a = p.alloc(n)
 t1 = time()
-QFT(a)
+QFT(a, do_swap=False)
 t = time() - t1
 print(t)

@@ -26,19 +26,20 @@ def run_cirq(s):
     store("cirq", s, t, mem)
 
 def run_cq(s):
-    os.system(f"cd ../ && cmake -B build -DINTEGERSIZE={s} >out 2>out")
-    os.system("cd ../ && cmake --build build >out 2>out")
-    os.system("cd ../ && mv build tests/cq")
+    # os.system(f"cd ../ && cmake -B build -DINTEGERSIZE={s} >out 2>out")
+    # os.system("cd ../ && cmake --build build >out 2>out")
+    # os.system("cd ../ && mv build tests/cq")
 
-    res = subprocess.run(["/usr/bin/time", "-l", "./cq/build/CQ_backend_improved"], capture_output=True, text = True)
-
-    os.system("cd ../ && rm -r tests/cq/build")
-    _, t2, t1 = map(float, res.stdout.split())
+    res = subprocess.run(["/usr/bin/time", "-l", "./cq/CQ_backend_improved", f"{s}", "0"], capture_output=True, text = True) # improved
+    res2 = subprocess.run(["/usr/bin/time", "-l", "./cq/CQ_backend_improved", f"{s}", "1"], capture_output=True, text = True) # current
+    t1 = float(res.stdout)
+    t2 = float(res2.stdout)
     mem = int(res.stderr.split("maximum resident set size")[0].split("\n")[-1])
-    print(s, t1, mem)
-    print(s, t2, mem)
-    # store("cq_impr", s, t1, mem)
-    # store("cq", s, t2, mem)
+    mem2 = int(res2.stderr.split("maximum resident set size")[0].split("\n")[-1])
+    # print(s, t1, mem)
+    # print(s, t2, mem2)
+    store("cq_impr", s, t1, mem)
+    store("cq", s, t2, mem2)
     # return t1, t2, mem
 
 def run_ket(s):
@@ -89,19 +90,30 @@ import os
 
 # Suppose we want 10 evenly spaced points between 1 and 1000
 x = np.unique(np.round(np.logspace(np.log10(1), np.log10(2000), num=50)).astype(int))
-print(x)
+# points = np.unique(np.round(np.logspace(np.log10(1), np.log10(3000), num=53)).astype(int))
+# x = points
+# print(points)
+# print(x)
 for s in x:
-# for s in [30]:
     print(s)
+    # print("Aria")
     # run_aria(s)
     # if s <= 495: run_projectq(s)
+    # print("Qiskit")
     # run_qiskit(s)
+    print("CQ")
     run_cq(s)
+    # print("KET")
     # run_ket(s)
+    # print("Cirq")
     # run_cirq(s)
+    # print("Amazon")
     # run_amazon(s)
+    # print("penny")
     # run_pennylane(s)
+    # print("qsharp")
     # if s <= 1000: run_qsharp(s)
+    # print("pytket")
     # run_pytket(s)
     # run_quipper(s)
     # run_straw(s)

@@ -17,7 +17,7 @@ typedef struct {
 } label_t;
 
 extern int label_counter;
-extern label_t labels[3000];
+extern label_t labels[3];
 
 instruction_t *init_instruction();
 

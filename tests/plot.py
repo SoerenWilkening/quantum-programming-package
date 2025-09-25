@@ -44,9 +44,11 @@ def optimal_qft(n, cpu_frec=4e9):
 
 def optimal_mem_qft(n, cpu_frec=4e9):
     n = np.array(n)
-    res = (4 * n + 6 * (n * (n + 1) / 2 - n)) * 8
+    res = (4 * n + 6 * (n * (n + 1) / 2 - n)) * 4
     return res
 
+
+cq_without_merging = pd.read_csv("results_without_merging.csv")
 
 res = pd.read_csv("results.csv")
 aria = res[res["meth"] == "aria"]
@@ -129,7 +131,7 @@ plt.savefig("legend.pdf")
 plt.show()
 
 
-f = plt.figure(figsize=(8, 5.5))
+f = plt.figure(figsize=(8, 5))
 plt.plot(cq_impr["n"], optimal_qft(cq_impr["n"]), "--", label="theoretical limit", color=colors[0])
 plt.fill_between(cq_impr["n"], 10 * optimal_qft(cq_impr["n"]), 20 * optimal_qft(cq_impr["n"]), label="realistic hardware limit", alpha=0.4, color=colors[0])
 plt.plot(cq_impr["n"], cq_impr["t"], "--", label="CQ improved", color=colors[5], marker = markers[0], markevery=every)
@@ -157,9 +159,10 @@ plt.tight_layout(pad = 0.2)
 plt.savefig("time_circuit_generation.pdf")
 plt.show()
 
-f = plt.figure(figsize=(8, 5.5))
+f = plt.figure(figsize=(8, 5))
 plt.plot(cq_impr["n"], optimal_mem_qft(cq_impr["n"]), "--", label="theoretical limit", color=colors[0])
 plt.plot(cq_impr["n"], cq_impr["m"], "--", label="CQ", color=colors[5], marker = markers[0], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
+plt.plot(cq["n"], cq["m"], "--", label="CQ", color=colors[3], marker = markers[1], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
 plt.plot(qisk["n"], qisk["m"], "--", label="Qiskit", color=colors[1], marker = markers[2], markevery=every)
 plt.plot(cirq["n"], cirq["m"], "--", label="Cirq", color=colors[4], marker = markers[3], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
 plt.plot(qs["n"], qs["m"], "--", label="Q#", color=colors[6], marker = markers[4], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
@@ -185,6 +188,22 @@ plt.show()
 
 
 
-
-
+f = plt.figure(figsize=(8, 5))
+plt.plot(cq_impr["n"], optimal_qft(cq_impr["n"]), "--", label="theoretical limit", color=colors[0])
+plt.fill_between(cq_impr["n"], 10 * optimal_qft(cq_impr["n"]), 20 * optimal_qft(cq_impr["n"]), label="realistic hardware limit", alpha=0.4, color=colors[0])
+plt.plot(cq_impr["n"], cq_impr["t"], "--", label="CQ improved", color=colors[5], marker = markers[0], markevery=every)
+plt.plot(cq["n"], cq["t"], "--", label="CQ", color=colors[3], marker = markers[1], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
+plt.plot(cq_without_merging["n"], cq_without_merging["t"], "--", label="CQ without gate merging", color="darkgreen", marker = markers[1], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
+plt.xlim(0.9, 2100)
+# plt.ylim(1e-9, 1000)
+plt.xscale('log')
+plt.yscale('log')
+plt.ylabel('Time $[s]$', fontsize = fontsize)
+plt.xlabel('Qubits', fontsize = fontsize)
+plt.xticks(fontsize = fontsize)
+plt.yticks(fontsize = fontsize)
+plt.legend(fontsize = fontsize)
+plt.tight_layout(pad = 0.2)
+plt.savefig("Cq_with_and_without_merging.pdf")
+plt.show()
 

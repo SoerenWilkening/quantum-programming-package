@@ -18,25 +18,36 @@ sequence_t *precompiled_cQQ_mul = NULL;
 sequence_t *precompiled_QQ_mul = NULL;
 
 int label_counter = 0;
-label_t labels[3000];
+label_t labels[3];
 
 int main(int argc, char *argv[]) {
 	// initialize the rest of the stack
 	// prepare exerything for the execution
 //	instruction_counter = 0;
-	QPU_state = instruction_list;
-	printf("%d\n", INTEGERSIZE);
+
+	int num_qubits = (int) strtol(argv[1], NULL, 10);
+	int run = (int) strtol(argv[2], NULL, 10);
+//	int num_qubits = 2000;
+//	int run = 1;
+//	int num_qubits = 2000;
+
+//	printf("%d\n", num_qubits);
 	clock_t t1 = clock();
-	sequence_t  *seq = QFT(NULL);
+	sequence_t  *seq = QFT(NULL, num_qubits);
 	clock_t t2 = clock();
 
-	// ._execute
-	circuit_t *circ = init_circuit();
-	qubit_t qubit_array[6 * INTEGERSIZE];
-	qubit_mapping(qubit_array, circ);
+	if (run) {
+		QPU_state = instruction_list;
+		// ._execute
+		circuit_t *circ = init_circuit();
+		qubit_t qubit_array[6 * INTEGERSIZE];
+		qubit_mapping(qubit_array, circ);
 
-	run_instruction(seq, qubit_array, false, circ);
-	printf("%f %f\n", (double) (clock() - t1) / CLOCKS_PER_SEC, (double) (t2 - t1) / CLOCKS_PER_SEC);
+		run_instruction(seq, qubit_array, false, circ);
+		printf("%f\n", (double) (clock() - t1) / CLOCKS_PER_SEC);
+	}else{
+		printf("%f\n", (double) (t2 - t1) / CLOCKS_PER_SEC);
+	}
 
 	free(seq);
 
