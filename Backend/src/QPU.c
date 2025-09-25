@@ -21,6 +21,15 @@ circuit_t *init_circuit() {
 		circ->sequence[i] = malloc(GATESPERLAYERBLOCK * sizeof(gate_t));
 	}
 
+	circ->gate_index_layer_qubits = malloc(2 * LAYERBLOCK * sizeof(int *));
+	for (int i = 0; i < 2 * LAYERBLOCK; ++i) {
+		circ->gate_index_layer_qubits[i] = malloc(MAXQUBITS * sizeof(int));
+		memset(circ->gate_index_layer_qubits[i], 0xFF, MAXQUBITS * sizeof(int));
+//		for (int j = 0; j < MAXQUBITS; ++j) {
+//			circ->gate_index_layer_qubits[i][j] = -1;
+//		}
+	}
+
 	// allocate layer informations
 	circ->used_layer_per_qubit = calloc(QUBITBLOCK, sizeof(num_t));
 	circ->allocated_layer_per_qubit = malloc(LAYERBLOCK * sizeof(num_t));
@@ -115,7 +124,7 @@ void print_circuit(circuit_t *circ) {
 					counter++;
 				}
 //				printf("|");
-                printf("\u250A");
+				printf("\u250A");
 			}
 			printf("\n");
 //            if (qubit % INTEGERSIZE == INTEGERSIZE - 1) printf("\n");
@@ -175,17 +184,35 @@ layer_t MinimumLayer(circuit_t *circ, gate_t *g) {
 int merge_gates(circuit_t *circ, gate_t *g, layer_t MinPossibleLayer) {
 	if (MinPossibleLayer == 0) return true;
 	qubit_t *ctrl = g->Control;
-	for (int i = circ->used_gates_per_layer[MinPossibleLayer - 1] - 1; i >= 0; --i) {
-		int comp = is_inverse(g, &circ->sequence[MinPossibleLayer - 1][i]);
+//	for (int i = circ->used_gates_per_layer[MinPossibleLayer - 1] - 1; i >= 0; --i) {
+	// get the index of the gate occupying the current gates qubits
+	// requres only to check for the gates target qubit, because in "is_inverse", the rest will be evaluated
+	// if index == -1: qubit not occupied -> cannot be inverse to other gates
+
+	int index = circ->gate_index_layer_qubits[MinPossibleLayer - 1][g->Target]; // index of gate
+	if (index != -1) {
+		int comp = is_inverse(g, &circ->sequence[MinPossibleLayer - 1][index]);
+		// if comp is true: remove gate
 		if (comp) {
+			circ->gate_index_layer_qubits[MinPossibleLayer - 1][g->Target] = -1; // reset target index
 			for (int k = 0; k < g->NumControls; ++k) {
+				circ->gate_index_layer_qubits[MinPossibleLayer - 1][g->Control[k]] = -1; // reset control indices
 				circ->used_layer_per_qubit[ctrl[k]]--;
 			}
+
 			circ->layer_on_qubit[g->Target][circ->used_layer_per_qubit[g->Target] - 1] = 0;
 			circ->used_layer_per_qubit[g->Target]--;
 			// swap gate to the end of layer to be reused
-			for (int k = i; k < circ->used_gates_per_layer[MinPossibleLayer - 1]; ++k)
+			for (int k = index; k < circ->used_gates_per_layer[MinPossibleLayer - 1]; ++k) {
 				circ->sequence[MinPossibleLayer - 1][k] = circ->sequence[MinPossibleLayer - 1][k + 1];
+
+				gate_t *helper = &circ->sequence[MinPossibleLayer - 1][k];
+				// reduce the stored gate index of remaining gates
+				circ->gate_index_layer_qubits[MinPossibleLayer - 1][helper->Target]--;
+				for (int l = 0; l < helper->NumControls; ++l) {
+					circ->gate_index_layer_qubits[MinPossibleLayer - 1][helper->Control[l]]--;
+				}
+			}
 			// layer contains less gates
 			circ->used_gates_per_layer[MinPossibleLayer - 1]--;
 			circ->used--;
@@ -241,16 +268,20 @@ int AppendGate(circuit_t *circ, gate_t *g, layer_t MinPossibleLayer) {
 	increase_gates_per_layer(circ, MinPossibleLayer, pos);
 
 	// increase the number of storable gates on MinPossibleLayer if needed
-	if (pos >= circ->allocated_gates_per_layer[MinPossibleLayer]) {
-		circ->sequence[MinPossibleLayer] = realloc(
-				circ->sequence[MinPossibleLayer],
-				(circ->allocated_gates_per_layer[MinPossibleLayer] + GATESPERLAYERBLOCK) * sizeof(gate_t)
-		);
-		circ->allocated_gates_per_layer[MinPossibleLayer] += GATESPERLAYERBLOCK;
-	}
+//	if (pos >= circ->allocated_gates_per_layer[MinPossibleLayer]) {
+//		circ->sequence[MinPossibleLayer] = realloc(
+//				circ->sequence[MinPossibleLayer],
+//				(circ->allocated_gates_per_layer[MinPossibleLayer] + GATESPERLAYERBLOCK) * sizeof(gate_t)
+//		);
+//		circ->allocated_gates_per_layer[MinPossibleLayer] += GATESPERLAYERBLOCK;
+//	}
 
 	gate_t *store = &circ->sequence[MinPossibleLayer][pos];
 	memcpy(store, g, sizeof(gate_t));
+
+	// store gate index in 2-d array
+	circ->gate_index_layer_qubits[MinPossibleLayer][g->Target] = pos;
+	for (int i = 0; i < g->NumControls; ++i) circ->gate_index_layer_qubits[MinPossibleLayer][g->Control[i]] = pos;
 //    copy_basis_gate(store, g, NOTFREED);
 
 	apply_layer(circ, g, MinPossibleLayer);

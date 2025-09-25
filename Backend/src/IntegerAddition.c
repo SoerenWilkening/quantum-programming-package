@@ -47,7 +47,7 @@ sequence_t *CQ_add() {
 	free(rotations);
 	add->used_layer++;
 
-	QFT_inverse(add);
+	QFT_inverse(add, INTEGERSIZE);
 
 	precompiled_CQ_add = add;
 	return add;
@@ -75,7 +75,7 @@ sequence_t *QQ_add() {
 		rounds++;
 	}
 	add->used_layer += INTEGERSIZE;
-	QFT_inverse(add);
+	QFT_inverse(add, INTEGERSIZE);
 	precompiled_QQ_add = add;
 
 	return add;
@@ -119,7 +119,7 @@ sequence_t *cCQ_add() {
 	free(rotations);
 	add->used_layer++;
 
-	QFT_inverse(add);
+	QFT_inverse(add, INTEGERSIZE);
 
 	precompiled_cCQ_add = add;
 	return add;
@@ -183,7 +183,7 @@ sequence_t *cQQ_add() {
 		rounds++;
 	}
 	add->used_layer = layer + 1;
-	QFT_inverse(add);
+	QFT_inverse(add, INTEGERSIZE);
 	precompiled_cQQ_add = add;
 
 	return add;

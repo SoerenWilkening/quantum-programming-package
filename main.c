@@ -27,11 +27,8 @@ int main(int argc, char *argv[]) {
 
 	int num_qubits = (int) strtol(argv[1], NULL, 10);
 	int run = (int) strtol(argv[2], NULL, 10);
-//	int num_qubits = 2000;
+//	int num_qubits = 1075;
 //	int run = 1;
-//	int num_qubits = 2000;
-
-//	printf("%d\n", num_qubits);
 	clock_t t1 = clock();
 	sequence_t  *seq = QFT(NULL, num_qubits);
 	clock_t t2 = clock();
@@ -42,7 +39,6 @@ int main(int argc, char *argv[]) {
 		circuit_t *circ = init_circuit();
 		qubit_t qubit_array[6 * INTEGERSIZE];
 		qubit_mapping(qubit_array, circ);
-
 		run_instruction(seq, qubit_array, false, circ);
 		printf("%f\n", (double) (clock() - t1) / CLOCKS_PER_SEC);
 	}else{

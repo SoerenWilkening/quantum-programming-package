@@ -109,6 +109,7 @@ void h(gate_t *g, qubit_t target) {
     g->Gate = H;
     g->Target = target;
     g->NumControls = 0;
+    g->GateValue = 0;
 }
 void cp(gate_t *g, qubit_t target, qubit_t control, double value) {
     g->Gate = P;
@@ -171,7 +172,7 @@ sequence_t *QFT(sequence_t *qft, int num_qubits) {
 		qft->gates_per_layer = calloc(2 * num_qubits - 1, sizeof(num_t));
 		qft->seq = calloc(2 * num_qubits - 1, sizeof(gate_t *));
 	    for (int i = 0; i < 2 * num_qubits - 1; ++i) {
-			if (i < num_qubits) qft->seq[i] = calloc(i, sizeof(gate_t));
+			if (i < num_qubits) qft->seq[i] = calloc(i + 1, sizeof(gate_t));
 			else qft->seq[i] = calloc(2 * num_qubits - i, sizeof(gate_t));
 	    }
         qft->used_layer = 0;
@@ -194,30 +195,36 @@ sequence_t *QFT(sequence_t *qft, int num_qubits) {
     return qft;
 }
 
-sequence_t *QFT_inverse(sequence_t *qft) {
+sequence_t *QFT_inverse(sequence_t *qft, int num_qubits) {
     // determine the number of gates per layer for the qft
-    num_t sum[2 * INTEGERSIZE - 1];
-    memset(sum, 0, (2 * INTEGERSIZE - 1) * sizeof(num_t));
-    for (int j = 0; j < INTEGERSIZE; ++j) {
+    num_t sum[2 * num_qubits - 1];
+    memset(sum, 0, (2 * num_qubits - 1) * sizeof(num_t));
+    for (int j = 0; j < num_qubits; ++j) {
         sum[2 * j]++; // for the hadamards
-        for (int i = 0; i < INTEGERSIZE - 1 - j; ++i) sum[2 * j + i + 1]++;
+        for (int i = 0; i < num_qubits - 1 - j; ++i) sum[2 * j + i + 1]++;
     }
     if (qft == NULL) {
         qft = malloc(sizeof(sequence_t));
+	    qft->gates_per_layer = calloc(2 * num_qubits - 1, sizeof(num_t));
+	    qft->seq = calloc(2 * num_qubits - 1, sizeof(gate_t *));
+	    for (int i = 0; i < 2 * num_qubits - 1; ++i) {
+		    if (i < num_qubits) qft->seq[i] = calloc(i + 1, sizeof(gate_t));
+		    else qft->seq[i] = calloc(2 * num_qubits - i, sizeof(gate_t));
+	    }
         qft->used_layer = 0;
-        qft->num_layer = 2 * INTEGERSIZE - 1;
+        qft->num_layer = 2 * num_qubits - 1;
         memset(qft->gates_per_layer, 0, qft->num_layer * sizeof(num_t));
     }
 
-    for (int j = 0; j < INTEGERSIZE; ++j) {
-        for (int i = 0; i < INTEGERSIZE - 1 - j; ++i) {
-            num_t layer = qft->used_layer + 2 * INTEGERSIZE - 1 - (2 * j + i + 1) - 1;
+    for (int j = 0; j < num_qubits; ++j) {
+        for (int i = 0; i < num_qubits - 1 - j; ++i) {
+            num_t layer = qft->used_layer + 2 * num_qubits - 1 - (2 * j + i + 1) - 1;
             cp(&qft->seq[layer][qft->gates_per_layer[layer]++], j, j + i + 1, - M_PI / pow(2, i + 1));
         }
-        num_t layer = qft->used_layer + 2 * INTEGERSIZE - 1 - 2 * j - 1;
+        num_t layer = qft->used_layer + 2 * num_qubits - 1 - 2 * j - 1;
         h(&qft->seq[layer][qft->gates_per_layer[layer]++], j);
     }
-    qft->used_layer += 2 * INTEGERSIZE - 1;
+    qft->used_layer += 2 * num_qubits - 1;
 
     return qft;
 }

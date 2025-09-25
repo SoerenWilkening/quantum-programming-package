@@ -96,7 +96,7 @@ sequence_t *CQ_mul() {
 	}
 
 	mul->used_layer = layer;
-	QFT_inverse(mul);
+	QFT_inverse(mul, INTEGERSIZE);
 
 	return mul;
 }
@@ -144,7 +144,7 @@ sequence_t *QQ_mul() {
 	layer++;
 //	layer -= INTEGERSIZE - 1;
     mul->used_layer = layer - 1;
-    QFT_inverse(mul);
+    QFT_inverse(mul, INTEGERSIZE);
 
     precompiled_QQ_mul = mul;
     return mul;
@@ -212,7 +212,7 @@ sequence_t *cCQ_mul() {
     }
     mul->used_layer = layer + 1;
 
-    QFT_inverse(mul);
+    QFT_inverse(mul, INTEGERSIZE);
 
     return mul;
 }
@@ -301,7 +301,7 @@ sequence_t *cQQ_mul() {
 	}
 
 	mul->used_layer = layer;
-	QFT_inverse(mul);
+	QFT_inverse(mul, INTEGERSIZE);
 
 	precompiled_cQQ_mul = mul;
 	return mul;
