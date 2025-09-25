@@ -63,7 +63,7 @@ pytket = res[res["meth"] == "pytket"]
 quipper = res[res["meth"] == "quipper"]
 straw = res[res["meth"] == "strawberry"]
 
-fontsize = 12. / 0.8
+fontsize = 10. / 0.8
 every = 1
 size = 5
 width = 0.75
@@ -111,13 +111,13 @@ hand = [
 ]
 
 # Create a separate figure just for the legend
-fig_legend = plt.figure(figsize=(9.25,1.35))
+fig_legend = plt.figure(figsize=(3.5,1.8))
 fig_legend.legend(
 	handles=hand,
 	labels=[line.get_label() for line in hand],
 	loc='center',
-	fontsize=fontsize,
-	ncol=4
+	fontsize=fontsize * 0.8,
+	ncol=2
 )
 
 # Remove axes in legend figure
@@ -188,20 +188,3 @@ plt.show()
 
 
 
-
-
-
-
-# import numpy as np
-# import matplotlib.pyplot as plt
-#
-# # Suppose we want 10 evenly spaced points between 1 and 1000
-# x = np.unique(np.round(np.logspace(np.log10(1), np.log10(2000), num=50)).astype(int))
-# y = x ** 2
-#
-# plt.figure()
-# plt.plot(x, y, '.-')
-# plt.xscale('log')
-# # plt.yscale('log')
-# # plt.xticks(x, [f"{int(v)}" for v in x])  # label with integers (approx)
-# plt.show()

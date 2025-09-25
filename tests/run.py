@@ -88,11 +88,11 @@ import os
 # Suppose we want 10 evenly spaced points between 1 and 1000
 x = np.unique(np.round(np.logspace(np.log10(1), np.log10(2000), num=50)).astype(int))
 print(x)
-# for s in x[x >= 1075]:
-for s in [266, 311, 363]:
+for s in x:
+# for s in [30]:
     print(s)
-    # if s <= 30: run_aria(s)
-    if s <= 331: run_projectq(s)
+    run_aria(s)
+    # if s <= 495: run_projectq(s)
     # run_qiskit(s)
     # run_cq(s)
     # run_ket(s)
