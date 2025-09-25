@@ -36,10 +36,10 @@ def run_cq(s):
     t2 = float(res2.stdout)
     mem = int(res.stderr.split("maximum resident set size")[0].split("\n")[-1])
     mem2 = int(res2.stderr.split("maximum resident set size")[0].split("\n")[-1])
-    print(s, t1, mem)
-    print(s, t2, mem2)
-    # store("cq_impr", s, t1, mem)
-    # store("cq", s, t2, mem2)
+    # print(s, t1, mem)
+    # print(s, t2, mem2)
+    store("cq_impr", s, t1, mem)
+    store("cq", s, t2, mem2)
     # return t1, t2, mem
 
 def run_ket(s):
@@ -101,7 +101,7 @@ for s in x:
     # if s <= 495: run_projectq(s)
     # print("Qiskit")
     # run_qiskit(s)
-    print("CQ")
+    # print("CQ")
     run_cq(s)
     # print("KET")
     # run_ket(s)
