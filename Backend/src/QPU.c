@@ -64,7 +64,7 @@ bool ValueInArray(const qubit_t *Array, num_t NumValues, qubit_t Value) {
 void print_circuit(circuit_t *circ) {
 	printf("Number of gates =  %zu\n", circ->used);
 	printf("Number of layers =  %u\n", circ->used_layer);
-	printf("Number of qubits = %d\n\n", circ->used_qubits);
+	printf("Number of qubits = %d\n\n", circ->used_qubits + 1);
 
 	if (circ->used > 2000) return;
 	// 3, 8

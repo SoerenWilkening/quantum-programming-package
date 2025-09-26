@@ -31,7 +31,7 @@ typedef struct {
 	int *allocated_layer_qubit_indices;
 	// -1 refers to the qubit being not occupied
 
-    layer_t **layer_on_qubit; // [qubits][layer]
+    layer_t **layer_on_qubit; // [qubits][index]
     num_t *allocated_layer_per_qubit; // [qubit]
     num_t *used_layer_per_qubit; // [qubits]
 
