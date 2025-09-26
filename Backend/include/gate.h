@@ -44,9 +44,10 @@ sequence_t *QFT(sequence_t *seq, int num_qubits);
 sequence_t *QFT_inverse(sequence_t *seq, int num_qubits);
 
 void p(gate_t *g, qubit_t target, double value);
-void cp(gate_t *g, qubit_t target, qubit_t control, double value);
-
 void h(gate_t *g, qubit_t target);
+void z(gate_t *g, qubit_t target);
+
+void cp(gate_t *g, qubit_t target, qubit_t control, double value);
 
 void x(gate_t *g, qubit_t target);
 void cx(gate_t *g, qubit_t target, qubit_t control);

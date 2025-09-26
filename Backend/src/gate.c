@@ -105,6 +105,11 @@ void x(gate_t *g, qubit_t target) {
     g->Target = target;
     g->NumControls = 0;
 }
+void z(gate_t *g, qubit_t target) {
+	g->Gate = Z;
+	g->Target = target;
+	g->NumControls = 0;
+}
 void h(gate_t *g, qubit_t target) {
     g->Gate = H;
     g->Target = target;
