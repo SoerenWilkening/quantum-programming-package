@@ -27,56 +27,54 @@ int main(int argc, char *argv[]) {
 
 //	int num_qubits = (int) strtol(argv[1], NULL, 10);
 //	int run = (int) strtol(argv[2], NULL, 10);
-	int num_qubits = 10;
+	int num_qubits = 2000;
 	int run = 1;
 	clock_t t1 = clock();
 
-	circuit_t *circ = init_circuit();
-	gate_t g;
-	h(&g, 0);
-	add_gate(circ, &g);
-
-	h(&g, 1);
-	add_gate(circ, &g);
-
-	cp(&g, 0, 2, 1);
-	add_gate(circ, &g);
-
-	cx(&g, 2, 100);
-	add_gate(circ, &g);
-
-	for (int i = 0; i < 5; ++i) {
-		printf("%d|",i);
-		for (int j = 0; j < 3; ++j) {
-			printf("%d ", circ->layer_on_qubit[i][j]);
-		}
-		printf("\n");
-	}
-
-//	p(&g, 2, 1);
-//	x(&g, 2);
+//	circuit_t *circ = init_circuit();
+//	gate_t g;
+//	h(&g, 0);
 //	add_gate(circ, &g);
-	print_circuit(circ);
-
-//	sequence_t  *seq = QFT(NULL, num_qubits);
-//	sequence_t  *seq2 = QFT_inverse(NULL, num_qubits / 2);
-//	clock_t t2 = clock();
 //
-//	if (run) {
-//		QPU_state = instruction_list;
-//		// ._execute
-//		circuit_t *circ = init_circuit();
-//		qubit_t qubit_array[6 * INTEGERSIZE];
-//		qubit_mapping(qubit_array, circ);
-//		run_instruction(seq2, qubit_array, false, circ);
-//		run_instruction(seq, qubit_array, false, circ);
-//		print_circuit(circ);
-//		printf("%f\n", (double) (clock() - t1) / CLOCKS_PER_SEC);
-//	}else{
-//		printf("%f\n", (double) (t2 - t1) / CLOCKS_PER_SEC);
+//	h(&g, 1);
+//	add_gate(circ, &g);
+//
+//	cp(&g, 0, 2, 1);
+//	add_gate(circ, &g);
+//
+//	cx(&g, 2, 100);
+//	add_gate(circ, &g);
+//
+//	for (int i = 0; i < 5; ++i) {
+//		printf("%d|",i);
+//		for (int j = 0; j < 3; ++j) {
+//			printf("%d ", circ->layer_on_qubit[i][j]);
+//		}
+//		printf("\n");
 //	}
 //
-//	free(seq);
+////	p(&g, 2, 1);
+////	x(&g, 2);
+////	add_gate(circ, &g);
+//	print_circuit(circ);
+
+	sequence_t  *seq = QFT(NULL, num_qubits);
+	clock_t t2 = clock();
+
+	if (run) {
+		QPU_state = instruction_list;
+		// ._execute
+		circuit_t *circ = init_circuit();
+		qubit_t qubit_array[6 * INTEGERSIZE];
+		qubit_mapping(qubit_array, circ);
+        run_instruction(seq, qubit_array, false, circ);
+		print_circuit(circ);
+		printf("%f\n", (double) (clock() - t1) / CLOCKS_PER_SEC);
+	}else{
+		printf("%f\n", (double) (t2 - t1) / CLOCKS_PER_SEC);
+	}
+
+	free(seq);
 
 	return 0;
 }

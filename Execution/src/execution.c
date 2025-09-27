@@ -26,7 +26,7 @@ void qubit_mapping(qubit_t qubit_arrray[], circuit_t *circ) {
 }
 
 // apply the sequences to the desired qubits
-void run_instruction(sequence_t *res, qubit_t qubit_array[], bool invert, circuit_t *circ){
+void run_instruction(sequence_t *res, const qubit_t qubit_array[], bool invert, circuit_t *circ){
     if (res == NULL) return;
     int direction = (invert) ? -1 : 1;
 

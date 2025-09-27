@@ -34,7 +34,7 @@ void print_circuit(circuit_t *circ) {
     }
     
     for (int qubit = 0; qubit < circ->used_qubits + 1; ++qubit) {
-        if (circ->used_indices_per_qubit[qubit] != 0) {
+        if (circ->used_occupation_indices_per_qubit[qubit] != 0) {
             printf("%3d ", qubit);
             counter = 0;
             for (int layer_index = 0; layer_index < circ->used_layer; ++layer_index) {

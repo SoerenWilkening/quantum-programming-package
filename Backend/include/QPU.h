@@ -8,11 +8,11 @@
 #include "gate.h"
 
 // functionality to store the circuit structure ========================================================================
-#define QUBIT_BLOCK 100
-#define LAYER_BLOCK 2000
-#define GATES_PER_LAYER_BLOCK 50
-#define QUBIT_INDEX_BLOCK 2000
-#define MAXQUBITS 2000
+#define QUBIT_BLOCK 256
+#define LAYER_BLOCK 512
+#define GATES_PER_LAYER_BLOCK 64
+#define QUBIT_INDEX_BLOCK 512
+#define MAXQUBITS 2048
 
 #define MAXINSTRUCTIONS 7
 
@@ -20,54 +20,54 @@
 #define NUM_GATE_LAYER_QUBITS 50
 
 typedef struct {
-    gate_t **sequence; // [layer][used_gates_per_layer]
-    num_t used_layer;
-    num_t allocated_layer;
-    num_t *used_gates_per_layer; // [layer]
-    num_t *allocated_gates_per_layer; // [layer]
-
-	int **gate_index_layer_qubits; // [layer][qubit] stores for every layer the gate index occupying the respective qubits
-	// -1 refers to the qubit being not occupied
-
-    layer_t **layer_on_qubit; // [qubits][index]
-    num_t *allocated_indices_per_qubit; // [qubit]
-    num_t *used_indices_per_qubit; // [qubits]
-
-    num_t allocated_qubits;
-    num_t used_qubits;
-    size_t used;
-    decompose_toffoli_t toff_decomp;
-
-    qubit_t qubit_indices[MAXQUBITS]; // allow at most MAXQUBITS qubits
-    qubit_t used_qubit_indices;
-    qubit_t *ancilla;
+  gate_t **sequence; // [layer][used_gates_per_layer]
+  num_t used_layer;
+  num_t allocated_layer;
+  num_t *allocated_gates_per_layer; // [layer]
+  num_t *used_gates_per_layer; // [layer]
+  
+  int **gate_index_of_layer_and_qubits; // [layer][qubit] stores for every layer the gate index occupying the respective qubits
+  // -1 refers to the qubit being not occupied
+  
+  layer_t **occupied_layers_of_qubit; // [qubits][index]
+  num_t *allocated_occupation_indices_per_qubit; // [qubit]
+  num_t *used_occupation_indices_per_qubit; // [qubits]
+  
+  num_t allocated_qubits;
+  num_t used_qubits;
+  size_t used;
+  decompose_toffoli_t toff_decomp;
+  
+  qubit_t qubit_indices[MAXQUBITS]; // allow at most MAXQUBITS qubits
+  qubit_t used_qubit_indices;
+  qubit_t *ancilla;
 } circuit_t;
 
 typedef struct {
-	char MSB;
-    qubit_t q_address[INTEGERSIZE];
+  char MSB;
+  qubit_t q_address[INTEGERSIZE];
 //    int64_t *c_address;
 } quantum_int_t;
 
 typedef struct instruction_t {
-	char *name;
-
-	// quantum storing registers
-    quantum_int_t *Q0;
-    quantum_int_t *Q1;
-    quantum_int_t *Q2;
-	quantum_int_t *Q3;
-
-	// classical storing registers
-	int *R0;
-	int *R1;
-	int *R2;
-	int *R3;
-
-    sequence_t *(*routine)();
-
-    bool invert;
-    struct instruction_t *next_instruction; // used for jumps
+  char *name;
+  
+  // quantum storing registers
+  quantum_int_t *Q0;
+  quantum_int_t *Q1;
+  quantum_int_t *Q2;
+  quantum_int_t *Q3;
+  
+  // classical storing registers
+  int *R0;
+  int *R1;
+  int *R2;
+  int *R3;
+  
+  sequence_t *(*routine)();
+  
+  bool invert;
+  struct instruction_t *next_instruction; // used for jumps
 } instruction_t;
 
 extern instruction_t instruction_list[MAXINSTRUCTIONS];

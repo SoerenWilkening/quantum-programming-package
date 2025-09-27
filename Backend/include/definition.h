@@ -7,7 +7,7 @@
 
 #include <stdlib.h>
 
-#define INTEGERSIZE 50
+#define INTEGERSIZE 2000
 #ifndef INTEGERSIZE
 #define INTEGERSIZE 800
 #endif
