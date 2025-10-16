@@ -67,6 +67,11 @@ def run_qiskit(s):
     t, mem = extract(res)
     store("qiskit", s, t, mem)
 
+def run_qrips(s):
+    res = subprocess.run(["/usr/bin/time", "-l", "/Users/sorenwilkening/.pyenv/versions/Solvers/bin/python", "qrisp/run_qrisp.py", f"{s}"], capture_output=True, text = True)
+    t, mem = extract(res)
+    store("qrisp", s, t, mem)
+
 def run_qsharp(s):
     result = subprocess.run(["/usr/bin/time", "-l", "dotnet", "qsharp/bin/Debug/net6.0/qsharp.dll", str(s)], capture_output=True, text=True)
     t = float(result.stdout.split("\n")[0])
@@ -93,8 +98,8 @@ x = np.unique(np.round(np.logspace(np.log10(1), np.log10(2000), num=50)).astype(
 # points = np.unique(np.round(np.logspace(np.log10(1), np.log10(3000), num=53)).astype(int))
 # x = points
 # print(points)
-# print(x)
-for s in x:
+print(x)
+for s in x[x >= 1075]:
     print(s)
     # print("Aria")
     # run_aria(s)
@@ -102,7 +107,7 @@ for s in x:
     # print("Qiskit")
     # run_qiskit(s)
     # print("CQ")
-    run_cq(s)
+    # run_cq(s)
     # print("KET")
     # run_ket(s)
     # print("Cirq")
@@ -113,6 +118,8 @@ for s in x:
     # run_pennylane(s)
     # print("qsharp")
     # if s <= 1000: run_qsharp(s)
+    print("qrisp")
+    run_qrips(s)
     # print("pytket")
     # run_pytket(s)
     # run_quipper(s)
