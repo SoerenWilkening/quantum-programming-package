@@ -66,6 +66,7 @@ pytket = res[res["meth"] == "pytket"]
 quipper = res[res["meth"] == "quipper"]
 straw = res[res["meth"] == "strawberry"]
 qrisp = res[res["meth"] == "qrisp"]
+quil = res[res["meth"] == "quil"]
 
 fontsize = 12
 every = 1
@@ -91,6 +92,7 @@ plt.plot(pytket["n"], pytket["t"], "--", label="PyTKet", color=colors[10], marke
 plt.plot(aria["n"], aria["t"], "--", label="AriaQuanta", color=colors[11], marker = markers[10], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
 plt.plot(projectq["n"], projectq["t"], "--", label="ProjectQ", color=colors[12], marker = markers[11], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
 plt.plot(qrisp["n"], qrisp["t"], "--", label="Qrisp", color="tab:gray", marker = markers[13], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
+plt.plot(quil["n"], quil["t"], "--", label="Quil", color="tab:olive", marker = markers[14], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
 plt.xlim(0.9, 2100)
 # plt.ylim(1e-9, 1000)
 plt.xscale('log')
@@ -135,6 +137,7 @@ plt.plot(pytket["n"], pytket["m"], "--", label="PyTKet", color=colors[10], marke
 plt.plot(aria["n"], aria["m"], "--", label="AriaQuanta", color=colors[11], marker = markers[10], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
 plt.plot(projectq["n"], projectq["m"], "--", label="ProjectQ", color=colors[12], marker = markers[11], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
 plt.plot(qrisp["n"], qrisp["m"], "--", label="Qrisp", color="tab:gray", marker = markers[13], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
+plt.plot(quil["n"], quil["m"], "--", label="Quil", color="tab:olive", marker = markers[14], markevery=every, markersize=size, markeredgewidth=width, linewidth=linewidth)
 # plt.xlim(1, 11)
 # plt.ylim(1e-9, 1000)
 plt.xscale('log')
