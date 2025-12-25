@@ -3,8 +3,8 @@
 //
 #include "Integer.h"
 
-sequence_t *precompiled_QQ_mul = NULL;
-sequence_t *precompiled_cQQ_mul = NULL;
+//sequence_t *precompiled_QQ_mul = NULL;
+//sequence_t *precompiled_cQQ_mul = NULL;
 
 void CP_sequence(sequence_t *mul, num_t *layer, int rounds, num_t control, double multiplyer, int inverted) {
     int l1 = 0, l2 = INTEGERSIZE - rounds;

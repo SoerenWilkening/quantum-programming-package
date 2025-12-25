@@ -12,7 +12,7 @@
 #define LAYER_BLOCK 128
 #define GATES_PER_LAYER_BLOCK 32
 #define QUBIT_INDEX_BLOCK 128
-#define MAXQUBITS 2000
+#define MAXQUBITS 8000
 
 #define MAXINSTRUCTIONS 7
 
@@ -70,7 +70,7 @@ typedef struct instruction_t {
   struct instruction_t *next_instruction; // used for jumps
 } instruction_t;
 
-extern instruction_t *instruction_list;
+extern instruction_t instruction_list[MAXINSTRUCTIONS];
 extern int instruction_counter;
 extern instruction_t *QPU_state;
 extern circuit_t *circuit;

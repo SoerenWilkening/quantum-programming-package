@@ -24,11 +24,17 @@ int main(int argc, char *argv[]) {
 	// initialize the rest of the stack
 	// prepare exerything for the execution
 	instruction_counter = 0;
-
-	int num_qubits = (int) strtol(argv[1], NULL, 10);
-	int run = (int) strtol(argv[2], NULL, 10);
-//	int num_qubits = 10;
-//	int run = 1;
+    
+    int num_qubits;
+    int run;
+    if (argc > 2) {
+        num_qubits = (int) strtol(argv[1], NULL, 10);
+        run = (int) strtol(argv[2], NULL, 10);
+    }
+    else {
+        num_qubits = 2223;
+        run = 1;
+    }
 	clock_t t1 = clock();
 //
 //	circuit_t *circ = init_circuit();
@@ -76,6 +82,7 @@ int main(int argc, char *argv[]) {
 		QPU_state = instruction_list;
 		// ._execute
 		circuit_t *circ = init_circuit();
+//        printf("%d\n", INTEGERSIZE);
 		qubit_t qubit_array[6 * INTEGERSIZE];
 		qubit_mapping(qubit_array, circ);
         run_instruction(seq, qubit_array, false, circ);

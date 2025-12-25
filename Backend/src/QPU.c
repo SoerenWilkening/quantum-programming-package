@@ -3,10 +3,10 @@
 //
 #include "QPU.h"
 
-instruction_t *instruction_list = NULL;
+//instruction_t instruction_list[MAXINSTRUCTIONS];
 instruction_t *QPU_state = NULL;
 circuit_t *circuit = NULL;
-int instruction_counter = 0;
+//int instruction_counter = 0;
 
 layer_t smallest_layer_below_comp(circuit_t *circ, qubit_t qubit, layer_t compar){
     // TODO: improve with binary search

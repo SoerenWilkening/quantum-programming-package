@@ -12,3 +12,4 @@ circuit-gen-results/qsharp/*
 !circuit-gen-results/qsharp/MyQFT.qs
 !circuit-gen-results/qsharp/Program.cs
 !circuit-gen-results/qsharp/QuantumProject.csproj
+build

@@ -5,10 +5,10 @@
 
 #include "Integer.h"
 
-sequence_t *precompiled_QQ_add = NULL;
-sequence_t *precompiled_cQQ_add = NULL;
-sequence_t *precompiled_CQ_add = NULL;
-sequence_t *precompiled_cCQ_add = NULL;
+//sequence_t *precompiled_QQ_add = NULL;
+//sequence_t *precompiled_cQQ_add = NULL;
+//sequence_t *precompiled_CQ_add = NULL;
+//sequence_t *precompiled_cCQ_add = NULL;
 
 sequence_t *CC_add() {
 	*(QPU_state->R0) += *(QPU_state->R1);
