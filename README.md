@@ -1,4 +1,4 @@
-### Speed-oriented quantum circuit backend
+# Speed-oriented quantum circuit backend
 
 Repository containing a quantum circuit generator written in C.
 Test on up to 2000 qubit QFTs demonstrate speed advantage over current software backends
