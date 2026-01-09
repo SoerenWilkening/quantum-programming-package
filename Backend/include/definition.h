@@ -4,13 +4,11 @@
 
 #ifndef CQ_BACKEND_IMPROVED_DEFINITION_H
 #define CQ_BACKEND_IMPROVED_DEFINITION_H
-
+#include <stdbool.h>
 #include <stdlib.h>
 
-#define INTEGERSIZE 2000
-#ifndef INTEGERSIZE
-#define INTEGERSIZE 10000
-#endif
+#define INTEGERSIZE 8
+
 #define QBITSIZE 1
 #define QBYTESIZE 8
 #define QHWORDSIZE 16

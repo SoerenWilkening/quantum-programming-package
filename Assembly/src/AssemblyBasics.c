@@ -4,7 +4,7 @@
 
 #include "AssemblyOperations.h"
 
-//int label_counter = 0;
+int label_counter = 0;
 label_t labels[3];
 
 instruction_t *init_instruction() {

@@ -84,6 +84,7 @@ void allocate_more_indices_per_qubit(circuit_t *circ, int loc);
 void add_gate(circuit_t *circ, gate_t *g);
 
 void print_circuit(circuit_t *circ);
+void free_circuit(circuit_t *circ);
 void circuit_to_opanqasm(circuit_t *circ, char *path);
 
 #endif //CQ_BACKEND_IMPROVED_QPU_H

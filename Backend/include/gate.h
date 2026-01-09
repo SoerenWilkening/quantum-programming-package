@@ -11,6 +11,9 @@
 #include <math.h>
 #include "definition.h"
 
+#define MAXLAYERINSEQUENCE 10000
+#define MAXGATESPERLAYER INTEGERSIZE
+
 typedef enum {
     X, Y, Z, R, H, Rx, Ry, Rz, P, M
 } Standardgate_t;
@@ -26,8 +29,6 @@ typedef struct {
     // store range of multiqubit gates
 } gate_t;
 
-#define MAXLAYERINSEQUENCE 10000
-#define MAXGATESPERLAYER INTEGERSIZE
 
 typedef struct {
     gate_t **seq;

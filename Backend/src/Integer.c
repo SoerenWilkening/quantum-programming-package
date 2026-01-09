@@ -13,6 +13,7 @@ quantum_int_t *QBOOL(){
     circuit->used_qubit_indices += 1;
     return integer;
 }
+
 quantum_int_t *QINT(){
     quantum_int_t *integer = malloc(sizeof(quantum_int_t));
 
@@ -25,6 +26,7 @@ quantum_int_t *QINT(){
     }
     return integer;
 }
+
 quantum_int_t *INT(int64_t intg){
     quantum_int_t *integer = malloc(sizeof(integer));
 //    integer->c_address = malloc(sizeof(int64_t));

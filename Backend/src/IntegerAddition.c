@@ -5,10 +5,10 @@
 
 #include "Integer.h"
 
-//sequence_t *precompiled_QQ_add = NULL;
-//sequence_t *precompiled_cQQ_add = NULL;
-//sequence_t *precompiled_CQ_add = NULL;
-//sequence_t *precompiled_cCQ_add = NULL;
+sequence_t *precompiled_QQ_add = NULL;
+sequence_t *precompiled_cQQ_add = NULL;
+sequence_t *precompiled_CQ_add = NULL;
+sequence_t *precompiled_cCQ_add = NULL;
 
 sequence_t *CC_add() {
 	*(QPU_state->R0) += *(QPU_state->R1);
@@ -59,14 +59,23 @@ sequence_t *CQ_add() {
 	return add;
 }
 sequence_t *QQ_add() {
+//    printf("check\n");
+//    fflush(stdout);
 	if (precompiled_QQ_add != NULL) return precompiled_QQ_add;
+//	printf("not precompiled\n");
+//    fflush(stdout);
 
 	sequence_t *add = malloc(sizeof(sequence_t));
 
 	// allocate exact number of layer and enough gates per layer
 	add->used_layer = 0;
-	add->num_layer = 4 * INTEGERSIZE - 2 + INTEGERSIZE;
+	add->num_layer = 5 * INTEGERSIZE - 2;
+    add->gates_per_layer = calloc(add->num_layer, sizeof(num_t));
 	memset(add->gates_per_layer, 0, add->num_layer * sizeof(num_t));
+    add->seq = calloc(add->num_layer, sizeof(gate_t *));
+    for (int i = 0; i < add->num_layer; ++i) {
+        add->seq[i] = calloc(2 * INTEGERSIZE, sizeof(gate_t));
+    }
 	QFT(add, INTEGERSIZE);
 	int rounds = 0;
 	for (int bit = (int) INTEGERSIZE - 1; bit >= 0; --bit) {
@@ -80,9 +89,15 @@ sequence_t *QQ_add() {
 		}
 		rounds++;
 	}
+//	printf("build\n");
+//    fflush(stdout);
 	add->used_layer += INTEGERSIZE;
 	QFT_inverse(add, INTEGERSIZE);
+//	printf("qft inverted\n");
+//    fflush(stdout);
 	precompiled_QQ_add = add;
+//	printf("stored\n");
+//    fflush(stdout);
 
 	return add;
 }
@@ -138,7 +153,12 @@ sequence_t *cQQ_add() {
 	// allocate exact number of layer and enough gates per layer
 	add->used_layer = 0;
 	add->num_layer = INTEGERSIZE * (INTEGERSIZE + 1) / 2 * 4 + 4 * INTEGERSIZE - 2 - INTEGERSIZE / 4 * 4 + 3;
-	memset(add->gates_per_layer, 0, add->num_layer * sizeof(num_t));
+    add->gates_per_layer = calloc(add->num_layer, sizeof(num_t));
+    memset(add->gates_per_layer, 0, add->num_layer * sizeof(num_t));
+    add->seq = calloc(add->num_layer, sizeof(gate_t *));
+    for (int i = 0; i < add->num_layer; ++i) {
+        add->seq[i] = calloc(2 * INTEGERSIZE, sizeof(gate_t));
+    }
 
 	QFT(add, INTEGERSIZE);
 

@@ -13,3 +13,5 @@ circuit-gen-results/qsharp/*
 !circuit-gen-results/qsharp/Program.cs
 !circuit-gen-results/qsharp/QuantumProject.csproj
 build
+python-backend/quantum_language.c
+python-backend/quantum_language.cpython-311-darwin.so
