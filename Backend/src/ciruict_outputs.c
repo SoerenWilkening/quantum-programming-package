@@ -8,6 +8,14 @@
 
 // Printing functionality
 
+int max(int *arr, int n) {
+    int mi = 0;
+    for (int i = 0; i < n; ++i) {
+        if (mi < arr[i]) mi = arr[i];
+    }
+    return mi;
+}
+
 bool value_in_array(const qubit_t *array, num_t num_values, qubit_t value) {
     if (array == NULL) return false;
     for (int i = 0; i < num_values; ++i) if (array[i] == value) return true;
@@ -21,6 +29,50 @@ void print_circuit(circuit_t *circ) {
     
     if (circ->used > 2000) return;
     // 3, 8
+    
+    // precompute, how wide is a layer
+//    int layer_width[circ->used_layer];
+//    int max_gates = max((int * ) circ->used_gates_per_layer, circ->used_layer);
+//
+//    int min_layer_in_layer[circ->used_qubits + 1][max_gates + 1];
+//    memset(min_layer_in_layer, 0, (circ->used_qubits + 1) * max_gates * sizeof(int));
+//
+//    for (int layer_index = 0; layer_index < circ->used_layer; ++layer_index) {
+//
+//        for (int gate_index = 0; gate_index < circ->used_gates_per_layer[layer_index]; ++gate_index) {
+////            printf("%d %d %d\n", layer_index, min_qubit(&circ->sequence[layer_index][gate_index]), max_qubit(&circ->sequence[layer_index][gate_index]));
+//            int val = 2;
+//            switch (circ->sequence[layer_index][gate_index].Gate) {
+//                case P:
+//                    val = 6;
+//                    break;
+//            }
+//            for (int i = min_qubit(&circ->sequence[layer_index][gate_index]);
+//                 i < max_qubit(&circ->sequence[layer_index][gate_index]) + 1; ++i) {
+//                if (gate_index > 0)
+//                    min_layer_in_layer[i][gate_index] += min_layer_in_layer[i][gate_index - 1] + val;
+//                else
+//                    min_layer_in_layer[i][gate_index] += val;
+//            }
+////            for (int i = 0; i < circ->used_qubits + 1; ++i) {
+////                printf("%d ", min_layer_in_layer[i]);
+////            }
+////            printf("\n");
+//        }
+////        for (int i = 0; i < circ->used_qubits + 1; ++i) {
+////                printf("%d ", min_layer_in_layer[i]);
+////            }
+////        printf("| %d \n", max(min_layer_in_layer, circ->used_qubits + 1));
+////        layer_width[layer_index] = max(min_layer_in_layer, circ->used_qubits + 1);
+//    }
+//    for (int layer_index = 0; layer_index < circ->used_layer; ++layer_index) {
+//        printf("%d| ", layer_index);
+//        for (int i = 0; i < circ->used_gates_per_layer[layer_index]; ++i) {
+//            printf("%d ", min_layer_in_layer[layer_index][i]);
+//        }
+//        printf("\n");
+//    }
+    
     int width[circ->used];
     int counter = 0;
     for (int layer_index = 0; layer_index < circ->used_layer; ++layer_index) {
@@ -38,6 +90,11 @@ void print_circuit(circuit_t *circ) {
             printf("%3d ", qubit);
             counter = 0;
             for (int layer_index = 0; layer_index < circ->used_layer; ++layer_index) {
+                
+                // use to print beneath each other if possible
+                int min_layer_in_layer[circ->used_qubits + 1];
+                memset(min_layer_in_layer, 0, (circ->used_qubits + 1) * sizeof(int));
+                
                 for (int gate_index = 0; gate_index < circ->used_gates_per_layer[layer_index]; ++gate_index) {
                     int skip_dash = 0;
                     qubit_t *ctrl = circ->sequence[layer_index][gate_index].Control;
@@ -77,6 +134,7 @@ void print_circuit(circuit_t *circ) {
                     else if (skip_dash == 0) print_dash(5);
                     counter++;
                 }
+
 //				printf("|");
                 printf("\u250A");
             }
