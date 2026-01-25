@@ -115,54 +115,54 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FOUND-01 | TBD | Pending |
-| FOUND-02 | TBD | Pending |
-| FOUND-03 | TBD | Pending |
-| FOUND-04 | TBD | Pending |
-| FOUND-05 | TBD | Pending |
-| FOUND-06 | TBD | Pending |
-| FOUND-07 | TBD | Pending |
-| FOUND-08 | TBD | Pending |
-| TEST-01 | TBD | Pending |
-| TEST-02 | TBD | Pending |
-| TEST-03 | TBD | Pending |
-| TEST-04 | TBD | Pending |
-| TEST-05 | TBD | Pending |
-| VINT-01 | TBD | Pending |
-| VINT-02 | TBD | Pending |
-| VINT-03 | TBD | Pending |
-| VINT-04 | TBD | Pending |
-| ARTH-01 | TBD | Pending |
-| ARTH-02 | TBD | Pending |
-| ARTH-03 | TBD | Pending |
-| ARTH-04 | TBD | Pending |
-| ARTH-05 | TBD | Pending |
-| ARTH-06 | TBD | Pending |
-| ARTH-07 | TBD | Pending |
-| BITOP-01 | TBD | Pending |
-| BITOP-02 | TBD | Pending |
-| BITOP-03 | TBD | Pending |
-| BITOP-04 | TBD | Pending |
-| BITOP-05 | TBD | Pending |
-| CIRC-01 | TBD | Pending |
-| CIRC-02 | TBD | Pending |
-| CIRC-03 | TBD | Pending |
-| CIRC-04 | TBD | Pending |
-| CODE-01 | TBD | Pending |
-| CODE-02 | TBD | Pending |
-| CODE-03 | TBD | Pending |
-| CODE-04 | TBD | Pending |
-| CODE-05 | TBD | Pending |
-| DOCS-01 | TBD | Pending |
-| DOCS-02 | TBD | Pending |
-| DOCS-03 | TBD | Pending |
-| DOCS-04 | TBD | Pending |
+| FOUND-01 | Phase 2 | Pending |
+| FOUND-02 | Phase 2 | Pending |
+| FOUND-03 | Phase 2 | Pending |
+| FOUND-04 | Phase 2 | Pending |
+| FOUND-05 | Phase 2 | Pending |
+| FOUND-06 | Phase 3 | Pending |
+| FOUND-07 | Phase 3 | Pending |
+| FOUND-08 | Phase 3 | Pending |
+| TEST-01 | Phase 1 | Pending |
+| TEST-02 | Phase 10 | Pending |
+| TEST-03 | Phase 10 | Pending |
+| TEST-04 | Phase 1 | Pending |
+| TEST-05 | Phase 1 | Pending |
+| VINT-01 | Phase 5 | Pending |
+| VINT-02 | Phase 5 | Pending |
+| VINT-03 | Phase 5 | Pending |
+| VINT-04 | Phase 5 | Pending |
+| ARTH-01 | Phase 5 | Pending |
+| ARTH-02 | Phase 5 | Pending |
+| ARTH-03 | Phase 7 | Pending |
+| ARTH-04 | Phase 7 | Pending |
+| ARTH-05 | Phase 7 | Pending |
+| ARTH-06 | Phase 7 | Pending |
+| ARTH-07 | Phase 7 | Pending |
+| BITOP-01 | Phase 6 | Pending |
+| BITOP-02 | Phase 6 | Pending |
+| BITOP-03 | Phase 6 | Pending |
+| BITOP-04 | Phase 6 | Pending |
+| BITOP-05 | Phase 6 | Pending |
+| CIRC-01 | Phase 8 | Pending |
+| CIRC-02 | Phase 8 | Pending |
+| CIRC-03 | Phase 8 | Pending |
+| CIRC-04 | Phase 8 | Pending |
+| CODE-01 | Phase 4 | Pending |
+| CODE-02 | Phase 4 | Pending |
+| CODE-03 | Phase 4 | Pending |
+| CODE-04 | Phase 9 | Pending |
+| CODE-05 | Phase 4 | Pending |
+| DOCS-01 | Phase 10 | Pending |
+| DOCS-02 | Phase 10 | Pending |
+| DOCS-03 | Phase 10 | Pending |
+| DOCS-04 | Phase 10 | Pending |
 
 **Coverage:**
 - v1 requirements: 37 total
-- Mapped to phases: 0
-- Unmapped: 37 (pending roadmap creation)
+- Mapped to phases: 37
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-25 after initial definition*
+*Last updated: 2026-01-25 after roadmap creation*
