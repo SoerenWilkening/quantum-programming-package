@@ -63,9 +63,11 @@ def test_qbool_and_qbool():
     # Perform AND
     c = a & b
 
-    # Verify result is qbool
+    # Verify result is qint with width 1 (max of both widths)
+    # Note: Phase 6 changed AND to return qint with max width, not qbool
     assert c is not None
-    assert isinstance(c, ql.qbool)
+    assert isinstance(c, ql.qint)
+    assert c.width == 1  # qbool & qbool -> 1-bit result
 
 
 def test_qint_and_qint():
@@ -73,12 +75,14 @@ def test_qint_and_qint():
     a = ql.qint(value=5, bits=8)
     b = ql.qint(value=3, bits=8)
 
-    # Perform AND (returns qbool based on code)
+    # Perform AND (returns qint with max width)
     c = a & b
 
-    # Verify result is qbool
+    # Verify result is qint with correct width
+    # Phase 6: Bitwise AND returns qint with max(width_a, width_b)
     assert c is not None
-    assert isinstance(c, ql.qbool)
+    assert isinstance(c, ql.qint)
+    assert c.width == 8
 
 
 # ============================================================================
@@ -94,9 +98,11 @@ def test_qbool_or_qbool():
     # Perform OR
     c = a | b
 
-    # Verify result is qbool
+    # Verify result is qint with width 1 (max of both widths)
+    # Note: Phase 6 changed OR to return qint with max width, not qbool
     assert c is not None
-    assert isinstance(c, ql.qbool)
+    assert isinstance(c, ql.qint)
+    assert c.width == 1  # qbool | qbool -> 1-bit result
 
 
 def test_qint_or_qint():
@@ -104,12 +110,14 @@ def test_qint_or_qint():
     a = ql.qint(value=5, bits=8)
     b = ql.qint(value=3, bits=8)
 
-    # Perform OR
+    # Perform OR (returns qint with max width)
     c = a | b
 
-    # Verify result is qbool
+    # Verify result is qint with correct width
+    # Phase 6: Bitwise OR returns qint with max(width_a, width_b)
     assert c is not None
-    assert isinstance(c, ql.qbool)
+    assert isinstance(c, ql.qint)
+    assert c.width == 8
 
 
 # ============================================================================
@@ -289,9 +297,11 @@ def test_complex_logic_expression():
     # Complex expression
     result = (a & b) | c
 
-    # Verify result is qbool
+    # Verify result is qint with correct width
+    # Phase 6: Bitwise ops return qint with max width of operands
     assert result is not None
-    assert isinstance(result, ql.qbool)
+    assert isinstance(result, ql.qint)
+    assert result.width == 1  # All 1-bit operands -> 1-bit result
 
 
 def test_qbool_in_comparison():
@@ -307,8 +317,10 @@ def test_qbool_in_comparison():
     logic_result = cmp_result & other
 
     # Verify types
+    # Phase 6: Comparison still returns qbool, but AND returns qint
     assert isinstance(cmp_result, ql.qbool)
-    assert isinstance(logic_result, ql.qbool)
+    assert isinstance(logic_result, ql.qint)
+    assert logic_result.width == 1  # qbool & qbool -> 1-bit result
 
 
 # ============================================================================
