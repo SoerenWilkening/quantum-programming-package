@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-25)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Phase 5: Variable-Width Integers
+**Current focus:** Phase 5 Complete - Ready for Phase 6 (Bitwise Operations)
 
 ## Current Position
 
-Phase: 5 of 10 (Variable-Width Integers)
-Plan: 3 of 4 in current phase
-Status: In progress
-Last activity: 2026-01-26 - Completed 05-03-PLAN.md (Python qint width support)
+Phase: 5 of 10 (Variable-Width Integers) - COMPLETE
+Plan: 4 of 4 in current phase
+Status: Phase Complete
+Last activity: 2026-01-26 - Completed 05-04-PLAN.md (Variable-width tests)
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 55%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 16
+- Total plans completed: 17
 - Average duration: 5.4 min
-- Total execution time: 1.5 hours
+- Total execution time: 1.6 hours
 
 **By Phase:**
 
@@ -31,11 +31,11 @@ Progress: [█████░░░░░] 50%
 | 02 - C Layer Cleanup | 3 | 18 min | 6 min |
 | 03 - Memory Architecture | 3 | 22 min | 7.3 min |
 | 04 - Module Separation | 4 | 15 min | 3.8 min |
-| 05 - Variable-Width Integers | 3 | 21 min | 7 min |
+| 05 - Variable-Width Integers | 4 | 28 min | 7 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-04 (3 min), 05-01 (4 min), 05-02 (6 min), 05-03 (11 min)
-- Trend: 05-03 took longer due to debugging qubit array compatibility
+- Last 5 plans: 05-01 (4 min), 05-02 (6 min), 05-03 (11 min), 05-04 (7 min)
+- Trend: Consistent 7 min average for Phase 5
 
 *Updated after each plan completion*
 
@@ -82,7 +82,7 @@ Recent decisions affecting current work:
 - circuit.h as main API header: Consolidates types, gates, optimizer, output, allocator into single user-facing include (04-03)
 - circuit_output.h/c module: Separated print_circuit and circuit_to_opanqasm into dedicated module (04-03)
 - QPU.h as backward compat wrapper: Now includes circuit.h, preserves instruction_t for sequence generation (04-03)
-- Fixed filename typo: ciruict_outputs.c → circuit_output.c for consistency and professionalism (04-03)
+- Fixed filename typo: ciruict_outputs.c -> circuit_output.c for consistency and professionalism (04-03)
 - module_deps.md as comprehensive dependency documentation: Includes ASCII graph, line counts, responsibilities, and historical context (04-04)
 - No .pxd changes needed for Cython: QPU.h backward compatibility wrapper sufficient for module separation (04-04)
 - Verification includes full test suite: 59 tests confirm module separation doesn't break functionality (04-04)
@@ -100,6 +100,10 @@ Recent decisions affecting current work:
 - UserWarning for overflow, not error: Per CONTEXT.md, modular arithmetic expected (05-03)
 - qbool unsigned 1-bit [0,1]: True=1 should not warn (05-03)
 - Extract used qubits from right-aligned: C backend expects compact arrays (05-03)
+- Variable-width tests organized by requirement: VINT-01 through VINT-04, ARTH-01, ARTH-02 (05-04)
+- TestPhase5SuccessCriteria for explicit verification: Maps directly to ROADMAP.md success criteria (05-04)
+- Fixed CQ_add/cCQ_add offset for variable-width: Changed from INTEGERSIZE-bits to 0 (05-04)
+- Fixed QFT/QFT_inverse offset for variable-width: Same fix pattern (05-04)
 
 ### Pending Todos
 
@@ -108,12 +112,10 @@ None yet.
 ### Blockers/Concerns
 
 **Critical Path Dependencies:**
-- Phase 5 plans 01-03 complete - width metadata, arithmetic, Python API
-- Phase 5 plan 04 ready (multiplication operations)
-- Phase 5 and Phase 6 can run in parallel
+- Phase 5 COMPLETE - all 4 plans executed
+- Ready to proceed to Phase 6 (Bitwise Operations)
 
 **Research Flags:**
-- Phase 5: Medium priority - optimal gate sequences for variable-width arithmetic
 - Phase 6: Medium priority - quantum bit shift/rotate circuits
 - Phase 7: High priority - QFT-based arithmetic and modular operations
 
@@ -123,27 +125,34 @@ None yet.
 - Fixed critical C compilation issues in Integer.c and QPU.c (missing stdint.h) (01-02, 05-01)
 - IntegerComparison.c uses conservative +10 buffer for layer allocation - may need precise calculation in future (02-01)
 - Logic operations (and, or, invert) still use INTEGERSIZE layout - Python bindings adapted (05-03)
-- All 59 tests pass with variable-width arithmetic
+- All 125 tests pass with variable-width arithmetic and comprehensive test coverage
 
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 05-03-PLAN.md - Python qint width support complete
+Stopped at: Completed 05-04-PLAN.md - Phase 5 complete with all tests passing
 Resume file: None
 
-## Phase 5 Progress
+## Phase 5 Summary
 
-**Plan 01 Complete** - Width metadata foundation established
-**Plan 02 Complete** - Width-aware arithmetic operations
-**Plan 03 Complete** - Python qint width support
+**ALL PLANS COMPLETE**
 
-**What was built in 05-03:**
-- qint(value, width=N) creates N-bit quantum integers
-- qint.width property (read-only)
-- Width validation (ValueError for < 1 or > 64)
-- Overflow warnings when value exceeds width range
-- qbool as syntactic sugar for qint(width=1)
-- Fixed qubit array extraction for C backend
+- **Plan 01:** Width metadata foundation (quantum_int_t.width, right-aligned array)
+- **Plan 02:** Width-aware arithmetic (QQ_add(bits), cQQ_add(bits))
+- **Plan 03:** Python qint width support (width parameter, validation, warnings)
+- **Plan 04:** Comprehensive test suite (66 tests, all Phase 5 success criteria verified)
+
+**Key Achievements:**
+- Variable-width quantum integers from 1-64 bits
+- Dynamic qubit allocation based on width
+- Mixed-width arithmetic operations
+- Backward compatibility with bits= parameter
+- 125 total tests passing
+
+**Critical Bug Fixed:**
+- Segfault in variable-width addition >8 bits
+- Root cause: INTEGERSIZE-based offset calculation in C layer
+- Fixed in CQ_add, cCQ_add, QFT, QFT_inverse
 
 **Next steps:**
-- 05-04: Multiplication and remaining variable-width operations
+- Phase 6: Bitwise Operations (shift, rotate)
