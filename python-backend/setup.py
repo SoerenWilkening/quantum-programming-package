@@ -8,6 +8,7 @@ compiler_args = ["-O3", "-flto", "-pthread"]
 sources_circuit = [
     os.path.join("quantum_language.pyx"),
     os.path.join("..", "Backend", "src", "QPU.c"),
+    os.path.join("..", "Backend", "src", "optimizer.c"),
     os.path.join("..", "Backend", "src", "qubit_allocator.c"),
     os.path.join("..", "Backend", "src", "circuit_allocations.c"),
     os.path.join("..", "Backend", "src", "ciruict_outputs.c"),
