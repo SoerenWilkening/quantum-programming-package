@@ -119,11 +119,13 @@ Plans:
   2. Python operator overloading works for bitwise operations (&, |, ^, ~)
   3. Bit operations respect variable-width integers
   4. Generated circuits for bit operations have reasonable depth (verified by benchmarks)
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 06-01: TBD
-- [ ] 06-02: TBD
+- [ ] 06-01-PLAN.md - Width-parameterized NOT and XOR in C layer
+- [ ] 06-02-PLAN.md - Width-parameterized AND and OR in C layer
+- [ ] 06-03-PLAN.md - Python qint operator overloading for bitwise ops
+- [ ] 06-04-PLAN.md - Comprehensive test suite for bitwise operations
 
 ### Phase 7: Extended Arithmetic
 **Goal**: Complete multiplication and add division, modulo, and modular arithmetic operations
@@ -202,7 +204,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 3. Memory Architecture | 3/3 | Complete | 2026-01-26 |
 | 4. Module Separation | 4/4 | Complete | 2026-01-26 |
 | 5. Variable-Width Integers | 4/4 | Complete | 2026-01-26 |
-| 6. Bit Operations | 0/0 | Not started | - |
+| 6. Bit Operations | 0/4 | Planned | - |
 | 7. Extended Arithmetic | 0/0 | Not started | - |
 | 8. Circuit Optimization | 0/0 | Not started | - |
 | 9. Code Organization | 0/0 | Not started | - |
