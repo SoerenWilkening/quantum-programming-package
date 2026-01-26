@@ -60,11 +60,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Code Organization
 
-- [ ] **CODE-01**: QPU.c responsibilities separated into focused modules
-- [ ] **CODE-02**: Circuit builder module (create/destroy/add gates)
-- [ ] **CODE-03**: Circuit optimizer module (layer assignment, merging)
+- [x] **CODE-01**: QPU.c responsibilities separated into focused modules
+- [x] **CODE-02**: Circuit builder module (create/destroy/add gates)
+- [x] **CODE-03**: Circuit optimizer module (layer assignment, merging)
 - [ ] **CODE-04**: Operations organized by category (arithmetic, comparison, logic)
-- [ ] **CODE-05**: Clear dependency graph between modules
+- [x] **CODE-05**: Clear dependency graph between modules
 
 ### Documentation
 
@@ -120,9 +120,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FOUND-03 | Phase 2 | Complete |
 | FOUND-04 | Phase 2 | Complete |
 | FOUND-05 | Phase 2 | Complete |
-| FOUND-06 | Phase 3 | Pending |
-| FOUND-07 | Phase 3 | Pending |
-| FOUND-08 | Phase 3 | Pending |
+| FOUND-06 | Phase 3 | Complete |
+| FOUND-07 | Phase 3 | Complete |
+| FOUND-08 | Phase 3 | Complete |
 | TEST-01 | Phase 1 | Complete |
 | TEST-02 | Phase 10 | Pending |
 | TEST-03 | Phase 10 | Pending |
@@ -148,11 +148,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CIRC-02 | Phase 8 | Pending |
 | CIRC-03 | Phase 8 | Pending |
 | CIRC-04 | Phase 8 | Pending |
-| CODE-01 | Phase 4 | Pending |
-| CODE-02 | Phase 4 | Pending |
-| CODE-03 | Phase 4 | Pending |
+| CODE-01 | Phase 4 | Complete |
+| CODE-02 | Phase 4 | Complete |
+| CODE-03 | Phase 4 | Complete |
 | CODE-04 | Phase 9 | Pending |
-| CODE-05 | Phase 4 | Pending |
+| CODE-05 | Phase 4 | Complete |
 | DOCS-01 | Phase 10 | Pending |
 | DOCS-02 | Phase 10 | Pending |
 | DOCS-03 | Phase 10 | Pending |
@@ -165,4 +165,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-26 after Phase 2 completion*
+*Last updated: 2026-01-26 after Phase 4 completion*
