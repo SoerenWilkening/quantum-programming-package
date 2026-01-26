@@ -205,3 +205,145 @@ class TestQboolAsOneBitQint:
         a = ql.qint(0, width=1)
         b = ql.qbool(False)
         assert a.width == b.width == 1
+
+
+# ============================================================================
+# Mixed-Width Operations Tests (VINT-04)
+# ============================================================================
+
+
+class TestMixedWidthOperations:
+    """Test mixed-width integer operations per CONTEXT.md decisions."""
+
+    def test_add_8bit_plus_32bit(self):
+        """8-bit + 32-bit addition works, result is 32-bit."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(100, width=32)
+
+        c = a + b
+
+        assert c is not None
+        assert isinstance(c, ql.qint)
+        assert c.width == 32  # Result width is larger of operands
+
+    def test_add_32bit_plus_8bit(self):
+        """32-bit + 8-bit addition works, result is 32-bit."""
+        a = ql.qint(100, width=32)
+        b = ql.qint(5, width=8)
+
+        c = a + b
+
+        assert c is not None
+        assert c.width == 32
+
+    def test_sub_mixed_widths(self):
+        """Mixed-width subtraction works."""
+        a = ql.qint(100, width=32)
+        b = ql.qint(5, width=8)
+
+        c = a - b
+
+        assert c is not None
+        assert c.width == 32
+
+    def test_inplace_add_mixed_width(self):
+        """In-place addition with different widths."""
+        a = ql.qint(5, width=16)
+        b = ql.qint(3, width=8)
+
+        a += b
+
+        assert a is not None
+        # Note: in-place may or may not change width depending on implementation
+        assert isinstance(a, ql.qint)
+
+    def test_add_1bit_plus_64bit(self):
+        """Extreme case: 1-bit + 64-bit."""
+        a = ql.qint(1, width=1)
+        b = ql.qint(1000, width=64)
+
+        c = a + b
+
+        assert c is not None
+        assert c.width == 64
+
+
+# ============================================================================
+# Variable-Width Addition Tests (ARTH-01)
+# ============================================================================
+
+
+class TestVariableWidthAddition:
+    """Test addition works for all variable-width integers."""
+
+    @pytest.mark.parametrize("width", [1, 2, 4, 8, 16, 32, 64])
+    def test_addition_at_width(self, width):
+        """Addition works for various widths."""
+        a = ql.qint(1, width=width)
+        b = ql.qint(1, width=width)
+
+        c = a + b
+
+        assert c is not None
+        assert isinstance(c, ql.qint)
+        assert c.width == width
+
+    @pytest.mark.parametrize("width", [1, 8, 16, 32])
+    def test_addition_with_classical_int(self, width):
+        """qint + int works for various widths."""
+        a = ql.qint(5, width=width)
+
+        b = a + 3
+
+        assert b is not None
+        assert b.width == width
+
+    def test_chained_addition_preserves_width(self):
+        """Chaining additions preserves width."""
+        a = ql.qint(1, width=16)
+        b = ql.qint(2, width=16)
+        c = ql.qint(3, width=16)
+
+        result = a + b + c
+
+        assert result.width == 16
+
+
+# ============================================================================
+# Variable-Width Subtraction Tests (ARTH-02)
+# ============================================================================
+
+
+class TestVariableWidthSubtraction:
+    """Test subtraction works for all variable-width integers."""
+
+    @pytest.mark.parametrize("width", [1, 2, 4, 8, 16, 32, 64])
+    def test_subtraction_at_width(self, width):
+        """Subtraction works for various widths."""
+        a = ql.qint(5, width=width)
+        b = ql.qint(3, width=width)
+
+        c = a - b
+
+        assert c is not None
+        assert isinstance(c, ql.qint)
+        assert c.width == width
+
+    @pytest.mark.parametrize("width", [1, 8, 16, 32])
+    def test_subtraction_with_classical_int(self, width):
+        """qint - int works for various widths."""
+        a = ql.qint(10, width=width)
+
+        b = a - 3
+
+        assert b is not None
+        assert b.width == width
+
+    def test_inplace_subtraction(self):
+        """In-place subtraction works for variable width."""
+        a = ql.qint(10, width=16)
+
+        a -= 5
+
+        assert a is not None
+        assert isinstance(a, ql.qint)
