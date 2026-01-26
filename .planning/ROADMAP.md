@@ -67,11 +67,12 @@ Plans:
   2. qint and qbool types borrow qubits from circuit with tracked ownership
   3. Ancilla qubit allocation is explicit and trackable without significant performance overhead
   4. Memory leaks from qubit allocation are eliminated (verified by Valgrind)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 03-01: TBD
-- [ ] 03-02: TBD
+- [ ] 03-01-PLAN.md - Create qubit allocator module with core API and statistics
+- [ ] 03-02-PLAN.md - Update C QINT/QBOOL to use allocator with ownership tracking
+- [ ] 03-03-PLAN.md - Update Python bindings to use allocator and expose statistics
 
 ### Phase 4: Module Separation
 **Goal**: Split QPU.c into focused modules with clear responsibilities
@@ -194,7 +195,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 |-------|----------------|--------|-----------|
 | 1. Testing Foundation | 3/3 | Complete | 2026-01-26 |
 | 2. C Layer Cleanup | 3/3 | Complete | 2026-01-26 |
-| 3. Memory Architecture | 0/0 | Not started | - |
+| 3. Memory Architecture | 0/3 | Not started | - |
 | 4. Module Separation | 0/0 | Not started | - |
 | 5. Variable-Width Integers | 0/0 | Not started | - |
 | 6. Bit Operations | 0/0 | Not started | - |
