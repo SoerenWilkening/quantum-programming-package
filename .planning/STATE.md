@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-25)
 
 ## Current Position
 
-Phase: 7 of 10 (Extended Arithmetic) - COMPLETE
-Plan: 6 of 6 in current phase - COMPLETE (gap closure)
-Status: Phase complete
-Last activity: 2026-01-26 - Completed 07-06-PLAN.md: QQ_mul gap closure
+Phase: 8 of 10 (Circuit Optimization)
+Plan: 3 of 5 in current phase - COMPLETE
+Status: In progress
+Last activity: 2026-01-26 - Completed 08-03-PLAN.md: Circuit visualization enhancement
 
-Progress: [█████████░] 95%
+Progress: [█████████░] 97%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 25
-- Average duration: 5.9 min
-- Total execution time: 2.4 hours
+- Total plans completed: 27
+- Average duration: 5.6 min
+- Total execution time: 2.5 hours
 
 **By Phase:**
 
@@ -34,10 +34,11 @@ Progress: [█████████░] 95%
 | 05 - Variable-Width Integers | 4 | 28 min | 7 min |
 | 06 - Bitwise Operations | 4 | 23 min | 5.75 min |
 | 07 - Extended Arithmetic | 6 | 41 min | 6.8 min |
+| 08 - Circuit Optimization | 3 | 9 min | 3 min |
 
 **Recent Trend:**
-- Last 5 plans: 07-03 (11 min), 07-04 (7 min), 07-05 (N/A), 07-06 (12 min)
-- Trend: Bug fixes require more investigation time
+- Last 5 plans: 07-06 (12 min), 08-01 (4 min), 08-03 (5 min)
+- Trend: Module creation is fast, bug fixes require more investigation
 
 *Updated after each plan completion*
 
@@ -138,6 +139,10 @@ Recent decisions affecting current work:
 - ZeroDivisionError before circuit generation: Classical divisor zero check at Python level (07-04)
 - MAXLAYERINSEQUENCE for QQ_mul layer allocation: Original formula bits*(2*bits+6)-1 underestimates (07-06)
 - isinstance() for qint type checks: Supports subclasses like qint_mod in multiplication (07-06)
+- Circuit statistics on-demand computation: Computed from circ->used, circ->used_layer, circ->used_qubits fields, no caching (08-01)
+- Gate type classification by control count: X with 0 controls = X, 1 control = CX, 2+ controls = CCX (08-01)
+- NULL safety in statistics functions: Return zero/empty for NULL circuit pointer (08-01)
+- circuit_stats.h included in circuit.h: Follows same pattern as circuit_output.h for API convenience (08-01)
 
 ### Pending Todos
 
@@ -169,9 +174,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 07-06-PLAN.md - QQ_mul gap closure (Phase 7 COMPLETE)
+Stopped at: Completed 08-01-PLAN.md - Circuit statistics module (Phase 8 started)
 Resume file: None
-Note: Phase 7 fully complete with all success criteria verified
+Note: Phase 8 Plan 1 complete, ready for Plan 2 (Python bindings)
 
 ## Phase 7 Summary
 
