@@ -16,6 +16,10 @@ sequence_t *jmp_seq();
 sequence_t *q_not_seq();
 sequence_t *cq_not_seq();
 
+// Width-parameterized NOT operations (Phase 6)
+sequence_t *Q_not(int bits);
+sequence_t *cQ_not(int bits);
+
 sequence_t *and_seq();
 sequence_t *q_and_seq();
 sequence_t *cq_and_seq();

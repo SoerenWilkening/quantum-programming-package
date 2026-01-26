@@ -168,6 +168,104 @@ sequence_t *cq_not_seq() {
     return seq;
 }
 
+sequence_t *Q_not(int bits) {
+    // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
+    // Width-parameterized NOT: applies X gate to each bit (all in parallel, O(1) depth)
+    //
+    // Qubit layout for Q_not(bits):
+    // - Qubits [0, bits-1]: Target operand (inverted in place)
+
+    // Bounds check: valid widths are 1-64
+    if (bits < 1 || bits > 64) {
+        return NULL;
+    }
+
+    sequence_t *seq = malloc(sizeof(sequence_t));
+    if (seq == NULL) {
+        return NULL;
+    }
+
+    seq->num_layer = 1;
+    seq->used_layer = 1;
+    seq->gates_per_layer = calloc(1, sizeof(num_t));
+    if (seq->gates_per_layer == NULL) {
+        free(seq);
+        return NULL;
+    }
+    seq->seq = calloc(1, sizeof(gate_t *));
+    if (seq->seq == NULL) {
+        free(seq->gates_per_layer);
+        free(seq);
+        return NULL;
+    }
+    seq->seq[0] = calloc(bits, sizeof(gate_t));
+    if (seq->seq[0] == NULL) {
+        free(seq->seq);
+        free(seq->gates_per_layer);
+        free(seq);
+        return NULL;
+    }
+
+    seq->gates_per_layer[0] = bits;
+    for (int i = 0; i < bits; ++i) {
+        x(&seq->seq[0][i], i);
+    }
+
+    return seq;
+}
+
+sequence_t *cQ_not(int bits) {
+    // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
+    // Width-parameterized controlled NOT: applies CX gate to each bit (sequential, O(bits) depth)
+    //
+    // Qubit layout for cQ_not(bits):
+    // - Qubits [0, bits-1]: Target operand (inverted in place when control is |1>)
+    // - Qubit [bits]: Control qubit
+
+    // Bounds check: valid widths are 1-64
+    if (bits < 1 || bits > 64) {
+        return NULL;
+    }
+
+    sequence_t *seq = malloc(sizeof(sequence_t));
+    if (seq == NULL) {
+        return NULL;
+    }
+
+    seq->num_layer = bits;
+    seq->used_layer = bits;
+    seq->gates_per_layer = calloc(bits, sizeof(num_t));
+    if (seq->gates_per_layer == NULL) {
+        free(seq);
+        return NULL;
+    }
+    seq->seq = calloc(bits, sizeof(gate_t *));
+    if (seq->seq == NULL) {
+        free(seq->gates_per_layer);
+        free(seq);
+        return NULL;
+    }
+    for (int i = 0; i < bits; ++i) {
+        seq->seq[i] = calloc(1, sizeof(gate_t));
+        if (seq->seq[i] == NULL) {
+            for (int j = 0; j < i; ++j) {
+                free(seq->seq[j]);
+            }
+            free(seq->seq);
+            free(seq->gates_per_layer);
+            free(seq);
+            return NULL;
+        }
+    }
+
+    for (int i = 0; i < bits; ++i) {
+        seq->gates_per_layer[i] = 1;
+        cx(&seq->seq[i][0], i, bits);
+    }
+
+    return seq;
+}
+
 sequence_t *and_seq() {
     // classical and
     *(QPU_state->R0) = *(QPU_state->R1) & *(QPU_state->R2);
