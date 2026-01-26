@@ -189,10 +189,10 @@ cdef class qint(circuit):
 		if _controlled:
 			qubit_array[2 * INTEGERSIZE: 3 * INTEGERSIZE] = (<qbool> _control_bool).qubits
 			qubit_array[3 * INTEGERSIZE: 3 * INTEGERSIZE + NUMANCILLY] = ancilla
-			seq = cQQ_add()
+			seq = cQQ_add(self.bits)
 		else:
 			qubit_array[2 * INTEGERSIZE: 2 * INTEGERSIZE + NUMANCILLY] = ancilla
-			seq = QQ_add()
+			seq = QQ_add(self.bits)
 
 		arr = qubit_array
 		run_instruction(seq, &arr[0], invert, _circuit)
@@ -263,10 +263,10 @@ cdef class qint(circuit):
 			if _controlled:
 				qubit_array[2 * INTEGERSIZE: 3 * INTEGERSIZE] = (<qbool> _control_bool).qubits
 				qubit_array[3 * INTEGERSIZE: 3 * INTEGERSIZE + NUMANCILLY] = ancilla
-				seq = cQQ_add()
+				seq = cQQ_add(self.bits)
 			else:
 				qubit_array[2 * INTEGERSIZE: 2 * INTEGERSIZE + NUMANCILLY] = ancilla
-				seq = QQ_add()
+				seq = QQ_add(self.bits)
 
 			arr = qubit_array
 			run_instruction(seq, &arr[0], False, _circuit)
