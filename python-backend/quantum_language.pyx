@@ -69,6 +69,9 @@ cdef class qint(circuit):
 	def __init__(self, value = 0, bits = INTEGERSIZE, classical = False, create_new = True, bit_list = None):
 		global _controlled, _control_bool, _int_counter, _smallest_allocated_qubit, ancilla
 		global _num_qubits
+		cdef qubit_allocator_t *alloc
+		cdef unsigned int start
+
 		super().__init__()
 
 		if create_new:
@@ -82,11 +85,11 @@ cdef class qint(circuit):
 			self.qubits = np.ndarray(INTEGERSIZE, dtype = np.uint32)
 
 			# NEW: Allocate qubits through circuit's allocator
-			cdef qubit_allocator_t *alloc = circuit_get_allocator(_circuit)
+			alloc = circuit_get_allocator(<circuit_s*>_circuit)
 			if alloc == NULL:
 				raise RuntimeError("Circuit allocator not initialized")
 
-			cdef unsigned int start = allocator_alloc(alloc, bits, True)  # is_ancilla=True
+			start = allocator_alloc(alloc, bits, True)  # is_ancilla=True
 			if start == <unsigned int>-1:
 				raise MemoryError("Qubit allocation failed - limit exceeded")
 
@@ -112,9 +115,11 @@ cdef class qint(circuit):
 	def __del__(self):
 		global _controlled, _control_bool, _int_counter, _smallest_allocated_qubit, ancilla
 		global _num_qubits
+		cdef qubit_allocator_t *alloc
+
 		if self.allocated_qubits:
 			# NEW: Return qubits to allocator
-			cdef qubit_allocator_t *alloc = circuit_get_allocator(_circuit)
+			alloc = circuit_get_allocator(<circuit_s*>_circuit)
 			if alloc != NULL:
 				allocator_free(alloc, self.allocated_start, self.bits)
 
@@ -405,3 +410,31 @@ cdef class qbool(qint):
 
 	def __init__(self, value: bool = False, classical: bool = False, create_new = True, bit_list = None):
 		super().__init__(value, bits = 1, classical = classical, create_new = create_new, bit_list=bit_list)
+
+
+def circuit_stats():
+	"""Get qubit allocation statistics for the current circuit.
+
+	Returns:
+		dict with keys: peak_allocated, total_allocations, total_deallocations,
+		                current_in_use, ancilla_allocations
+		None if circuit not initialized
+	"""
+	cdef qubit_allocator_t *alloc
+	cdef allocator_stats_t stats
+
+	if not _circuit_initialized:
+		return None
+
+	alloc = circuit_get_allocator(<circuit_s*>_circuit)
+	if alloc == NULL:
+		return None
+
+	stats = allocator_get_stats(alloc)
+	return {
+		'peak_allocated': stats.peak_allocated,
+		'total_allocations': stats.total_allocations,
+		'total_deallocations': stats.total_deallocations,
+		'current_in_use': stats.current_in_use,
+		'ancilla_allocations': stats.ancilla_allocations
+	}
