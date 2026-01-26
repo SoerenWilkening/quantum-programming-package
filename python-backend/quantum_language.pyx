@@ -694,35 +694,122 @@ cdef class qint(circuit):
 		a = qbool(create_new = False, bit_list = bit_list)
 		return a
 
-	def __gt__(self, other):
-		global _smallest_allocated_qubit, ancilla
-		a = self[64 - self.bits]  # MSB is at index (64 - width)
-		self.addition_inplace(other, True)
-		c = qbool()
-		c = ~c
+	def __eq__(self, other):
+		"""Equality comparison: self == other
 
-		with a:
-			c = ~c
+		Uses optimized XOR-based circuit (O(n) gates).
+		Returns qbool result. Preserves input operands.
 
-		self.addition_inplace(other, False)
-		return c
+		Strategy: XOR all bits together, then check if result is zero.
+		If all bits are equal, XOR produces 0.
+		"""
+		global _controlled, _control_bool, qubit_array
+		cdef sequence_t *seq
+		cdef unsigned int[:] arr
+		cdef int comp_bits
+		cdef int self_offset, other_offset, temp_offset
 
-	def __ge__(self, other):
-		return self > other - 1
+		# Determine comparison width
+		if type(other) == int:
+			comp_bits = self.bits
+			other_qint = qint(other, width=comp_bits)
+		elif type(other) == qint:
+			comp_bits = max(self.bits, (<qint>other).bits)
+			other_qint = other
+		else:
+			raise TypeError("Comparison requires qint or int")
+
+		# XOR self and other into temp
+		# If self == other, temp will be all zeros
+		temp = self ^ other_qint
+
+		# Check if temp is all zeros
+		# Start with result = True (assume equal)
+		result = qbool(True)
+
+		# For each bit in temp, if any bit is 1, set result to False
+		# Use controlled NOT: if temp[i] is 1, flip result
+		for i in range(comp_bits):
+			bit_index = 64 - comp_bits + i
+			bit = temp[bit_index]
+			# Controlled NOT on result based on this bit
+			with bit:
+				result = ~result
+
+		return result
+
+	def __ne__(self, other):
+		"""Not-equal comparison: self != other"""
+		return ~(self == other)
 
 	def __lt__(self, other):
-		global _smallest_allocated_qubit, ancilla
-		a = self[64 - self.bits]  # MSB is at index (64 - width)
-		self.addition_inplace(other, True)
-		c = qbool()
-		with a:
-			c = ~c
+		"""Less-than comparison: self < other
 
-		self.addition_inplace(other, False)
-		return c
+		Returns qbool result. Preserves input operands.
+		Uses subtraction and MSB check.
+		"""
+		global _controlled, _control_bool, qubit_array
+		cdef sequence_t *seq
+		cdef unsigned int[:] arr
+		cdef int comp_bits
+		cdef int self_offset, other_offset, temp_offset
+
+		# Determine comparison width
+		if type(other) == int:
+			comp_bits = self.bits
+			other_qint = qint(other, width=comp_bits)
+		elif type(other) == qint:
+			comp_bits = max(self.bits, (<qint>other).bits)
+			other_qint = other
+		else:
+			raise TypeError("Comparison requires qint or int")
+
+		# Allocate ancilla for subtraction (temp = self - other)
+		temp = qint(0, width=comp_bits)
+
+		# Copy self to temp via XOR (since temp starts at 0)
+		temp ^= self
+
+		# Subtract other from temp (temp = self - other)
+		temp -= other_qint
+
+		# Extract MSB (sign bit) - if negative, self < other
+		# MSB is at index (64 - comp_bits) for right-aligned storage
+		msb = temp[64 - comp_bits]
+
+		# Result: if MSB=1 (negative), self < other is True
+		result = qbool()
+		result ^= msb  # Copy MSB to result
+
+		return result
+
+	def __gt__(self, other):
+		"""Greater-than comparison: self > other"""
+		# self > other is equivalent to other < self (swap operands)
+		# For int type, create qint and swap
+		if type(other) == int:
+			other_qint = qint(other, width=self.bits)
+			return other_qint < self
+		elif type(other) == qint:
+			return other < self
+		else:
+			raise TypeError("Comparison requires qint or int")
 
 	def __le__(self, other):
-		return self < other + 1
+		"""Less-than-or-equal comparison: self <= other"""
+		# self <= other is equivalent to NOT (other < self)
+		if type(other) == int:
+			other_qint = qint(other, width=self.bits)
+			return ~(other_qint < self)
+		elif type(other) == qint:
+			return ~(other < self)
+		else:
+			raise TypeError("Comparison requires qint or int")
+
+	def __ge__(self, other):
+		"""Greater-than-or-equal comparison: self >= other"""
+		# self >= other is equivalent to NOT (self < other)
+		return ~(self < other)
 
 
 
