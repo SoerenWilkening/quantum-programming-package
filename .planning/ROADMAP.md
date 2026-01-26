@@ -34,11 +34,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Valgrind and ASan are integrated into development workflow with automated runs
   3. Pre-commit hooks enforce code quality (Ruff linting) on every commit
   4. Developer can run memory tests locally without manual setup
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
-- [ ] 01-02: TBD
+- [ ] 01-01-PLAN.md - Test infrastructure setup (pytest + pre-commit hooks)
+- [ ] 01-02-PLAN.md - Python characterization tests (qint/qbool operations)
+- [ ] 01-03-PLAN.md - Memory testing integration (Makefile with Valgrind/ASan)
 
 ### Phase 2: C Layer Cleanup
 **Goal**: Eliminate global state and fix critical memory bugs in C backend
@@ -190,7 +191,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Testing Foundation | 0/0 | Not started | - |
+| 1. Testing Foundation | 0/3 | Planned | - |
 | 2. C Layer Cleanup | 0/0 | Not started | - |
 | 3. Memory Architecture | 0/0 | Not started | - |
 | 4. Module Separation | 0/0 | Not started | - |
