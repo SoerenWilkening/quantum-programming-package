@@ -249,7 +249,7 @@ cdef class qint(circuit):
 			run_instruction(seq, &arr[0], invert, _circuit)
 
 			return self
-		if type(other) != qint:
+		if not isinstance(other, qint):
 			raise ValueError()
 
 
@@ -1315,20 +1315,20 @@ cdef class qint_mod(qint):
 
 		return value
 
-	cdef _wrap_result(self, qint result):
+	cdef qint_mod _wrap_result(self, qint result):
 		"""Wrap plain qint result into qint_mod with same modulus."""
-		# Create new qint_mod without calling __init__ to avoid double allocation
-		wrapped = qint_mod.__new__(qint_mod)
+		# Create new qint_mod using existing qubits
+		cdef qint_mod wrapped = qint_mod.__new__(qint_mod)
 
-		# Copy qint state
-		wrapped.qubits = result.qubits
+		# Manually copy qint fields (avoiding __init__ which would allocate qubits)
+		wrapped.counter = result.counter
 		wrapped.bits = result.bits
 		wrapped.value = result.value
-		wrapped.counter = result.counter
+		wrapped.qubits = result.qubits
 		wrapped.allocated_qubits = result.allocated_qubits
 		wrapped.allocated_start = result.allocated_start
 
-		# Set modulus
+		# Set modulus (cdef attribute)
 		wrapped._modulus = self._modulus
 
 		return wrapped
@@ -1337,9 +1337,9 @@ cdef class qint_mod(qint):
 		"""Modular addition: (self + other) mod N."""
 		# Check modulus compatibility
 		if isinstance(other, qint_mod):
-			if other._modulus != self._modulus:
+			if (<qint_mod>other)._modulus != self._modulus:
 				raise ValueError(
-					f"Moduli must match: {self._modulus} != {other._modulus}"
+					f"Moduli must match: {self._modulus} != {(<qint_mod>other)._modulus}"
 				)
 
 		# Perform regular addition (using parent class)
@@ -1357,9 +1357,9 @@ cdef class qint_mod(qint):
 		Handles negative results by adding N.
 		"""
 		if isinstance(other, qint_mod):
-			if other._modulus != self._modulus:
+			if (<qint_mod>other)._modulus != self._modulus:
 				raise ValueError(
-					f"Moduli must match: {self._modulus} != {other._modulus}"
+					f"Moduli must match: {self._modulus} != {(<qint_mod>other)._modulus}"
 				)
 
 		# Perform regular subtraction
@@ -1379,9 +1379,9 @@ cdef class qint_mod(qint):
 	def __mul__(self, other):
 		"""Modular multiplication: (self * other) mod N."""
 		if isinstance(other, qint_mod):
-			if other._modulus != self._modulus:
+			if (<qint_mod>other)._modulus != self._modulus:
 				raise ValueError(
-					f"Moduli must match: {self._modulus} != {other._modulus}"
+					f"Moduli must match: {self._modulus} != {(<qint_mod>other)._modulus}"
 				)
 
 		# Perform regular multiplication
