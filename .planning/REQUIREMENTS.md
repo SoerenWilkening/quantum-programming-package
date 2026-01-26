@@ -14,9 +14,9 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **FOUND-03**: All sizeof() usage corrected (use sizeof(type) not sizeof(pointer))
 - [x] **FOUND-04**: All structure fields initialized before use
 - [x] **FOUND-05**: NULL checks after all malloc/calloc operations
-- [ ] **FOUND-06**: Qubit allocator centralizes qubit lifecycle management
-- [ ] **FOUND-07**: qint/qbool borrow qubits from circuit with tracked ownership
-- [ ] **FOUND-08**: Ancilla qubit allocation is trackable without significant performance overhead
+- [x] **FOUND-06**: Qubit allocator centralizes qubit lifecycle management
+- [x] **FOUND-07**: qint/qbool borrow qubits from circuit with tracked ownership
+- [x] **FOUND-08**: Ancilla qubit allocation is trackable without significant performance overhead
 
 ### Testing Infrastructure
 
