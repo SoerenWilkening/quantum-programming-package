@@ -53,10 +53,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Circuit Output
 
-- [ ] **CIRC-01**: Text-based circuit visualization for debugging
-- [ ] **CIRC-02**: Automatic gate merging optimization
-- [ ] **CIRC-03**: Inverse gate cancellation
-- [ ] **CIRC-04**: Circuit statistics (depth, gate count, qubit usage)
+- [x] **CIRC-01**: Text-based circuit visualization for debugging
+- [x] **CIRC-02**: Automatic gate merging optimization
+- [x] **CIRC-03**: Inverse gate cancellation
+- [x] **CIRC-04**: Circuit statistics (depth, gate count, qubit usage)
 
 ### Code Organization
 
@@ -144,10 +144,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BITOP-03 | Phase 6 | Complete |
 | BITOP-04 | Phase 6 | Complete |
 | BITOP-05 | Phase 6 | Complete |
-| CIRC-01 | Phase 8 | Pending |
-| CIRC-02 | Phase 8 | Pending |
-| CIRC-03 | Phase 8 | Pending |
-| CIRC-04 | Phase 8 | Pending |
+| CIRC-01 | Phase 8 | Complete |
+| CIRC-02 | Phase 8 | Complete |
+| CIRC-03 | Phase 8 | Complete |
+| CIRC-04 | Phase 8 | Complete |
 | CODE-01 | Phase 4 | Complete |
 | CODE-02 | Phase 4 | Complete |
 | CODE-03 | Phase 4 | Complete |
@@ -165,4 +165,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-26 after Phase 7 completion*
+*Last updated: 2026-01-26 after Phase 8 completion*
