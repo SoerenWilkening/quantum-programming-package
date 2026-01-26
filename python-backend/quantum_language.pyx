@@ -453,11 +453,13 @@ cdef class qint(circuit):
 
 	def __iand__(self, other):
 		"""In-place AND: a &= b. Allocates result, swaps qubit references."""
+		cdef qint result_qint
 		result = self & other
-		# Swap qubit arrays (Python-level swap)
-		self.qubits, result.qubits = result.qubits, self.qubits
-		self.allocated_start, result.allocated_start = result.allocated_start, self.allocated_start
-		self.bits = result.bits
+		result_qint = <qint>result
+		# Swap qubit arrays using cdef access
+		self.qubits, result_qint.qubits = result_qint.qubits, self.qubits
+		self.allocated_start, result_qint.allocated_start = result_qint.allocated_start, self.allocated_start
+		self.bits = result_qint.bits
 		return self
 
 	def __rand__(self, other):
@@ -523,11 +525,13 @@ cdef class qint(circuit):
 
 	def __ior__(self, other):
 		"""In-place OR: a |= b. Allocates result, swaps qubit references."""
+		cdef qint result_qint
 		result = self | other
-		# Swap qubit arrays (Python-level swap)
-		self.qubits, result.qubits = result.qubits, self.qubits
-		self.allocated_start, result.allocated_start = result.allocated_start, self.allocated_start
-		self.bits = result.bits
+		result_qint = <qint>result
+		# Swap qubit arrays using cdef access
+		self.qubits, result_qint.qubits = result_qint.qubits, self.qubits
+		self.allocated_start, result_qint.allocated_start = result_qint.allocated_start, self.allocated_start
+		self.bits = result_qint.bits
 		return self
 
 	def __ror__(self, other):
