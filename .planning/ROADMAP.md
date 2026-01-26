@@ -51,11 +51,12 @@ Plans:
   3. All sizeof() usage is corrected (use sizeof(type) not sizeof(pointer))
   4. All structure fields are initialized before use (no uninitialized memory reads)
   5. NULL checks exist after all malloc/calloc operations with proper error handling
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: TBD
-- [ ] 02-02: TBD
+- [ ] 02-01-PLAN.md - Fix sizeof() bugs and uninitialized sequence structures
+- [ ] 02-02-PLAN.md - Add NULL checks after all malloc/calloc operations
+- [ ] 02-03-PLAN.md - Eliminate global state and document memory ownership
 
 ### Phase 3: Memory Architecture
 **Goal**: Centralize qubit lifecycle management and establish clear ownership between circuit and quantum types
@@ -187,12 +188,12 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Testing Foundation | 3/3 | ✓ Complete | 2026-01-26 |
-| 2. C Layer Cleanup | 0/0 | Not started | - |
+| 1. Testing Foundation | 3/3 | Complete | 2026-01-26 |
+| 2. C Layer Cleanup | 0/3 | Planned | - |
 | 3. Memory Architecture | 0/0 | Not started | - |
 | 4. Module Separation | 0/0 | Not started | - |
 | 5. Variable-Width Integers | 0/0 | Not started | - |
