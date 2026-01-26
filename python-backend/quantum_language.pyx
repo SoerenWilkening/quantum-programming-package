@@ -327,69 +327,148 @@ cdef class qint(circuit):
 
 			start = 0
 
-			# Multiplication layout: ret (accumulator) at position 0, self at position bits
+			# Determine result width (must match ret's width)
+			result_bits = (<qint>ret).bits
+
+			# Multiplication layout: ret (accumulator) at position 0, self at position result_bits
 			# Extract only used qubits (right-aligned in 64-element array)
 			self_offset = 64 - self.bits
-			ret_offset = 64 - (<qint>ret).bits
+			ret_offset = 64 - result_bits
 
 			# ret qubits at position 0
-			qubit_array[:self.bits] = (<qint>ret).qubits[ret_offset:64]
-			# self qubits at position bits
-			qubit_array[self.bits: 2 * self.bits] = self.qubits[self_offset:64]
-			start = 2 * self.bits
+			qubit_array[:result_bits] = (<qint>ret).qubits[ret_offset:64]
+			# self qubits at position result_bits
+			qubit_array[result_bits: result_bits + self.bits] = self.qubits[self_offset:64]
+			start = result_bits + self.bits
 
 			if type(other) == int:
-				# value is a classical integer
+				# Classical-quantum multiplication
 				if _controlled:
 					# Control qubit from qbool (last element)
 					qubit_array[start: start + 1] = (<qbool> _control_bool).qubits[63:64]
 					qubit_array[start + 1: start + 1 + NUMANCILLY] = ancilla
-					seq = cCQ_mul(self.bits, other)
+					seq = cCQ_mul(result_bits, other)  # Pass bits parameter
 				else:
 					qubit_array[start: start + NUMANCILLY] = ancilla
-					seq = CQ_mul(self.bits, other)
+					seq = CQ_mul(result_bits, other)  # Pass bits parameter
 
 				arr = qubit_array
 				run_instruction(seq, &arr[0], False, _circuit)
-
 				return ret
 
 			if type(other) != qint:
-				raise ValueError()
+				raise TypeError("Multiplication requires qint or int")
 
-			# Quantum-quantum multiplication - determine result width
+			# Quantum-quantum multiplication
 			other_bits = (<qint> other).bits
-			result_bits = max(self.bits, other_bits)
 			other_offset = 64 - other_bits
 
-			# other qubits at position 2*bits
+			# other qubits at position start
 			qubit_array[start: start + other_bits] = (<qint> other).qubits[other_offset:64]
 			start += other_bits
 
-			# value is a quantum integer
-
 			if _controlled:
-				# Control qubit from qbool (last element)
 				qubit_array[start: start + 1] = (<qbool> _control_bool).qubits[63:64]
 				qubit_array[start + 1: start + 1 + NUMANCILLY] = ancilla
-				seq = cQQ_add(result_bits)
+				seq = cQQ_mul(result_bits)  # Pass bits parameter
 			else:
 				qubit_array[start: start + NUMANCILLY] = ancilla
-				seq = QQ_add(result_bits)
+				seq = QQ_mul(result_bits)  # Pass bits parameter
 
 			arr = qubit_array
 			run_instruction(seq, &arr[0], False, _circuit)
-			return self
+			return ret
 
 	def __mul__(self, other):
-		a = qint(bits = self.bits)
-		self.multiplication_inplace(other, a)
-		return a
+		"""Multiply quantum integers.
+
+		Result width is max(self.width, other.width) per CONTEXT.md.
+		Overflow wraps silently (modular arithmetic).
+
+		Args:
+			other: qint or int to multiply by
+
+		Returns:
+			New qint containing product
+
+		Examples:
+			>>> a = qint(3, width=8)
+			>>> b = qint(4, width=16)
+			>>> c = a * b
+			>>> c.width
+			16
+		"""
+		# Determine result width
+		if type(other) == int:
+			result_width = self.bits
+		elif type(other) == qint:
+			result_width = max(self.bits, (<qint>other).bits)
+		else:
+			raise TypeError("Multiplication requires qint or int")
+
+		# Allocate result with correct width
+		result = qint(width=result_width)
+
+		# Perform multiplication into result
+		self.multiplication_inplace(other, result)
+
+		return result
 
 	def __rmul__(self, other):
-		a = qint(bits = self.bits)
-		self.multiplication_inplace(other, a)
-		return a
+		"""Reverse multiplication: other * self (for int * qint).
+
+		Args:
+			other: int to multiply by (qint * qint uses __mul__)
+
+		Returns:
+			New qint containing product
+
+		Examples:
+			>>> a = qint(5, width=8)
+			>>> b = 3 * a  # Uses __rmul__
+			>>> b.width
+			8
+		"""
+		# For int * qint, result width is qint's width
+		if type(other) == int:
+			result_width = self.bits
+		else:
+			# qint * qint should use __mul__, not __rmul__
+			result_width = max(self.bits, (<qint>other).bits)
+
+		result = qint(width=result_width)
+		self.multiplication_inplace(other, result)
+		return result
+
+	def __imul__(self, other):
+		"""In-place multiplication: self *= other
+
+		Note: Due to quantum mechanics, in-place multiplication allocates
+		new qubits for the result and swaps qubit references.
+
+		Args:
+			other: qint or int to multiply by
+
+		Returns:
+			self (with swapped qubit references)
+
+		Examples:
+			>>> a = qint(3, width=8)
+			>>> a *= 4
+			>>> # a now references new qubits containing 3*4
+		"""
+		# Perform out-of-place multiplication
+		result = self * other
+
+		# Swap qubit arrays (like __iand__ pattern from Phase 6)
+		cdef qint result_qint = <qint>result
+
+		# Swap qubit references
+		self.qubits, result_qint.qubits = result_qint.qubits, self.qubits
+		self.allocated_start, result_qint.allocated_start = result_qint.allocated_start, self.allocated_start
+		self.bits = result_qint.bits
+
+		return self
 
 	def measure(self):
 		return self.value
