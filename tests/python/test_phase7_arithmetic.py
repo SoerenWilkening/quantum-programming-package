@@ -29,9 +29,6 @@ import quantum_language as ql  # noqa: E402
 class TestVariableWidthMultiplication:
     """Tests for ARTH-03: Multiplication works for any integer size."""
 
-    @pytest.mark.skip(
-        reason="Quantum-quantum multiplication segfaults - C-layer QQ_mul bug (see 07-03-SUMMARY.md)"
-    )
     @pytest.mark.parametrize("width", [1, 2, 4, 8, 16, 32])
     def test_multiplication_at_width(self, width):
         """Multiplication works for various widths."""
@@ -42,9 +39,6 @@ class TestVariableWidthMultiplication:
         assert isinstance(c, ql.qint)
         assert c.width == width
 
-    @pytest.mark.skip(
-        reason="Quantum-quantum multiplication segfaults - C-layer QQ_mul bug (see 07-03-SUMMARY.md)"
-    )
     def test_multiplication_mixed_widths(self):
         """8-bit * 16-bit produces 16-bit result."""
         a = ql.qint(3, width=8)
@@ -238,9 +232,6 @@ class TestModularArithmetic:
         assert isinstance(z, ql.qint_mod)
         assert z.modulus == 17
 
-    @pytest.mark.skip(
-        reason="Modular multiplication uses QQ_mul which segfaults (see 07-03-SUMMARY.md)"
-    )
     def test_qint_mod_mul(self):
         """Modular multiplication works."""
         x = ql.qint_mod(5, N=17)
@@ -282,9 +273,6 @@ class TestModularArithmetic:
 class TestPhase7SuccessCriteria:
     """Tests mapping to Phase 7 success criteria from ROADMAP.md."""
 
-    @pytest.mark.skip(
-        reason="Quantum-quantum multiplication segfaults - C-layer QQ_mul bug (see 07-03-SUMMARY.md)"
-    )
     def test_criterion_1_multiplication_any_size(self):
         """SC1: Multiplication works for any integer size."""
         for width in [1, 8, 16, 32]:
@@ -319,14 +307,14 @@ class TestPhase7SuccessCriteria:
         y = ql.qint_mod(10, N=17)
         _ = x + y
         _ = x - y
-        # Skip multiplication - uses QQ_mul which segfaults
+        _ = x * y  # Modular multiplication now works
 
     def test_criterion_5_optimized_circuits(self):
         """SC5: Arithmetic generates circuits (implicit - no timeout)."""
         # Large operations should complete in reasonable time
         a = ql.qint(100, width=16)
         b = ql.qint(50, width=16)
-        # Skip a * b - uses QQ_mul which segfaults
+        _ = a * b  # Quantum-quantum multiplication now works
         _ = a > b  # Should not timeout
 
 
@@ -344,7 +332,7 @@ class TestBackwardCompatibility:
         b = ql.qint(3, width=8)
         _ = a + b
         _ = a - b
-        # Skip a * b - uses QQ_mul which segfaults
+        _ = a * b  # Quantum-quantum multiplication now works
 
     def test_qbool_still_works(self):
         """qbool operations still work."""

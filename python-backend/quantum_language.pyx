@@ -359,7 +359,7 @@ cdef class qint(circuit):
 				run_instruction(seq, &arr[0], False, _circuit)
 				return ret
 
-			if type(other) != qint:
+			if not isinstance(other, qint):
 				raise TypeError("Multiplication requires qint or int")
 
 			# Quantum-quantum multiplication
@@ -405,10 +405,10 @@ cdef class qint(circuit):
 			16
 		"""
 		# Determine result width
-		if type(other) == int:
-			result_width = self.bits
-		elif type(other) == qint:
+		if isinstance(other, qint):  # Includes qint subclasses like qint_mod
 			result_width = max(self.bits, (<qint>other).bits)
+		elif type(other) == int:
+			result_width = self.bits
 		else:
 			raise TypeError("Multiplication requires qint or int")
 
