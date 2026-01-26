@@ -64,6 +64,7 @@ cdef class qint(circuit):
 	cdef int value
 	cdef object qubits
 	cdef bint allocated_qubits
+	cdef unsigned int allocated_start  # Starting qubit index from allocator
 
 	def __init__(self, value = 0, bits = INTEGERSIZE, classical = False, create_new = True, bit_list = None):
 		global _controlled, _control_bool, _int_counter, _smallest_allocated_qubit, ancilla
@@ -79,12 +80,27 @@ cdef class qint(circuit):
 			_num_qubits += bits
 
 			self.qubits = np.ndarray(INTEGERSIZE, dtype = np.uint32)
-			for i in range(bits):
-				self.qubits[INTEGERSIZE - bits + i] = _smallest_allocated_qubit + i
 
+			# NEW: Allocate qubits through circuit's allocator
+			cdef qubit_allocator_t *alloc = circuit_get_allocator(_circuit)
+			if alloc == NULL:
+				raise RuntimeError("Circuit allocator not initialized")
+
+			cdef unsigned int start = allocator_alloc(alloc, bits, True)  # is_ancilla=True
+			if start == <unsigned int>-1:
+				raise MemoryError("Qubit allocation failed - limit exceeded")
+
+			for i in range(bits):
+				self.qubits[INTEGERSIZE - bits + i] = start + i
+
+			self.allocated_start = start  # Track for deallocation
+			self.allocated_qubits = True
+
+			# Keep backward compat tracking (deprecated, remove later)
+			# Note: _smallest_allocated_qubit and ancilla numpy array still updated
+			# for any code that might still use them
 			_smallest_allocated_qubit += bits
 			ancilla += bits
-			self.allocated_qubits = True
 		else:
 			self.bits = bits
 			self.qubits = bit_list
@@ -97,6 +113,12 @@ cdef class qint(circuit):
 		global _controlled, _control_bool, _int_counter, _smallest_allocated_qubit, ancilla
 		global _num_qubits
 		if self.allocated_qubits:
+			# NEW: Return qubits to allocator
+			cdef qubit_allocator_t *alloc = circuit_get_allocator(_circuit)
+			if alloc != NULL:
+				allocator_free(alloc, self.allocated_start, self.bits)
+
+			# Keep backward compat tracking (deprecated)
 			_smallest_allocated_qubit -= self.bits
 			ancilla -= self.bits
 
