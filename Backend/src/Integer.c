@@ -2,11 +2,13 @@
 // Created by Sören Wilkening on 26.10.24.
 //
 #include "QPU.h"
+#include "qubit_allocator.h"
 #include <stdint.h>
 
 quantum_int_t *QBOOL(circuit_t *circ) {
-    // OWNERSHIP: Caller owns returned quantum_int_t*, must free when done
-    if (circ == NULL) {
+    // OWNERSHIP: Caller owns returned quantum_int_t*, must call free_element() when done
+    // Qubits are borrowed from circuit's allocator
+    if (circ == NULL || circ->allocator == NULL) {
         return NULL;
     }
     quantum_int_t *integer = malloc(sizeof(quantum_int_t));
@@ -14,17 +16,36 @@ quantum_int_t *QBOOL(circuit_t *circ) {
         return NULL;
     }
 
-    integer->MSB = INTEGERSIZE - 1;
-    integer->q_address[INTEGERSIZE - 1] = circ->used_qubit_indices;
+    // Allocate 1 qubit through circuit's allocator (is_ancilla=true for QBOOL)
+    qubit_t start = allocator_alloc(circ->allocator, 1, true);
+    if (start == (qubit_t)-1) {
+        free(integer);
+        return NULL; // Allocation failed (hit limit)
+    }
 
+    integer->MSB = INTEGERSIZE - 1;
+    integer->q_address[INTEGERSIZE - 1] = start;
+
+#ifdef DEBUG_OWNERSHIP
+    // Track ownership for debugging
+    static int qbool_counter = 0;
+    char tag[32];
+    snprintf(tag, sizeof(tag), "qbool_%d", ++qbool_counter);
+    allocator_set_owner(circ->allocator, start, tag);
+#endif
+
+    // Keep backward compat tracking (remove in later phase)
+    // IMPORTANT: Match existing pattern - increment both by 1 for QBOOL
     circ->ancilla += 1;
     circ->used_qubit_indices += 1;
+
     return integer;
 }
 
 quantum_int_t *QINT(circuit_t *circ) {
-    // OWNERSHIP: Caller owns returned quantum_int_t*, must free when done
-    if (circ == NULL) {
+    // OWNERSHIP: Caller owns returned quantum_int_t*, must call free_element() when done
+    // Qubits are borrowed from circuit's allocator
+    if (circ == NULL || circ->allocator == NULL) {
         return NULL;
     }
     quantum_int_t *integer = malloc(sizeof(quantum_int_t));
@@ -32,13 +53,35 @@ quantum_int_t *QINT(circuit_t *circ) {
         return NULL;
     }
 
-    integer->MSB = 0;
-    circ->ancilla += INTEGERSIZE;
-
-    for (int i = 0; i < INTEGERSIZE; ++i) {
-        integer->q_address[i] = circ->used_qubit_indices;
-        circ->used_qubit_indices++;
+    // Allocate INTEGERSIZE qubits through circuit's allocator (is_ancilla=true for QINT ancillas)
+    qubit_t start = allocator_alloc(circ->allocator, INTEGERSIZE, true);
+    if (start == (qubit_t)-1) {
+        free(integer);
+        return NULL; // Allocation failed (hit limit)
     }
+
+    integer->MSB = 0;
+    for (int i = 0; i < INTEGERSIZE; ++i) {
+        integer->q_address[i] = start + i;
+    }
+
+#ifdef DEBUG_OWNERSHIP
+    static int qint_counter = 0;
+    char tag[32];
+    snprintf(tag, sizeof(tag), "qint_%d", ++qint_counter);
+    for (int i = 0; i < INTEGERSIZE; ++i) {
+        allocator_set_owner(circ->allocator, start + i, tag);
+    }
+#endif
+
+    // Keep backward compat tracking (remove in later phase)
+    // IMPORTANT: Match existing pattern - ancilla += INTEGERSIZE, used_qubit_indices increments per
+    // loop
+    circ->ancilla += INTEGERSIZE;
+    // Note: existing code does used_qubit_indices++ inside the loop (INTEGERSIZE times)
+    // We replicate that effect here:
+    circ->used_qubit_indices += INTEGERSIZE;
+
     return integer;
 }
 
@@ -88,12 +131,28 @@ int *two_complement(int64_t x, int n) {
 }
 
 void free_element(circuit_t *circ, quantum_int_t *el1) {
-    // OWNERSHIP: Frees the quantum_int_t, updates circuit tracking
+    // OWNERSHIP: Frees the quantum_int_t, returns qubits to circuit's allocator
     if (circ == NULL || el1 == NULL) {
         return;
     }
+
+    // Determine width based on MSB (QBOOL has MSB=INTEGERSIZE-1, QINT has MSB=0)
+    int width = (el1->MSB == INTEGERSIZE - 1) ? 1 : INTEGERSIZE;
+    qubit_t start = el1->q_address[el1->MSB];
+
+    // Return qubits to allocator
+    if (circ->allocator != NULL) {
+        allocator_free(circ->allocator, start, width);
+    }
+
+    // Keep backward compat tracking (remove in later phase)
+    // IMPORTANT: The EXISTING code decrements both by 1 regardless of width!
+    // This appears to be a bug in the original code, but we maintain it for now
+    // to avoid behavioral changes during this migration.
+    // TODO(Phase 3): Fix this when removing backward compat tracking
     circ->ancilla--;
     circ->used_qubit_indices--;
+
     free(el1);
 }
 

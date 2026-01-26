@@ -12,6 +12,9 @@
 
 int *two_complement(int64_t x, int n);
 
+// Quantum integer allocation/deallocation (uses circuit's qubit allocator)
+// OWNERSHIP: Returned quantum_int_t* must be freed with free_element()
+// Qubits are borrowed from circuit and tracked through allocator
 quantum_int_t *QBOOL(circuit_t *circ);
 quantum_int_t *QINT(circuit_t *circ);
 quantum_int_t *INT(int64_t intg);
