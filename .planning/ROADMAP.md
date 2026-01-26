@@ -84,11 +84,13 @@ Plans:
   3. QPU.c responsibilities are separated into focused modules (no god object)
   4. Clear dependency graph exists between modules with minimal coupling
   5. Module interfaces are stable and well-documented
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md - Create types.h and reorganize header dependencies
+- [ ] 04-02-PLAN.md - Extract optimizer module and eliminate global state
+- [ ] 04-03-PLAN.md - Create circuit.h API and rename circuit_output.c
+- [ ] 04-04-PLAN.md - Document dependencies and verify phase completion
 
 ### Phase 5: Variable-Width Integers
 **Goal**: Enable arbitrary bit-width quantum integers with dynamic allocation
