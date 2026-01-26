@@ -1,5 +1,6 @@
 from libc.stdlib cimport free, malloc, calloc
 from libc.string cimport memcpy
+from libc.stdint cimport int64_t
 
 # cdef int INTEGERSIZE = 64
 
@@ -33,6 +34,16 @@ cdef extern from "LogicOperations.h":
 	sequence_t *cq_not_seq();
 
 	sequence_t *qq_or_seq();
+
+	# Width-parameterized bitwise operations (Phase 6)
+	sequence_t *Q_not(int bits)
+	sequence_t *cQ_not(int bits)
+	sequence_t *Q_xor(int bits)
+	sequence_t *cQ_xor(int bits)
+	sequence_t *Q_and(int bits)
+	sequence_t *CQ_and(int bits, int64_t value)
+	sequence_t *Q_or(int bits)
+	sequence_t *CQ_or(int bits, int64_t value)
 
 
 cdef extern from "QPU.h":
