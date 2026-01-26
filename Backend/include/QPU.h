@@ -1,5 +1,6 @@
 //
-// Created by Sören Wilkening on 05.11.24.
+// QPU.h - Circuit management and gate adding
+// Dependencies: types.h, gate.h, qubit_allocator.h
 //
 
 #ifndef CQ_BACKEND_IMPROVED_QPU_H
@@ -7,6 +8,7 @@
 
 #include "gate.h"
 #include "qubit_allocator.h"
+#include "types.h"
 
 // functionality to store the circuit structure
 // ========================================================================

@@ -1,12 +1,12 @@
 //
-// Created by Claude (Anthropic) on 26.01.26.
+// qubit_allocator.h - Centralized qubit allocation
+// Dependencies: types.h
 //
 
 #ifndef QUBIT_ALLOCATOR_H
 #define QUBIT_ALLOCATOR_H
 
-#include "definition.h"
-#include <stdbool.h>
+#include "types.h"
 
 // Hard-coded maximum to prevent runaway allocation
 #define ALLOCATOR_MAX_QUBITS 8192
