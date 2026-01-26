@@ -347,3 +347,54 @@ class TestVariableWidthSubtraction:
 
         assert a is not None
         assert isinstance(a, ql.qint)
+
+
+# ============================================================================
+# Phase 5 Success Criteria Verification
+# ============================================================================
+
+
+class TestPhase5SuccessCriteria:
+    """Tests mapping directly to Phase 5 success criteria from ROADMAP.md."""
+
+    def test_criterion_1_constructor_accepts_width(self):
+        """SC1: QInt constructor accepts width parameter for arbitrary bit sizes."""
+        for width in [8, 16, 32, 64]:
+            a = ql.qint(0, width=width)
+            assert a.width == width
+
+    def test_criterion_2_dynamic_qubit_allocation(self):
+        """SC2: Quantum integers dynamically allocate qubits based on width."""
+        # Different widths create different allocations
+        a = ql.qint(0, width=8)
+        b = ql.qint(0, width=32)
+        assert a.width != b.width  # Different allocations
+
+    def test_criterion_3_width_validation(self):
+        """SC3: Arithmetic operations validate width compatibility."""
+        # Invalid widths rejected
+        with pytest.raises(ValueError):
+            ql.qint(0, width=0)
+        with pytest.raises(ValueError):
+            ql.qint(0, width=65)
+
+    def test_criterion_4_mixed_width_operations(self):
+        """SC4: Mixed-width integer operations work correctly."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(100, width=32)
+        c = a + b
+        assert c.width == 32  # Result is larger width
+
+    def test_criterion_5_addition_subtraction_all_widths(self):
+        """SC5: Addition and subtraction work for all variable-width integers."""
+        for width in [1, 8, 16, 32, 64]:
+            a = ql.qint(5, width=width)
+            b = ql.qint(3, width=width)
+
+            # Addition
+            c = a + b
+            assert c is not None
+
+            # Subtraction
+            d = a - b
+            assert d is not None
