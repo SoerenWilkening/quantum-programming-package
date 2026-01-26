@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-25)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Phase 6 COMPLETE - Ready for Phase 7
+**Current focus:** Phase 7 COMPLETE - Ready for Phase 8
 
 ## Current Position
 
-Phase: 7 of 10 (Extended Arithmetic) - IN PROGRESS
-Plan: 4 of 5 in current phase - COMPLETE
-Status: In progress
-Last activity: 2026-01-26 - Completed 07-04-PLAN.md: Division and modulo operators
+Phase: 7 of 10 (Extended Arithmetic) - COMPLETE
+Plan: 6 of 6 in current phase - COMPLETE (gap closure)
+Status: Phase complete
+Last activity: 2026-01-26 - Completed 07-06-PLAN.md: QQ_mul gap closure
 
-Progress: [████████░░] 92%
+Progress: [█████████░] 95%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 24
-- Average duration: 5.6 min
-- Total execution time: 2.2 hours
+- Total plans completed: 25
+- Average duration: 5.9 min
+- Total execution time: 2.4 hours
 
 **By Phase:**
 
@@ -33,11 +33,11 @@ Progress: [████████░░] 92%
 | 04 - Module Separation | 4 | 15 min | 3.8 min |
 | 05 - Variable-Width Integers | 4 | 28 min | 7 min |
 | 06 - Bitwise Operations | 4 | 23 min | 5.75 min |
-| 07 - Extended Arithmetic | 4 | 29 min | 7.25 min |
+| 07 - Extended Arithmetic | 6 | 41 min | 6.8 min |
 
 **Recent Trend:**
-- Last 5 plans: 07-02 (3 min), 07-01 (8 min), 07-03 (11 min), 07-04 (7 min)
-- Trend: Python-level operators faster than C-layer refactoring
+- Last 5 plans: 07-03 (11 min), 07-04 (7 min), 07-05 (N/A), 07-06 (12 min)
+- Trend: Bug fixes require more investigation time
 
 *Updated after each plan completion*
 
@@ -123,7 +123,7 @@ Recent decisions affecting current work:
 - cQQ_mul(int bits) and cCQ_mul(int bits, int64_t value): Controlled multiplication with bits (07-01)
 - precompiled_*_mul_width[65] caches: Index 0 unused, 1-64 valid for width-specific caching (07-01)
 - Helper functions accept bits parameter: CP_sequence, CX_sequence, all_rot, etc. (07-01)
-- XOR-based equality check: O(n) gates vs O(n²) subtraction-based (07-02)
+- XOR-based equality check: O(n) gates vs O(n^2) subtraction-based (07-02)
 - Ancilla for comparison temp storage: preserve input operands during comparison (07-02)
 - C comparison stubs for Phase 7: full C implementation deferred to Phase 8 (07-02)
 - Derived comparisons: __gt__ = other < self, __le__ = NOT (other < self) (07-02)
@@ -136,6 +136,8 @@ Recent decisions affecting current work:
 - Quantum divisor repeated subtraction: O(quotient) circuit size, known limitation per arXiv:1809.09732 (07-04)
 - Use addition instead of OR for quotient updates: Controlled addition works, controlled OR not implemented (07-04)
 - ZeroDivisionError before circuit generation: Classical divisor zero check at Python level (07-04)
+- MAXLAYERINSEQUENCE for QQ_mul layer allocation: Original formula bits*(2*bits+6)-1 underestimates (07-06)
+- isinstance() for qint type checks: Supports subclasses like qint_mod in multiplication (07-06)
 
 ### Pending Todos
 
@@ -143,32 +145,20 @@ None yet.
 
 ### Blockers/Concerns
 
-**Critical Path Dependencies:**
-- Phase 7 Plan 01 COMPLETE - Variable-width multiplication (C-layer)
-- Phase 7 Plan 02 COMPLETE - Comparison operators (Python-level)
-- Phase 7 Plan 03 COMPLETE WITH BLOCKER - Python multiplication operators (QQ_mul C-layer bug blocks qint * qint)
-- Phase 7 Plan 04 COMPLETE - Division and modulo operators (Python-level)
-- Next: Plan 05 (Modular Arithmetic, Test Suite)
-
-**KNOWN BLOCKER (NOT AFFECTING CURRENT WORK):**
-- QQ_mul C-layer function causes segmentation fault
-- Quantum-quantum multiplication (qint * qint) non-functional
-- Classical-quantum multiplication (qint * int) works correctly
-- Root cause appears to be in C-layer QFT-based multiplication, not Python bindings
-- Impact: Plan 07-04 division does NOT use multiplication (uses subtraction only)
-- Phase 07-05 modular arithmetic may use multiplication for modular reduction
-- Recommendation: Debug QQ_mul before implementing advanced modular operations
+**RESOLVED:**
+- QQ_mul C-layer segfault - FIXED in 07-06 by using MAXLAYERINSEQUENCE for layer allocation
+- qint_mod multiplication type check - FIXED in 07-06 by using isinstance()
 
 **Research Flags:**
 - Phase 6: Medium priority - quantum bit shift/rotate circuits
-- Phase 7: High priority - QFT-based arithmetic and modular operations
+- Phase 8: Advanced quantum operations (Grover, Shor components)
 
 **Current Concerns:**
 - Virtual environment symlinks point to macOS paths, need proper venv setup for local development (01-01, 01-02)
 - Existing codebase has 65+ Ruff violations (bare except, tabs vs spaces) that need cleanup (01-01)
 - IntegerComparison.c uses conservative +10 buffer for layer allocation - may need precise calculation in future (02-01)
-- Circuit complexity scales quadratically with width for multiplication: bits * (2*bits + 6) - 1 layers (07-01)
-- All 213 tests pass with variable-width arithmetic and comprehensive test coverage (125 + 88 Phase 6)
+- Circuit complexity scales quadratically with width for multiplication: MAXLAYERINSEQUENCE (10000) used (07-06)
+- Running 250+ tests in sequence may cause resource exhaustion abort - individual test files pass
 
 ### Quick Tasks Completed
 
@@ -179,65 +169,42 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 07-04-PLAN.md - Division and modulo operators (Phase 7 Plan 4)
+Stopped at: Completed 07-06-PLAN.md - QQ_mul gap closure (Phase 7 COMPLETE)
 Resume file: None
-Note: QQ_mul C-layer blocker does not affect division (uses subtraction only)
+Note: Phase 7 fully complete with all success criteria verified
 
 ## Phase 7 Summary
 
-**IN PROGRESS**
+**COMPLETE**
 
 - **Plan 01:** Variable-width multiplication (C-layer) - COMPLETE
 - **Plan 02:** Comparison operators (Python-level) - COMPLETE
-- **Plan 03:** Python multiplication operators - COMPLETE (WITH BLOCKER)
+- **Plan 03:** Python multiplication operators - COMPLETE
 - **Plan 04:** Division and modulo operators - COMPLETE
-- **Plan 05:** Modular arithmetic and tests - TODO
+- **Plan 05:** Modular arithmetic and tests - COMPLETE
+- **Plan 06:** QQ_mul gap closure - COMPLETE
 
-**Plan 01 Achievements:**
-- QFT-based multiplication refactored to accept 1-64 bit widths
-- Width-parameterized caching via precompiled_*_mul_width[65] arrays
-- All four multiplication variants accept bits parameter: QQ_mul(bits), CQ_mul(bits, value), cQQ_mul(bits), cCQ_mul(bits, value)
-- Bounds checking prevents invalid widths (bits < 1 or bits > 64)
-- All helper functions updated to accept bits parameter
-- Python bindings updated for new signatures
-- Backward compatibility maintained via legacy globals
+**Plan 06 Achievements (Gap Closure):**
+- Fixed QQ_mul segfault by using MAXLAYERINSEQUENCE (10000) instead of formula
+- Root cause: bits*(2*bits+6)-1 formula underestimates actual layer usage
+- Fixed qint_mod multiplication type check using isinstance()
+- Re-enabled 9 previously skipped tests
+- All Phase 7 success criteria now verified
 
-**Plan 02 Achievements:**
-- XOR-based equality check (__eq__) with O(n) gate complexity
-- Subtraction-based less-than (__lt__) with MSB sign check
-- Derived __gt__, __le__, __ge__, __ne__ from __lt__ and __eq__
-- All comparison operators return qbool (1-bit qint)
-- Input operands preserved via ancilla allocation
-- IntegerComparison.c stub functions compile successfully
+**All Phase 7 Success Criteria Met:**
+1. Multiplication works for any integer size (qint * qint, qint * int)
+2. Comparisons work for variable-width integers (<, >, ==, <=, >=, !=)
+3. Division and modulo operations implemented (//, %, divmod)
+4. Modular arithmetic implemented (qint_mod with +, -, *)
+5. Arithmetic generates optimized circuits (no timeout for 16-bit operations)
 
-**Plan 03 Achievements:**
-- Python __mul__, __rmul__, __imul__ operators updated to call width-parameterized C functions
-- Result width = max(operand widths) following established pattern
-- Classical-quantum multiplication working (qint * int, int * qint)
-- NULL checks added for circuit generation failures
-- Fixed bug: old code was calling QQ_add instead of QQ_mul for qint * qint
+**Test Results:**
+- Phase 7 test suite: 38 passed, 2 skipped (performance tests)
+- Core + Phase 7 tests: 97 passed, 2 skipped
+- All QQ_mul tests pass (no longer skipped)
 
-**BLOCKER IDENTIFIED (NOT AFFECTING DIVISION):**
-- QQ_mul C-layer function causes segmentation fault
-- Quantum-quantum multiplication (qint * qint) non-functional
-- Root cause in C-layer QFT-based multiplication (not Python bindings)
-- Phase 07-01 only tested CQ_mul (classical multiplication), not QQ_mul
-- QQ_mul may never have been tested/working in this codebase
-
-**Plan 04 Achievements:**
-- Floor division (__floordiv__) via restoring division algorithm
-- Modulo (__mod__) computing remainder efficiently
-- Divmod (__divmod__) returning (quotient, remainder) tuple in single pass
-- Reverse operators (__rfloordiv__, __rmod__, __rdivmod__) for int // qint
-- Classical divisor: O(n) bit-level algorithm
-- Quantum divisor: O(quotient) repeated subtraction
-- ZeroDivisionError before circuit generation
-- Fixed bug: use addition instead of OR for controlled quotient updates
-- All existing tests pass (except pre-existing QQ_mul segfault)
-
-**Next Steps:**
-- Plan 05: Modular arithmetic (qint_mod type) and test suite
-- QQ_mul blocker may affect modular multiplication if needed
+**Next Phase:**
+- Phase 8: Advanced Quantum Operations
 
 ## Phase 6 Summary
 
@@ -268,4 +235,4 @@ Note: QQ_mul C-layer blocker does not affect division (uses subtraction only)
 4. Circuit depth is reasonable for supported widths
 
 **Next Phase:**
-- Phase 7: Comparison Operations
+- Phase 7: Comparison Operations (COMPLETE)
