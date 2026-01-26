@@ -113,12 +113,19 @@ cdef class qint(circuit):
 			self.value = value
 
 			# Warn if value exceeds width (two's complement range)
+			# Note: For 1-bit (qbool), treat as unsigned [0,1] for clarity
 			if value != 0:
-				max_positive = (1 << (actual_width - 1)) - 1
-				min_negative = -(1 << (actual_width - 1))
-				if value > max_positive or value < min_negative:
+				if actual_width == 1:
+					# Single bit: unsigned range [0, 1]
+					max_value = 1
+					min_value = 0
+				else:
+					# Multi-bit: signed range
+					max_value = (1 << (actual_width - 1)) - 1
+					min_value = -(1 << (actual_width - 1))
+				if value > max_value or value < min_value:
 					warnings.warn(
-						f"Value {value} exceeds {actual_width}-bit signed range [{min_negative}, {max_positive}]. "
+						f"Value {value} exceeds {actual_width}-bit range [{min_value}, {max_value}]. "
 						f"Value will wrap (modular arithmetic).",
 						UserWarning
 					)
@@ -215,19 +222,24 @@ cdef class qint(circuit):
 		cdef unsigned int[:] arr
 		cdef int result_bits
 		cdef int other_bits
+		cdef int self_offset
+		cdef int other_offset
 
 		start = 0
 
-		# Copy self qubits (right-aligned in 64-element array)
-		qubit_array[:64] = self.qubits
-		start += 64
+		# Extract only the used qubits (right-aligned in 64-element array)
+		# self.qubits[64-self.bits:64] contains the actual qubit indices
+		self_offset = 64 - self.bits
+		qubit_array[:self.bits] = self.qubits[self_offset:64]
+		start += self.bits
 
 		if type(other) == int:
 			# value is a classical integer
 			QPU_state[0].R0[0] = other
 			if _controlled:
-				qubit_array[start: start + 64] = (<qbool> _control_bool).qubits
-				qubit_array[start + 64: start + 64 + NUMANCILLY] = ancilla
+				# Control qubit from qbool (last element)
+				qubit_array[start: start + 1] = (<qbool> _control_bool).qubits[63:64]
+				qubit_array[start + 1: start + 1 + NUMANCILLY] = ancilla
 				seq = cCQ_add(self.bits)
 			else:
 				qubit_array[start: start + NUMANCILLY] = ancilla
@@ -245,17 +257,20 @@ cdef class qint(circuit):
 		# other type is qint as well - determine result width
 		other_bits = (<qint> other).bits
 		result_bits = max(self.bits, other_bits)
+		other_offset = 64 - other_bits
 
-		qubit_array[start: start + 64] = (<qint> other).qubits
-		start += 64
+		# Extract used qubits from other
+		qubit_array[start: start + other_bits] = (<qint> other).qubits[other_offset:64]
+		start += other_bits
 
 
 		if _controlled:
-			qubit_array[2 * 64: 3 * 64] = (<qbool> _control_bool).qubits
-			qubit_array[3 * 64: 3 * 64 + NUMANCILLY] = ancilla
+			# Control qubit from qbool (last element)
+			qubit_array[start: start + 1] = (<qbool> _control_bool).qubits[63:64]
+			qubit_array[start + 1: start + 1 + NUMANCILLY] = ancilla
 			seq = cQQ_add(result_bits)
 		else:
-			qubit_array[2 * 64: 2 * 64 + NUMANCILLY] = ancilla
+			qubit_array[start: start + NUMANCILLY] = ancilla
 			seq = QQ_add(result_bits)
 
 		arr = qubit_array
@@ -307,22 +322,33 @@ cdef class qint(circuit):
 			cdef unsigned int[:] arr
 			cdef int result_bits
 			cdef int other_bits
+			cdef int self_offset
+			cdef int ret_offset
+			cdef int other_offset
 
 			start = 0
 
-			qubit_array[64: 2 * 64] = self.qubits
-			start += 64
+			# Multiplication layout: ret (accumulator) at position 0, self at position bits
+			# Extract only used qubits (right-aligned in 64-element array)
+			self_offset = 64 - self.bits
+			ret_offset = 64 - (<qint>ret).bits
+
+			# ret qubits at position 0
+			qubit_array[:self.bits] = (<qint>ret).qubits[ret_offset:64]
+			# self qubits at position bits
+			qubit_array[self.bits: 2 * self.bits] = self.qubits[self_offset:64]
+			start = 2 * self.bits
 
 			if type(other) == int:
 				# value is a classical integer
 				QPU_state[0].R0[0] = other
-				qubit_array[: 64] = (<qint> ret).qubits
 				if _controlled:
-					qubit_array[2 * 64: 3 * 64] = (<qbool> _control_bool).qubits
-					qubit_array[3 * 64: 3 * 64 + NUMANCILLY] = ancilla
+					# Control qubit from qbool (last element)
+					qubit_array[start: start + 1] = (<qbool> _control_bool).qubits[63:64]
+					qubit_array[start + 1: start + 1 + NUMANCILLY] = ancilla
 					seq = cCQ_mul()
 				else:
-					qubit_array[2 * 64: 2 * 64 + NUMANCILLY] = ancilla
+					qubit_array[start: start + NUMANCILLY] = ancilla
 					seq = CQ_mul()
 
 				arr = qubit_array
@@ -336,18 +362,21 @@ cdef class qint(circuit):
 			# Quantum-quantum multiplication - determine result width
 			other_bits = (<qint> other).bits
 			result_bits = max(self.bits, other_bits)
+			other_offset = 64 - other_bits
 
-			qubit_array[start + 64: start + 2 * 64] = (<qint> other).qubits
-			start += 64
+			# other qubits at position 2*bits
+			qubit_array[start: start + other_bits] = (<qint> other).qubits[other_offset:64]
+			start += other_bits
 
 			# value is a quantum integer
 
 			if _controlled:
-				qubit_array[2 * 64: 3 * 64] = (<qbool> _control_bool).qubits
-				qubit_array[3 * 64: 3 * 64 + NUMANCILLY] = ancilla
+				# Control qubit from qbool (last element)
+				qubit_array[start: start + 1] = (<qbool> _control_bool).qubits[63:64]
+				qubit_array[start + 1: start + 1 + NUMANCILLY] = ancilla
 				seq = cQQ_add(result_bits)
 			else:
-				qubit_array[2 * 64: 2 * 64 + NUMANCILLY] = ancilla
+				qubit_array[start: start + NUMANCILLY] = ancilla
 				seq = QQ_add(result_bits)
 
 			arr = qubit_array
@@ -368,9 +397,11 @@ cdef class qint(circuit):
 		cdef sequence_t *seq;
 		cdef unsigned int[:] arr
 
-		qubit_array[: 64] = (<qbool> ret).qubits
-		qubit_array[64: 2 * 64] = self.qubits
-		qubit_array[2 * 64: 3 * 64] = (<qbool> other).qubits
+		# Logic operations use INTEGERSIZE layout - qubits at position INTEGERSIZE-1
+		# For qbool (width=1), the qubit is at self.qubits[63] (last element)
+		qubit_array[INTEGERSIZE - 1] = (<qbool> ret).qubits[63]
+		qubit_array[2 * INTEGERSIZE - 1] = self.qubits[63]
+		qubit_array[3 * INTEGERSIZE - 1] = (<qbool> other).qubits[63]
 
 		seq = qq_and_seq()
 
@@ -400,9 +431,11 @@ cdef class qint(circuit):
 		cdef sequence_t *seq;
 		cdef unsigned int[:] arr
 
-		qubit_array[: 64] = a.qubits
-		qubit_array[64: 2 * 64] = self.qubits
-		qubit_array[2 * 64: 3 * 64] = (<qbool> other).qubits
+		# Logic operations use INTEGERSIZE layout - qubits at position INTEGERSIZE-1
+		# For qbool (width=1), the qubit is at self.qubits[63] (last element)
+		qubit_array[INTEGERSIZE - 1] = a.qubits[63]
+		qubit_array[2 * INTEGERSIZE - 1] = self.qubits[63]
+		qubit_array[3 * INTEGERSIZE - 1] = (<qbool> other).qubits[63]
 
 		seq = qq_or_seq()
 
@@ -434,12 +467,14 @@ cdef class qint(circuit):
 		cdef sequence_t *seq
 		cdef unsigned int[:] arr
 
+		# Logic operations use INTEGERSIZE layout - qubit at position INTEGERSIZE-1
+		# For qbool (width=1), the qubit is at self.qubits[63] (last element)
 		if _controlled:
-			qubit_array[64: 2 * 64] = (<qbool> _control_bool).qubits
-			qubit_array[: 64] = self.qubits
+			qubit_array[2 * INTEGERSIZE - 1] = (<qbool> _control_bool).qubits[63]
+			qubit_array[INTEGERSIZE - 1] = self.qubits[63]
 			seq = cq_not_seq()
 		else:
-			qubit_array[: 64] = self.qubits
+			qubit_array[INTEGERSIZE - 1] = self.qubits[63]
 			seq = q_not_seq()
 
 		arr = qubit_array
@@ -489,9 +524,20 @@ cdef class qint(circuit):
 
 
 cdef class qbool(qint):
+	"""Quantum boolean - a 1-bit quantum integer.
+
+	qbool is syntactic sugar for qint with width=1. All qint operations
+	apply to qbool, with single-bit semantics.
+
+	Examples:
+		>>> b = qbool(True)
+		>>> b.width
+		1
+		>>> c = qbool()  # False by default
+	"""
 
 	def __init__(self, value: bool = False, classical: bool = False, create_new = True, bit_list = None):
-		super().__init__(value, bits = 1, classical = classical, create_new = create_new, bit_list=bit_list)
+		super().__init__(value, width=1, classical=classical, create_new=create_new, bit_list=bit_list)
 
 
 def circuit_stats():
