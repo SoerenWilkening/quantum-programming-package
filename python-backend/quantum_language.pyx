@@ -12,10 +12,10 @@ QUANTUM = 0
 CLASSICAL = 1
 
 cdef circuit_t *_circuit
-cdef bool _circuit_initialized = False
+cdef bint _circuit_initialized = False
 cdef int _num_qubits = 0
 
-cdef bool _controlled = False
+cdef bint _controlled = False
 cdef object _control_bool = None
 cdef int _int_counter = 0
 cdef object list_of_constrols = []
@@ -63,7 +63,7 @@ cdef class qint(circuit):
 	cdef int bits
 	cdef int value
 	cdef object qubits
-	cdef bool allocated_qubits
+	cdef bint allocated_qubits
 
 	def __init__(self, value = 0, bits = INTEGERSIZE, classical = False, create_new = True, bit_list = None):
 		global _controlled, _control_bool, _int_counter, _smallest_allocated_qubit, ancilla
