@@ -1072,6 +1072,88 @@ cdef class qint(circuit):
 
 		return remainder
 
+	def __divmod__(self, divisor):
+		"""Return (quotient, remainder) tuple: divmod(self, divisor)
+
+		More efficient than calling // and % separately since it computes
+		both in a single pass through the division algorithm.
+
+		Args:
+			divisor: int or qint divisor
+
+		Returns:
+			tuple (quotient, remainder) where both are qint
+
+		Raises:
+			ZeroDivisionError: If divisor is zero (classical only)
+			TypeError: If divisor is not int or qint
+		"""
+		# Classical divisor case
+		if type(divisor) == int:
+			if divisor == 0:
+				raise ZeroDivisionError("Divmod by zero")
+			if divisor < 0:
+				raise NotImplementedError("Negative divisor not yet supported")
+
+			# Allocate quotient and remainder
+			quotient = qint(0, width=self.bits)
+			remainder = qint(0, width=self.bits)
+
+			# Copy self to remainder via XOR
+			remainder ^= self
+
+			# Restoring division: compute both quotient and remainder
+			for bit_pos in range(self.bits - 1, -1, -1):
+				trial_value = divisor << bit_pos
+
+				# Check if remainder >= trial_value
+				can_subtract = remainder >= trial_value
+
+				# Conditional subtraction and quotient bit set
+				with can_subtract:
+					remainder -= trial_value
+					quotient |= (1 << bit_pos)
+
+			return (quotient, remainder)
+
+		elif type(divisor) == qint:
+			# Quantum divisor - compute both
+			return self._divmod_quantum(divisor)
+		else:
+			raise TypeError("Divisor must be int or qint")
+
+	def _divmod_quantum(self, divisor: qint):
+		"""Divmod with quantum divisor: divmod(self, divisor)
+
+		Args:
+			divisor: qint divisor
+
+		Returns:
+			tuple (quotient, remainder) where both are qint
+		"""
+		cdef int comp_bits = max(self.bits, (<qint>divisor).bits)
+
+		# Allocate quotient and remainder
+		quotient = qint(0, width=comp_bits)
+		remainder = qint(0, width=comp_bits)
+
+		# Copy self to remainder via XOR
+		remainder ^= self
+
+		# Repeated conditional subtraction (compute both quotient and remainder)
+		max_iterations = (1 << comp_bits)
+
+		for _ in range(max_iterations):
+			# Check if remainder >= divisor
+			can_subtract = remainder >= divisor
+
+			# Conditional subtraction and increment
+			with can_subtract:
+				remainder -= divisor
+				quotient += 1
+
+		return (quotient, remainder)
+
 
 
 cdef class qbool(qint):
