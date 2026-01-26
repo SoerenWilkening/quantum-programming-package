@@ -352,6 +352,9 @@ cdef class qint(circuit):
 					qubit_array[start: start + NUMANCILLY] = ancilla
 					seq = CQ_mul(result_bits, other)  # Pass bits parameter
 
+				if seq == NULL:
+					raise RuntimeError(f"Multiplication circuit generation failed for width {result_bits}")
+
 				arr = qubit_array
 				run_instruction(seq, &arr[0], False, _circuit)
 				return ret
@@ -374,6 +377,9 @@ cdef class qint(circuit):
 			else:
 				qubit_array[start: start + NUMANCILLY] = ancilla
 				seq = QQ_mul(result_bits)  # Pass bits parameter
+
+			if seq == NULL:
+				raise RuntimeError(f"Multiplication circuit generation failed for width {result_bits}")
 
 			arr = qubit_array
 			run_instruction(seq, &arr[0], False, _circuit)
