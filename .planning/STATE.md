@@ -10,17 +10,17 @@ See: .planning/PROJECT.md (updated 2026-01-25)
 ## Current Position
 
 Phase: 8 of 10 (Circuit Optimization)
-Plan: 3 of 5 in current phase - COMPLETE
+Plan: 2 of 5 in current phase - COMPLETE
 Status: In progress
-Last activity: 2026-01-26 - Completed 08-03-PLAN.md: Circuit visualization enhancement
+Last activity: 2026-01-26 - Completed 08-02-PLAN.md: Python circuit statistics API
 
 Progress: [█████████░] 97%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 27
-- Average duration: 5.6 min
+- Total plans completed: 28
+- Average duration: 5.5 min
 - Total execution time: 2.5 hours
 
 **By Phase:**
@@ -34,11 +34,11 @@ Progress: [█████████░] 97%
 | 05 - Variable-Width Integers | 4 | 28 min | 7 min |
 | 06 - Bitwise Operations | 4 | 23 min | 5.75 min |
 | 07 - Extended Arithmetic | 6 | 41 min | 6.8 min |
-| 08 - Circuit Optimization | 3 | 9 min | 3 min |
+| 08 - Circuit Optimization | 2 | 7 min | 3.5 min |
 
 **Recent Trend:**
-- Last 5 plans: 07-06 (12 min), 08-01 (4 min), 08-03 (5 min)
-- Trend: Module creation is fast, bug fixes require more investigation
+- Last 5 plans: 08-01 (4 min), 08-02 (3 min)
+- Trend: API binding tasks execute quickly, C-layer implementations vary
 
 *Updated after each plan completion*
 
@@ -143,6 +143,9 @@ Recent decisions affecting current work:
 - Gate type classification by control count: X with 0 controls = X, 1 control = CX, 2+ controls = CCX (08-01)
 - NULL safety in statistics functions: Return zero/empty for NULL circuit pointer (08-01)
 - circuit_stats.h included in circuit.h: Follows same pattern as circuit_output.h for API convenience (08-01)
+- Statistics exposed as @property methods: circuit.gate_count, circuit.depth, circuit.qubit_count, circuit.gate_counts (08-02)
+- gate_counts returns dict with keys X, Y, Z, H, P, CNOT, CCX, other: Matches C gate_counts_t struct fields (08-02)
+- circuit_s* cast pattern in Cython: Matches forward declaration from qubit_allocator usage (08-02)
 
 ### Pending Todos
 
@@ -174,9 +177,9 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 08-03-PLAN.md - Circuit visualization enhancement
+Stopped at: Completed 08-02-PLAN.md - Python circuit statistics API
 Resume file: None
-Note: Phase 8 in progress (3 of 5 plans complete)
+Note: Phase 8 in progress (2 of 5 plans complete)
 
 ## Phase 7 Summary
 
