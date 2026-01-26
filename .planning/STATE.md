@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-25)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Phase 4: Module Separation
+**Current focus:** Phase 5: Variable-Width Integers
 
 ## Current Position
 
-Phase: 4 of 10 (Module Separation)
-Plan: 4 of 4 in current phase
-Status: Phase complete
-Last activity: 2026-01-26 - Completed 04-04-PLAN.md (Module separation verification)
+Phase: 5 of 10 (Variable-Width Integers)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-01-26 - Completed 05-01-PLAN.md (Width field and QINT update)
 
-Progress: [████░░░░░░] 42%
+Progress: [████░░░░░░] 45%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 13
-- Average duration: 5.1 min
-- Total execution time: 1.1 hours
+- Total plans completed: 14
+- Average duration: 5.0 min
+- Total execution time: 1.2 hours
 
 **By Phase:**
 
@@ -31,10 +31,11 @@ Progress: [████░░░░░░] 42%
 | 02 - C Layer Cleanup | 3 | 18 min | 6 min |
 | 03 - Memory Architecture | 3 | 22 min | 7.3 min |
 | 04 - Module Separation | 4 | 15 min | 3.8 min |
+| 05 - Variable-Width Integers | 1 | 4 min | 4 min |
 
 **Recent Trend:**
-- Last 5 plans: 04-01 (3 min), 04-02 (5 min), 04-03 (4 min), 04-04 (3 min)
-- Trend: Phase 4 complete with excellent 3.8 min average - fastest phase yet
+- Last 5 plans: 04-02 (5 min), 04-03 (4 min), 04-04 (3 min), 05-01 (4 min)
+- Trend: Phase 5 started with excellent 4 min first plan
 
 *Updated after each plan completion*
 
@@ -85,6 +86,11 @@ Recent decisions affecting current work:
 - module_deps.md as comprehensive dependency documentation: Includes ASCII graph, line counts, responsibilities, and historical context (04-04)
 - No .pxd changes needed for Cython: QPU.h backward compatibility wrapper sufficient for module separation (04-04)
 - Verification includes full test suite: 59 tests confirm module separation doesn't break functionality (04-04)
+- Right-aligned q_address array layout: indices [64-width] through [63] stores qubits for variable-width integers (05-01)
+- Width stored as unsigned char: Supports 1-64 bit widths efficiently (05-01)
+- QBOOL as QINT(circ, 1) wrapper: Single allocation code path, reduced complexity (05-01)
+- MSB field kept for backward compat: Now points to first used element (64-width) (05-01)
+- QINT_DEFAULT macro: Backward compatibility for C code calling QINT(circ) (05-01)
 
 ### Pending Todos
 
@@ -93,7 +99,8 @@ None yet.
 ### Blockers/Concerns
 
 **Critical Path Dependencies:**
-- Phase 3 enables both Phase 4 (Module Separation) and Phase 5 (Variable-Width Integers)
+- Phase 5 plan 01 complete - width metadata foundation established
+- Phase 5 plans 02-03 ready (width-aware arithmetic, Python bindings)
 - Phase 5 and Phase 6 can run in parallel
 
 **Research Flags:**
@@ -104,36 +111,27 @@ None yet.
 **Current Concerns:**
 - Virtual environment symlinks point to macOS paths, need proper venv setup for local development (01-01, 01-02)
 - Existing codebase has 65+ Ruff violations (bare except, tabs vs spaces) that need cleanup (01-01)
-- Fixed critical C compilation issues in Integer.c and QPU.c (missing stdint.h) (01-02)
+- Fixed critical C compilation issues in Integer.c and QPU.c (missing stdint.h) (01-02, 05-01)
 - IntegerComparison.c uses conservative +10 buffer for layer allocation - may need precise calculation in future (02-01)
-- Phase 4 complete - Module separation achieved with 6 focused modules, documented dependency graph, and zero circular dependencies
-- QPU.c reduced from 201-line god object to 18 lines (only global instruction state)
-- All 59 tests pass with new modular structure
-- Cython bindings work without modification via QPU.h backward compatibility wrapper
-- Ready for Phase 5 (Variable-Width Integers) and Phase 6 (Advanced Arithmetic)
+- All 59 tests pass with variable-width integer foundation
 
 ## Session Continuity
 
 Last session: 2026-01-26
-Stopped at: Completed 04-04-PLAN.md - Phase 4 (Module Separation) complete with verified architecture
+Stopped at: Completed 05-01-PLAN.md - Width field and QINT update complete
 Resume file: None
 
-## Phase 4 Completion Summary
+## Phase 5 Progress
 
-**Module Separation Complete** - QPU god object eliminated, 6 focused modules established
+**Plan 01 Complete** - Width metadata foundation established
 
-**Architecture:**
-- types.h (84 lines) - Foundation with zero dependencies
-- gate.c (442 lines) - Gate creation and manipulation
-- circuit_allocations.c (360 lines) - Circuit lifecycle
-- qubit_allocator.c (252 lines) - Qubit management
-- circuit_output.c (224 lines) - Visualization and QASM export
-- optimizer.c (208 lines) - Layer assignment and gate merging
-- QPU.c (18 lines) - Only global instruction state
+**What was built:**
+- quantum_int_t extended with `unsigned char width` field
+- QINT(circ, width) accepts 1-64 bit widths
+- QBOOL simplified to QINT(circ, 1)
+- free_element uses stored width for correct deallocation
+- Right-aligned q_address layout: [64-width] through [63]
 
-**Key Achievements:**
-- Acyclic dependency graph documented in module_deps.md
-- All 59 tests pass with new structure
-- Cython bindings compatible via QPU.h backward compatibility wrapper
-- Clean module boundaries with single responsibilities
-- Ready for Phase 5 development
+**Next steps:**
+- 05-02: Width-aware arithmetic operations
+- 05-03: Python bindings update for variable-width support
