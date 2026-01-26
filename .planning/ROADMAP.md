@@ -157,11 +157,14 @@ Plans:
   3. Inverse gate cancellation eliminates redundant operations
   4. Circuit statistics (depth, gate count, qubit usage) are available programmatically
   5. Optimization passes can be enabled/disabled independently
-**Plans**: TBD
+**Plans**: 5 plans
 
 Plans:
-- [ ] 08-01: TBD
-- [ ] 08-02: TBD
+- [ ] 08-01-PLAN.md - Circuit statistics C-layer module (wave 1)
+- [ ] 08-02-PLAN.md - Python statistics API with properties (wave 2)
+- [ ] 08-03-PLAN.md - Enhanced text-based circuit visualization (wave 1)
+- [ ] 08-04-PLAN.md - Circuit optimization passes in C layer (wave 2)
+- [ ] 08-05-PLAN.md - Python optimization API and phase tests (wave 3)
 
 ### Phase 9: Code Organization
 **Goal**: Reorganize arithmetic, comparison, and logic operations into category-based modules
@@ -209,6 +212,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 5. Variable-Width Integers | 4/4 | Complete | 2026-01-26 |
 | 6. Bit Operations | 4/4 | Complete | 2026-01-26 |
 | 7. Extended Arithmetic | 6/6 | Complete | 2026-01-26 |
-| 8. Circuit Optimization | 0/0 | Not started | - |
+| 8. Circuit Optimization | 0/5 | Planned | - |
 | 9. Code Organization | 0/0 | Not started | - |
 | 10. Documentation and API Polish | 0/0 | Not started | - |
