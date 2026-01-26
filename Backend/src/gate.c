@@ -197,20 +197,26 @@ void ccx(gate_t *g, qubit_t target, qubit_t control1, qubit_t control2) {
 }
 
 sequence_t *cx_gate() {
-    sequence_t *seq = malloc(sizeof(sequence_t *));
+    sequence_t *seq = malloc(sizeof(sequence_t));
 
     seq->used_layer = 1;
     seq->num_layer = 1;
+    seq->gates_per_layer = calloc(1, sizeof(num_t));
+    seq->seq = calloc(1, sizeof(gate_t *));
+    seq->seq[0] = calloc(1, sizeof(gate_t));
     seq->gates_per_layer[0] = 1;
     cx(&seq->seq[0][0], INTEGERSIZE - 1, 2 * INTEGERSIZE - 1);
 
     return seq;
 }
 sequence_t *ccx_gate() {
-    sequence_t *seq = malloc(sizeof(sequence_t *));
+    sequence_t *seq = malloc(sizeof(sequence_t));
 
     seq->used_layer = 1;
     seq->num_layer = 1;
+    seq->gates_per_layer = calloc(1, sizeof(num_t));
+    seq->seq = calloc(1, sizeof(gate_t *));
+    seq->seq[0] = calloc(1, sizeof(gate_t));
     seq->gates_per_layer[0] = 1;
     ccx(&seq->seq[0][0], INTEGERSIZE - 1, 2 * INTEGERSIZE - 1, 3 * INTEGERSIZE - 1);
 

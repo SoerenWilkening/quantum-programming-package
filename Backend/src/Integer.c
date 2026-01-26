@@ -29,13 +29,13 @@ quantum_int_t *QINT() {
 }
 
 quantum_int_t *INT(int64_t intg) {
-    quantum_int_t *integer = malloc(sizeof(integer));
+    quantum_int_t *integer = malloc(sizeof(quantum_int_t));
     //    integer->c_address = malloc(sizeof(int64_t));
     //    *integer->c_address = intg;
     return integer;
 }
 quantum_int_t *BOOL(bool intg) {
-    quantum_int_t *integer = malloc(sizeof(integer));
+    quantum_int_t *integer = malloc(sizeof(quantum_int_t));
     //    integer->c_address = malloc(sizeof(int64_t));
     //    *integer->c_address = intg;
     return integer;
@@ -72,6 +72,9 @@ sequence_t *setting_seq() {
     seq = malloc(sizeof(sequence_t));
     seq->used_layer = 1;
     seq->num_layer = 1;
+    seq->gates_per_layer = calloc(1, sizeof(num_t));
+    seq->seq = calloc(1, sizeof(gate_t *));
+    seq->seq[0] = calloc(INTEGERSIZE, sizeof(gate_t));
     seq->gates_per_layer[0] = 0;
     for (int i = QPU_state->Q0->MSB; i < INTEGERSIZE; ++i) {
         if (bin[i])
