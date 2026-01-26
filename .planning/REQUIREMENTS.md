@@ -28,15 +28,15 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Variable-Width Integers
 
-- [ ] **VINT-01**: QInt constructor accepts width parameter for arbitrary bit sizes
-- [ ] **VINT-02**: Dynamic allocation based on width parameter
-- [ ] **VINT-03**: Width validation in arithmetic operations
-- [ ] **VINT-04**: Mixed-width integer operations handled correctly
+- [x] **VINT-01**: QInt constructor accepts width parameter for arbitrary bit sizes
+- [x] **VINT-02**: Dynamic allocation based on width parameter
+- [x] **VINT-03**: Width validation in arithmetic operations
+- [x] **VINT-04**: Mixed-width integer operations handled correctly
 
 ### Arithmetic Operations
 
-- [ ] **ARTH-01**: Addition works for variable-width integers
-- [ ] **ARTH-02**: Subtraction works for variable-width integers
+- [x] **ARTH-01**: Addition works for variable-width integers
+- [x] **ARTH-02**: Subtraction works for variable-width integers
 - [ ] **ARTH-03**: Multiplication works for any integer size (not just fixed)
 - [ ] **ARTH-04**: Comparisons (>, <, ==, >=, <=) work for variable-width integers
 - [ ] **ARTH-05**: Division operation implemented
@@ -128,12 +128,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TEST-03 | Phase 10 | Pending |
 | TEST-04 | Phase 1 | Complete |
 | TEST-05 | Phase 1 | Complete |
-| VINT-01 | Phase 5 | Pending |
-| VINT-02 | Phase 5 | Pending |
-| VINT-03 | Phase 5 | Pending |
-| VINT-04 | Phase 5 | Pending |
-| ARTH-01 | Phase 5 | Pending |
-| ARTH-02 | Phase 5 | Pending |
+| VINT-01 | Phase 5 | Complete |
+| VINT-02 | Phase 5 | Complete |
+| VINT-03 | Phase 5 | Complete |
+| VINT-04 | Phase 5 | Complete |
+| ARTH-01 | Phase 5 | Complete |
+| ARTH-02 | Phase 5 | Complete |
 | ARTH-03 | Phase 7 | Pending |
 | ARTH-04 | Phase 7 | Pending |
 | ARTH-05 | Phase 7 | Pending |
@@ -165,4 +165,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-25*
-*Last updated: 2026-01-26 after Phase 4 completion*
+*Last updated: 2026-01-26 after Phase 5 completion*
