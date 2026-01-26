@@ -55,4 +55,27 @@ cdef extern from "execution.h":
 	void qubit_mapping(unsigned int qubit_arrray[], circuit_t *circ);
 	void run_instruction(sequence_t *res, const unsigned int qubit_array[], int invert, circuit_t *circ);
 
+cdef extern from "qubit_allocator.h":
+	ctypedef struct allocator_stats_t:
+		unsigned int peak_allocated
+		unsigned int total_allocations
+		unsigned int total_deallocations
+		unsigned int current_in_use
+		unsigned int ancilla_allocations
+
+	ctypedef struct qubit_allocator_t:
+		allocator_stats_t stats
+		# Other fields are internal, we only need stats access
+
+	qubit_allocator_t *allocator_create(unsigned int initial_capacity)
+	void allocator_destroy(qubit_allocator_t *alloc)
+	unsigned int allocator_alloc(qubit_allocator_t *alloc, unsigned int count, bint is_ancilla)
+	int allocator_free(qubit_allocator_t *alloc, unsigned int start, unsigned int count)
+	allocator_stats_t allocator_get_stats(qubit_allocator_t *alloc)
+
+	# Accessor function to get allocator from opaque circuit_t
+	# This is the key - we can't access circ->allocator directly from Cython
+	# because circuit_t is declared as opaque (just 'pass')
+	qubit_allocator_t *circuit_get_allocator(circuit_t *circ)
+
 
