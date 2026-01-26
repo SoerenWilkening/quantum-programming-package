@@ -1,0 +1,30 @@
+[project]
+name = "quantum-assembly"
+version = "0.1.0"
+requires-python = ">=3.11"
+description = "Quantum programming framework with natural programming style"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# E: pycodestyle errors
+# F: pyflakes
+# W: pycodestyle warnings
+# I: isort (import sorting)
+# B: bugbear (common bugs)
+# C4: comprehensions
+# UP: pyupgrade (modern Python idioms)
+select = ["E", "F", "W", "I", "B", "C4", "UP"]
+ignore = ["E501"]  # line length handled by line-length setting
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+# Indent with spaces
+indent-style = "space"
+# Respect magic trailing comma
+skip-magic-trailing-comma = false
+# Auto-detect line ending
+line-ending = "auto"
