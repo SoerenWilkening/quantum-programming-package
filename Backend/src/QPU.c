@@ -1,18 +1,17 @@
 //
-// QPU.c - Global instruction state for sequence generation
+// QPU.c - Backward compatibility module
 //
-// Gate optimization moved to optimizer.c (Phase 4)
-// Circuit allocation is in circuit_allocations.c
+// Global instruction state removed (Phase 11).
+// Gate operations moved to optimizer.c (Phase 4).
+// Circuit allocation is in circuit_allocations.c.
+// Sequence generation functions now take explicit parameters.
 //
-// This file now contains only the global instruction state needed by
-// sequence generation functions (CQ_add, CC_mul, etc. in IntegerAddition.c, etc.)
+// This file is kept for backward compatibility only.
+// New code should use circuit.h API directly.
 //
 
 #include "QPU.h"
 
-// Global instruction state for sequence generation
-// Used by IntegerAddition.c, IntegerMultiplication.c, IntegerComparison.c, LogicOperations.c
-// TODO(Phase 5+): Refactor sequence generation to accept parameters instead of using globals
-instruction_t instruction_list[MAXINSTRUCTIONS];
-instruction_t *QPU_state = &instruction_list[0];
-int instruction_counter = 0;
+// Global state removed (Phase 11) - all functions now use explicit parameters
+// instruction_list[], QPU_state, and instruction_counter were removed
+// because sequence generation functions no longer depend on global state.
