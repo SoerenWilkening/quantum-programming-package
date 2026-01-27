@@ -14,11 +14,8 @@ sequence_t *precompiled_cCQ_add[64] = {NULL};
 sequence_t *precompiled_QQ_add_width[65] = {NULL};
 sequence_t *precompiled_cQQ_add_width[65] = {NULL};
 
-sequence_t *CC_add() {
-    // OWNERSHIP: No sequence returned (performs classical computation only)
-    *(QPU_state->R0) += *(QPU_state->R1);
-    return NULL;
-}
+// CC_add removed (Phase 11) - purely classical, no quantum gate generation
+
 // Width-parameterized precompiled caches for CQ_add (index 0 unused, 1-64 valid)
 sequence_t *precompiled_CQ_add_width[65] = {NULL};
 sequence_t *precompiled_cCQ_add_width[65] = {NULL};
@@ -421,35 +418,89 @@ sequence_t *cQQ_add(int bits) {
     return add;
 }
 
-sequence_t *P_add() {
+sequence_t *P_add_param(double phase_value) {
     // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
-    // READS: QPU_state->R0 for phase value
+    // Width-parameterized single-qubit phase gate
     sequence_t *seq = malloc(sizeof(sequence_t));
     if (seq == NULL) {
         return NULL;
     }
 
-    seq->gates_per_layer[0] = 1;
+    seq->gates_per_layer = calloc(1, sizeof(num_t));
+    if (seq->gates_per_layer == NULL) {
+        free(seq);
+        return NULL;
+    }
+    seq->seq = calloc(1, sizeof(gate_t *));
+    if (seq->seq == NULL) {
+        free(seq->gates_per_layer);
+        free(seq);
+        return NULL;
+    }
+    seq->seq[0] = calloc(1, sizeof(gate_t));
+    if (seq->seq[0] == NULL) {
+        free(seq->seq);
+        free(seq->gates_per_layer);
+        free(seq);
+        return NULL;
+    }
     seq->used_layer = 1;
     seq->num_layer = 1;
-    // implement correct phase multiplication
-    p(&seq->seq[0][0], 0, *(QPU_state->R0));
+    seq->gates_per_layer[0] = 1;
+
+    // Apply phase gate with explicit parameter value
+    p(&seq->seq[0][0], 0, phase_value);
 
     return seq;
 }
-sequence_t *cP_add() {
+
+// DEPRECATED: Use P_add_param(phase_value) instead
+// This function will be removed when all callers are migrated
+sequence_t *P_add() {
     // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
     // READS: QPU_state->R0 for phase value
+    return P_add_param(*(QPU_state->R0));
+}
+sequence_t *cP_add_param(double phase_value) {
+    // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
+    // Width-parameterized controlled phase gate
     sequence_t *seq = malloc(sizeof(sequence_t));
     if (seq == NULL) {
         return NULL;
     }
 
-    seq->gates_per_layer[0] = 1;
+    seq->gates_per_layer = calloc(1, sizeof(num_t));
+    if (seq->gates_per_layer == NULL) {
+        free(seq);
+        return NULL;
+    }
+    seq->seq = calloc(1, sizeof(gate_t *));
+    if (seq->seq == NULL) {
+        free(seq->gates_per_layer);
+        free(seq);
+        return NULL;
+    }
+    seq->seq[0] = calloc(1, sizeof(gate_t));
+    if (seq->seq[0] == NULL) {
+        free(seq->seq);
+        free(seq->gates_per_layer);
+        free(seq);
+        return NULL;
+    }
     seq->used_layer = 1;
     seq->num_layer = 1;
-    // implement correct phase multiplication
-    cp(&seq->seq[0][0], 0, 1, *(QPU_state->R0));
+    seq->gates_per_layer[0] = 1;
+
+    // Apply controlled phase gate with explicit parameter value
+    cp(&seq->seq[0][0], 0, 1, phase_value);
 
     return seq;
+}
+
+// DEPRECATED: Use cP_add_param(phase_value) instead
+// This function will be removed when all callers are migrated
+sequence_t *cP_add() {
+    // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
+    // READS: QPU_state->R0 for phase value
+    return cP_add_param(*(QPU_state->R0));
 }
