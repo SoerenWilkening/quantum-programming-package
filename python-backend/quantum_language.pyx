@@ -1506,7 +1506,7 @@ cdef class qint(circuit):
 	def __lt__(self, other):
 		"""Less-than comparison: self < other
 
-		Uses subtraction and sign bit check. Preserves inputs.
+		Uses in-place subtraction and sign bit check. Preserves inputs.
 
 		Parameters
 		----------
@@ -1527,42 +1527,44 @@ cdef class qint(circuit):
 
 		Notes
 		-----
-		Computes self - other, checks MSB (sign bit).
+		Computes self - other in-place, checks MSB (sign bit), then restores self.
+		Phase 14: Refactored to use in-place subtract-add-back pattern without temporary qint allocation.
 		"""
-		global _controlled, _control_bool, qubit_array
-		cdef sequence_t *seq
-		cdef unsigned int[:] arr
-		cdef int comp_bits
-		cdef int self_offset, other_offset, temp_offset
+		# Self-comparison optimization
+		if self is other:
+			return qbool(False)  # x < x is always false
 
-		# Determine comparison width
+		# Handle qint operand
+		if type(other) == qint:
+			# In-place subtraction on self
+			self -= other
+			# Check MSB (sign bit) - if 1, result is negative (self < other)
+			msb = self[64 - self.bits]
+			result = qbool()
+			result ^= msb  # Copy MSB to result
+			# Restore operand
+			self += other
+			return result
+
+		# Handle int operand
 		if type(other) == int:
-			comp_bits = self.bits
-			other_qint = qint(other, width=comp_bits)
-		elif type(other) == qint:
-			comp_bits = max(self.bits, (<qint>other).bits)
-			other_qint = other
-		else:
-			raise TypeError("Comparison requires qint or int")
+			# Classical overflow checks
+			max_val = (1 << self.bits) - 1 if self.bits < 64 else (1 << 63) - 1
+			if other < 0:
+				return qbool(False)  # qint always >= 0, so qint < negative is false
+			if other > max_val:
+				return qbool(True)  # qint always < large value that doesn't fit
 
-		# Allocate ancilla for subtraction (temp = self - other)
-		temp = qint(0, width=comp_bits)
+			# In-place subtraction with classical value
+			self -= other
+			msb = self[64 - self.bits]
+			result = qbool()
+			result ^= msb
+			# Restore operand
+			self += other
+			return result
 
-		# Copy self to temp via XOR (since temp starts at 0)
-		temp ^= self
-
-		# Subtract other from temp (temp = self - other)
-		temp -= other_qint
-
-		# Extract MSB (sign bit) - if negative, self < other
-		# MSB is at index (64 - comp_bits) for right-aligned storage
-		msb = temp[64 - comp_bits]
-
-		# Result: if MSB=1 (negative), self < other is True
-		result = qbool()
-		result ^= msb  # Copy MSB to result
-
-		return result
+		raise TypeError("Comparison requires qint or int")
 
 	def __gt__(self, other):
 		"""Greater-than comparison: self > other
