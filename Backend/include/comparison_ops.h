@@ -19,17 +19,7 @@
 // Legacy Comparison Operations (INTEGERSIZE-based)
 // ======================================================
 
-/**
- * @brief Classical-classical equality (performs classical computation only).
- *
- * Compares classical values from QPU_state, stores result in QPU_state.
- * No quantum gates generated.
- *
- * @return NULL (performs classical computation only)
- *
- * OWNERSHIP: Returns NULL (performs classical computation only via QPU_state)
- */
-sequence_t *CC_equal();
+// CC_equal removed (Phase 11) - purely classical, no quantum gate generation
 
 /**
  * @brief Classical-quantum equality (legacy INTEGERSIZE-based).

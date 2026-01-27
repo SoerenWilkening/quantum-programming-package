@@ -21,7 +21,7 @@
 // Control flow operations
 // ======================================================
 sequence_t *void_seq();
-sequence_t *jmp_seq();
+// jmp_seq removed (Phase 11) - manipulated QPU_state pointer for control flow that's no longer used
 sequence_t *branch_seq();
 sequence_t *cbranch_seq();
 
@@ -31,23 +31,26 @@ sequence_t *cbranch_seq();
 // ======================================================
 
 // Legacy NOT operations
+// not_seq removed (Phase 11) - purely classical, no quantum gate generation
 sequence_t *q_not_seq();
 sequence_t *cq_not_seq();
 
 // Legacy AND operations
-sequence_t *and_seq();
+// and_seq removed (Phase 11) - purely classical, no quantum gate generation
 sequence_t *q_and_seq();
 sequence_t *cq_and_seq();
 sequence_t *qq_and_seq();
 sequence_t *cqq_and_seq();
 
 // Legacy XOR operations
+// xor_seq removed (Phase 11) - purely classical, no quantum gate generation
 sequence_t *q_xor_seq();
 sequence_t *cq_xor_seq();
 sequence_t *qq_xor_seq();
 sequence_t *cqq_xor_seq();
 
 // Legacy OR operations
+// or_seq removed (Phase 11) - purely classical, no quantum gate generation
 sequence_t *q_or_seq();
 sequence_t *cq_or_seq();
 sequence_t *qq_or_seq();

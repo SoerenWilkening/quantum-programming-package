@@ -23,17 +23,7 @@
 // Addition Operations
 // ============================================================================
 
-/**
- * @brief Classical-classical addition (performs classical computation only).
- *
- * Reads classical values from QPU_state and stores result in QPU_state.
- * No quantum gates generated.
- *
- * @return NULL (performs classical computation only)
- *
- * OWNERSHIP: No sequence returned (performs classical computation only)
- */
-sequence_t *CC_add();
+// CC_add removed (Phase 11) - purely classical, no quantum gate generation
 
 /**
  * @brief Classical-quantum addition: target += value.
@@ -164,17 +154,7 @@ extern sequence_t *precompiled_cQQ_add_width[65];
 // Multiplication Operations
 // ============================================================================
 
-/**
- * @brief Classical-classical multiplication (performs classical computation only).
- *
- * Reads classical values from QPU_state and stores result in QPU_state.
- * No quantum gates generated.
- *
- * @return NULL (performs classical computation only)
- *
- * OWNERSHIP: No sequence returned (performs classical computation only)
- */
-sequence_t *CC_mul();
+// CC_mul removed (Phase 11) - purely classical, no quantum gate generation
 
 /**
  * @brief Classical-quantum multiplication: result = target * value.
