@@ -195,6 +195,38 @@ void ccx(gate_t *g, qubit_t target, qubit_t control1, qubit_t control2) {
     g->Control[1] = control2;
     g->GateValue = 1;
 }
+void mcx(gate_t *g, qubit_t target, qubit_t *controls, num_t num_controls) {
+    // Multi-controlled X gate (n-controlled X)
+    // For num_controls <= 2: uses Control[0], Control[1] static array
+    // For num_controls > 2: allocates and populates large_control array
+    g->Gate = X;
+    g->Target = target;
+    g->NumControls = num_controls;
+    g->GateValue = 1;
+    g->large_control = NULL;
+
+    if (num_controls <= 2) {
+        // Use static array for 0-2 controls
+        if (num_controls >= 1) {
+            g->Control[0] = controls[0];
+        }
+        if (num_controls >= 2) {
+            g->Control[1] = controls[1];
+        }
+    } else {
+        // Use dynamic array for >2 controls
+        g->large_control = malloc(num_controls * sizeof(qubit_t));
+        if (g->large_control != NULL) {
+            // Copy all controls to large_control
+            for (num_t i = 0; i < num_controls; i++) {
+                g->large_control[i] = controls[i];
+            }
+            // Also copy first 2 to Control[] for backward compatibility
+            g->Control[0] = controls[0];
+            g->Control[1] = controls[1];
+        }
+    }
+}
 
 sequence_t *cx_gate() {
     sequence_t *seq = malloc(sizeof(sequence_t));

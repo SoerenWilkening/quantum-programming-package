@@ -38,6 +38,7 @@ void cy(gate_t *g, qubit_t target, qubit_t control);
 void x(gate_t *g, qubit_t target);
 void cx(gate_t *g, qubit_t target, qubit_t control);
 void ccx(gate_t *g, qubit_t target, qubit_t control1, qubit_t control2);
+void mcx(gate_t *g, qubit_t target, qubit_t *controls, num_t num_controls);
 
 sequence_t *cx_gate();
 sequence_t *ccx_gate();
