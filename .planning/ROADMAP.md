@@ -194,13 +194,14 @@ Plans:
   4. Python API has unit tests covering all qint/qbool operations
   5. Tutorial examples demonstrate key features (arithmetic, conditionals, circuit generation)
   6. Internal functions marked with underscore prefix, version set to 0.1.0
-**Plans**: 4 plans
+**Plans**: 5 plans
 
 Plans:
-- [ ] 10-01-PLAN.md - Add NumPy-style docstrings to Python API (wave 1)
-- [ ] 10-02-PLAN.md - Create comprehensive Python API test coverage (wave 1)
-- [ ] 10-03-PLAN.md - Add documentation comments to C headers (wave 1)
-- [ ] 10-04-PLAN.md - Write README.md documentation and API cleanup (wave 2)
+- [x] 10-01-PLAN.md — NumPy-style docstrings for Python API
+- [x] 10-02-PLAN.md — Comprehensive Python API test coverage
+- [x] 10-03-PLAN.md — Documentation comments for C headers
+- [x] 10-04-PLAN.md — README.md documentation and API cleanup
+- [ ] 10-05-PLAN.md — Fix qint_mod multiplication and close verification gaps (gap closure)
 
 ## Progress
 
@@ -218,4 +219,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 7. Extended Arithmetic | 6/6 | Complete | 2026-01-26 |
 | 8. Circuit Optimization | 5/5 | Complete | 2026-01-26 |
 | 9. Code Organization | 4/4 | Complete | 2026-01-27 |
-| 10. Documentation and API Polish | 0/4 | Planned | - |
+| 10. Documentation and API Polish | 4/5 | In Progress | - |
