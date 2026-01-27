@@ -15,20 +15,30 @@ void print_empty(int k) {
         printf(" ");
     }
 }
+// Helper to get control qubit at index i, handling large_control for n-controlled gates (Phase 13)
+static inline qubit_t gate_get_control(gate_t *g, int i) {
+    if (g->NumControls > MAXCONTROLS && g->large_control != NULL) {
+        return g->large_control[i];
+    }
+    return g->Control[i];
+}
+
 qubit_t min_qubit(gate_t *g) {
     qubit_t min = g->Target;
-    for (int i = 0; i < g->NumControls; ++i) {
-        if (g->Control[i] < min) {
-            min = g->Control[i];
+    for (int i = 0; i < (int)g->NumControls; ++i) {
+        qubit_t ctrl = gate_get_control(g, i);
+        if (ctrl < min) {
+            min = ctrl;
         }
     }
     return min;
 }
 qubit_t max_qubit(gate_t *g) {
     qubit_t max = g->Target;
-    for (int i = 0; i < g->NumControls; ++i) {
-        if (g->Control[i] > max) {
-            max = g->Control[i];
+    for (int i = 0; i < (int)g->NumControls; ++i) {
+        qubit_t ctrl = gate_get_control(g, i);
+        if (ctrl > max) {
+            max = ctrl;
         }
     }
     return max;

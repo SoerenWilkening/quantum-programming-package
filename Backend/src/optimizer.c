@@ -15,6 +15,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+// Helper: Get control qubit at index i, handling large_control for n-controlled gates (Phase 13)
+static inline qubit_t get_control(gate_t *g, int i) {
+    if (g->NumControls > MAXCONTROLS && g->large_control != NULL) {
+        return g->large_control[i];
+    }
+    return g->Control[i];
+}
+
 layer_t smallest_layer_below_comp(circuit_t *circ, qubit_t qubit, layer_t compar) {
     // TODO: improve with binary search
     // maybe not necessary
@@ -30,11 +38,10 @@ layer_t smallest_layer_below_comp(circuit_t *circ, qubit_t qubit, layer_t compar
 }
 
 layer_t minimum_layer(circuit_t *circ, gate_t *g, layer_t compared_layer) {
-    qubit_t *ctrl = g->Control;
     layer_t min_possible_layer = 0;
     // Determine the minimal possible layer where gate can be applied
-    for (int j = 0; j < g->NumControls; ++j) {
-        layer_t qubit = ctrl[j];
+    for (int j = 0; j < (int)g->NumControls; ++j) {
+        layer_t qubit = get_control(g, j);
         layer_t min_layer = smallest_layer_below_comp(circ, qubit, compared_layer);
         if (min_layer > min_possible_layer)
             min_possible_layer = min_layer;
@@ -55,10 +62,11 @@ int merge_gates(circuit_t *circ, gate_t *g, layer_t min_possible_layer, int gate
     // if is inverse: remove gate
     circ->gate_index_of_layer_and_qubits[min_possible_layer - 1][g->Target] =
         -1; // reset target index
-    for (int k = 0; k < g->NumControls; ++k) {
-        circ->gate_index_of_layer_and_qubits[min_possible_layer - 1][g->Control[k]] =
+    for (int k = 0; k < (int)g->NumControls; ++k) {
+        qubit_t ctrl = get_control(g, k);
+        circ->gate_index_of_layer_and_qubits[min_possible_layer - 1][ctrl] =
             -1; // reset control indices
-        circ->used_occupation_indices_per_qubit[g->Control[k]]--;
+        circ->used_occupation_indices_per_qubit[ctrl]--;
     }
 
     circ->occupied_layers_of_qubit[g->Target]
@@ -66,14 +74,15 @@ int merge_gates(circuit_t *circ, gate_t *g, layer_t min_possible_layer, int gate
     circ->used_occupation_indices_per_qubit[g->Target]--;
 
     // swap gate to the end of layer to be reused
-    for (int k = gate_index; k < circ->used_gates_per_layer[min_possible_layer - 1] - 1; ++k) {
+    for (int k = gate_index; k < (int)circ->used_gates_per_layer[min_possible_layer - 1] - 1; ++k) {
         circ->sequence[min_possible_layer - 1][k] = circ->sequence[min_possible_layer - 1][k + 1];
 
         gate_t *helper = &circ->sequence[min_possible_layer - 1][k];
         // reduce the stored gate index of remaining gates
         circ->gate_index_of_layer_and_qubits[min_possible_layer - 1][helper->Target]--;
-        for (int l = 0; l < helper->NumControls; ++l) {
-            circ->gate_index_of_layer_and_qubits[min_possible_layer - 1][helper->Control[l]]--;
+        for (int l = 0; l < (int)helper->NumControls; ++l) {
+            qubit_t hctrl = get_control(helper, l);
+            circ->gate_index_of_layer_and_qubits[min_possible_layer - 1][hctrl]--;
         }
     }
     // layer contains less gates
@@ -82,7 +91,7 @@ int merge_gates(circuit_t *circ, gate_t *g, layer_t min_possible_layer, int gate
 
     // remove layer, if last gate was removed
     if (circ->used_gates_per_layer[min_possible_layer - 1] == 0) {
-        for (int j = min_possible_layer - 1; j < circ->used_layer - 1; ++j)
+        for (int j = min_possible_layer - 1; j < (int)circ->used_layer - 1; ++j)
             *circ->sequence[j] = *circ->sequence[j + 1];
         circ->used_layer--;
     }
@@ -90,8 +99,8 @@ int merge_gates(circuit_t *circ, gate_t *g, layer_t min_possible_layer, int gate
 }
 
 void apply_layer(circuit_t *circ, gate_t *g, layer_t min_possible_layer) {
-    for (int j = 0; j < g->NumControls; ++j) {
-        qubit_t loc = g->Control[j];
+    for (int j = 0; j < (int)g->NumControls; ++j) {
+        qubit_t loc = get_control(g, j);
         allocate_more_indices_per_qubit(circ, loc);
 
         circ->occupied_layers_of_qubit[loc][circ->used_occupation_indices_per_qubit[loc]++] =
@@ -117,8 +126,10 @@ void append_gate(circuit_t *circ, gate_t *g, layer_t min_possible_layer) {
     memcpy(&circ->sequence[min_possible_layer][pos], g, sizeof(gate_t));
 
     circ->gate_index_of_layer_and_qubits[min_possible_layer][g->Target] = pos;
-    for (int i = 0; i < g->NumControls; ++i)
-        circ->gate_index_of_layer_and_qubits[min_possible_layer][g->Control[i]] = pos;
+    for (int i = 0; i < (int)g->NumControls; ++i) {
+        qubit_t ctrl = get_control(g, i);
+        circ->gate_index_of_layer_and_qubits[min_possible_layer][ctrl] = pos;
+    }
 
     circ->used++;
 }
@@ -140,8 +151,9 @@ gate_t **colliding_gates(circuit_t *circ, gate_t *g, layer_t min_possible_layer,
         return coll;
     }
     // we have at most three colliding gates
-    for (int i = 0; i < g->NumControls; ++i) {
-        int step = circ->gate_index_of_layer_and_qubits[min_possible_layer - 1][g->Control[i]];
+    for (int i = 0; i < (int)g->NumControls; ++i) {
+        qubit_t ctrl = get_control(g, i);
+        int step = circ->gate_index_of_layer_and_qubits[min_possible_layer - 1][ctrl];
         //        printf("%d ", step);
         if (step >= 0) {
             coll[0] = &circ->sequence[min_possible_layer - 1][step];

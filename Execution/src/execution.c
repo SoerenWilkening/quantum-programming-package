@@ -25,8 +25,24 @@ void run_instruction(sequence_t *res, const qubit_t qubit_array[], int invert, c
             gate_t *g = malloc(sizeof(gate_t));
             memcpy(g, &res->seq[layer][gate], sizeof(gate_t));
             g->Target = qubit_array[g->Target];
-            for (int i = 0; i < g->NumControls; ++i) {
-                g->Control[i] = qubit_array[g->Control[i]];
+
+            // Handle n-controlled gates (Phase 12): controls may be in large_control
+            if (g->NumControls > 2 && res->seq[layer][gate].large_control != NULL) {
+                // Allocate new large_control array for mapped qubits
+                g->large_control = malloc(g->NumControls * sizeof(qubit_t));
+                if (g->large_control != NULL) {
+                    for (int i = 0; i < (int)g->NumControls; ++i) {
+                        g->large_control[i] = qubit_array[res->seq[layer][gate].large_control[i]];
+                    }
+                    // Also update Control[0] and Control[1] for compatibility
+                    g->Control[0] = g->large_control[0];
+                    g->Control[1] = g->large_control[1];
+                }
+            } else {
+                // Standard case: up to 2 controls in Control[] array
+                for (int i = 0; i < (int)g->NumControls && i < MAXCONTROLS; ++i) {
+                    g->Control[i] = qubit_array[g->Control[i]];
+                }
             }
             g->GateValue *= pow(-1, invert);
 

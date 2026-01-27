@@ -1379,7 +1379,8 @@ cdef class qint(circuit):
 	def __eq__(self, other):
 		"""Equality comparison: self == other
 
-		Uses optimized XOR-based circuit (O(n) gates). Preserves inputs.
+		Uses C-level CQ_equal_width for qint == int (O(n) gates).
+		Uses subtract-add-back pattern for qint == qint.
 
 		Parameters
 		----------
@@ -1400,42 +1401,85 @@ cdef class qint(circuit):
 
 		Notes
 		-----
-		XOR all bits: if equal, XOR produces |0...0>.
+		qint == int: Uses C-level CQ_equal_width circuit.
+		qint == qint: Uses subtract-add-back pattern (a-=b, check a==0, a+=b).
 		"""
 		global _controlled, _control_bool, qubit_array
 		cdef sequence_t *seq
 		cdef unsigned int[:] arr
-		cdef int comp_bits
-		cdef int self_offset, other_offset, temp_offset
+		cdef int self_offset
+		cdef int start
 
-		# Determine comparison width
+		# Handle qint == qint case first (must come before int check)
+		if type(other) == qint:
+			# Self-comparison optimization: a == a is always True
+			if self is other:
+				return qbool(True)
+
+			# Subtract-add-back pattern: (a - b) == 0, then restore a
+			# 1. In-place subtraction: self -= other
+			self -= other
+
+			# 2. Compare to zero: result = (self == 0)
+			result = self == 0  # Recursive call uses qint == int path
+
+			# 3. Restore operand: self += other
+			self += other
+
+			return result
+
+		# Handle qint == int case using C-level CQ_equal_width
 		if type(other) == int:
-			comp_bits = self.bits
-			other_qint = qint(other, width=comp_bits)
-		elif type(other) == qint:
-			comp_bits = max(self.bits, (<qint>other).bits)
-			other_qint = other
-		else:
-			raise TypeError("Comparison requires qint or int")
+			# Classical overflow check: if value doesn't fit in bits, not equal
+			# For unsigned interpretation: value must be in [0, 2^bits - 1]
+			max_val = (1 << self.bits) - 1 if self.bits < 64 else (1 << 63) - 1
+			if other < 0 or other > max_val:
+				# Overflow: value outside range - definitely not equal
+				# Return qbool initialized to |0> (False)
+				return qbool(False)
 
-		# XOR self and other into temp
-		# If self == other, temp will be all zeros
-		temp = self ^ other_qint
+			# Get comparison sequence from C
+			if _controlled:
+				seq = cCQ_equal_width(self.bits, other)
+			else:
+				seq = CQ_equal_width(self.bits, other)
 
-		# Check if temp is all zeros
-		# Start with result = True (assume equal)
-		result = qbool(True)
+			if seq == NULL:
+				raise RuntimeError(f"CQ_equal_width failed for bits={self.bits}, value={other}")
 
-		# For each bit in temp, if any bit is 1, set result to False
-		# Use controlled NOT: if temp[i] is 1, flip result
-		for i in range(comp_bits):
-			bit_index = 64 - comp_bits + i
-			bit = temp[bit_index]
-			# Controlled NOT on result based on this bit
-			with bit:
-				result = ~result
+			# Check for overflow (empty sequence returned by C)
+			if seq.num_layer == 0:
+				# Overflow detected by C layer - definitely not equal
+				return qbool(False)
 
-		return result
+			# Allocate result qbool
+			result = qbool()
+
+			# Build qubit array: [0] = result, [1:bits+1] = operand
+			# Result qubit (from qbool, stored at index 63 in right-aligned storage)
+			qubit_array[0] = (<qbool>result).qubits[63]
+
+			# Self operand qubits (right-aligned)
+			self_offset = 64 - self.bits
+			for i in range(self.bits):
+				qubit_array[1 + i] = self.qubits[self_offset + i]
+
+			start = 1 + self.bits
+
+			# Add control qubit if controlled context
+			if _controlled:
+				qubit_array[start] = (<qbool>_control_bool).qubits[63]
+
+			arr = qubit_array
+			run_instruction(seq, &arr[0], False, _circuit)
+
+			# Note: seq is caller-owned per comparison_ops.h, but we don't have
+			# a free_sequence binding exposed. This is consistent with existing
+			# codebase patterns where sequences are not explicitly freed.
+
+			return result
+
+		raise TypeError("Comparison requires qint or int")
 
 	def __ne__(self, other):
 		"""Inequality comparison: self != other

@@ -9,7 +9,8 @@ cdef extern from "arithmetic_ops.h":
 		pass
 
 	ctypedef struct sequence_t:
-		pass
+		unsigned int num_layer
+		unsigned int used_layer
 
 	# Addition operations
 	sequence_t *CC_add();
@@ -40,6 +41,11 @@ cdef extern from "bitwise_ops.h":
 	sequence_t *CQ_and(int bits, int64_t value)
 	sequence_t *Q_or(int bits)
 	sequence_t *CQ_or(int bits, int64_t value)
+
+cdef extern from "comparison_ops.h":
+	# Width-parameterized comparison operations (Phase 12)
+	sequence_t *CQ_equal_width(int bits, int64_t value)
+	sequence_t *cCQ_equal_width(int bits, int64_t value)
 
 cdef extern from "LogicOperations.h":
 	# Legacy qbool operations
