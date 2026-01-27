@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 ## Current Position
 
 Phase: Phase 12 - Comparison Function Refactoring
-Plan: 1 of 1 (12-01 complete)
-Status: In Progress
-Last activity: 2026-01-27 — Completed 12-01-PLAN.md
+Plan: 2 of 2 (12-01, 12-02 complete)
+Status: Phase Complete
+Last activity: 2026-01-27 — Completed 12-02-PLAN.md
 
-Progress: █████████░ 1/1 plans (100%)
+Progress: ██████████ 2/2 plans (100%)
 
 ## Performance Metrics
 
@@ -26,10 +26,10 @@ Progress: █████████░ 1/1 plans (100%)
 - Requirements shipped: 37/37
 
 **v1.1 Progress:**
-- Total plans completed: 6
-- Average duration: 5.0 min
-- Phases complete: 1/5 (Phase 11 complete), Phase 12 in progress (1/1 complete)
-- Requirements shipped: 1/9 (REQ-11 complete)
+- Total plans completed: 7
+- Average duration: 4.7 min
+- Phases complete: 2/5 (Phase 11 complete, Phase 12 complete)
+- Requirements shipped: 3/9 (REQ-11, GLOB-02, GLOB-03 complete)
 
 ## Accumulated Context
 
@@ -48,6 +48,8 @@ Progress: █████████░ 1/1 plans (100%)
 | DEC-12-01-01 | Simplified multi-bit comparison to 1-2 bits fully working, 3+ placeholder | MAXCONTROLS=2 limitation requires ancilla or large_control array for 3+ bit AND | Multi-bit comparisons (3+) partially implemented, full version deferred to Phase 12-02 | 12 |
 | DEC-12-01-02 | Use empty sequence (num_layer=0) for overflow instead of NULL | Distinguishes overflow (valid call, value too large) from invalid parameters | Callers can check seq->num_layer == 0 to detect overflow condition | 12 |
 | DEC-12-01-03 | Created C test infrastructure in tests/c/ directory | Direct C-level testing without Python bindings for unit testing | Future C functions can be tested in isolation with make && ./test_* | 12 |
+| DEC-12-02-01 | Use large_control array for >2 controls instead of ancilla decomposition | gate_t structure already supports large_control, avoids ancilla qubit overhead | Simple, efficient n-controlled gates without additional qubit allocation | 12 |
+| DEC-12-02-02 | mcx() allocates large_control, caller's free_sequence() deallocates | Consistent with existing memory management pattern in codebase | Test helper and future code must free large_control when freeing sequences | 12 |
 
 See also: PROJECT.md Key Decisions table for project-wide decisions.
 
@@ -65,10 +67,11 @@ None.
 **Resolved in v1.1:**
 - QPU_state completely removed (Phase 11) — Full system is now stateless
 - Python bindings updated to remove QPU_state dependency (Phase 11-05)
+- Comparison functions parameterization (Phase 12) — Complete for all bit widths (1-64)
+- Multi-bit (3+) comparison full n-bit AND logic (Phase 12-02) — Complete using mcx()
 
 **Active in v1.1:**
-- Comparison functions parameterization (Phase 12) - Plan 12-01 complete
-- Multi-bit (3+) comparison needs full n-bit AND logic (Phase 12-02)
+None
 
 **Known pre-existing issues:**
 - Multiplication tests segfault at certain widths (C backend issue, unrelated to Phase 11)
@@ -76,7 +79,6 @@ None.
 **Known limitations (acceptable):**
 - qint_mod * qint_mod raises NotImplementedError (by design)
 - apply_merge() placeholder for phase rotation merging
-- CQ_equal_width/cCQ_equal_width: 1-2 bit fully working, 3+ bit placeholder (Phase 12-01)
 
 ### Quick Tasks Completed
 
@@ -87,9 +89,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 12-01-PLAN.md (Classical-Quantum Comparison Implementation)
-Resume file: .planning/phases/12-comparison-function-refactoring/12-01-SUMMARY.md
-Note: Phase 12-01 complete! CQ_equal_width and cCQ_equal_width implemented (1-2 bit fully working).
+Stopped at: Completed 12-02-PLAN.md (Multi-Bit Comparison Gap Closure)
+Resume file: .planning/phases/12-comparison-function-refactoring/12-02-SUMMARY.md
+Note: Phase 12 complete! All comparison functions now work for ALL bit widths (1-64). Requirements GLOB-02 and GLOB-03 fully satisfied.
 
 ---
 
