@@ -34,7 +34,7 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full milestone details.
 
 - [x] **Phase 11: Global State Removal** - Remove QPU_state global dependency
 - [x] **Phase 12: Comparison Function Refactoring** - Implement comparison functions with explicit parameters
-- [ ] **Phase 13: Equality Comparison** - Implement qint == int and qint == qint
+- [x] **Phase 13: Equality Comparison** - Implement qint == int and qint == qint
 - [ ] **Phase 14: Ordering Comparisons** - Refactor <= and >= for efficiency
 - [ ] **Phase 15: Classical Initialization** - Initialize qint with classical values
 
@@ -86,8 +86,8 @@ Plans:
 **Plans:** 2 plans in 2 waves
 
 Plans:
-- [ ] 13-01-PLAN.md - Refactor __eq__ to use C-level CQ_equal_width and subtract-add-back pattern
-- [ ] 13-02-PLAN.md - Add comprehensive equality comparison tests
+- [x] 13-01-PLAN.md - Refactor __eq__ to use C-level CQ_equal_width and subtract-add-back pattern
+- [x] 13-02-PLAN.md - Add comprehensive equality comparison tests
 
 ### Phase 14: Ordering Comparisons
 **Goal:** Refactor <= and >= operators to use in-place subtraction/addition without temporary qint allocation
@@ -127,9 +127,9 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 |-------|-----------|----------------|--------|-----------|
 | 11. Global State Removal | v1.1 | 5/5 | Complete | 2026-01-27 |
 | 12. Comparison Function Refactoring | v1.1 | 2/2 | Complete | 2026-01-27 |
-| 13. Equality Comparison | v1.1 | 0/2 | Ready | - |
-| 14. Ordering Comparisons | v1.1 | 0/TBD | Not started | - |
+| 13. Equality Comparison | v1.1 | 2/2 | Complete | 2026-01-27 |
+| 14. Ordering Comparisons | v1.1 | 0/TBD | Ready | - |
 | 15. Classical Initialization | v1.1 | 0/TBD | Not started | - |
 
 ---
-*Last updated: 2026-01-27 — Phase 13 planned*
+*Last updated: 2026-01-27 — Phase 13 complete*
