@@ -13,7 +13,8 @@ NUMANCILLY = 2 * 64  # Max possible ancilla (2 * max_width)
 # Module-level constant for available optimization passes
 AVAILABLE_PASSES = ['merge', 'cancel_inverse']
 
-QPU_state[0].R0 = <int *> malloc(sizeof(int))
+# QPU_state removed (Phase 11) - global state no longer used
+# All C functions now take explicit parameters instead of reading from registers
 
 QUANTUM = 0
 CLASSICAL = 1

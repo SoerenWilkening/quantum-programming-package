@@ -61,10 +61,8 @@ cdef extern from "QPU.h":
 	ctypedef struct quantum_int_t:
 		pass
 
-	ctypedef struct instruction_t:
-		int *R0
-
-	instruction_t *QPU_state
+	# instruction_t and QPU_state removed in Phase 11
+	# Backend is now stateless - all functions take explicit parameters
 
 	circuit_t *init_circuit();
 	void print_circuit(circuit_t *circ);
