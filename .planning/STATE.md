@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 
 ## Current Position
 
-Phase: Phase 13 - Equality Comparison
-Plan: 2 of 2 (13-01, 13-02 complete)
-Status: Phase Complete
-Last activity: 2026-01-27 - Completed 13-02-PLAN.md (Equality Comparison Tests)
+Phase: Phase 14 - Ordering Comparisons
+Plan: 1 of 2 (14-01 complete)
+Status: In progress
+Last activity: 2026-01-27 - Completed 14-01-PLAN.md (Refactor Ordering Operators)
 
-Progress: #################### 2/2 plans (100%)
+Progress: ##########__________ 1/2 plans (50%)
 
 ## Performance Metrics
 
@@ -26,10 +26,10 @@ Progress: #################### 2/2 plans (100%)
 - Requirements shipped: 37/37
 
 **v1.1 Progress:**
-- Total plans completed: 9
-- Average duration: 5.0 min
+- Total plans completed: 10
+- Average duration: 4.6 min
 - Phases complete: 3/5 (Phase 11, Phase 12, Phase 13 complete)
-- Requirements shipped: 6/9 (GLOB-01, GLOB-02, GLOB-03, GLOB-04, COMP-01, COMP-02 complete)
+- Requirements shipped: 8/9 (GLOB-01, GLOB-02, GLOB-03, GLOB-04, COMP-01, COMP-02, COMP-03, COMP-04 complete)
 
 ## Accumulated Context
 
@@ -53,6 +53,11 @@ Progress: #################### 2/2 plans (100%)
 | DEC-13-01-01 | Use subtract-add-back pattern for qint == qint | Preserves operands after comparison by subtracting, checking equality to zero, then adding back | Both operands unchanged after comparison | 13 |
 | DEC-13-01-02 | Return qbool(False) for overflow in equality comparison | When classical value doesn't fit in qint's bit width, result is definitely not equal | Clean handling of out-of-range comparisons | 13 |
 | DEC-13-01-03 | Self-comparison optimization (a == a) returns True directly | Identity comparison doesn't need gates | Optimization for common pattern | 13 |
+| DEC-14-01-01 | Use in-place subtract-add-back pattern for all ordering operators | Eliminates qubit allocation overhead, follows Phase 13 pattern | Consistent memory-efficient implementation across all comparisons | 14 |
+| DEC-14-01-02 | Check MSB (sign bit) for negative detection in two's complement | Two's complement representation uses MSB as sign bit | Direct sign inspection without additional gates | 14 |
+| DEC-14-01-03 | Combine MSB check with zero check for <= operator | a <= b means (a - b) is negative OR zero | Uses Phase 13's zero-check via self == 0, then ORs with MSB | 14 |
+| DEC-14-01-04 | Delegate __gt__ int operand to NOT(self <= other) | More efficient than implementing separate subtract-check logic | Reduces code duplication, maintains consistency | 14 |
+| DEC-14-01-05 | Optimize self-comparisons to return directly without gates | Identity comparisons have known results (x < x = False, x <= x = True) | Zero gate overhead for self-comparison cases | 14 |
 
 See also: PROJECT.md Key Decisions table for project-wide decisions.
 
@@ -93,9 +98,9 @@ None
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 13-02-PLAN.md (Equality Comparison Tests)
-Resume file: .planning/phases/13-equality-comparison/13-02-SUMMARY.md
-Note: Phase 13 complete! Equality comparison implementation verified with 29 comprehensive tests. COMP-01 and COMP-02 requirements fulfilled.
+Stopped at: Completed 14-01-PLAN.md (Refactor Ordering Operators)
+Resume file: .planning/phases/14-ordering-comparisons/14-01-SUMMARY.md
+Note: Phase 14 started! All four ordering comparison operators (<, >, <=, >=) refactored to use in-place pattern without temporary qint allocation. COMP-03 and COMP-04 requirements fulfilled. Ready for 14-02 (Ordering Comparison Tests).
 
 ---
 
