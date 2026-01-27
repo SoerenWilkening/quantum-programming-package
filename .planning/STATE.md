@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 ## Current Position
 
 Phase: Phase 11 - Global State Removal
-Plan: 11-01 of 5 (Classical Function Removal)
+Plan: 11-03 of 5 (Legacy Logic Parameterization)
 Status: Completed
-Last activity: 2026-01-27 — Completed 11-01-PLAN.md
+Last activity: 2026-01-27 — Completed 11-03-PLAN.md
 
-Progress: █░░░░░░░░░ 1/5 plans (20%)
+Progress: ███░░░░░░░ 3/5 plans (60%)
 
 ## Performance Metrics
 
@@ -26,8 +26,8 @@ Progress: █░░░░░░░░░ 1/5 plans (20%)
 - Requirements shipped: 37/37
 
 **v1.1 Progress:**
-- Total plans completed: 1
-- Average duration: 5 min
+- Total plans completed: 3
+- Average duration: 4 min
 - Phases complete: 0/5
 - Requirements shipped: 0/9
 
@@ -41,6 +41,8 @@ Progress: █░░░░░░░░░ 1/5 plans (20%)
 | DEC-11-01-02 | Documented removal rationale in comments | Future developers need to know why functions were removed | Phase-tagged removal comments provide traceability | 11 |
 | DEC-11-02-01 | Keep legacy P_add/cP_add as deprecated wrappers | Maintain backward compatibility during migration | Future plans migrate callers incrementally | 11 |
 | DEC-11-02-02 | Fix memory allocation bugs in phase gate functions | Original functions had missing calloc calls | All new parameterized functions have correct memory management | 11 |
+| DEC-11-03-01 | Parameterize legacy semi-classical functions without backward compatibility wrappers | Modern alternatives exist (Q_and, Q_xor, Q_or), no need for deprecated wrappers | Callers will migrate to explicit parameters or modern functions | 11 |
+| DEC-11-03-02 | Selectively parameterize only functions reading QPU_state | qq_and_seq and qq_or_seq have commented-out reads, don't need changes | Avoids unnecessary refactoring of functions already independent of global state | 11 |
 
 See also: PROJECT.md Key Decisions table for project-wide decisions.
 
@@ -72,9 +74,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 11-01-PLAN.md (Classical Function Removal)
-Resume file: .planning/phases/11-global-state-removal/11-01-SUMMARY.md
-Note: Plan 11-01 complete. Ready for next plan in Phase 11.
+Stopped at: Completed 11-03-PLAN.md (Legacy Logic Parameterization)
+Resume file: .planning/phases/11-global-state-removal/11-03-SUMMARY.md
+Note: Plans 11-01, 11-02, 11-03 complete. Ready for Plan 11-04 (Comparison Function Refactoring).
 
 ---
 
