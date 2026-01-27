@@ -67,10 +67,11 @@ Plans:
   2. cCQ_equal_width(bits, value) generates controlled comparison gates
   3. Functions return empty sequence for overflow (value >= 2^bits), NULL for invalid width
   4. C-level tests verify function behavior directly (no Python dependency)
-**Plans:** 1 plan in 1 wave
+**Plans:** 2 plans in 2 waves
 
 Plans:
-- [ ] 12-01-PLAN.md - Implement CQ_equal_width, cCQ_equal_width, and add C-level unit tests
+- [x] 12-01-PLAN.md - Implement CQ_equal_width, cCQ_equal_width, and add C-level unit tests
+- [ ] 12-02-PLAN.md - Close gap: implement proper n-bit AND for 3+ bit comparisons (gap closure)
 
 ### Phase 13: Equality Comparison
 **Goal:** Implement efficient equality comparison for qint == int and qint == qint using refactored functions
