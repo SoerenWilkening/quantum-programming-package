@@ -11,7 +11,15 @@ void free_sequence(sequence_t *seq) {
         return;
     if (seq->seq != NULL) {
         for (int i = 0; i < (int)seq->num_layer; i++) {
-            free(seq->seq[i]);
+            if (seq->seq[i] != NULL) {
+                // Free large_control arrays for gates with >2 controls
+                for (int j = 0; j < (int)seq->gates_per_layer[i]; j++) {
+                    if (seq->seq[i][j].NumControls > 2 && seq->seq[i][j].large_control != NULL) {
+                        free(seq->seq[i][j].large_control);
+                    }
+                }
+                free(seq->seq[i]);
+            }
         }
         free(seq->seq);
     }
@@ -207,6 +215,60 @@ void test_valid_small_widths() {
     printf("PASS: test_valid_small_widths\n");
 }
 
+// Test: Multi-bit (3+) comparisons now fully implemented
+void test_multibit_comparison() {
+    // 3-bit comparison
+    sequence_t *seq3 = CQ_equal_width(3, 5); // 101 in binary
+    assert(seq3 != NULL);
+    assert(seq3->num_layer > 0);
+    // Verify we have a gate with 3 controls (the mcx gate)
+    int found_mcx = 0;
+    for (int l = 0; l < (int)seq3->used_layer; l++) {
+        for (int g = 0; g < (int)seq3->gates_per_layer[l]; g++) {
+            if (seq3->seq[l][g].NumControls == 3) {
+                found_mcx = 1;
+            }
+        }
+    }
+    assert(found_mcx && "3-bit comparison should have 3-controlled gate");
+    free_sequence(seq3);
+
+    // 4-bit comparison
+    sequence_t *seq4 = CQ_equal_width(4, 10); // 1010 in binary
+    assert(seq4 != NULL);
+    assert(seq4->num_layer > 0);
+    free_sequence(seq4);
+
+    // 8-bit comparison
+    sequence_t *seq8 = CQ_equal_width(8, 127);
+    assert(seq8 != NULL);
+    assert(seq8->num_layer > 0);
+    free_sequence(seq8);
+
+    printf("PASS: test_multibit_comparison\n");
+}
+
+// Test: Controlled multi-bit comparisons
+void test_controlled_multibit_comparison() {
+    // 3-bit controlled comparison (4 controls total)
+    sequence_t *cseq3 = cCQ_equal_width(3, 7);
+    assert(cseq3 != NULL);
+    assert(cseq3->num_layer > 0);
+    // Verify 4-controlled gate exists
+    int found_4ctrl = 0;
+    for (int l = 0; l < (int)cseq3->used_layer; l++) {
+        for (int g = 0; g < (int)cseq3->gates_per_layer[l]; g++) {
+            if (cseq3->seq[l][g].NumControls == 4) {
+                found_4ctrl = 1;
+            }
+        }
+    }
+    assert(found_4ctrl && "3-bit controlled comparison should have 4-controlled gate");
+    free_sequence(cseq3);
+
+    printf("PASS: test_controlled_multibit_comparison\n");
+}
+
 int main() {
     printf("Starting test program...\n");
     fflush(stdout);
@@ -227,12 +289,12 @@ int main() {
     printf("\nTesting valid sequence generation (1-2 bit widths)...\n");
     test_valid_small_widths();
 
-    // NOTE: 3+ bit comparisons are partially implemented in Phase 12-01
-    // Full multi-bit implementation with ancilla will come in Phase 12-02
-    // Actual functional correctness testing happens at Python level in tests/python/
+    printf("\nTesting multi-bit (3+) comparison implementation...\n");
+    test_multibit_comparison();
+    test_controlled_multibit_comparison();
 
     printf("\n===  ALL TESTS PASSED ===\n");
     printf("Functions correctly handle: invalid width, overflow detection, sequence generation\n");
-    printf("Multi-bit (3+) comparison logic will be completed in Phase 12-02.\n");
+    printf("Multi-bit (3+) comparison logic now fully implemented using mcx gates.\n");
     return 0;
 }
