@@ -83,10 +83,11 @@ Plans:
   3. Equality comparisons use CQ_equal_width with explicit parameters
   4. Python operator overloading (__eq__) works correctly for both cases
   5. Tests verify equality comparisons for various bit widths and values
-**Plans:** TBD
+**Plans:** 2 plans in 2 waves
 
 Plans:
-- [ ] TBD during plan-phase
+- [ ] 13-01-PLAN.md - Refactor __eq__ to use C-level CQ_equal_width and subtract-add-back pattern
+- [ ] 13-02-PLAN.md - Add comprehensive equality comparison tests
 
 ### Phase 14: Ordering Comparisons
 **Goal:** Refactor <= and >= operators to use in-place subtraction/addition without temporary qint allocation
@@ -126,9 +127,9 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 |-------|-----------|----------------|--------|-----------|
 | 11. Global State Removal | v1.1 | 5/5 | Complete | 2026-01-27 |
 | 12. Comparison Function Refactoring | v1.1 | 2/2 | Complete | 2026-01-27 |
-| 13. Equality Comparison | v1.1 | 0/TBD | Not started | - |
+| 13. Equality Comparison | v1.1 | 0/2 | Ready | - |
 | 14. Ordering Comparisons | v1.1 | 0/TBD | Not started | - |
 | 15. Classical Initialization | v1.1 | 0/TBD | Not started | - |
 
 ---
-*Last updated: 2026-01-27 — Phase 12 complete*
+*Last updated: 2026-01-27 — Phase 13 planned*
