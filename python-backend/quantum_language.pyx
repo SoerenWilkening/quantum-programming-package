@@ -35,6 +35,30 @@ for i in range(NUMANCILLY):
 
 
 def array(dim: int | tuple[int, int] | list[int], dtype = qint) -> list[qint | qbool]:
+	"""Create array of quantum integers or booleans.
+
+	Parameters
+	----------
+	dim : int, tuple of int, or list of int
+		Array dimensions:
+		- int: 1D array of length dim
+		- tuple (rows, cols): 2D array
+		- list of int: 1D array with specified initial values
+	dtype : type, optional
+		Element type: qint or qbool (default qint).
+
+	Returns
+	-------
+	list or list of list
+		Array of quantum integers/booleans.
+
+	Examples
+	--------
+	>>> arr = array(5)              # [qint(), qint(), qint(), qint(), qint()]
+	>>> arr = array([1, 2, 3])      # [qint(1), qint(2), qint(3)]
+	>>> arr = array((2, 3))         # 2x3 2D array
+	>>> arr = array(3, dtype=qbool) # [qbool(), qbool(), qbool()]
+	"""
 	if type(dim) == list:
 		return [dtype(j) for j in dim]
 	if type(dim) == tuple:
@@ -1960,16 +1984,51 @@ cdef class qbool(qint):
 	"""Quantum boolean - a 1-bit quantum integer.
 
 	qbool is syntactic sugar for qint with width=1. All qint operations
-	apply to qbool, with single-bit semantics.
+	apply to qbool with single-bit semantics.
 
-	Examples:
-		>>> b = qbool(True)
-		>>> b.width
-		1
-		>>> c = qbool()  # False by default
+	Parameters
+	----------
+	value : bool, optional
+		Initial value (default False). Encoded as |0> or |1>.
+	classical : bool, optional
+		Whether this is a classical boolean (default False).
+	create_new : bool, optional
+		Whether to allocate new qubit (default True).
+	bit_list : array-like, optional
+		External qubit (when create_new=False).
+
+	Examples
+	--------
+	>>> b = qbool(True)   # Creates |1>
+	>>> b.width
+	1
+	>>> c = qbool()       # Creates |0> (False by default)
+
+	Notes
+	-----
+	Used for quantum conditionals via context manager (with statement).
 	"""
 
 	def __init__(self, value: bool = False, classical: bool = False, create_new = True, bit_list = None):
+		"""Create quantum boolean.
+
+		Parameters
+		----------
+		value : bool, optional
+			Initial value (default False).
+		classical : bool, optional
+			Classical boolean flag (default False).
+		create_new : bool, optional
+			Allocate new qubit (default True).
+		bit_list : array-like, optional
+			External qubit array (when create_new=False).
+
+		Examples
+		--------
+		>>> flag = qbool(True)
+		>>> with flag:
+		...     # Controlled operations
+		"""
 		super().__init__(value, width=1, classical=classical, create_new=create_new, bit_list=bit_list)
 
 
@@ -1979,34 +2038,59 @@ cdef class qint_mod(qint):
 	Modulus N is classical (Python int), known at circuit generation time.
 	All operations automatically reduce result mod N.
 
-	Examples:
-		>>> x = qint_mod(5, N=17)
-		>>> y = qint_mod(15, N=17)
-		>>> z = x + y  # z = 20 mod 17 = 3
-		>>> z.modulus
-		17
+	Parameters
+	----------
+	value : int, optional
+		Initial value (reduced mod N classically before encoding).
+	N : int
+		Modulus (required, must be positive).
+	width : int, optional
+		Bit width (default: N.bit_length()).
 
-	Attributes:
-		modulus: The classical modulus N (read-only)
-		width: Bit width (inherited from qint)
+	Attributes
+	----------
+	modulus : int
+		The classical modulus N (read-only property).
+	width : int
+		Bit width (inherited from qint).
+
+	Examples
+	--------
+	>>> x = qint_mod(5, N=17)
+	>>> y = qint_mod(15, N=17)
+	>>> z = x + y  # z = 20 mod 17 = 3
+	>>> z.modulus
+	17
+
+	Notes
+	-----
+	Used for modular exponentiation in Shor's algorithm and other
+	number-theoretic quantum algorithms.
 	"""
 	cdef int _modulus
 
 	def __init__(self, value=0, N=None, width=None):
 		"""Create quantum integer with classical modulus N.
 
-		Args:
-			value: Initial value (reduced mod N classically before encoding)
-			N: Modulus (required, must be positive int)
-			width: Bit width (default: N.bit_length())
+		Parameters
+		----------
+		value : int, optional
+			Initial value (reduced mod N before encoding, default 0).
+		N : int
+			Modulus (required, must be positive).
+		width : int, optional
+			Bit width (default: N.bit_length()).
 
-		Raises:
-			ValueError: If N is None, non-positive, or not an integer
+		Raises
+		------
+		ValueError
+			If N is None, non-positive, or not an integer.
 
-		Examples:
-			>>> x = qint_mod(25, N=17)  # Creates qint with value 25 % 17 = 8
-			>>> x.modulus
-			17
+		Examples
+		--------
+		>>> x = qint_mod(25, N=17)  # Creates qint with value 25 % 17 = 8
+		>>> x.modulus
+		17
 		"""
 		if N is None or not isinstance(N, int) or N <= 0:
 			raise ValueError("Modulus N must be positive integer")
@@ -2026,7 +2110,19 @@ cdef class qint_mod(qint):
 
 	@property
 	def modulus(self):
-		"""Get the modulus N (read-only)."""
+		"""Get the modulus N (read-only).
+
+		Returns
+		-------
+		int
+			The classical modulus N.
+
+		Examples
+		--------
+		>>> x = qint_mod(5, N=17)
+		>>> x.modulus
+		17
+		"""
 		return self._modulus
 
 	def __repr__(self):
@@ -2077,7 +2173,29 @@ cdef class qint_mod(qint):
 		return wrapped
 
 	def __add__(self, other):
-		"""Modular addition: (self + other) mod N."""
+		"""Modular addition: (self + other) mod N
+
+		Parameters
+		----------
+		other : qint_mod or int
+			Value to add.
+
+		Returns
+		-------
+		qint_mod
+			Result reduced mod N.
+
+		Raises
+		------
+		ValueError
+			If other is qint_mod with different modulus.
+
+		Examples
+		--------
+		>>> x = qint_mod(15, N=17)
+		>>> y = qint_mod(5, N=17)
+		>>> z = x + y  # (15 + 5) mod 17 = 3
+		"""
 		# Check modulus compatibility
 		if isinstance(other, qint_mod):
 			if (<qint_mod>other)._modulus != self._modulus:
@@ -2095,9 +2213,30 @@ cdef class qint_mod(qint):
 		return self._wrap_result(reduced)
 
 	def __sub__(self, other):
-		"""Modular subtraction: (self - other) mod N.
+		"""Modular subtraction: (self - other) mod N
 
-		Handles negative results by adding N.
+		Handles negative results by adding N to ensure [0, N) range.
+
+		Parameters
+		----------
+		other : qint_mod or int
+			Value to subtract.
+
+		Returns
+		-------
+		qint_mod
+			Result reduced mod N.
+
+		Raises
+		------
+		ValueError
+			If other is qint_mod with different modulus.
+
+		Examples
+		--------
+		>>> x = qint_mod(5, N=17)
+		>>> y = qint_mod(10, N=17)
+		>>> z = x - y  # (5 - 10) mod 17 = 12
 		"""
 		if isinstance(other, qint_mod):
 			if (<qint_mod>other)._modulus != self._modulus:
@@ -2120,7 +2259,29 @@ cdef class qint_mod(qint):
 		return self._wrap_result(reduced)
 
 	def __mul__(self, other):
-		"""Modular multiplication: (self * other) mod N."""
+		"""Modular multiplication: (self * other) mod N
+
+		Parameters
+		----------
+		other : qint_mod or int
+			Value to multiply by.
+
+		Returns
+		-------
+		qint_mod
+			Result reduced mod N.
+
+		Raises
+		------
+		ValueError
+			If other is qint_mod with different modulus.
+
+		Examples
+		--------
+		>>> x = qint_mod(5, N=17)
+		>>> y = qint_mod(7, N=17)
+		>>> z = x * y  # (5 * 7) mod 17 = 1
+		"""
 		if isinstance(other, qint_mod):
 			if (<qint_mod>other)._modulus != self._modulus:
 				raise ValueError(
@@ -2136,7 +2297,23 @@ cdef class qint_mod(qint):
 		return self._wrap_result(reduced)
 
 	def __iadd__(self, other):
-		"""In-place modular addition."""
+		"""In-place modular addition: self += other mod N
+
+		Parameters
+		----------
+		other : qint_mod or int
+			Value to add.
+
+		Returns
+		-------
+		qint_mod
+			Self (with swapped qubit references).
+
+		Examples
+		--------
+		>>> x = qint_mod(15, N=17)
+		>>> x += 5  # (15 + 5) mod 17 = 3
+		"""
 		result = self + other
 		cdef qint_mod result_mod = <qint_mod>result
 		self.qubits, result_mod.qubits = result_mod.qubits, self.qubits
@@ -2145,7 +2322,23 @@ cdef class qint_mod(qint):
 		return self
 
 	def __isub__(self, other):
-		"""In-place modular subtraction."""
+		"""In-place modular subtraction: self -= other mod N
+
+		Parameters
+		----------
+		other : qint_mod or int
+			Value to subtract.
+
+		Returns
+		-------
+		qint_mod
+			Self (with swapped qubit references).
+
+		Examples
+		--------
+		>>> x = qint_mod(5, N=17)
+		>>> x -= 10  # (5 - 10) mod 17 = 12
+		"""
 		result = self - other
 		cdef qint_mod result_mod = <qint_mod>result
 		self.qubits, result_mod.qubits = result_mod.qubits, self.qubits
@@ -2154,7 +2347,23 @@ cdef class qint_mod(qint):
 		return self
 
 	def __imul__(self, other):
-		"""In-place modular multiplication."""
+		"""In-place modular multiplication: self *= other mod N
+
+		Parameters
+		----------
+		other : qint_mod or int
+			Value to multiply by.
+
+		Returns
+		-------
+		qint_mod
+			Self (with swapped qubit references).
+
+		Examples
+		--------
+		>>> x = qint_mod(5, N=17)
+		>>> x *= 7  # (5 * 7) mod 17 = 1
+		"""
 		result = self * other
 		cdef qint_mod result_mod = <qint_mod>result
 		self.qubits, result_mod.qubits = result_mod.qubits, self.qubits
@@ -2166,10 +2375,24 @@ cdef class qint_mod(qint):
 def circuit_stats():
 	"""Get qubit allocation statistics for the current circuit.
 
-	Returns:
-		dict with keys: peak_allocated, total_allocations, total_deallocations,
-		                current_in_use, ancilla_allocations
-		None if circuit not initialized
+	Returns
+	-------
+	dict or None
+		Statistics dictionary with keys:
+		- peak_allocated: Maximum qubits allocated simultaneously
+		- total_allocations: Total allocation operations
+		- total_deallocations: Total deallocation operations
+		- current_in_use: Currently allocated qubits
+		- ancilla_allocations: Ancilla qubit allocations
+		Returns None if circuit not initialized.
+
+	Examples
+	--------
+	>>> c = circuit()
+	>>> a = qint(5, width=8)
+	>>> stats = circuit_stats()
+	>>> stats['current_in_use']
+	8
 	"""
 	cdef qubit_allocator_t *alloc
 	cdef allocator_stats_t stats
