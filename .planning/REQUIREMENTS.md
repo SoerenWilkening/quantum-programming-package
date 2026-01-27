@@ -63,7 +63,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **CODE-01**: QPU.c responsibilities separated into focused modules
 - [x] **CODE-02**: Circuit builder module (create/destroy/add gates)
 - [x] **CODE-03**: Circuit optimizer module (layer assignment, merging)
-- [ ] **CODE-04**: Operations organized by category (arithmetic, comparison, logic)
+- [x] **CODE-04**: Operations organized by category (arithmetic, comparison, logic)
 - [x] **CODE-05**: Clear dependency graph between modules
 
 ### Documentation
@@ -151,7 +151,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CODE-01 | Phase 4 | Complete |
 | CODE-02 | Phase 4 | Complete |
 | CODE-03 | Phase 4 | Complete |
-| CODE-04 | Phase 9 | Pending |
+| CODE-04 | Phase 9 | Complete |
 | CODE-05 | Phase 4 | Complete |
 | DOCS-01 | Phase 10 | Pending |
 | DOCS-02 | Phase 10 | Pending |
