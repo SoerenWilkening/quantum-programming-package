@@ -2,9 +2,9 @@
 // Created by Sören Wilkening on 09.11.24.
 //
 
-#include "IntegerComparison.h"
 #include "Integer.h"
 #include "QPU.h"
+#include "comparison_ops.h"
 #include "definition.h"
 #include "gate.h"
 #include <stdlib.h>
