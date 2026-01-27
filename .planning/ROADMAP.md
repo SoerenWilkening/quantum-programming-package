@@ -110,14 +110,16 @@ Plans:
 **Depends on:** Phase 11 (independent of comparison refactoring)
 **Requirements:** INIT-01
 **Success Criteria** (what must be TRUE):
-  1. User can create qint with classical initial value (e.g., qint(5, 3) creates 3-bit qint initialized to 5)
+  1. User can create qint with classical initial value (e.g., qint(5, width=8) creates 8-bit qint initialized to 5)
   2. Initialization sets qubits to |1> via Q_not based on binary representation
-  3. Initialized qint can be used in arithmetic and comparison operations
-  4. Tests verify correct initialization for various bit widths and values
-**Plans:** TBD
+  3. Auto-width mode: qint(5) creates minimum-width qint initialized to 5
+  4. Initialized qint can be used in arithmetic and comparison operations
+  5. Tests verify correct initialization for various bit widths and values
+**Plans:** 2 plans in 2 waves
 
 Plans:
-- [ ] TBD during plan-phase
+- [ ] 15-01-PLAN.md - Implement auto-width calculation and X gate initialization in qint.__init__()
+- [ ] 15-02-PLAN.md - Add comprehensive initialization tests
 
 ## Progress
 
@@ -130,7 +132,7 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 12. Comparison Function Refactoring | v1.1 | 2/2 | Complete | 2026-01-27 |
 | 13. Equality Comparison | v1.1 | 2/2 | Complete | 2026-01-27 |
 | 14. Ordering Comparisons | v1.1 | 2/2 | Complete | 2026-01-27 |
-| 15. Classical Initialization | v1.1 | 0/TBD | Not started | - |
+| 15. Classical Initialization | v1.1 | 0/2 | Not started | - |
 
 ---
-*Last updated: 2026-01-27 — Phase 14 complete*
+*Last updated: 2026-01-27 — Phase 15 planned*
