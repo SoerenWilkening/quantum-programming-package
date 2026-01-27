@@ -353,6 +353,7 @@ cdef class qint(circuit):
 			Initial value (default 0). Encoded into quantum state |value>.
 		width : int, optional
 			Bit width (1-64, default 8). Determines range: [-2^(w-1), 2^(w-1)-1].
+			If None and value != 0, auto-determines width from value (unsigned mode).
 		bits : int, optional
 			Alias for width (backward compatibility).
 		classical : bool, optional
@@ -371,25 +372,53 @@ cdef class qint(circuit):
 
 		Examples
 		--------
-		>>> a = qint(5)           # 8-bit quantum integer, value 5
+		>>> a = qint(5)           # Auto-width (3-bit) quantum integer, value 5
 		>>> b = qint(5, width=16) # 16-bit quantum integer, value 5
 		>>> c = qint(5, bits=16)  # Backward compatible alias
+		>>> d = qint(0)           # Default 8-bit quantum integer, value 0
 
 		Notes
 		-----
 		Creates quantum state |value> using computational basis encoding.
+		Auto-width mode uses unsigned representation (minimum bits for magnitude).
 		"""
 		global _controlled, _control_bool, _int_counter, _smallest_allocated_qubit, ancilla
-		global _num_qubits
+		global _num_qubits, qubit_array
 		cdef qubit_allocator_t *alloc
 		cdef unsigned int start
 		cdef int actual_width
+		cdef unsigned int[:] arr
+		cdef sequence_t *seq
+		cdef int bit_pos, qubit_idx
+		cdef long long masked_value
 
 		super().__init__()
 
-		# Handle width/bits parameter (width takes precedence, bits for backward compat)
+		# Handle int-like values (objects with __int__ method)
+		if hasattr(value, '__int__'):
+			value = int(value)
+
+		# Handle width/bits parameter with auto-width support
 		if width is None and bits is None:
-			actual_width = INTEGERSIZE  # Default 8 bits
+			# Auto-width mode: determine width from value
+			if value == 0:
+				actual_width = INTEGERSIZE  # Default 8 bits for zero
+			elif value > 0:
+				# Positive: unsigned bit count (no sign bit)
+				actual_width = value.bit_length()
+			else:
+				# Negative: two's complement formula
+				# -1 needs 1 bit, other negatives depend on magnitude
+				if value == -1:
+					actual_width = 1
+				else:
+					mag = -value
+					# If magnitude is power of 2, use mag.bit_length() bits
+					# Otherwise use mag.bit_length() + 1 bits
+					if (mag & (mag - 1)) == 0:  # Power of 2 check
+						actual_width = mag.bit_length()
+					else:
+						actual_width = mag.bit_length() + 1
 		elif width is not None:
 			actual_width = width
 		else:
@@ -406,8 +435,9 @@ cdef class qint(circuit):
 			self.value = value
 
 			# Warn if value exceeds width (two's complement range)
+			# Only warn when width was explicitly specified (not auto-width mode)
 			# Note: For 1-bit (qbool), treat as unsigned [0,1] for clarity
-			if value != 0:
+			if value != 0 and (width is not None or bits is not None):
 				if actual_width == 1:
 					# Single bit: unsigned range [0, 1]
 					max_value = 1
@@ -419,7 +449,7 @@ cdef class qint(circuit):
 				if value > max_value or value < min_value:
 					warnings.warn(
 						f"Value {value} exceeds {actual_width}-bit range [{min_value}, {max_value}]. "
-						f"Value will wrap (modular arithmetic).",
+						f"Value will truncate (modular arithmetic).",
 						UserWarning
 					)
 
@@ -442,6 +472,23 @@ cdef class qint(circuit):
 
 			self.allocated_start = start  # Track for deallocation
 			self.allocated_qubits = True
+
+			# Apply X gates based on binary representation of value
+			# Phase 15: Classical initialization via X gate application
+			if value != 0:
+				# Mask value to width (handles both positive and negative via two's complement)
+				masked_value = value & ((1 << actual_width) - 1)
+
+				# Apply X gate for each 1 bit
+				for bit_pos in range(actual_width):
+					if (masked_value >> bit_pos) & 1:
+						# Qubit index for bit_pos (right-aligned storage)
+						# Bit 0 (LSB) is at qubits[64-width], bit (width-1) is at qubits[63]
+						qubit_idx = 64 - actual_width + bit_pos
+						qubit_array[0] = self.qubits[qubit_idx]
+						arr = qubit_array
+						seq = Q_not(1)
+						run_instruction(seq, &arr[0], False, _circuit)
 
 			# Keep backward compat tracking (deprecated, remove later)
 			# Note: _smallest_allocated_qubit and ancilla numpy array still updated
