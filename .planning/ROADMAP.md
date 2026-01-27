@@ -59,19 +59,19 @@ Plans:
 - [x] 11-05-PLAN.md — Update Python bindings and verify full test suite
 
 ### Phase 12: Comparison Function Refactoring
-**Goal:** Refactor comparison functions to take classical values as parameters instead of using global state
+**Goal:** Implement CQ_equal_width and cCQ_equal_width to generate quantum gate sequences for classical-quantum comparison
 **Depends on:** Phase 11
 **Requirements:** GLOB-02, GLOB-03, GLOB-04
 **Success Criteria** (what must be TRUE):
-  1. CQ_equal takes classical value as explicit parameter (no global state)
-  2. cCQ_equal takes classical value as explicit parameter (no global state)
-  3. CC_equal is removed from codebase (purely classical, not needed for quantum operations)
+  1. CQ_equal_width(bits, value) generates quantum gates comparing quantum register to classical value
+  2. cCQ_equal_width(bits, value) generates controlled comparison gates
+  3. CC_equal is verified removed from codebase (completed in Phase 11)
   4. All existing comparison operations continue to work correctly
   5. Tests verify comparison functions work with explicit parameters
-**Plans:** TBD
+**Plans:** 1 plan in 1 wave
 
 Plans:
-- [ ] TBD during plan-phase
+- [ ] 12-01-PLAN.md — Implement CQ_equal_width, cCQ_equal_width, and add unit tests
 
 ### Phase 13: Equality Comparison
 **Goal:** Implement efficient equality comparison for qint == int and qint == qint using refactored functions
@@ -125,10 +125,10 @@ Phases execute in numeric order: 11 → 12 → 13 → 14 → 15
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 11. Global State Removal | v1.1 | 5/5 | ✓ Complete | 2026-01-27 |
-| 12. Comparison Function Refactoring | v1.1 | 0/TBD | Not started | - |
+| 12. Comparison Function Refactoring | v1.1 | 0/1 | Planned | - |
 | 13. Equality Comparison | v1.1 | 0/TBD | Not started | - |
 | 14. Ordering Comparisons | v1.1 | 0/TBD | Not started | - |
 | 15. Classical Initialization | v1.1 | 0/TBD | Not started | - |
 
 ---
-*Last updated: 2026-01-27 - Phase 11 complete (5 plans, 4 waves)*
+*Last updated: 2026-01-27 - Phase 12 planned (1 plan, 1 wave)*
