@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-01-27)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v1.1 QPU State Removal & Comparison Refactoring
+**Current focus:** v1.1 QPU State Removal & Comparison Refactoring — COMPLETE
 
 ## Current Position
 
@@ -28,8 +28,8 @@ Progress: ████████████████████ 2/2 plans
 **v1.1 Progress:**
 - Total plans completed: 15
 - Average duration: 4.7 min
-- Phases complete: 5/6 (Phase 11, Phase 12, Phase 13, Phase 14, Phase 15 complete)
-- Requirements shipped: 10/11 (GLOB-01 through INIT-01 complete)
+- Phases complete: 5/5 (Phase 11, Phase 12, Phase 13, Phase 14, Phase 15 complete)
+- Requirements shipped: 10/10 (GLOB-01 through INIT-01 complete)
 
 ## Accumulated Context
 
@@ -126,4 +126,5 @@ See `.planning/milestones/v1.0-REQUIREMENTS.md` for archived requirements.
 - Comprehensive documentation and test coverage
 
 **Next Steps:**
-- `/gsd:discuss-phase 15` or `/gsd:plan-phase 15` to begin Classical Initialization
+- `/gsd:audit-milestone` to verify v1.1 requirements, cross-phase integration
+- `/gsd:complete-milestone` to archive milestone and prepare for v1.2

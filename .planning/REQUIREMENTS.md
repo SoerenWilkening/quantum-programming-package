@@ -23,7 +23,7 @@ Requirements for QPU State Removal & Comparison Refactoring milestone.
 
 ### Initialization
 
-- [ ] **INIT-01**: Initialize qint with classical value by setting qubits to |1> via Q_not based on binary representation
+- [x] **INIT-01**: Initialize qint with classical value by setting qubits to |1> via Q_not based on binary representation
 
 ## Future Requirements
 
@@ -57,7 +57,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | COMP-02 | Phase 13 | Complete |
 | COMP-03 | Phase 14 | Complete |
 | COMP-04 | Phase 14 | Complete |
-| INIT-01 | Phase 15 | Pending |
+| INIT-01 | Phase 15 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 9 total
@@ -68,4 +68,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 — Phase 14 complete (COMP-03, COMP-04 satisfied)*
+*Last updated: 2026-01-27 — v1.1 complete (INIT-01 satisfied), all 10 requirements shipped*

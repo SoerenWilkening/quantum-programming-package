@@ -28,7 +28,7 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full milestone details.
 
 </details>
 
-### v1.1 QPU State Removal & Comparison Refactoring (In Progress)
+### v1.1 QPU State Removal & Comparison Refactoring (Complete)
 
 **Milestone Goal:** Remove global state dependency (QPU_state R0-R3 registers) and refactor comparison operations for cleaner architecture and efficient implementation.
 
@@ -36,7 +36,7 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full milestone details.
 - [x] **Phase 12: Comparison Function Refactoring** - Implement comparison functions with explicit parameters
 - [x] **Phase 13: Equality Comparison** - Implement qint == int and qint == qint
 - [x] **Phase 14: Ordering Comparisons** - Refactor <= and >= for efficiency
-- [ ] **Phase 15: Classical Initialization** - Initialize qint with classical values
+- [x] **Phase 15: Classical Initialization** - Initialize qint with classical values
 
 ## Phase Details
 
@@ -118,8 +118,8 @@ Plans:
 **Plans:** 2 plans in 2 waves
 
 Plans:
-- [ ] 15-01-PLAN.md - Implement auto-width calculation and X gate initialization in qint.__init__()
-- [ ] 15-02-PLAN.md - Add comprehensive initialization tests
+- [x] 15-01-PLAN.md - Implement auto-width calculation and X gate initialization in qint.__init__()
+- [x] 15-02-PLAN.md - Add comprehensive initialization tests
 
 ## Progress
 
@@ -132,7 +132,7 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 12. Comparison Function Refactoring | v1.1 | 2/2 | Complete | 2026-01-27 |
 | 13. Equality Comparison | v1.1 | 2/2 | Complete | 2026-01-27 |
 | 14. Ordering Comparisons | v1.1 | 2/2 | Complete | 2026-01-27 |
-| 15. Classical Initialization | v1.1 | 0/2 | Not started | - |
+| 15. Classical Initialization | v1.1 | 2/2 | Complete | 2026-01-27 |
 
 ---
-*Last updated: 2026-01-27 — Phase 15 planned*
+*Last updated: 2026-01-27 — Phase 15 complete, v1.1 milestone complete*
