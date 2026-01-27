@@ -152,35 +152,30 @@ sequence_t *CQ_equal_width(int bits, int64_t value) {
         }
     }
 
-    // Phase 2: Multi-controlled X (cascaded Toffoli) to set result qubit
+    // Phase 2: Multi-controlled X to set result qubit
     if (bits == 1) {
         // Single bit: just copy qubit[1] to qubit[0] (CX gate)
         cx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, 1);
         seq->gates_per_layer[current_layer]++;
         current_layer++;
         seq->used_layer++;
+    } else if (bits == 2) {
+        // Two bits: single CCX with qubits[1] and qubits[2] controlling qubit[0]
+        ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, 1, 2);
+        seq->gates_per_layer[current_layer]++;
+        current_layer++;
+        seq->used_layer++;
     } else {
-        // Multi-bit: use cascaded Toffoli pattern
-        // For n-bit comparison: accumulate AND results
-        // Simple approach: apply CCX with both operands controlling result
-        // This is a simplified version; full implementation would use ancilla
-        // For now: if all bits are |1> after phase 1, result should be |1>
-
-        // Create multi-controlled X using cascaded Toffoli
-        // Target: qubit[0] (result), Controls: qubits[1] through qubits[bits]
-        for (int i = 0; i < bits - 1; i++) {
-            if (i == 0) {
-                // First Toffoli: qubits[1] and qubits[2] control qubit[0]
-                ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, 1, 2);
-            } else {
-                // Subsequent Toffoli: qubit[0] and qubit[i+2] control qubit[0]
-                // This accumulates the AND operation
-                ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, 0, i + 2);
-            }
-            seq->gates_per_layer[current_layer]++;
-            current_layer++;
-            seq->used_layer++;
-        }
+        // Multi-bit (3+): Requires proper multi-controlled gates
+        // Phase 12-01: Placeholder implementation - returns valid sequence structure
+        // but gate logic needs ancilla qubits for correct multi-controlled X
+        // Full implementation will use large_control array for >2 controls
+        // For now: just apply CCX for first two bits (partial check)
+        ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, 1, 2);
+        seq->gates_per_layer[current_layer]++;
+        current_layer++;
+        seq->used_layer++;
+        // TODO(Phase 12-02): Implement proper n-bit AND with ancilla/large_control
     }
 
     // Phase 3: Uncompute - reverse the X gates to restore original state
@@ -309,35 +304,32 @@ sequence_t *cCQ_equal_width(int bits, int64_t value) {
     }
 
     // Phase 2: Controlled multi-controlled X to set result qubit
-    // This requires using the control qubit as an additional control
-    // For simplicity with ccx gates, we need to construct multi-controlled gates
     if (bits == 1) {
         // Single bit: CCX with control_qubit and qubit[1] controlling qubit[0]
         ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, control_qubit, 1);
         seq->gates_per_layer[current_layer]++;
         current_layer++;
         seq->used_layer++;
+    } else if (bits == 2) {
+        // Two bits: Needs 3-controlled gate (control_qubit, qubit[1], qubit[2] -> qubit[0])
+        // With MAXCONTROLS=2, need to decompose:
+        // - CCX(control_qubit, qubit[1], qubit[0])
+        // - Then check qubit[2] with CX or another pattern
+        // Phase 12-01: Simplified - only check first two operands with control
+        ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, control_qubit, 1);
+        seq->gates_per_layer[current_layer]++;
+        current_layer++;
+        seq->used_layer++;
+        // TODO(Phase 12-02): Add proper 3-controlled gate decomposition
     } else {
-        // Multi-bit: cascaded Toffoli with control qubit
-        // First Toffoli needs to include control_qubit
-        for (int i = 0; i < bits - 1; i++) {
-            if (i == 0) {
-                // First Toffoli: control_qubit and qubit[1] control qubit[0]
-                ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, control_qubit,
-                    1);
-                seq->gates_per_layer[current_layer]++;
-                current_layer++;
-                seq->used_layer++;
-                // Then qubit[0] and qubit[2] control qubit[0]
-                ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, 0, 2);
-            } else {
-                // Subsequent Toffoli: qubit[0] and qubit[i+2] control qubit[0]
-                ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, 0, i + 2);
-            }
-            seq->gates_per_layer[current_layer]++;
-            current_layer++;
-            seq->used_layer++;
-        }
+        // Multi-bit (3+): Placeholder implementation
+        // Full controlled multi-bit comparison requires ancilla and decomposition
+        // Phase 12-01: Basic structure only
+        ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, control_qubit, 1);
+        seq->gates_per_layer[current_layer]++;
+        current_layer++;
+        seq->used_layer++;
+        // TODO(Phase 12-02): Implement proper n-bit controlled AND
     }
 
     // Phase 3: Uncompute - reverse the controlled X gates
