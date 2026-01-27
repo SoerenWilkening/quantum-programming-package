@@ -454,13 +454,9 @@ sequence_t *P_add_param(double phase_value) {
     return seq;
 }
 
-// DEPRECATED: Use P_add_param(phase_value) instead
-// This function will be removed when all callers are migrated
-sequence_t *P_add() {
-    // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
-    // READS: QPU_state->R0 for phase value
-    return P_add_param(*(QPU_state->R0));
-}
+// P_add() removed (Phase 11-04) - deprecated wrapper that used QPU_state->R0
+// Use P_add_param(phase_value) instead
+
 sequence_t *cP_add_param(double phase_value) {
     // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
     // Width-parameterized controlled phase gate
@@ -497,10 +493,5 @@ sequence_t *cP_add_param(double phase_value) {
     return seq;
 }
 
-// DEPRECATED: Use cP_add_param(phase_value) instead
-// This function will be removed when all callers are migrated
-sequence_t *cP_add() {
-    // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
-    // READS: QPU_state->R0 for phase value
-    return cP_add_param(*(QPU_state->R0));
-}
+// cP_add() removed (Phase 11-04) - deprecated wrapper that used QPU_state->R0
+// Use cP_add_param(phase_value) instead

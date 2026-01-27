@@ -14,8 +14,15 @@
 #include "arithmetic_ops.h"
 #include "definition.h"
 #include "gate.h"
+
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <stdint.h>
+
+// Ensure M_PI is defined on all platforms
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 int *two_complement(int64_t x, int n);
 

@@ -21,29 +21,8 @@
 
 // CC_equal removed (Phase 11) - purely classical, no quantum gate generation
 
-/**
- * @brief Classical-quantum equality (legacy INTEGERSIZE-based).
- *
- * Compares quantum register with classical value from QPU_state->R0.
- *
- * @return Sequence for equality comparison
- *
- * OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
- * READS: QPU_state->R0 for classical value
- */
-sequence_t *CQ_equal();
-
-/**
- * @brief Controlled classical-quantum equality (legacy INTEGERSIZE-based).
- *
- * Conditional comparison controlled by a qubit. Reads QPU_state->R0.
- *
- * @return Sequence for controlled equality comparison
- *
- * OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
- * READS: QPU_state->R0 for classical value
- */
-sequence_t *cCQ_equal();
+// CQ_equal() and cCQ_equal() removed (Phase 11-04) - used QPU_state->R0 for classical value
+// Use CQ_equal_width(bits, value) instead with explicit parameters
 
 // ======================================================
 // Width-Parameterized Comparison Operations (Phase 7)

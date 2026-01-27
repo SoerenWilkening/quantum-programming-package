@@ -116,29 +116,8 @@ sequence_t *P_add_param(double phase_value);
  */
 sequence_t *cP_add_param(double phase_value);
 
-/**
- * @brief DEPRECATED: Probabilistic addition using global state.
- *
- * Legacy operation for probabilistic arithmetic. Reads phase value from QPU_state->R0.
- * Use P_add_param(phase_value) instead for code without global state dependencies.
- *
- * @return Sequence for probabilistic addition - caller must free
- *
- * DEPRECATED: This function will be removed when all callers are migrated to P_add_param
- */
-sequence_t *P_add();
-
-/**
- * @brief DEPRECATED: Controlled probabilistic addition using global state.
- *
- * Legacy operation for probabilistic arithmetic. Reads phase value from QPU_state->R0.
- * Use cP_add_param(phase_value) instead for code without global state dependencies.
- *
- * @return Sequence for controlled probabilistic addition - caller must free
- *
- * DEPRECATED: This function will be removed when all callers are migrated to cP_add_param
- */
-sequence_t *cP_add();
+// P_add() and cP_add() removed (Phase 11-04) - deprecated wrappers that used QPU_state->R0
+// Use P_add_param(phase_value) and cP_add_param(phase_value) instead
 
 // Legacy globals for backward compatibility (point to INTEGERSIZE versions)
 extern sequence_t *precompiled_QQ_add;
