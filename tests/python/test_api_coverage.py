@@ -311,6 +311,14 @@ class TestQintModAPI:
         y = x * 3
         assert isinstance(y, ql.qint_mod)
 
+    def test_qint_mod_mul_qint_mod_not_implemented(self):
+        """qint_mod * qint_mod raises NotImplementedError (known limitation)."""
+        x = ql.qint_mod(5, N=17)
+        y = ql.qint_mod(3, N=17)
+        with pytest.raises(NotImplementedError) as excinfo:
+            _ = x * y
+        assert "qint_mod * int" in str(excinfo.value)  # Error message is actionable
+
     def test_qint_mod_mismatched_moduli(self):
         """Operations with different moduli raise ValueError."""
         x = ql.qint_mod(5, N=17)
