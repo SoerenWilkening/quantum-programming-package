@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 ## Current Position
 
 Phase: Phase 11 - Global State Removal
-Plan: 11-02 of 5 (Parameterized Phase Functions)
-Status: In progress
-Last activity: 2026-01-27 — Completed 11-02-PLAN.md
+Plan: 11-01 of 5 (Classical Function Removal)
+Status: Completed
+Last activity: 2026-01-27 — Completed 11-01-PLAN.md
 
 Progress: █░░░░░░░░░ 1/5 plans (20%)
 
@@ -27,6 +27,7 @@ Progress: █░░░░░░░░░ 1/5 plans (20%)
 
 **v1.1 Progress:**
 - Total plans completed: 1
+- Average duration: 5 min
 - Phases complete: 0/5
 - Requirements shipped: 0/9
 
@@ -36,6 +37,8 @@ Progress: █░░░░░░░░░ 1/5 plans (20%)
 
 | ID | What | Why | Impact | Phase |
 |---|---|---|---|---|
+| DEC-11-01-01 | Removed purely classical functions that don't generate quantum gates | Functions only wrote to QPU_state without gate generation | Reduced dead code and global state dependencies | 11 |
+| DEC-11-01-02 | Documented removal rationale in comments | Future developers need to know why functions were removed | Phase-tagged removal comments provide traceability | 11 |
 | DEC-11-02-01 | Keep legacy P_add/cP_add as deprecated wrappers | Maintain backward compatibility during migration | Future plans migrate callers incrementally | 11 |
 | DEC-11-02-02 | Fix memory allocation bugs in phase gate functions | Original functions had missing calloc calls | All new parameterized functions have correct memory management | 11 |
 
@@ -68,10 +71,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-27 14:10 UTC
-Stopped at: Completed 11-02-PLAN.md (Parameterized Phase Functions)
-Resume file: .planning/phases/11-global-state-removal/11-02-SUMMARY.md
-Note: Continue with `/gsd:execute-plan` for next plan in Phase 11
+Last session: 2026-01-27
+Stopped at: Completed 11-01-PLAN.md (Classical Function Removal)
+Resume file: .planning/phases/11-global-state-removal/11-01-SUMMARY.md
+Note: Plan 11-01 complete. Ready for next plan in Phase 11.
 
 ---
 
