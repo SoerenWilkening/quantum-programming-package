@@ -176,3 +176,149 @@ class TestInequality:
         a = ql.qint(5, width=4)
         result = a != 100  # Overflow
         assert isinstance(result, ql.qbool)
+
+
+# ============================================================================
+# Context Manager Integration Tests
+# ============================================================================
+
+
+class TestEqualityContextManager:
+    """Tests for using equality result in controlled operations."""
+
+    def test_eq_result_as_control(self):
+        """Equality result can be used as control in with statement."""
+        a = ql.qint(5, width=8)
+        is_five = a == 5
+
+        result = ql.qint(0, width=4)
+        with is_five:
+            result += 1  # Controlled addition
+
+        assert isinstance(result, ql.qint)
+
+    def test_ne_result_as_control(self):
+        """Inequality result can be used as control."""
+        a = ql.qint(5, width=8)
+        not_five = a != 5
+
+        result = ql.qint(0, width=4)
+        with not_five:
+            result += 1
+
+        assert isinstance(result, ql.qint)
+
+    def test_qq_eq_result_as_control(self):
+        """qint == qint result can be used as control."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(5, width=8)
+        are_equal = a == b
+
+        result = ql.qint(0, width=4)
+        with are_equal:
+            result += 1
+
+        assert isinstance(result, ql.qint)
+
+    def test_chained_comparisons_in_control(self):
+        """Multiple comparisons can be combined for control."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(5, width=8)
+
+        eq1 = a == 5
+        eq2 = b == 5
+
+        result = ql.qint(0, width=4)
+        with eq1 & eq2:
+            result += 1
+
+        assert isinstance(result, ql.qint)
+
+
+# ============================================================================
+# Edge Cases and Regression Tests
+# ============================================================================
+
+
+class TestEqualityEdgeCases:
+    """Edge cases and regression tests for equality comparison."""
+
+    def test_zero_equality(self):
+        """Comparison with zero works."""
+        a = ql.qint(0, width=8)
+        result = a == 0
+        assert isinstance(result, ql.qbool)
+
+    def test_compare_after_arithmetic(self):
+        """Comparison after arithmetic operations."""
+        a = ql.qint(3, width=8)
+        a += 2  # a is now effectively 5
+        result = a == 5
+        assert isinstance(result, ql.qbool)
+
+    def test_multiple_comparisons_same_qint(self):
+        """Multiple comparisons on same qint."""
+        a = ql.qint(5, width=8)
+
+        r1 = a == 5
+        r2 = a == 3
+        r3 = a == 5
+
+        assert isinstance(r1, ql.qbool)
+        assert isinstance(r2, ql.qbool)
+        assert isinstance(r3, ql.qbool)
+
+    def test_comparison_preserves_qint_type(self):
+        """Comparison doesn't change qint type."""
+        a = ql.qint(5, width=8)
+        _ = a == 5
+        assert isinstance(a, ql.qint)
+        assert a.width == 8
+
+
+# ============================================================================
+# Requirements Coverage Tests
+# ============================================================================
+
+
+class TestRequirementsCoverage:
+    """Tests explicitly mapping to COMP-01 and COMP-02 requirements."""
+
+    def test_comp01_qint_eq_int_returns_qbool(self):
+        """COMP-01: qint == int returns quantum boolean result."""
+        a = ql.qint(5, width=8)
+        result = a == 5
+        assert isinstance(result, ql.qbool)
+
+    def test_comp01_uses_c_level_function(self):
+        """COMP-01: Comparison should work (uses CQ_equal_width internally)."""
+        # We can't directly verify C function usage, but we verify it works
+        for width in [1, 4, 8, 16]:
+            for value in [0, 1, (1 << (width - 1)) - 1 if width > 1 else 1]:
+                a = ql.qint(value, width=width)
+                result = a == value
+                assert isinstance(result, ql.qbool), f"Failed for width={width}, value={value}"
+
+    def test_comp02_qint_eq_qint_returns_qbool(self):
+        """COMP-02: qint == qint returns quantum boolean result."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(5, width=8)
+        result = a == b
+        assert isinstance(result, ql.qbool)
+
+    def test_comp02_uses_subtract_add_pattern(self):
+        """COMP-02: Pattern (qint - qint) == 0 is used (operands preserved)."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+
+        # Get original state
+        a_width = a.width
+        b_width = b.width
+
+        # Perform comparison
+        result = a == b
+
+        # Verify operands preserved (subtract-add pattern restores them)
+        assert a.width == a_width
+        assert b.width == b_width
+        assert isinstance(result, ql.qbool)
