@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 
 ## Current Position
 
-Phase: Phase 14 - Ordering Comparisons
-Plan: 2 of 2 (14-02 complete)
-Status: Phase complete
-Last activity: 2026-01-27 - Completed 14-02-PLAN.md (Ordering Comparison Tests)
+Phase: Phase 15 - Classical Initialization
+Plan: 1 of 2 (15-01 complete)
+Status: In progress
+Last activity: 2026-01-27 - Completed 15-01-PLAN.md (Classical Initialization Implementation)
 
-Progress: ████████████████████ 2/2 plans (100%)
+Progress: ██████████░░░░░░░░░░ 1/2 plans (50%)
 
 ## Performance Metrics
 
@@ -26,10 +26,10 @@ Progress: ████████████████████ 2/2 plans
 - Requirements shipped: 37/37
 
 **v1.1 Progress:**
-- Total plans completed: 12
-- Average duration: 4.4 min
-- Phases complete: 4/5 (Phase 11, Phase 12, Phase 13, Phase 14 complete)
-- Requirements shipped: 9/9 (GLOB-01, GLOB-02, GLOB-03, GLOB-04, COMP-01, COMP-02, COMP-03, COMP-04 complete; Phase 14 verified)
+- Total plans completed: 13
+- Average duration: 4.6 min
+- Phases complete: 4/6 (Phase 11, Phase 12, Phase 13, Phase 14 complete; Phase 15 in progress)
+- Requirements shipped: 9/11 (GLOB-01 through COMP-04 complete; INIT-01 in progress)
 
 ## Accumulated Context
 
@@ -58,6 +58,9 @@ Progress: ████████████████████ 2/2 plans
 | DEC-14-01-03 | Combine MSB check with zero check for <= operator | a <= b means (a - b) is negative OR zero | Uses Phase 13's zero-check via self == 0, then ORs with MSB | 14 |
 | DEC-14-01-04 | Delegate __gt__ int operand to NOT(self <= other) | More efficient than implementing separate subtract-check logic | Reduces code duplication, maintains consistency | 14 |
 | DEC-14-01-05 | Optimize self-comparisons to return directly without gates | Identity comparisons have known results (x < x = False, x <= x = True) | Zero gate overhead for self-comparison cases | 14 |
+| DEC-15-01-01 | Auto-width uses unsigned representation | Simpler mental model - qint(5) needs 3 bits (101), not 4 with sign | Users creating small values get minimal qubit allocation | 15 |
+| DEC-15-01-02 | Truncation warnings only for explicit width | Auto-width always calculates correct width, can't have truncation | Cleaner user experience - qint(1000) doesn't warn, qint(1000, width=8) does | 15 |
+| DEC-15-01-03 | Value 0 defaults to 8-bit width | Zero is special case - can't determine intent from value alone | Backward compatible with existing 8-bit default | 15 |
 
 See also: PROJECT.md Key Decisions table for project-wide decisions.
 
@@ -98,9 +101,9 @@ None
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 14-02-PLAN.md (Ordering Comparison Tests)
-Resume file: .planning/phases/14-ordering-comparisons/14-02-SUMMARY.md
-Note: Phase 14 complete! All four ordering comparison operators (<, >, <=, >=) refactored and fully tested with 56 comprehensive tests. COMP-03 and COMP-04 requirements fulfilled and verified. No regressions in Phase 13. Ready for next phase in v1.1 roadmap.
+Stopped at: Completed 15-01-PLAN.md (Classical Initialization Implementation)
+Resume file: .planning/phases/15-classical-initialization/15-01-SUMMARY.md
+Note: Phase 15-01 complete! Classical initialization via X gates implemented with auto-width support. qint(5) creates 3-bit qint, qint(5, width=8) creates 8-bit qint. All 67 variable width tests pass. Ready for Phase 15-02 (Classical Initialization Tests).
 
 ---
 
