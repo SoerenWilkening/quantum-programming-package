@@ -323,25 +323,35 @@ sequence_t *cCQ_equal_width(int bits, int64_t value) {
         current_layer++;
         seq->used_layer++;
     } else if (bits == 2) {
-        // Two bits: Needs 3-controlled gate (control_qubit, qubit[1], qubit[2] -> qubit[0])
-        // With MAXCONTROLS=2, need to decompose:
-        // - CCX(control_qubit, qubit[1], qubit[0])
-        // - Then check qubit[2] with CX or another pattern
-        // Phase 12-01: Simplified - only check first two operands with control
-        ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, control_qubit, 1);
+        // Two bits: 3 controls (control_qubit, qubit[1], qubit[2]) -> qubit[0]
+        qubit_t controls[3] = {control_qubit, 1, 2};
+        mcx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, controls, 3);
         seq->gates_per_layer[current_layer]++;
         current_layer++;
         seq->used_layer++;
-        // TODO(Phase 12-02): Add proper 3-controlled gate decomposition
     } else {
-        // Multi-bit (3+): Placeholder implementation
-        // Full controlled multi-bit comparison requires ancilla and decomposition
-        // Phase 12-01: Basic structure only
-        ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, control_qubit, 1);
+        // Multi-bit (3+): n+1 controls (control_qubit + all operand qubits)
+        qubit_t *controls = malloc((bits + 1) * sizeof(qubit_t));
+        if (controls == NULL) {
+            // Cleanup and return NULL
+            for (int i = 0; i < num_layers; i++) {
+                free(seq->seq[i]);
+            }
+            free(seq->seq);
+            free(seq->gates_per_layer);
+            free(bin);
+            free(seq);
+            return NULL;
+        }
+        controls[0] = control_qubit;
+        for (int i = 0; i < bits; i++) {
+            controls[i + 1] = i + 1; // Operand qubits are at [1, bits]
+        }
+        mcx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, controls, bits + 1);
         seq->gates_per_layer[current_layer]++;
         current_layer++;
         seq->used_layer++;
-        // TODO(Phase 12-02): Implement proper n-bit controlled AND
+        free(controls);
     }
 
     // Phase 3: Uncompute - reverse the controlled X gates
