@@ -121,4 +121,4 @@ See `.planning/milestones/v1.0-REQUIREMENTS.md` for archived requirements.
 - Comprehensive documentation and test coverage
 
 **Next Steps:**
-- `/gsd:discuss-phase 14` or `/gsd:plan-phase 14` to begin Ordering Comparisons
+- `/gsd:discuss-phase 15` or `/gsd:plan-phase 15` to begin Classical Initialization

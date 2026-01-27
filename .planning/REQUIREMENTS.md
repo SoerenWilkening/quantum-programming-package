@@ -18,8 +18,8 @@ Requirements for QPU State Removal & Comparison Refactoring milestone.
 
 - [x] **COMP-01**: Implement qint == int using `CQ_equal_width` in Python bindings
 - [x] **COMP-02**: Implement qint == qint as `(qint - qint) == 0`
-- [ ] **COMP-03**: Refactor <= to use in-place subtraction/addition (no temp qint)
-- [ ] **COMP-04**: Refactor >= to use in-place subtraction/addition (no temp qint)
+- [x] **COMP-03**: Refactor <= to use in-place subtraction/addition (no temp qint)
+- [x] **COMP-04**: Refactor >= to use in-place subtraction/addition (no temp qint)
 
 ### Initialization
 
@@ -55,8 +55,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GLOB-04 | Phase 11 | Complete (CC_equal removed in 11-01) |
 | COMP-01 | Phase 13 | Complete |
 | COMP-02 | Phase 13 | Complete |
-| COMP-03 | Phase 14 | Pending |
-| COMP-04 | Phase 14 | Pending |
+| COMP-03 | Phase 14 | Complete |
+| COMP-04 | Phase 14 | Complete |
 | INIT-01 | Phase 15 | Pending |
 
 **Coverage:**
@@ -68,4 +68,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-27*
-*Last updated: 2026-01-27 — Phase 13 complete (COMP-01, COMP-02 satisfied)*
+*Last updated: 2026-01-27 — Phase 14 complete (COMP-03, COMP-04 satisfied)*

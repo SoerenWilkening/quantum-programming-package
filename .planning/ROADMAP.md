@@ -35,7 +35,7 @@ See `.planning/milestones/v1.0-ROADMAP.md` for full milestone details.
 - [x] **Phase 11: Global State Removal** - Remove QPU_state global dependency
 - [x] **Phase 12: Comparison Function Refactoring** - Implement comparison functions with explicit parameters
 - [x] **Phase 13: Equality Comparison** - Implement qint == int and qint == qint
-- [ ] **Phase 14: Ordering Comparisons** - Refactor <= and >= for efficiency
+- [x] **Phase 14: Ordering Comparisons** - Refactor <= and >= for efficiency
 - [ ] **Phase 15: Classical Initialization** - Initialize qint with classical values
 
 ## Phase Details
@@ -102,8 +102,8 @@ Plans:
 **Plans:** 2 plans in 2 waves
 
 Plans:
-- [ ] 14-01-PLAN.md - Refactor __lt__, __gt__, __le__, __ge__ to use in-place subtract-add-back pattern
-- [ ] 14-02-PLAN.md - Add comprehensive ordering comparison tests
+- [x] 14-01-PLAN.md - Refactor __lt__, __gt__, __le__, __ge__ to use in-place subtract-add-back pattern
+- [x] 14-02-PLAN.md - Add comprehensive ordering comparison tests
 
 ### Phase 15: Classical Initialization
 **Goal:** Initialize qint with classical value by setting qubits to |1> based on binary representation
@@ -129,8 +129,8 @@ Phases execute in numeric order: 11 -> 12 -> 13 -> 14 -> 15
 | 11. Global State Removal | v1.1 | 5/5 | Complete | 2026-01-27 |
 | 12. Comparison Function Refactoring | v1.1 | 2/2 | Complete | 2026-01-27 |
 | 13. Equality Comparison | v1.1 | 2/2 | Complete | 2026-01-27 |
-| 14. Ordering Comparisons | v1.1 | 0/2 | Planned | - |
+| 14. Ordering Comparisons | v1.1 | 2/2 | Complete | 2026-01-27 |
 | 15. Classical Initialization | v1.1 | 0/TBD | Not started | - |
 
 ---
-*Last updated: 2026-01-27 — Phase 14 planned*
+*Last updated: 2026-01-27 — Phase 14 complete*
