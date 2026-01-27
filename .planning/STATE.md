@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-27)
 
 ## Current Position
 
-Phase: Phase 12 - Comparison Function Refactoring
-Plan: 2 of 2 (12-01, 12-02 complete)
-Status: Phase Complete
-Last activity: 2026-01-27 — Completed 12-02-PLAN.md
+Phase: Phase 13 - Equality Comparison
+Plan: 1 of 1 (13-01 complete)
+Status: Plan Complete
+Last activity: 2026-01-27 - Completed 13-01-PLAN.md
 
-Progress: ██████████ 2/2 plans (100%)
+Progress: ########## 1/1 plans (100%)
 
 ## Performance Metrics
 
@@ -26,9 +26,9 @@ Progress: ██████████ 2/2 plans (100%)
 - Requirements shipped: 37/37
 
 **v1.1 Progress:**
-- Total plans completed: 7
-- Average duration: 4.7 min
-- Phases complete: 2/5 (Phase 11 complete, Phase 12 complete)
+- Total plans completed: 8
+- Average duration: 5.2 min
+- Phases complete: 2/5 (Phase 11 complete, Phase 12 complete), Phase 13 in progress
 - Requirements shipped: 3/9 (REQ-11, GLOB-02, GLOB-03 complete)
 
 ## Accumulated Context
@@ -50,6 +50,9 @@ Progress: ██████████ 2/2 plans (100%)
 | DEC-12-01-03 | Created C test infrastructure in tests/c/ directory | Direct C-level testing without Python bindings for unit testing | Future C functions can be tested in isolation with make && ./test_* | 12 |
 | DEC-12-02-01 | Use large_control array for >2 controls instead of ancilla decomposition | gate_t structure already supports large_control, avoids ancilla qubit overhead | Simple, efficient n-controlled gates without additional qubit allocation | 12 |
 | DEC-12-02-02 | mcx() allocates large_control, caller's free_sequence() deallocates | Consistent with existing memory management pattern in codebase | Test helper and future code must free large_control when freeing sequences | 12 |
+| DEC-13-01-01 | Use subtract-add-back pattern for qint == qint | Preserves operands after comparison by subtracting, checking equality to zero, then adding back | Both operands unchanged after comparison | 13 |
+| DEC-13-01-02 | Return qbool(False) for overflow in equality comparison | When classical value doesn't fit in qint's bit width, result is definitely not equal | Clean handling of out-of-range comparisons | 13 |
+| DEC-13-01-03 | Self-comparison optimization (a == a) returns True directly | Identity comparison doesn't need gates | Optimization for common pattern | 13 |
 
 See also: PROJECT.md Key Decisions table for project-wide decisions.
 
@@ -65,10 +68,11 @@ None.
 - QQ_mul segfault fixed via MAXLAYERINSEQUENCE allocation
 
 **Resolved in v1.1:**
-- QPU_state completely removed (Phase 11) — Full system is now stateless
+- QPU_state completely removed (Phase 11) - Full system is now stateless
 - Python bindings updated to remove QPU_state dependency (Phase 11-05)
-- Comparison functions parameterization (Phase 12) — Complete for all bit widths (1-64)
-- Multi-bit (3+) comparison full n-bit AND logic (Phase 12-02) — Complete using mcx()
+- Comparison functions parameterization (Phase 12) - Complete for all bit widths (1-64)
+- Multi-bit (3+) comparison full n-bit AND logic (Phase 12-02) - Complete using mcx()
+- n-controlled gate support in run_instruction, optimizer, gate.c (Phase 13-01) - Complete
 
 **Active in v1.1:**
 None
@@ -89,9 +93,9 @@ None
 ## Session Continuity
 
 Last session: 2026-01-27
-Stopped at: Completed 12-02-PLAN.md (Multi-Bit Comparison Gap Closure)
-Resume file: .planning/phases/12-comparison-function-refactoring/12-02-SUMMARY.md
-Note: Phase 12 complete! All comparison functions now work for ALL bit widths (1-64). Requirements GLOB-02 and GLOB-03 fully satisfied.
+Stopped at: Completed 13-01-PLAN.md (Refactor qint.__eq__ to use C-level CQ_equal_width)
+Resume file: .planning/phases/13-equality-comparison/13-01-SUMMARY.md
+Note: Phase 13 Plan 01 complete! qint equality comparison now uses optimized C-level circuits. n-controlled gate support fixed across C backend.
 
 ---
 
@@ -112,4 +116,4 @@ See `.planning/milestones/v1.0-REQUIREMENTS.md` for archived requirements.
 - Comprehensive documentation and test coverage
 
 **Next Steps:**
-- `/gsd:discuss-phase 13` or `/gsd:plan-phase 13` to begin Equality Comparison
+- Continue Phase 13 if more plans exist, or proceed to Phase 14
