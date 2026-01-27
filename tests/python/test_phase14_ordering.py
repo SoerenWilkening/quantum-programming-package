@@ -226,3 +226,172 @@ class TestQintGeIntOverflow:
         result = a >= -5
         assert isinstance(result, ql.qbool)
         # Should return True (unsigned qint >= 0, always >= negative)
+
+
+# ============================================================================
+# qint vs qint Tests
+# ============================================================================
+
+
+class TestQintLtQint:
+    """Tests for qint < qint comparison."""
+
+    def test_basic_lt_qint(self):
+        """Basic qint < qint returns qbool."""
+        a = ql.qint(3, width=8)
+        b = ql.qint(5, width=8)
+        result = a < b
+        assert isinstance(result, ql.qbool)
+        assert result.width == 1
+
+    def test_lt_qint_preserves_both_operands(self):
+        """Both operands preserved after < comparison."""
+        a = ql.qint(3, width=8)
+        b = ql.qint(5, width=8)
+        a_width = a.width
+        b_width = b.width
+
+        _ = a < b
+
+        assert a.width == a_width
+        assert b.width == b_width
+
+    def test_lt_qint_different_widths(self):
+        """< works with different bit widths."""
+        a = ql.qint(3, width=4)
+        b = ql.qint(5, width=8)
+        result = a < b
+        assert isinstance(result, ql.qbool)
+
+
+class TestQintGtQint:
+    """Tests for qint > qint comparison."""
+
+    def test_basic_gt_qint(self):
+        """Basic qint > qint returns qbool."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+        result = a > b
+        assert isinstance(result, ql.qbool)
+
+    def test_gt_qint_preserves_both_operands(self):
+        """Both operands preserved after > comparison."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+        a_width = a.width
+        b_width = b.width
+
+        _ = a > b
+
+        assert a.width == a_width
+        assert b.width == b_width
+
+
+class TestQintLeQint:
+    """Tests for qint <= qint comparison."""
+
+    def test_basic_le_qint(self):
+        """Basic qint <= qint returns qbool."""
+        a = ql.qint(3, width=8)
+        b = ql.qint(5, width=8)
+        result = a <= b
+        assert isinstance(result, ql.qbool)
+
+    def test_le_qint_equal_values(self):
+        """qint <= qint with equal values."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(5, width=8)
+        result = a <= b
+        assert isinstance(result, ql.qbool)
+
+    def test_le_qint_preserves_both_operands(self):
+        """Both operands preserved after <= comparison."""
+        a = ql.qint(3, width=8)
+        b = ql.qint(5, width=8)
+        a_width = a.width
+        b_width = b.width
+
+        _ = a <= b
+
+        assert a.width == a_width
+        assert b.width == b_width
+
+
+class TestQintGeQint:
+    """Tests for qint >= qint comparison."""
+
+    def test_basic_ge_qint(self):
+        """Basic qint >= qint returns qbool."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+        result = a >= b
+        assert isinstance(result, ql.qbool)
+
+    def test_ge_qint_equal_values(self):
+        """qint >= qint with equal values."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(5, width=8)
+        result = a >= b
+        assert isinstance(result, ql.qbool)
+
+    def test_ge_qint_preserves_both_operands(self):
+        """Both operands preserved after >= comparison."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+        a_width = a.width
+        b_width = b.width
+
+        _ = a >= b
+
+        assert a.width == a_width
+        assert b.width == b_width
+
+
+# ============================================================================
+# Self-Comparison Tests
+# ============================================================================
+
+
+class TestSelfComparisons:
+    """Tests for self-comparison optimizations (a op a)."""
+
+    def test_lt_self(self):
+        """a < a returns qbool (represents False)."""
+        a = ql.qint(5, width=8)
+        result = a < a
+        assert isinstance(result, ql.qbool)
+
+    def test_gt_self(self):
+        """a > a returns qbool (represents False)."""
+        a = ql.qint(5, width=8)
+        result = a > a
+        assert isinstance(result, ql.qbool)
+
+    def test_le_self(self):
+        """a <= a returns qbool (represents True)."""
+        a = ql.qint(5, width=8)
+        result = a <= a
+        assert isinstance(result, ql.qbool)
+
+    def test_ge_self(self):
+        """a >= a returns qbool (represents True)."""
+        a = ql.qint(5, width=8)
+        result = a >= a
+        assert isinstance(result, ql.qbool)
+
+    def test_self_comparison_preserves_operand(self):
+        """Self-comparison preserves operand."""
+        a = ql.qint(5, width=8)
+        width_before = a.width
+
+        _ = a < a
+        assert a.width == width_before
+
+        _ = a <= a
+        assert a.width == width_before
+
+        _ = a > a
+        assert a.width == width_before
+
+        _ = a >= a
+        assert a.width == width_before
