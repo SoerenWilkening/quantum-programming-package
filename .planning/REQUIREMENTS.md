@@ -16,10 +16,10 @@ Requirements for automatic uncomputation milestone. Each maps to roadmap phases.
 
 ### Uncomputation Core
 
-- [ ] **UNCOMP-01**: Generate reverse gates (adjoints) for all supported gate types
+- [x] **UNCOMP-01**: Generate reverse gates (adjoints) for all supported gate types
 - [ ] **UNCOMP-02**: Cascade uncomputation through dependency graph when final qbool is uncomputed
 - [ ] **UNCOMP-03**: Reverse order (LIFO) cleanup ensures correct uncomputation sequence
-- [ ] **UNCOMP-04**: Gate-type-specific inversion handles multi-controlled gates and phase gates correctly
+- [x] **UNCOMP-04**: Gate-type-specific inversion handles multi-controlled gates and phase gates correctly
 
 ### Scope Integration
 
@@ -71,8 +71,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRACK-02 | Phase 16 | Complete |
 | TRACK-03 | Phase 16 | Complete |
 | TRACK-04 | Phase 16 | Complete |
-| UNCOMP-01 | Phase 17 | Pending |
-| UNCOMP-04 | Phase 17 | Pending |
+| UNCOMP-01 | Phase 17 | Complete |
+| UNCOMP-04 | Phase 17 | Complete |
 | UNCOMP-02 | Phase 18 | Pending |
 | UNCOMP-03 | Phase 18 | Pending |
 | SCOPE-02 | Phase 18 | Pending |
