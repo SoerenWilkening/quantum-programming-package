@@ -154,6 +154,9 @@ cdef class qint(circuit):
 	cdef public int _start_layer     # Layer before operation (for reversal range)
 	cdef public int _end_layer       # Layer after operation (for reversal range)
 
+	# Phase 20: Mode capture attribute
+	cdef public bint _uncompute_mode  # True = eager, False = lazy
+
 	def __init__(self, value = 0, width = None, bits = None, classical = False, create_new = True, bit_list = None):
 		"""Create a quantum integer.
 
@@ -308,6 +311,10 @@ cdef class qint(circuit):
 			self._start_layer = 0
 			self._end_layer = 0
 
+			# Phase 20: Capture uncomputation mode at creation
+			global _qubit_saving_mode
+			self._uncompute_mode = _qubit_saving_mode
+
 			# Apply X gates based on binary representation of value
 			# Phase 15: Classical initialization via X gate application
 			if value != 0:
@@ -357,6 +364,10 @@ cdef class qint(circuit):
 			self._is_uncomputed = False
 			self._start_layer = 0
 			self._end_layer = 0
+
+			# Phase 20: Capture uncomputation mode at creation
+			global _qubit_saving_mode
+			self._uncompute_mode = _qubit_saving_mode
 
 	@property
 	def width(self):

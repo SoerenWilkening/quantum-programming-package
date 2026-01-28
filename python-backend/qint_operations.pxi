@@ -169,12 +169,18 @@
 		print_circuit(_circuit)
 
 	def __del__(self):
-		"""Automatic uncomputation on garbage collection.
+		"""Automatic uncomputation on garbage collection with mode awareness.
 
 		When a qbool goes out of scope, automatically:
 		1. Cascade uncomputation through dependencies (LIFO order)
 		2. Reverse the gates that created this qbool
 		3. Free the allocated qubits back to the pool
+
+		Mode behavior:
+		- EAGER mode (qubit_saving=True): Always uncompute immediately when GC runs.
+		  This minimizes peak qubit count by freeing qubits as soon as possible.
+		- LAZY mode (qubit_saving=False, default): Only uncompute when scope has exited.
+		  This minimizes gate count by keeping intermediates alive longer (shared gates).
 
 		Notes
 		-----
@@ -182,11 +188,29 @@
 		For deterministic cleanup, use explicit .uncompute() instead.
 		"""
 		global _controlled, _control_bool, _int_counter, _smallest_allocated_qubit, ancilla
-		global _num_qubits
+		global _num_qubits, _scope_stack
 
-		# Use the internal uncompute method with from_del=True
-		# This suppresses exceptions and only prints warnings
-		self._do_uncompute(from_del=True)
+		# Existing Phase 18 checks (in _do_uncompute: _is_uncomputed, allocated_qubits)
+
+		# Phase 20: Check .keep() flag (will be added in Plan 02)
+		if hasattr(self, '_keep_flag') and self._keep_flag:
+			return  # User opted out
+
+		# Phase 20: Mode-based decision - EAGER vs LAZY have different behavior
+		if self._uncompute_mode:
+			# EAGER mode (qubit_saving=True): Always uncompute immediately when GC runs.
+			# This minimizes peak qubit count by freeing qubits as soon as possible.
+			self._do_uncompute(from_del=True)
+		else:
+			# LAZY mode (qubit_saving=False, default): Only uncompute when scope has exited.
+			# This minimizes gate count by keeping intermediates alive longer (shared gates).
+			# Use Phase 19's scope stack to check if we're still in the creation scope.
+			current = current_scope_depth.get()
+			if current <= self.creation_scope:
+				# Scope has exited (depth decreased) - safe to uncompute
+				self._do_uncompute(from_del=True)
+			# else: Still in creation scope - defer uncomputation until scope exits
+			# The qbool will be uncomputed later when its containing scope exits
 
 		# Keep backward compat tracking (deprecated, but maintained for older code)
 		if not self._is_uncomputed and self.bits > 0:
