@@ -1103,6 +1103,12 @@ cdef class qint(circuit):
 		# Allocate result (ancilla qubits)
 		result = qint(width=result_bits)
 
+		# Register dependencies
+		result.add_dependency(self)
+		if type(other) != int:  # Don't track classical operands
+			result.add_dependency(other)
+		result.operation_type = 'AND'
+
 		# Build qubit array: [output:N], [self:N], [other:N]
 		# Q_and expects: [0:bits] = output, [bits:2*bits] = A, [2*bits:3*bits] = B
 		self_offset = 64 - self.bits
@@ -1208,6 +1214,12 @@ cdef class qint(circuit):
 		# Allocate result (ancilla qubits)
 		result = qint(width=result_bits)
 
+		# Register dependencies
+		result.add_dependency(self)
+		if type(other) != int:
+			result.add_dependency(other)
+		result.operation_type = 'OR'
+
 		# Build qubit array: [output:N], [self:N], [other:N]
 		# Q_or expects: [0:bits] = output, [bits:2*bits] = A, [2*bits:3*bits] = B
 		self_offset = 64 - self.bits
@@ -1312,6 +1324,12 @@ cdef class qint(circuit):
 
 		# Allocate result (ancilla qubits)
 		result = qint(width=result_bits)
+
+		# Register dependencies
+		result.add_dependency(self)
+		if type(other) != int:
+			result.add_dependency(other)
+		result.operation_type = 'XOR'
 
 		# Q_xor expects: [0:bits] = target, [bits:2*bits] = source
 		# XOR modifies target in-place: target ^= source
