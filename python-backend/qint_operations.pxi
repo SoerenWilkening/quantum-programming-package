@@ -100,20 +100,18 @@
 	def uncompute(self):
 		"""Explicitly uncompute this qbool and its dependencies.
 
-		Triggers early uncomputation before garbage collection.
-		Use when you need deterministic cleanup timing.
+		Triggers uncomputation of this qbool and cascades through its
+		dependency graph (intermediate qbools created during operations).
 
 		Raises
 		------
-		RuntimeError
-			If other references to this qbool still exist (refcount > 2).
-			The value 2 accounts for: the variable itself + the getrefcount argument.
-		RuntimeError
-			If using qbool after it has been uncomputed.
+		ValueError
+			If other references to this qbool still exist.
 
 		Notes
 		-----
-		This method is idempotent: calling twice is a no-op, not an error.
+		This method is idempotent: calling twice prints warning, not error.
+		Not affected by .keep() flag - explicit uncompute always allowed.
 
 		Examples
 		--------
@@ -126,20 +124,20 @@
 		"""
 		import sys
 
-		# Already uncomputed - idempotent, no error (Phase 18 decision)
+		# Idempotent: repeated calls print warning
 		if self._is_uncomputed:
+			print("Warning: .uncompute() called on already-uncomputed qbool",
+			      file=sys.stderr)
 			return
 
-		# Check reference count (getrefcount adds 1 for the argument)
-		# Expected: 2 = variable + getrefcount argument
+		# Check reference count
 		refcount = sys.getrefcount(self)
-		if refcount > 2:
-			raise RuntimeError(
-				f"Cannot uncompute qbool: {refcount - 1} references still exist. "
-				f"Delete other references first or let garbage collection handle cleanup."
+		if refcount > 2:  # self + getrefcount argument
+			raise ValueError(
+				f"Cannot uncompute: qbool still in use ({refcount - 1} references exist). "
+				f"Delete other references first or let automatic cleanup handle it."
 			)
 
-		# Perform uncomputation with exception propagation (not from __del__)
 		self._do_uncompute(from_del=False)
 
 	def keep(self):

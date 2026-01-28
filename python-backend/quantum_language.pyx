@@ -156,6 +156,7 @@ cdef class qint(circuit):
 
 	# Phase 20: Mode capture attribute
 	cdef public bint _uncompute_mode  # True = eager, False = lazy
+	cdef bint _keep_flag  # True = prevent automatic uncomputation
 
 	def __init__(self, value = 0, width = None, bits = None, classical = False, create_new = True, bit_list = None):
 		"""Create a quantum integer.
@@ -314,6 +315,7 @@ cdef class qint(circuit):
 			# Phase 20: Capture uncomputation mode at creation
 			global _qubit_saving_mode
 			self._uncompute_mode = _qubit_saving_mode
+			self._keep_flag = False
 
 			# Apply X gates based on binary representation of value
 			# Phase 15: Classical initialization via X gate application
@@ -368,6 +370,7 @@ cdef class qint(circuit):
 			# Phase 20: Capture uncomputation mode at creation
 			global _qubit_saving_mode
 			self._uncompute_mode = _qubit_saving_mode
+			self._keep_flag = False
 
 	@property
 	def width(self):
