@@ -360,6 +360,11 @@ cdef class qint(circuit):
 	cdef public int creation_scope  # scope depth when created
 	cdef public object control_context  # list of control qubit indices when created
 
+	# Phase 18: Uncomputation tracking attributes
+	cdef public bint _is_uncomputed  # Idempotency flag
+	cdef public int _start_layer     # Layer before operation (for reversal range)
+	cdef public int _end_layer       # Layer after operation (for reversal range)
+
 	def __init__(self, value = 0, width = None, bits = None, classical = False, create_new = True, bit_list = None):
 		"""Create a quantum integer.
 
@@ -504,6 +509,11 @@ cdef class qint(circuit):
 			else:
 				self.control_context = []
 
+			# Phase 18: Initialize uncomputation tracking
+			self._is_uncomputed = False
+			self._start_layer = 0
+			self._end_layer = 0
+
 			# Apply X gates based on binary representation of value
 			# Phase 15: Classical initialization via X gate application
 			if value != 0:
@@ -543,6 +553,11 @@ cdef class qint(circuit):
 				self.control_context = [(<qint>_control_bool).qubits[63]]
 			else:
 				self.control_context = []
+
+			# Phase 18: Initialize uncomputation tracking
+			self._is_uncomputed = False
+			self._start_layer = 0
+			self._end_layer = 0
 
 	@property
 	def width(self):
