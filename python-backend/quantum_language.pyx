@@ -608,6 +608,62 @@ cdef class qint(circuit):
 				live.append(parent)
 		return live
 
+	def _do_uncompute(self, bint from_del=False):
+		"""Internal method to uncompute this qbool and cascade to dependencies.
+
+		Called by __del__ (from_del=True) or explicit uncompute() (from_del=False).
+
+		Parameters
+		----------
+		from_del : bool
+			If True, suppress exceptions and only print warnings (Python __del__ best practice).
+			If False, allow exceptions to propagate.
+		"""
+		global _circuit, _circuit_initialized
+		cdef qubit_allocator_t *alloc
+
+		# Idempotency check - already uncomputed
+		if self._is_uncomputed:
+			return
+
+		# No allocated qubits means nothing to uncompute
+		if not self.allocated_qubits:
+			self._is_uncomputed = True
+			return
+
+		try:
+			# 1. CASCADE: Get live parents and sort by creation order (descending = LIFO)
+			live_parents = self.get_live_parents()
+			# Sort by _creation_order descending for LIFO order
+			live_parents.sort(key=lambda p: p._creation_order, reverse=True)
+
+			# Recursively uncompute parents (they will cascade further if needed)
+			for parent in live_parents:
+				if not parent._is_uncomputed:
+					parent._do_uncompute(from_del=from_del)
+
+			# 2. REVERSE GATES: Only if there's a valid range
+			if _circuit_initialized and self._end_layer > self._start_layer:
+				reverse_circuit_range(_circuit, self._start_layer, self._end_layer)
+
+			# 3. FREE QUBITS: Return to allocator
+			if _circuit_initialized:
+				alloc = circuit_get_allocator(<circuit_s*>_circuit)
+				if alloc != NULL:
+					allocator_free(alloc, self.allocated_start, self.bits)
+
+			# 4. Mark as uncomputed and clear ownership
+			self._is_uncomputed = True
+			self.allocated_qubits = False
+
+		except Exception as e:
+			if from_del:
+				# Phase 18 decision: __del__ failures print warning only
+				import sys
+				print(f"Warning: Uncomputation failed: {e}", file=sys.stderr)
+			else:
+				raise
+
 	def print_circuit(self):
 		"""Print the current quantum circuit to stdout.
 
