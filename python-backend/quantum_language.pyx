@@ -799,7 +799,7 @@ cdef class qint(circuit):
 		-----
 		Creates controlled quantum gates where this qint acts as control.
 		"""
-		global _controlled, _control_bool
+		global _controlled, _control_bool, _scope_stack
 		self._check_not_uncomputed()
 		if not _controlled:
 			_control_bool = self
@@ -809,10 +809,15 @@ cdef class qint(circuit):
 			_control_bool &= self
 			pass
 		_controlled = True
+
+		# Phase 19: Scope management - push new scope frame
+		current_scope_depth.set(current_scope_depth.get() + 1)
+		_scope_stack.append([])  # New empty scope frame
+
 		return self
 
 	def __exit__(self, exc__type, exc, tb):
-		"""Exit quantum conditional context.
+		"""Exit quantum conditional context with scope cleanup.
 
 		Parameters
 		----------
@@ -834,11 +839,29 @@ cdef class qint(circuit):
 		>>> with flag:
 		...     pass  # Controlled operations here
 		"""
-		global _controlled, _control_bool, ancilla, _smallest_allocated_qubit
+		global _controlled, _control_bool, ancilla, _smallest_allocated_qubit, _scope_stack
+
+		# Phase 19: Uncompute scope-local qbools FIRST (while still controlled)
+		# This ensures uncomputation gates are generated inside the controlled context
+		if _scope_stack:
+			scope_qbools = _scope_stack.pop()
+
+			# Sort by _creation_order descending for LIFO (newest first)
+			scope_qbools.sort(key=lambda q: q._creation_order, reverse=True)
+
+			# Uncompute each qbool in scope (skip if already uncomputed)
+			for qbool_obj in scope_qbools:
+				if not qbool_obj._is_uncomputed:
+					qbool_obj._do_uncompute(from_del=False)
+
+		# Phase 19: Decrement scope depth
+		current_scope_depth.set(current_scope_depth.get() - 1)
+
+		# THEN restore control state (existing logic)
 		_controlled = False
 		_control_bool = None
 
-		# undo logical and operations
+		# undo logical and operations (TODO from original)
 		return False  # do not suppress exceptions
 
 	cdef addition_inplace(self, other: qint | int, invert: int  = False):
