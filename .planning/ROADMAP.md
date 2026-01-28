@@ -12,7 +12,7 @@ This milestone delivers automatic uncomputation of intermediate qubits in boolea
 
 - v1.0 MVP - Phases 1-10 (shipped 2026-01-27)
 - v1.1 QPU State Removal - Phases 11-15 (shipped 2026-01-28)
-- v1.2 Automatic Uncomputation - Phases 16-20 (in progress)
+- v1.2 Automatic Uncomputation - Phases 16-20 (shipped 2026-01-28)
 
 ## Phase Overview
 
@@ -40,7 +40,7 @@ Eliminated global state dependency and implemented efficient comparison operator
 
 </details>
 
-### v1.2 Automatic Uncomputation (In Progress)
+### v1.2 Automatic Uncomputation (Complete)
 
 **Milestone Goal:** Automatically uncompute intermediate qubits when their lifetime ends
 
@@ -165,10 +165,10 @@ Plans:
 **Plans:** 4 plans
 
 Plans:
-- [ ] 20-01-PLAN.md - Option API and mode-aware automatic uncomputation
-- [ ] 20-02-PLAN.md - .keep() method for opt-out of automatic uncomputation
-- [ ] 20-03-PLAN.md - Enhanced error messages for uncomputation failures
-- [ ] 20-04-PLAN.md - Comprehensive Phase 20 test suite
+- [x] 20-01-PLAN.md - Option API and mode-aware automatic uncomputation
+- [x] 20-02-PLAN.md - .keep() method for opt-out of automatic uncomputation
+- [x] 20-03-PLAN.md - Enhanced error messages for uncomputation failures
+- [x] 20-04-PLAN.md - Comprehensive Phase 20 test suite
 
 ---
 
@@ -187,12 +187,12 @@ Plans:
 | SCOPE-02 | Phase 18 | Complete |
 | SCOPE-01 | Phase 19 | Complete |
 | SCOPE-04 | Phase 19 | Complete |
-| MODE-01 | Phase 20 | Pending |
-| MODE-02 | Phase 20 | Pending |
-| MODE-03 | Phase 20 | Pending |
-| CTRL-01 | Phase 20 | Pending |
-| CTRL-02 | Phase 20 | Pending |
-| SCOPE-03 | Phase 20 | Pending |
+| MODE-01 | Phase 20 | Complete |
+| MODE-02 | Phase 20 | Complete |
+| MODE-03 | Phase 20 | Complete |
+| CTRL-01 | Phase 20 | Complete |
+| CTRL-02 | Phase 20 | Complete |
+| SCOPE-03 | Phase 20 | Complete |
 
 **Coverage:** 17/17 (100%)
 
@@ -219,7 +219,7 @@ Plans:
 | 17. Reverse Gate Generation | v1.2 | 1/1 | Complete | 2026-01-28 |
 | 18. Basic Uncomputation | v1.2 | 2/2 | Complete | 2026-01-28 |
 | 19. Context Manager Integration | v1.2 | 1/1 | Complete | 2026-01-28 |
-| 20. Modes and Control | v1.2 | 0/4 | Planned | - |
+| 20. Modes and Control | v1.2 | 4/4 | Complete | 2026-01-28 |
 
 ---
 *Roadmap created: 2026-01-28*
