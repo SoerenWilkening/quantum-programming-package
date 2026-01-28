@@ -675,17 +675,27 @@ cdef class qint(circuit):
 		print_circuit(_circuit)
 
 	def __del__(self):
+		"""Automatic uncomputation on garbage collection.
+
+		When a qbool goes out of scope, automatically:
+		1. Cascade uncomputation through dependencies (LIFO order)
+		2. Reverse the gates that created this qbool
+		3. Free the allocated qubits back to the pool
+
+		Notes
+		-----
+		Follows Python best practice: exceptions in __del__ print warnings only.
+		For deterministic cleanup, use explicit .uncompute() instead.
+		"""
 		global _controlled, _control_bool, _int_counter, _smallest_allocated_qubit, ancilla
 		global _num_qubits
-		cdef qubit_allocator_t *alloc
 
-		if self.allocated_qubits:
-			# NEW: Return qubits to allocator
-			alloc = circuit_get_allocator(<circuit_s*>_circuit)
-			if alloc != NULL:
-				allocator_free(alloc, self.allocated_start, self.bits)
+		# Use the internal uncompute method with from_del=True
+		# This suppresses exceptions and only prints warnings
+		self._do_uncompute(from_del=True)
 
-			# Keep backward compat tracking (deprecated)
+		# Keep backward compat tracking (deprecated, but maintained for older code)
+		if not self._is_uncomputed and self.bits > 0:
 			_smallest_allocated_qubit -= self.bits
 			ancilla -= self.bits
 
