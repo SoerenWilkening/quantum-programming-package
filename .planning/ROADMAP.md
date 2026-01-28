@@ -10,9 +10,9 @@ This milestone delivers automatic uncomputation of intermediate qubits in boolea
 
 ## Milestones
 
-- ✅ **v1.0 MVP** - Phases 1-10 (shipped 2026-01-27)
-- ✅ **v1.1 QPU State Removal** - Phases 11-15 (shipped 2026-01-28)
-- 🚧 **v1.2 Automatic Uncomputation** - Phases 16-20 (in progress)
+- v1.0 MVP - Phases 1-10 (shipped 2026-01-27)
+- v1.1 QPU State Removal - Phases 11-15 (shipped 2026-01-28)
+- v1.2 Automatic Uncomputation - Phases 16-20 (in progress)
 
 ## Phase Overview
 
@@ -27,20 +27,20 @@ This milestone delivers automatic uncomputation of intermediate qubits in boolea
 ## Phase Details
 
 <details>
-<summary>✅ v1.0 MVP (Phases 1-10) - SHIPPED 2026-01-27</summary>
+<summary>v1.0 MVP (Phases 1-10) - SHIPPED 2026-01-27</summary>
 
 Delivered production-ready quantum programming framework with variable-width integers, complete arithmetic, bitwise operations, circuit optimization, and comprehensive documentation. 41 plans completed across 10 phases.
 
 </details>
 
 <details>
-<summary>✅ v1.1 QPU State Removal (Phases 11-15) - SHIPPED 2026-01-28</summary>
+<summary>v1.1 QPU State Removal (Phases 11-15) - SHIPPED 2026-01-28</summary>
 
 Eliminated global state dependency and implemented efficient comparison operators with classical qint initialization. 13 plans completed across 5 phases.
 
 </details>
 
-### 🚧 v1.2 Automatic Uncomputation (In Progress)
+### v1.2 Automatic Uncomputation (In Progress)
 
 **Milestone Goal:** Automatically uncompute intermediate qubits when their lifetime ends
 
@@ -48,10 +48,10 @@ Eliminated global state dependency and implemented efficient comparison operator
 
 ### Phase 16: Dependency Tracking Infrastructure
 
-**Goal:** Record parent→child dependencies when qbool operations create intermediate results
+**Goal:** Record parent-child dependencies when qbool operations create intermediate results
 
 **Requirements:**
-- TRACK-01: Track parent→child dependencies when qbool operations create intermediate results
+- TRACK-01: Track parent-child dependencies when qbool operations create intermediate results
 - TRACK-02: Track dependencies from qint comparison results (>, <, ==, etc.)
 - TRACK-03: Single ownership model prevents circular reference memory leaks
 - TRACK-04: Layer-aware dependency tracking respects existing circuit structure
@@ -64,7 +64,11 @@ Eliminated global state dependency and implemented efficient comparison operator
 
 **Dependencies:** None (foundation phase)
 
-**Plans:** TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 16-01-PLAN.md - Dependency tracking infrastructure and operator modifications
+- [ ] 16-02-PLAN.md - Tests and verification
 
 ---
 
@@ -77,8 +81,8 @@ Eliminated global state dependency and implemented efficient comparison operator
 - UNCOMP-04: Gate-type-specific inversion handles multi-controlled gates and phase gates correctly
 
 **Success Criteria:**
-1. C backend can generate reverse gate sequences for basic gates (X→X, H→H)
-2. Phase gates invert correctly (P(θ)→P(-θ), T→T†)
+1. C backend can generate reverse gate sequences for basic gates (X->X, H->H)
+2. Phase gates invert correctly (P(t)->P(-t), T->Tdagger)
 3. Multi-controlled gates reverse correctly (maintaining control structure and gate order)
 
 **Dependencies:** Phase 16 (needs dependency graph to know what to reverse)
@@ -195,7 +199,7 @@ Eliminated global state dependency and implemented efficient comparison operator
 | 13. Equality Refactoring | v1.1 | 3/3 | Complete | 2026-01-28 |
 | 14. Ordering Operators | v1.1 | 3/3 | Complete | 2026-01-28 |
 | 15. Classical Initialization | v1.1 | 2/2 | Complete | 2026-01-28 |
-| 16. Dependency Tracking | v1.2 | 0/? | Not started | - |
+| 16. Dependency Tracking | v1.2 | 0/2 | Planned | - |
 | 17. Reverse Gate Generation | v1.2 | 0/? | Not started | - |
 | 18. Basic Uncomputation | v1.2 | 0/? | Not started | - |
 | 19. Context Manager Integration | v1.2 | 0/? | Not started | - |
