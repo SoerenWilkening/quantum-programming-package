@@ -1567,6 +1567,11 @@ cdef class qint(circuit):
 			# 3. Restore operand: self += other
 			self += other
 
+			# Track dependencies on compared qints
+			result.add_dependency(self)
+			result.add_dependency(other)
+			result.operation_type = 'EQ'
+
 			return result
 
 		# Handle qint == int case using C-level CQ_equal_width
@@ -1617,6 +1622,10 @@ cdef class qint(circuit):
 			# Note: seq is caller-owned per comparison_ops.h, but we don't have
 			# a free_sequence binding exposed. This is consistent with existing
 			# codebase patterns where sequences are not explicitly freed.
+
+			# Track dependency on compared qint (classical doesn't need tracking)
+			result.add_dependency(self)
+			result.operation_type = 'EQ'
 
 			return result
 
@@ -1685,6 +1694,10 @@ cdef class qint(circuit):
 			result ^= msb  # Copy MSB to result
 			# Restore operand
 			self += other
+			# Track dependencies
+			result.add_dependency(self)
+			result.add_dependency(other)
+			result.operation_type = 'LT'
 			return result
 
 		# Handle int operand
@@ -1703,6 +1716,9 @@ cdef class qint(circuit):
 			result ^= msb
 			# Restore operand
 			self += other
+			# Track dependency on qint
+			result.add_dependency(self)
+			result.operation_type = 'LT'
 			return result
 
 		raise TypeError("Comparison requires qint or int")
@@ -1748,6 +1764,10 @@ cdef class qint(circuit):
 			result ^= msb
 			# Restore operand
 			other += self
+			# Track dependencies
+			result.add_dependency(self)
+			result.add_dependency(other)
+			result.operation_type = 'GT'
 			return result
 
 		# Handle int operand
@@ -1810,6 +1830,10 @@ cdef class qint(circuit):
 			result |= temp_zero
 			# Restore operand
 			self += other
+			# Track dependencies
+			result.add_dependency(self)
+			result.add_dependency(other)
+			result.operation_type = 'LE'
 			return result
 
 		# Handle int operand
@@ -1831,6 +1855,9 @@ cdef class qint(circuit):
 			result |= temp_zero
 			# Restore operand
 			self += other
+			# Track dependency on qint
+			result.add_dependency(self)
+			result.operation_type = 'LE'
 			return result
 
 		raise TypeError("Comparison requires qint or int")
