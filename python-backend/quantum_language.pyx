@@ -38,6 +38,10 @@ current_scope_depth = contextvars.ContextVar('scope_depth', default=0)
 # Global creation counter for dependency cycle prevention
 _global_creation_counter = 0
 
+# Phase 19: Scope stack for context manager integration
+# Each entry is a list of qbools created in that scope
+_scope_stack = []  # List[List[qint]]
+
 # cdef unsigned int * qubit_array = <unsigned int *> malloc(6 * INTEGERSIZE)
 
 qubit_array = np.ndarray(4 * 64 + NUMANCILLY, dtype = np.uint32)  # Max width support
@@ -509,6 +513,11 @@ cdef class qint(circuit):
 			else:
 				self.control_context = []
 
+			# Phase 19: Register with active scope if inside a with block
+			global _scope_stack
+			if _scope_stack and self.creation_scope == current_scope_depth.get() and current_scope_depth.get() > 0:
+				_scope_stack[-1].append(self)
+
 			# Phase 18: Initialize uncomputation tracking
 			self._is_uncomputed = False
 			self._start_layer = 0
@@ -553,6 +562,11 @@ cdef class qint(circuit):
 				self.control_context = [(<qint>_control_bool).qubits[63]]
 			else:
 				self.control_context = []
+
+			# Phase 19: Register with active scope if inside a with block
+			global _scope_stack
+			if _scope_stack and self.creation_scope == current_scope_depth.get() and current_scope_depth.get() > 0:
+				_scope_stack[-1].append(self)
 
 			# Phase 18: Initialize uncomputation tracking
 			self._is_uncomputed = False
