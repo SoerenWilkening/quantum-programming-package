@@ -886,17 +886,8 @@ cdef class qint(circuit):
 		"""
 		return self.value
 
-	# Arithmetic operations (addition, subtraction, multiplication)
-	include "qint_arithmetic.pxi"
-
-	# Bitwise operations (&, |, ^, ~, [])
-	include "qint_bitwise.pxi"
-
-	# Comparison operations (==, !=, <, >, <=, >=)
-	include "qint_comparison.pxi"
-
-	# Division operations (//, %, divmod)
-	include "qint_division.pxi"
+	# All qint operations (arithmetic, bitwise, comparison, division)
+	include "qint_operations.pxi"
 
 
 
