@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-27)
+See: .planning/PROJECT.md (updated 2026-01-28)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v1.1 QPU State Removal & Comparison Refactoring — COMPLETE
+**Current focus:** Planning next milestone (v1.2)
 
 ## Current Position
 
-Phase: Phase 15 - Classical Initialization
-Plan: 2 of 2 (15-01, 15-02 complete)
-Status: Phase complete
-Last activity: 2026-01-27 - Completed 15-02-PLAN.md (Classical Initialization Tests)
+Phase: 16+ (not yet planned)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-01-28 — v1.1 milestone complete
 
-Progress: ████████████████████ 2/2 plans (100%)
+Progress: Milestone v1.1 shipped, ready for v1.2 planning
 
 ## Performance Metrics
 
@@ -35,34 +35,7 @@ Progress: ████████████████████ 2/2 plans
 
 ### Decisions
 
-| ID | What | Why | Impact | Phase |
-|---|---|---|---|---|
-| DEC-11-01-01 | Removed purely classical functions that don't generate quantum gates | Functions only wrote to QPU_state without gate generation | Reduced dead code and global state dependencies | 11 |
-| DEC-11-01-02 | Documented removal rationale in comments | Future developers need to know why functions were removed | Phase-tagged removal comments provide traceability | 11 |
-| DEC-11-02-01 | Keep legacy P_add/cP_add as deprecated wrappers | Maintain backward compatibility during migration | Future plans migrate callers incrementally | 11 |
-| DEC-11-02-02 | Fix memory allocation bugs in phase gate functions | Original functions had missing calloc calls | All new parameterized functions have correct memory management | 11 |
-| DEC-11-03-01 | Parameterize legacy semi-classical functions without backward compatibility wrappers | Modern alternatives exist (Q_and, Q_xor, Q_or), no need for deprecated wrappers | Callers will migrate to explicit parameters or modern functions | 11 |
-| DEC-11-03-02 | Selectively parameterize only functions reading QPU_state | qq_and_seq and qq_or_seq have commented-out reads, don't need changes | Avoids unnecessary refactoring of functions already independent of global state | 11 |
-| DEC-11-04-01 | Removed deprecated QPU_state wrapper functions | Functions still referenced QPU_state which was being removed, blocking compilation | Callers must use parameterized versions (_param or _width suffix) | 11 |
-| DEC-11-04-02 | Added M_PI definition for portability | M_PI availability varies across platforms and compilers | Portable compilation on all platforms without math constant issues | 11 |
-| DEC-12-01-01 | Simplified multi-bit comparison to 1-2 bits fully working, 3+ placeholder | MAXCONTROLS=2 limitation requires ancilla or large_control array for 3+ bit AND | Multi-bit comparisons (3+) partially implemented, full version deferred to Phase 12-02 | 12 |
-| DEC-12-01-02 | Use empty sequence (num_layer=0) for overflow instead of NULL | Distinguishes overflow (valid call, value too large) from invalid parameters | Callers can check seq->num_layer == 0 to detect overflow condition | 12 |
-| DEC-12-01-03 | Created C test infrastructure in tests/c/ directory | Direct C-level testing without Python bindings for unit testing | Future C functions can be tested in isolation with make && ./test_* | 12 |
-| DEC-12-02-01 | Use large_control array for >2 controls instead of ancilla decomposition | gate_t structure already supports large_control, avoids ancilla qubit overhead | Simple, efficient n-controlled gates without additional qubit allocation | 12 |
-| DEC-12-02-02 | mcx() allocates large_control, caller's free_sequence() deallocates | Consistent with existing memory management pattern in codebase | Test helper and future code must free large_control when freeing sequences | 12 |
-| DEC-13-01-01 | Use subtract-add-back pattern for qint == qint | Preserves operands after comparison by subtracting, checking equality to zero, then adding back | Both operands unchanged after comparison | 13 |
-| DEC-13-01-02 | Return qbool(False) for overflow in equality comparison | When classical value doesn't fit in qint's bit width, result is definitely not equal | Clean handling of out-of-range comparisons | 13 |
-| DEC-13-01-03 | Self-comparison optimization (a == a) returns True directly | Identity comparison doesn't need gates | Optimization for common pattern | 13 |
-| DEC-14-01-01 | Use in-place subtract-add-back pattern for all ordering operators | Eliminates qubit allocation overhead, follows Phase 13 pattern | Consistent memory-efficient implementation across all comparisons | 14 |
-| DEC-14-01-02 | Check MSB (sign bit) for negative detection in two's complement | Two's complement representation uses MSB as sign bit | Direct sign inspection without additional gates | 14 |
-| DEC-14-01-03 | Combine MSB check with zero check for <= operator | a <= b means (a - b) is negative OR zero | Uses Phase 13's zero-check via self == 0, then ORs with MSB | 14 |
-| DEC-14-01-04 | Delegate __gt__ int operand to NOT(self <= other) | More efficient than implementing separate subtract-check logic | Reduces code duplication, maintains consistency | 14 |
-| DEC-14-01-05 | Optimize self-comparisons to return directly without gates | Identity comparisons have known results (x < x = False, x <= x = True) | Zero gate overhead for self-comparison cases | 14 |
-| DEC-15-01-01 | Auto-width uses unsigned representation | Simpler mental model - qint(5) needs 3 bits (101), not 4 with sign | Users creating small values get minimal qubit allocation | 15 |
-| DEC-15-01-02 | Truncation warnings only for explicit width | Auto-width always calculates correct width, can't have truncation | Cleaner user experience - qint(1000) doesn't warn, qint(1000, width=8) does | 15 |
-| DEC-15-01-03 | Value 0 defaults to 8-bit width | Zero is special case - can't determine intent from value alone | Backward compatible with existing 8-bit default | 15 |
-| DEC-15-02-01 | Follow Phase 13/14 test pattern | Consistent test structure with organized classes by category | Clear test organization, discoverable test categories | 15 |
-| DEC-15-02-02 | Use warnings module for no-warning tests | pytest.warns(None) raises TypeError in pytest 9.0.2+ | Tests work correctly across pytest versions | 15 |
+v1.1 decisions archived to PROJECT.md Key Decisions table.
 
 See also: PROJECT.md Key Decisions table for project-wide decisions.
 
@@ -78,17 +51,12 @@ None.
 - QQ_mul segfault fixed via MAXLAYERINSEQUENCE allocation
 
 **Resolved in v1.1:**
-- QPU_state completely removed (Phase 11) - Full system is now stateless
-- Python bindings updated to remove QPU_state dependency (Phase 11-05)
-- Comparison functions parameterization (Phase 12) - Complete for all bit widths (1-64)
-- Multi-bit (3+) comparison full n-bit AND logic (Phase 12-02) - Complete using mcx()
-- n-controlled gate support in run_instruction, optimizer, gate.c (Phase 13-01) - Complete
-
-**Active in v1.1:**
-None
+- QPU_state completely removed — Full system is now stateless
+- Comparison functions parameterization complete for all bit widths (1-64)
+- n-controlled gate support in execution layer, optimizer, gate.c
 
 **Known pre-existing issues:**
-- Multiplication tests segfault at certain widths (C backend issue, unrelated to Phase 11)
+- Multiplication tests segfault at certain widths (C backend issue)
 
 **Known limitations (acceptable):**
 - qint_mod * qint_mod raises NotImplementedError (by design)
@@ -102,29 +70,26 @@ None
 
 ## Session Continuity
 
-Last session: 2026-01-27
-Stopped at: Completed 15-02-PLAN.md (Classical Initialization Tests)
-Resume file: .planning/phases/15-classical-initialization/15-02-SUMMARY.md
-Note: Phase 15 complete! INIT-01 requirement fully satisfied with comprehensive test coverage (57 tests). Classical initialization via X gates with auto-width mode operational. All 208 tests pass (Phase 13, 14, variable width, Phase 15). Ready for next phase or milestone planning.
+Last session: 2026-01-28
+Stopped at: v1.1 milestone completed
+Resume file: .planning/MILESTONES.md
+Note: v1.1 shipped! Stateless C backend, efficient comparisons, classical initialization. 149 tests at 100% pass rate. Ready for v1.2 planning.
 
 ---
 
-## v1.0 Milestone Summary
+## v1.1 Milestone Summary
 
-**SHIPPED 2026-01-27**
+**SHIPPED 2026-01-28**
 
 See `.planning/MILESTONES.md` for full milestone record.
-See `.planning/milestones/v1.0-ROADMAP.md` for archived roadmap.
-See `.planning/milestones/v1.0-REQUIREMENTS.md` for archived requirements.
+See `.planning/milestones/v1.1-ROADMAP.md` for archived roadmap.
+See `.planning/milestones/v1.1-REQUIREMENTS.md` for archived requirements.
 
 **Key Achievements:**
-- Clean C backend with centralized memory management
-- Variable-width quantum integers (1-64 bits)
-- Complete arithmetic operations (add, sub, mul, div, mod, modular arithmetic)
-- Bitwise operations with Python operator overloading
-- Circuit optimization and statistics
-- Comprehensive documentation and test coverage
+- QPU_state global completely removed — stateless architecture
+- Multi-controlled gates (mcx) for n-bit comparisons (1-64 bits)
+- Memory-efficient comparison operators (in-place pattern)
+- Classical qint initialization with auto-width mode
 
 **Next Steps:**
-- `/gsd:audit-milestone` to verify v1.1 requirements, cross-phase integration
-- `/gsd:complete-milestone` to archive milestone and prepare for v1.2
+- `/gsd:new-milestone` to define v1.2 requirements and roadmap

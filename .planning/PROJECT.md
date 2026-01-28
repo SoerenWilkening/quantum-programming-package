@@ -27,16 +27,17 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - ✓ Comprehensive documentation (Python docstrings, C headers, README) — v1.0
 - ✓ Test infrastructure (pytest, pre-commit, characterization tests) — v1.0
 - ✓ Performance benchmarks (QFT up to 2000 variables) — existing
+- ✓ Remove QPU_state global dependency (R0-R3 registers) — v1.1
+- ✓ Refactor equality comparison with CQ_equal_width/cCQ_equal_width — v1.1
+- ✓ Implement qint == qint as (qint - qint) == 0 — v1.1
+- ✓ Refactor >= and <= to use in-place subtraction/addition — v1.1
+- ✓ Classical qint initialization via X gates — v1.1
 
 ### Active
 
-**Milestone v1.1: QPU State Removal & Comparison Refactoring**
+**Milestone v1.2: TBD**
 
-- [ ] Remove QPU_state global dependency (R0-R3 registers)
-- [ ] Refactor equality comparison to use predefined C functions
-- [ ] Implement qint == qint as (qint - qint) == 0
-- [ ] Refactor >= and <= to use in-place subtraction/addition
-- [ ] Initialize qint with classical value via Q_not on binary representation
+(Requirements to be defined in `/gsd:new-milestone`)
 
 ### Out of Scope
 
@@ -50,12 +51,12 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ## Context
 
-**Architecture:** Three-layer design — C backend (gate primitives, circuit management, integer operations) → Cython bindings → Python frontend (qint/qbool classes, operator overloading).
+**Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) → Cython bindings → Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
 
-**Current state:** v1.0 shipped. Clean modular C backend with types.h, circuit.h, arithmetic_ops.h, comparison_ops.h, bitwise_ops.h. Centralized qubit allocator with ownership tracking. Variable-width quantum integers (1-64 bits) with complete arithmetic and bitwise operations.
+**Current state:** v1.1 shipped. Clean modular C backend with types.h, circuit.h, arithmetic_ops.h, comparison_ops.h, bitwise_ops.h. Centralized qubit allocator with ownership tracking. Variable-width quantum integers (1-64 bits) with complete arithmetic, comparison, and initialization operations.
 
 **Codebase:**
-- ~67,600 lines of code (Python, Cython, C)
+- ~70,900 lines of code (Python, Cython, C)
 - Version 0.1.0
 - Tech stack: Python 3.11+, Cython, C backend
 
@@ -72,7 +73,7 @@ Write quantum algorithms in natural programming style that compiles to efficient
 **Known limitations:**
 - qint_mod * qint_mod raises NotImplementedError (by design)
 - apply_merge() placeholder for future phase rotation merging
-- QPU_state global registers (R0-R3) — removing in v1.1
+- Multiplication tests segfault at certain widths (C backend issue, pre-existing)
 
 ## Constraints
 
@@ -91,6 +92,10 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Right-aligned qubit array layout | Supports variable-width with minimal changes | ✓ Good — 1-64 bits work |
 | MAXLAYERINSEQUENCE for QQ_mul | Original formula underestimated layer needs | ⚠️ Revisit — may need optimization |
 | Single README format | GitHub-rendered, accessible without build | ✓ Good — easy to maintain |
+| Stateless C backend | Global state eliminated for cleaner architecture | ✓ Good — v1.1 complete |
+| Multi-controlled gates via large_control | Supports n-controlled X without ancilla qubits | ✓ Good — efficient for comparisons |
+| In-place comparison pattern | Subtract-add-back preserves operands without temp allocation | ✓ Good — memory efficient |
+| Auto-width qint initialization | qint(5) calculates minimum bits automatically | ✓ Good — user-friendly API |
 
 ---
-*Last updated: 2026-01-27 after v1.1 milestone started*
+*Last updated: 2026-01-28 after v1.1 milestone*
