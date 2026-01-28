@@ -1,5 +1,7 @@
 import sys
 import warnings
+import weakref
+import contextvars
 
 import numpy as np
 # cimport numpy as np
@@ -29,6 +31,12 @@ cdef int _int_counter = 0
 cdef object _list_of_controls = []
 
 cdef unsigned int _smallest_allocated_qubit = 0
+
+# Module-level context variable for scope depth (Phase 16: dependency tracking)
+current_scope_depth = contextvars.ContextVar('scope_depth', default=0)
+
+# Global creation counter for dependency cycle prevention
+_global_creation_counter = 0
 
 # cdef unsigned int * qubit_array = <unsigned int *> malloc(6 * INTEGERSIZE)
 
@@ -342,6 +350,13 @@ cdef class qint(circuit):
 	cdef bint allocated_qubits
 	cdef unsigned int allocated_start  # Starting qubit index from allocator
 
+	# Phase 16: Dependency tracking attributes
+	cdef object dependency_parents  # list[weakref.ref[qint]]
+	cdef int _creation_order
+	cdef object operation_type  # str: 'AND', 'OR', 'XOR', 'EQ', 'LT', 'GT', 'LE', 'GE'
+	cdef int creation_scope  # scope depth when created
+	cdef object control_context  # list of control qubit indices when created
+
 	def __init__(self, value = 0, width = None, bits = None, classical = False, create_new = True, bit_list = None):
 		"""Create a quantum integer.
 
@@ -473,6 +488,19 @@ cdef class qint(circuit):
 			self.allocated_start = start  # Track for deallocation
 			self.allocated_qubits = True
 
+			# Phase 16: Initialize dependency tracking
+			global _global_creation_counter, _control_bool
+			_global_creation_counter += 1
+			self._creation_order = _global_creation_counter
+			self.dependency_parents = []
+			self.operation_type = None
+			self.creation_scope = current_scope_depth.get()
+			# Capture control context
+			if _control_bool is not None:
+				self.control_context = [(<qint>_control_bool).qubits[63]]
+			else:
+				self.control_context = []
+
 			# Apply X gates based on binary representation of value
 			# Phase 15: Classical initialization via X gate application
 			if value != 0:
@@ -500,6 +528,19 @@ cdef class qint(circuit):
 			self.qubits = bit_list
 			self.allocated_qubits = False
 
+			# Phase 16: Initialize dependency tracking for bit_list path
+			global _global_creation_counter, _control_bool
+			_global_creation_counter += 1
+			self._creation_order = _global_creation_counter
+			self.dependency_parents = []
+			self.operation_type = None
+			self.creation_scope = current_scope_depth.get()
+			# Capture control context
+			if _control_bool is not None:
+				self.control_context = [(<qint>_control_bool).qubits[63]]
+			else:
+				self.control_context = []
+
 	@property
 	def width(self):
 		"""Get the bit width of this quantum integer (read-only).
@@ -513,6 +554,41 @@ cdef class qint(circuit):
 			16
 		"""
 		return self.bits
+
+	def add_dependency(self, parent):
+		"""Register parent as dependency (weak reference).
+
+		Parameters
+		----------
+		parent : qint
+			Parent qint this value depends on.
+
+		Raises
+		------
+		AssertionError
+			If parent was created after self (cycle detection).
+		"""
+		if parent is None:
+			return
+		# Cycle prevention: parent must be older
+		assert parent._creation_order < self._creation_order, \
+			f"Cycle detected: dependency (order {parent._creation_order}) must be older than dependent (order {self._creation_order})"
+		self.dependency_parents.append(weakref.ref(parent))
+
+	def get_live_parents(self):
+		"""Get list of parent dependencies that are still alive.
+
+		Returns
+		-------
+		list
+			List of parent qint objects (filtered for alive weakrefs).
+		"""
+		live = []
+		for ref in self.dependency_parents:
+			parent = ref()
+			if parent is not None:
+				live.append(parent)
+		return live
 
 	def print_circuit(self):
 		"""Print the current quantum circuit to stdout.
