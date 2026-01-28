@@ -142,6 +142,37 @@
 		# Perform uncomputation with exception propagation (not from __del__)
 		self._do_uncompute(from_del=False)
 
+	def keep(self):
+		"""Prevent automatic uncomputation in current scope.
+
+		Marks this qbool to skip automatic cleanup when it goes out of
+		scope or is garbage collected. Useful when you need a qbool to
+		persist for later use, such as when returning from a function.
+
+		Returns
+		-------
+		None
+
+		Notes
+		-----
+		- Only affects automatic uncomputation (__del__)
+		- Does not prevent explicit .uncompute() calls
+		- Warning printed if called on already-uncomputed qbool
+
+		Examples
+		--------
+		>>> result = a & b
+		>>> result.keep()  # Don't auto-uncompute when scope exits
+		>>> return result  # Can safely return
+		"""
+		if self._is_uncomputed:
+			import sys
+			print("Warning: .keep() called on already-uncomputed qbool",
+			      file=sys.stderr)
+			return
+
+		self._keep_flag = True
+
 	def _check_not_uncomputed(self):
 		"""Raise if this qbool has been uncomputed.
 
@@ -149,13 +180,13 @@
 
 		Raises
 		------
-		RuntimeError
+		ValueError
 			If qbool has been uncomputed.
 		"""
 		if self._is_uncomputed:
-			raise RuntimeError(
-				"qbool has been uncomputed and cannot be used. "
-				"Create a new qbool or avoid uncomputing values still needed."
+			raise ValueError(
+				"Cannot use qbool: already uncomputed. "
+				"Create a new qbool or call .keep() to prevent automatic cleanup."
 			)
 
 	def print_circuit(self):
