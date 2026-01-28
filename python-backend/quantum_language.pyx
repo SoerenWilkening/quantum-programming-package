@@ -1102,12 +1102,16 @@ cdef class qint(circuit):
 		>>> c = a & b
 		>>> # c represents |1001>
 		"""
-		global _controlled, _control_bool, qubit_array
+		global _controlled, _control_bool, qubit_array, _circuit_initialized, _circuit
 		cdef sequence_t *seq
 		cdef unsigned int[:] arr
 		cdef int result_bits
 		cdef int self_offset, result_offset, other_offset
 		cdef int classical_width
+		cdef int start_layer
+
+		# Capture start layer
+		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		# Determine result width
 		if type(other) == int:
@@ -1156,6 +1160,10 @@ cdef class qint(circuit):
 
 		arr = qubit_array
 		run_instruction(seq, &arr[0], False, _circuit)
+
+		# Capture end layer
+		result._start_layer = start_layer
+		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		return result
 
@@ -1213,12 +1221,16 @@ cdef class qint(circuit):
 		>>> c = a | b
 		>>> # c represents |1111>
 		"""
-		global _controlled, _control_bool, qubit_array
+		global _controlled, _control_bool, qubit_array, _circuit_initialized, _circuit
 		cdef sequence_t *seq
 		cdef unsigned int[:] arr
 		cdef int result_bits
 		cdef int self_offset, result_offset, other_offset
 		cdef int classical_width
+		cdef int start_layer
+
+		# Capture start layer
+		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		# Determine result width
 		if type(other) == int:
@@ -1267,6 +1279,10 @@ cdef class qint(circuit):
 
 		arr = qubit_array
 		run_instruction(seq, &arr[0], False, _circuit)
+
+		# Capture end layer
+		result._start_layer = start_layer
+		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		return result
 
@@ -1324,12 +1340,16 @@ cdef class qint(circuit):
 		>>> c = a ^ b
 		>>> # c represents |1010>
 		"""
-		global _controlled, _control_bool, qubit_array
+		global _controlled, _control_bool, qubit_array, _circuit_initialized, _circuit
 		cdef sequence_t *seq
 		cdef unsigned int[:] arr
 		cdef int result_bits
 		cdef int self_offset, result_offset, other_offset
 		cdef int classical_width
+		cdef int start_layer
+
+		# Capture start layer
+		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		# Determine result width
 		if type(other) == int:
@@ -1402,6 +1422,10 @@ cdef class qint(circuit):
 
 			arr = qubit_array
 			run_instruction(seq, &arr[0], False, _circuit)
+
+		# Capture end layer
+		result._start_layer = start_layer
+		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		return result
 
@@ -1563,11 +1587,15 @@ cdef class qint(circuit):
 		qint == int: Uses C-level CQ_equal_width circuit.
 		qint == qint: Uses subtract-add-back pattern (a-=b, check a==0, a+=b).
 		"""
-		global _controlled, _control_bool, qubit_array
+		global _controlled, _control_bool, qubit_array, _circuit_initialized, _circuit
 		cdef sequence_t *seq
 		cdef unsigned int[:] arr
 		cdef int self_offset
 		cdef int start
+		cdef int start_layer
+
+		# Capture start layer
+		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		# Handle qint == qint case first (must come before int check)
 		if type(other) == qint:
@@ -1591,6 +1619,10 @@ cdef class qint(circuit):
 			result.add_dependency(self)
 			result.add_dependency(other)
 			result.operation_type = 'EQ'
+
+			# Capture layer boundaries
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 			return result
 
@@ -1647,6 +1679,10 @@ cdef class qint(circuit):
 			result.add_dependency(self)
 			result.operation_type = 'EQ'
 
+			# Capture layer boundaries
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+
 			return result
 
 		raise TypeError("Comparison requires qint or int")
@@ -1700,6 +1736,12 @@ cdef class qint(circuit):
 		Computes self - other in-place, checks MSB (sign bit), then restores self.
 		Phase 14: Refactored to use in-place subtract-add-back pattern without temporary qint allocation.
 		"""
+		global _circuit_initialized, _circuit
+		cdef int start_layer
+
+		# Capture start layer
+		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+
 		# Self-comparison optimization
 		if self is other:
 			return qbool(False)  # x < x is always false
@@ -1718,6 +1760,9 @@ cdef class qint(circuit):
 			result.add_dependency(self)
 			result.add_dependency(other)
 			result.operation_type = 'LT'
+			# Capture layer boundaries
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 			return result
 
 		# Handle int operand
@@ -1739,6 +1784,9 @@ cdef class qint(circuit):
 			# Track dependency on qint
 			result.add_dependency(self)
 			result.operation_type = 'LT'
+			# Capture layer boundaries
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 			return result
 
 		raise TypeError("Comparison requires qint or int")
@@ -1770,6 +1818,12 @@ cdef class qint(circuit):
 		Phase 14: Refactored to use in-place pattern for qint operands.
 		For int operands, uses NOT(self <= other) for efficiency.
 		"""
+		global _circuit_initialized, _circuit
+		cdef int start_layer
+
+		# Capture start layer
+		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+
 		# Self-comparison optimization
 		if self is other:
 			return qbool(False)  # x > x is always false
@@ -1788,6 +1842,9 @@ cdef class qint(circuit):
 			result.add_dependency(self)
 			result.add_dependency(other)
 			result.operation_type = 'GT'
+			# Capture layer boundaries
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 			return result
 
 		# Handle int operand
@@ -1831,6 +1888,12 @@ cdef class qint(circuit):
 		Phase 14: Refactored to use in-place subtract-add-back pattern.
 		a <= b means (a - b) is negative OR zero.
 		"""
+		global _circuit_initialized, _circuit
+		cdef int start_layer
+
+		# Capture start layer
+		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+
 		# Self-comparison optimization
 		if self is other:
 			return qbool(True)  # x <= x is always true
@@ -1854,6 +1917,9 @@ cdef class qint(circuit):
 			result.add_dependency(self)
 			result.add_dependency(other)
 			result.operation_type = 'LE'
+			# Capture layer boundaries
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 			return result
 
 		# Handle int operand
@@ -1878,6 +1944,9 @@ cdef class qint(circuit):
 			# Track dependency on qint
 			result.add_dependency(self)
 			result.operation_type = 'LE'
+			# Capture layer boundaries
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 			return result
 
 		raise TypeError("Comparison requires qint or int")
