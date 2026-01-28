@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-28)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Phase 18 - Basic Uncomputation Integration
+**Current focus:** Phase 18 complete — Basic Uncomputation Integration
 
 ## Current Position
 
 Phase: 18 of 20 (Basic Uncomputation Integration)
-Plan: 1 of 1 in current phase (18-01 complete)
+Plan: 2 of 2 in current phase (both complete)
 Status: Phase 18 complete
-Last activity: 2026-01-28 — Completed 18-01-PLAN.md (core uncomputation infrastructure)
+Last activity: 2026-01-28 — Completed 18-02-PLAN.md (integration and tests)
 
 Progress: [████████▓░] 90% (phases 1-18 complete, 19-20 pending)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 58 (v1.0: 41, v1.1: 13, v1.2: 4)
+- Total plans completed: 59 (v1.0: 41, v1.1: 13, v1.2: 5)
 - Average duration: ~6 min/plan
-- Total execution time: ~5.8 hours
+- Total execution time: ~5.9 hours
 
 **By Milestone:**
 
@@ -29,13 +29,13 @@ Progress: [████████▓░] 90% (phases 1-18 complete, 19-20 pend
 |-----------|--------|-------|--------|
 | v1.0 MVP | 1-10 | 41 | Complete (2026-01-27) |
 | v1.1 QPU State | 11-15 | 13 | Complete (2026-01-28) |
-| v1.2 Uncomputation | 16-20 | 4/? | In progress |
+| v1.2 Uncomputation | 16-20 | 5/? | In progress |
 
 **Recent Trend:**
 - v1.1: 13 plans in 1 day (accelerated delivery)
 - v1.2 Phase 16: 2 plans in 15 min total (infrastructure + tests)
 - v1.2 Phase 17: 1 plan in 11 min (C reverse gate generation)
-- v1.2 Phase 18: 1 plan in 10 min (core uncomputation infrastructure)
+- v1.2 Phase 18: 2 plans in 25 min total (core infrastructure + integration)
 
 ## Accumulated Context
 
@@ -44,6 +44,8 @@ Progress: [████████▓░] 90% (phases 1-18 complete, 19-20 pend
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting v1.2 work:
 
+- v1.2 Phase 18-02: Refcount threshold of 2 (self + getrefcount) for explicit uncompute validation
+- v1.2 Phase 18-02: Guards added to all 11 quantum operations for defense in depth
 - v1.2 Phase 18-01: Layer tracking placement — start_layer captured before operation, end_layer before return
 - v1.2 Phase 18-01: LIFO cascade order — dependencies sorted by _creation_order descending for correct reversal
 - v1.2 Phase 18-01: Error handling in __del__ — suppress exceptions, print warnings (Python best practice)
@@ -78,7 +80,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-28
-Stopped at: Completed 18-01-PLAN.md (core uncomputation infrastructure)
+Stopped at: Completed 18-02-PLAN.md (integration and tests)
 Resume file: None (Phase 18 complete, ready for Phase 19 with `/gsd:plan-phase 19`)
 
 ---
@@ -98,6 +100,6 @@ Resume file: None (Phase 18 complete, ready for Phase 19 with `/gsd:plan-phase 1
 
 **Phase 16 completed:** 2026-01-28 (2 plans: infrastructure + test suite)
 **Phase 17 completed:** 2026-01-28 (1 plan: C reverse gate generation)
-**Phase 18 completed:** 2026-01-28 (1 plan: core uncomputation infrastructure)
+**Phase 18 completed:** 2026-01-28 (2 plans: core infrastructure + integration/tests)
 
 **Next action:** `/gsd:plan-phase 19` to create detailed plan for context manager integration

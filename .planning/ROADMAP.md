@@ -114,8 +114,8 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 18-01-PLAN.md - Core uncomputation infrastructure (layer tracking, _do_uncompute method)
-- [ ] 18-02-PLAN.md - Integration and tests (__del__, .uncompute(), use-after guards)
+- [x] 18-01-PLAN.md - Core uncomputation infrastructure (layer tracking, _do_uncompute method)
+- [x] 18-02-PLAN.md - Integration and tests (__del__, .uncompute(), use-after guards)
 
 ---
 
@@ -208,7 +208,7 @@ Plans:
 | 15. Classical Initialization | v1.1 | 2/2 | Complete | 2026-01-28 |
 | 16. Dependency Tracking | v1.2 | 2/2 | Complete | 2026-01-28 |
 | 17. Reverse Gate Generation | v1.2 | 1/1 | Complete | 2026-01-28 |
-| 18. Basic Uncomputation | v1.2 | 0/? | Not started | - |
+| 18. Basic Uncomputation | v1.2 | 2/2 | Complete | 2026-01-28 |
 | 19. Context Manager Integration | v1.2 | 0/? | Not started | - |
 | 20. Modes and Control | v1.2 | 0/? | Not started | - |
 

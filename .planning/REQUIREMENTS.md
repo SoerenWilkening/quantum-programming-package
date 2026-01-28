@@ -17,14 +17,14 @@ Requirements for automatic uncomputation milestone. Each maps to roadmap phases.
 ### Uncomputation Core
 
 - [x] **UNCOMP-01**: Generate reverse gates (adjoints) for all supported gate types
-- [ ] **UNCOMP-02**: Cascade uncomputation through dependency graph when final qbool is uncomputed
-- [ ] **UNCOMP-03**: Reverse order (LIFO) cleanup ensures correct uncomputation sequence
+- [x] **UNCOMP-02**: Cascade uncomputation through dependency graph when final qbool is uncomputed
+- [x] **UNCOMP-03**: Reverse order (LIFO) cleanup ensures correct uncomputation sequence
 - [x] **UNCOMP-04**: Gate-type-specific inversion handles multi-controlled gates and phase gates correctly
 
 ### Scope Integration
 
 - [ ] **SCOPE-01**: Uncompute temporaries automatically when `with` block exits
-- [ ] **SCOPE-02**: Uncompute when qbool is destroyed or goes out of scope
+- [x] **SCOPE-02**: Uncompute when qbool is destroyed or goes out of scope
 - [ ] **SCOPE-03**: Explicit `.keep()` method allows opt-out of automatic uncomputation
 - [ ] **SCOPE-04**: Scope-aware tracking handles nested `with` statements correctly
 
@@ -73,9 +73,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRACK-04 | Phase 16 | Complete |
 | UNCOMP-01 | Phase 17 | Complete |
 | UNCOMP-04 | Phase 17 | Complete |
-| UNCOMP-02 | Phase 18 | Pending |
-| UNCOMP-03 | Phase 18 | Pending |
-| SCOPE-02 | Phase 18 | Pending |
+| UNCOMP-02 | Phase 18 | Complete |
+| UNCOMP-03 | Phase 18 | Complete |
+| SCOPE-02 | Phase 18 | Complete |
 | SCOPE-01 | Phase 19 | Pending |
 | SCOPE-04 | Phase 19 | Pending |
 | MODE-01 | Phase 20 | Pending |
