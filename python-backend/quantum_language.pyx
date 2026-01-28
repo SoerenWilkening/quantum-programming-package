@@ -350,12 +350,15 @@ cdef class qint(circuit):
 	cdef bint allocated_qubits
 	cdef unsigned int allocated_start  # Starting qubit index from allocator
 
-	# Phase 16: Dependency tracking attributes
-	cdef object dependency_parents  # list[weakref.ref[qint]]
-	cdef int _creation_order
-	cdef object operation_type  # str: 'AND', 'OR', 'XOR', 'EQ', 'LT', 'GT', 'LE', 'GE'
-	cdef int creation_scope  # scope depth when created
-	cdef object control_context  # list of control qubit indices when created
+	# Enable weak references for dependency tracking
+	cdef object __weakref__
+
+	# Phase 16: Dependency tracking attributes (public for Python access)
+	cdef public object dependency_parents  # list[weakref.ref[qint]]
+	cdef public int _creation_order
+	cdef public object operation_type  # str: 'AND', 'OR', 'XOR', 'EQ', 'LT', 'GT', 'LE', 'GE'
+	cdef public int creation_scope  # scope depth when created
+	cdef public object control_context  # list of control qubit indices when created
 
 	def __init__(self, value = 0, width = None, bits = None, classical = False, create_new = True, bit_list = None):
 		"""Create a quantum integer.
@@ -1568,6 +1571,8 @@ cdef class qint(circuit):
 			self += other
 
 			# Track dependencies on compared qints
+			# Clear dependencies from recursive (self == 0) call, replace with actual operands
+			result.dependency_parents = []
 			result.add_dependency(self)
 			result.add_dependency(other)
 			result.operation_type = 'EQ'
