@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-28)
 ## Current Position
 
 Phase: 20 of 20 (Modes and Control)
-Plan: 3 of 3 in current phase (complete)
-Status: Phase 20 complete
-Last activity: 2026-01-28 — Completed 20-03-PLAN.md (enhanced error messages for uncomputation)
+Plan: 4 of 4 in current phase (complete)
+Status: Phase 20 complete, v1.2 milestone achieved
+Last activity: 2026-01-28 — Completed 20-04-PLAN.md (comprehensive Phase 20 test suite)
 
 Progress: [██████████] 100% (all 20 phases complete, v1.2 milestone achieved)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 63 (v1.0: 41, v1.1: 13, v1.2: 9)
+- Total plans completed: 64 (v1.0: 41, v1.1: 13, v1.2: 10)
 - Average duration: ~6 min/plan
-- Total execution time: ~6.3 hours
+- Total execution time: ~6.4 hours
 
 **By Milestone:**
 
@@ -29,7 +29,7 @@ Progress: [██████████] 100% (all 20 phases complete, v1.2 mi
 |-----------|--------|-------|--------|
 | v1.0 MVP | 1-10 | 41 | Complete (2026-01-27) |
 | v1.1 QPU State | 11-15 | 13 | Complete (2026-01-28) |
-| v1.2 Uncomputation | 16-20 | 9 | Complete (2026-01-28) |
+| v1.2 Uncomputation | 16-20 | 10 | Complete (2026-01-28) |
 
 **Recent Trend:**
 - v1.1: 13 plans in 1 day (accelerated delivery)
@@ -40,6 +40,7 @@ Progress: [██████████] 100% (all 20 phases complete, v1.2 mi
 - v1.2 Phase 20-01: 1 plan in 5.5 min (option API and mode-aware uncomputation)
 - v1.2 Phase 20-02: 1 plan in 3 min (keep() method for uncomputation opt-out)
 - v1.2 Phase 20-03: 1 plan in 5 min (enhanced error messages for uncomputation)
+- v1.2 Phase 20-04: 1 plan in 4.6 min (comprehensive Phase 20 test suite)
 
 ## Accumulated Context
 
@@ -48,6 +49,8 @@ Progress: [██████████] 100% (all 20 phases complete, v1.2 mi
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting v1.2 work:
 
+- v1.2 Phase 20-04: Test error message content — verify error messages contain specific keywords and actionable suggestions
+- v1.2 Phase 20-04: Fixed Phase 18 tests for ValueError — updated to match Phase 20-03 semantic correctness change
 - v1.2 Phase 20-03: Error message pattern "Cannot [action]:" — provides clarity, includes actionable suggestions
 - v1.2 Phase 20-03: ValueError for uncomputation failures — semantically correct, replaces RuntimeError
 - v1.2 Phase 20-03: Reference count transparency — show actual count in error messages to help debugging
@@ -110,7 +113,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-28
-Stopped at: Completed 20-03-PLAN.md (enhanced error messages for uncomputation)
+Stopped at: Completed 20-04-PLAN.md (comprehensive Phase 20 test suite)
 Resume file: None (Phase 20 complete, v1.2 milestone achieved)
 
 ---
@@ -124,7 +127,7 @@ Resume file: None (Phase 20 complete, v1.2 milestone achieved)
 - Phase 17: C reverse gate generation (2 requirements) — COMPLETE
 - Phase 18: Basic uncomputation integration (3 requirements) — COMPLETE
 - Phase 19: Context manager integration for `with` (2 requirements) — COMPLETE
-- Phase 20: Modes and user control (6 requirements) — COMPLETE (3/3 plans complete)
+- Phase 20: Modes and user control (6 requirements) — COMPLETE (4/4 plans complete)
 
 **Research completed:** 2026-01-28 (HIGH confidence, Python weakref + C adjoint pattern validated)
 
@@ -135,5 +138,6 @@ Resume file: None (Phase 20 complete, v1.2 milestone achieved)
 **Phase 20-01 completed:** 2026-01-28 (option API and mode-aware uncomputation)
 **Phase 20-02 completed:** 2026-01-28 (keep() method for uncomputation opt-out)
 **Phase 20-03 completed:** 2026-01-28 (enhanced error messages for uncomputation)
+**Phase 20-04 completed:** 2026-01-28 (comprehensive Phase 20 test suite)
 
-**v1.2 MILESTONE ACHIEVED:** All automatic uncomputation features complete
+**v1.2 MILESTONE ACHIEVED:** All automatic uncomputation features complete and fully tested
