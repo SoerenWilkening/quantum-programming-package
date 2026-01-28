@@ -87,7 +87,10 @@ Plans:
 
 **Dependencies:** Phase 16 (needs dependency graph to know what to reverse)
 
-**Plans:** TBD
+**Plans:** 1 plan
+
+Plans:
+- [ ] 17-01-PLAN.md - C reverse gate function, Python binding, and tests
 
 ---
 
@@ -200,7 +203,7 @@ Plans:
 | 14. Ordering Operators | v1.1 | 3/3 | Complete | 2026-01-28 |
 | 15. Classical Initialization | v1.1 | 2/2 | Complete | 2026-01-28 |
 | 16. Dependency Tracking | v1.2 | 2/2 | Complete | 2026-01-28 |
-| 17. Reverse Gate Generation | v1.2 | 0/? | Not started | - |
+| 17. Reverse Gate Generation | v1.2 | 0/1 | Planned | - |
 | 18. Basic Uncomputation | v1.2 | 0/? | Not started | - |
 | 19. Context Manager Integration | v1.2 | 0/? | Not started | - |
 | 20. Modes and Control | v1.2 | 0/? | Not started | - |
