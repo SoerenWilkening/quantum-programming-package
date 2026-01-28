@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-01-28)
 Phase: 19 of 20 (Context Manager Integration)
 Plan: 1 of 1 in current phase (complete)
 Status: Phase 19 complete
-Last activity: 2026-01-28 — Completed quick task 002: Refactor quantum_language.pyx
+Last activity: 2026-01-28 — Completed quick task 003: Revisit refactoring quantum_language.pyx
 
 Progress: [█████████░] 95% (phases 1-19 complete, phase 20 pending)
 
@@ -76,6 +76,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 002 | Refactor quantum_language.pyx into smaller .pxi files | 2026-01-28 | 7178414 | [002-refactor-quantum-language-pyx-and-the-px](./quick/002-refactor-quantum-language-pyx-and-the-px/) |
+| 003 | Revisit refactoring: consolidate operations, extract utility methods and circuit class | 2026-01-28 | f5f5f16 | [003-revisit-refactoring-quantum-language-pyx](./quick/003-revisit-refactoring-quantum-language-pyx/) |
 
 ### Blockers/Concerns
 
