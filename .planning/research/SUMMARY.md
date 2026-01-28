@@ -1,436 +1,327 @@
 # Project Research Summary
 
-**Project:** Quantum Assembly
-**Domain:** Quantum programming framework with C backend and Python bindings
-**Researched:** 2026-01-25
+**Project:** Quantum Assembly v1.2 - Automatic Uncomputation with Dependency Tracking
+**Domain:** Quantum programming language compiler with automatic memory management
+**Researched:** 2026-01-28
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Quantum Assembly is a quantum circuit generation framework that differentiates itself through high-level quantum data types (qint, qbool) with operator overloading, providing a significantly better developer experience than gate-level frameworks like Qiskit or Cirq. The current architecture follows the industry-standard pattern of C/C++ backend for performance with Python bindings for usability, matching the approach used by major frameworks. However, the codebase exhibits several critical architectural anti-patterns common in early-stage quantum frameworks: heavy reliance on global state, unclear memory ownership between C and Python layers, and hardcoded integer sizes that prevent variable-width arithmetic.
+Automatic uncomputation requires tracking which intermediate qubits depend on which operations, then automatically generating inverse gate sequences when those intermediates go out of scope. Research confirms that the recommended approach is **Python-level dependency tracking with C-level reverse gate generation**, avoiding the complexity of retrofitting object lifecycle management into the existing stateless C backend while maintaining performance-critical circuit generation in C.
 
-The recommended approach prioritizes architectural cleanup over feature additions. Research reveals that the framework's core differentiation (high-level types with natural syntax) is already present and working, but critical memory management issues and global state dependencies create a fragile foundation. The path forward involves incremental refactoring following proven patterns from the scientific Python ecosystem: eliminating global state through context objects, establishing clear ownership semantics between layers, and separating concerns into focused modules. This cleanup enables the planned feature additions (variable-width integers, extended arithmetic operations, bit operations) without accumulating technical debt.
+The existing three-layer architecture (Python frontend with Cython bindings to stateless C backend) naturally supports this pattern. Python already manages qint/qbool object lifetimes through garbage collection, so extending `__del__` to trigger uncomputation cascades aligns with the existing design. The key architectural decision is using `weakref.finalize` callbacks instead of `__del__` directly for reliability, and storing creation sequences at the Python level to enable C-level adjoint generation.
 
-Key risks center on the complexity of C/Python memory management and the temptation to attempt "big bang" refactoring. Mitigation requires establishing comprehensive characterization tests before any refactoring, using Valgrind and AddressSanitizer systematically, and enforcing incremental changes with frequent integration. The quantum-specific risks (ancilla leakage, circuit depth explosion) are manageable through established patterns from the quantum computing literature, but require careful implementation during arithmetic operations expansion.
+The primary risk is **incorrect uncomputation positioning** in the circuit, which can silently corrupt quantum states. Prevention requires layer-aware dependency graph analysis, validation that qubits needed for uncomputation haven't been modified, and comprehensive testing with conditional (`with` statement) contexts. Secondary risks include circular reference memory leaks (mitigated by single-ownership model), exponential cost blowup in nested expressions (requires immediate uncomputation mode), and incorrect reversal of multi-controlled gates (requires gate-type-specific inversion logic).
 
 ## Key Findings
 
 ### Recommended Stack
 
-The current technology stack is solid and aligns with 2025-2026 scientific Python best practices. The C backend compiled with GCC and Cython 3.2.4 for bindings matches exactly how mature projects like NumPy and SciPy are built. No major stack changes are needed, but the development tooling should be enhanced with modern quality assurance tools.
+The core technology pattern is **Python dependency graph + weakref lifecycle management + C adjoint generation**, avoiding external dependencies and leveraging existing infrastructure.
 
 **Core technologies:**
-- **Cython 3.2.4**: C/Python binding layer — industry standard for scientific computing, used by NumPy/SciPy/scikit-learn, production-stable release from January 2026
-- **setuptools + cythonize**: Build system — current setup works correctly, don't change unless complexity increases 10x
-- **pytest 9.0.2 + pytest-cython**: Testing framework — latest stable with 1300+ plugins, pytest-cython enables testing Cython .pyx code
-- **Valgrind 3.26.0 + AddressSanitizer**: Memory debugging — Valgrind for comprehensive weekly checks, ASan for fast daily development with `-fsanitize=address`
-- **Ruff 0.14.14**: Code quality — replaces Black/Flake8/isort in one tool, 10-100x faster, used by FastAPI/Pandas/PyTorch
-- **Sphinx 9.1.0 + numpydoc**: Documentation — standard for scientific Python, NumPy-style docstrings
+- **Python dict/list (native)**: Dependency storage — O(1) lookups, no external dependency, sufficient for parent→child relationships
+- **weakref.finalize (PEP 442)**: Lifetime management — Reliable cleanup without `__del__` pitfalls, can be triggered manually for tests
+- **weakref.ref**: Reference tracking — Track dependencies without preventing garbage collection, prevents circular reference issues
+- **C reverse_gate_generator (new)**: Adjoint generation — Generate inverse sequences (X→X, P(θ)→P(-θ), reverse order), reuses existing gate types
 
-**Development enhancements needed:**
-- Add pre-commit hooks for automatic linting (Ruff, mypy)
-- Enable ASan builds via environment variable for daily memory testing
-- Set up GitHub Actions CI matrix for Python 3.10-3.13 and multiple platforms
-- Add Scalene profiler for performance optimization work
+**Why Python-level tracking:**
+- Existing C backend is stateless by design (circuit_t is just gate storage, no object lifecycle)
+- Python already manages qint/qbool object lifetimes through garbage collection
+- Dependency graph mutations are infrequent (creation-time only, no runtime updates)
+- Avoids duplicating Python's garbage collector in C
+
+**Why NOT C-level tracking:**
+- C has no weak reference equivalent (would require manual reference counting)
+- Retrofitting object lifecycle into stateless C backend breaks existing architecture
+- Cython bindings would need complex memory ownership logic
+- Python's GC and weak reference support already solve this problem
+
+**Rejected alternatives:**
+- NetworkX/graphlib: Overkill for simple parent→child edges (native collections sufficient)
+- Context managers for scoping: Awkward API for automatic feature (valid for mode switching only)
+- C-level dependency tracking: Duplicates Python's GC, error-prone, high complexity
 
 ### Expected Features
 
-The quantum programming framework landscape has clear table stakes and differentiators. Quantum Assembly already possesses its key competitive advantages but is missing some expected baseline features.
+Research across production quantum frameworks (Q#, Qrisp, Silq) and academic work (Unqomp, Qurts, SQUARE) shows two universal patterns: **scope-triggered cleanup** and **dual-mode strategy** (lazy vs eager uncomputation).
 
 **Must have (table stakes):**
-- Universal gate set (H, CNOT, Rx, Ry, Rz) — likely present, verify completeness
-- OpenQASM 3.0 export — critical gap, industry moving from 2.0 to 3.0 with mid-circuit measurement and real-time conditionals
-- Circuit visualization — essential for debugging, status unknown
-- Complete arithmetic operations — addition/subtraction present, multiplication/comparison partial, need modular arithmetic
-- Automatic circuit optimization — gate merging and dead code elimination are becoming table stakes
-- Clear error messages — need to audit compilation error quality
+- **Scope-triggered cleanup**: Uncompute at scope exit (industry standard across Q#, Qrisp, Silq)
+- **Dependency tracking**: Track intermediate allocations to know what can be safely uncomputed
+- **Reverse-order uncomputation**: LIFO cleanup (mathematical requirement for U†VU pattern)
+- **Nested expression support**: Handle `~a & b | ~c` tree of intermediates
+- **Both qbool and qint comparisons**: Comparison results return qbool that need uncomputation
+- **Safety verification**: Prevent uncomputation of values still in use (type system or runtime checks)
 
-**Should have (competitive differentiators):**
-- High-level data types (qint/qbool) — **ALREADY PRESENT, major differentiator**, Qiskit/Cirq don't have this
-- Operator overloading (+, -, *, etc.) — **ALREADY PRESENT**, significantly better DX than competitors
-- Variable-width integers — planned, enables memory efficiency and flexibility
-- Bit operations for qint — planned, required for many algorithms (shifts, rotates, bitwise AND/OR/XOR)
-- QFT-based arithmetic — more efficient than ripple-carry, consider after basic arithmetic complete
-- Circuit templates library — pre-built QFT, Grover components, phase estimation algorithms
+**Should have (competitive):**
+- **Dual-mode strategy**: Lazy (default, minimize gates) vs eager (qubit-saving, minimize peak qubits)
+- **Visual uncomputation markers**: Circuit output shows what gets cleaned up (OpenQASM comment annotations)
+- **Statistics tracking**: Report qubits saved via uncomputation (extends existing circuit stats)
+- **Zero-configuration default**: Works automatically without setup (most users shouldn't need options)
 
 **Defer (v2+):**
-- ML framework integration (PennyLane-style) — requires stable API first, complex integration
-- Multiple hardware backends beyond OpenQASM — export handles most cases
-- Real-time debugging (CircInspect-style) — complex infrastructure requirement
-- Formal verification and type safety — nice-to-have, not critical yet
-- GUI interface — programmatic API and CLI sufficient for now
+- **Automatic strategy selection**: Smart defaults based on expression depth analysis
+- **Recompute-on-demand**: Uncompute early, recompute if needed later (Qrisp's advanced feature)
+- **Circuit optimizer integration**: Uncomputation + optimization synergy (U†U pattern simplification)
 
-**Anti-features to avoid:**
-- Direct quantum state access (violates no-cloning theorem)
-- Automatic qubit cloning (physically impossible, causes subtle bugs)
-- Unbounded quantum resources (unrealistic for real hardware)
-- Over-abstraction hiding circuit details (need both high and low level APIs)
+**Anti-features (explicitly avoid):**
+- **Automatic cloning**: Violates no-cloning theorem
+- **Measurement-based uncomputation**: Changes semantics (collapses superposition)
+- **Global cleanup at circuit end**: Defeats purpose (memory already consumed)
+- **Implicit uncomputation without tracking**: Can uncompute values still needed
 
 ### Architecture Approach
 
-The current three-layer architecture (C backend → Cython bindings → Python API) follows industry best practice, but the implementation has critical flaws that prevent it from scaling. The research identifies five key architectural patterns used by mature frameworks: opaque handle/context objects instead of global state, strict separation of concerns with single-responsibility modules, RAII-style resource management with clear ownership, intermediate representation as DAG for optimization, and layered API design supporting both low and high-level usage.
+The architecture extends the existing three-layer system with minimal changes: Python adds DependencyManager and extends qbool lifecycle, C adds reverse gate generation, Cython exposes new functions.
 
-**Major architectural issues requiring remediation:**
-1. **Global state dependency** — `extern circuit_t *circuit` and `QPU_state` prevent multiple circuits, break thread safety, make testing impossible
-2. **Mixed concerns** — QPU.c does allocation, optimization, insertion, and state management in 187 lines
-3. **Unclear ownership** — quantum_int_t allocates struct but circuit owns qubits, creating memory leak risk
-4. **Leaky abstractions** — Python layer directly accesses C memory layout and constants like INTEGERSIZE
-5. **Hardcoded sizes** — INTEGERSIZE=8 constant baked into operations prevents variable-width integers
+**Major components:**
 
-**Recommended component structure:**
-1. **Core Data Structures** — circuit_t, gate_t, qubit_allocator_t type definitions
-2. **Circuit Builder** — circuit_create(), circuit_add_gate(), circuit_free() with explicit context
-3. **Circuit Optimizer** — layer assignment and gate merging as separate module
-4. **Gate Library** — gate construction primitives (X, Y, Z, H, CNOT, etc.)
-5. **Quantum Operations** — high-level arithmetic and logic built on circuit builder
-6. **Compiler** — OpenQASM and other format export
-7. **Binding Layer** — Cython wrappers with proper lifetime management
-8. **Python Frontend** — user-facing QuantumCircuit, QInt, QBool classes
+1. **DependencyManager (Python)** — Centralized dependency graph tracking parent→child relationships, provides topological sort for cascade uncomputation, stored in Python dict/weakref structures
+
+2. **qbool.dependency_list (Python)** — Each qbool stores list of intermediates it depends on, populated at creation time during operator overloading, triggers cascade cleanup in `__del__`
+
+3. **reverse_gate_generator.c (C)** — Generate adjoint sequences for uncomputation (reverse gate order, apply gate-specific adjoints like P(θ)→P(-θ)), reuses existing gate types
+
+4. **uncomputation.c (C)** — Apply reversed sequences to circuit, integrates with existing add_gate() infrastructure, no new gate types needed
+
+5. **weakref.finalize callbacks (Python)** — Register finalization callback at qbool creation, receives qubit indices and operation type, calls C backend to append inverse gates
+
+**Integration points:**
+- Extend qint/qbool operators (`__invert__`, `__and__`, comparisons) to register dependencies (~5 lines per operator)
+- Modify `__del__` to call `uncompute()` before freeing qubits
+- Extend `with` statement `__exit__` to uncompute context-local temporaries
+- Qubit allocator (existing) continues handling qubit freeing (uncomputation circuit generation happens first)
+
+**Data flow pattern:**
+1. User writes `result = ~a & b`
+2. Python creates intermediate for `~a`, records empty dependency list
+3. Python creates result for `intermediate & b`, records `[intermediate, b]` as dependencies
+4. Scope exit triggers `result.__del__()`
+5. Cascade uncomputation: walk dependencies in reverse, generate and apply adjoint sequences
+6. Free qubits to allocator
 
 ### Critical Pitfalls
 
-Research identified 20+ pitfalls, with these five being most critical for the project:
+Research identified five critical pitfalls that cause rewrites, incorrect quantum states, or exponential resource usage.
 
-1. **Mixing C and Python memory allocators** — Memory allocated in C (malloc) freed by Python GC or vice versa causes segfaults and corruption. Prevention: document ownership clearly, use PyCapsule destructors, never use C functions on Python objects. This must be addressed in Phase 1 before any feature work.
+1. **Incorrect uncomputation position in circuit flow** — Uncomputing before value's last use or after qubits modified produces silent state corruption. Prevention: Layer-aware dependency graph, validate qubit availability before uncomputation, test with statevector simulation to verify ancilla return to |0⟩.
 
-2. **Global state in C library with multiple Python contexts** — Global `circuit`, `QPU_state`, `R0-R3` registers shared across all Python objects, breaking thread safety and testability. Prevention: pass circuit_t* context to all functions, use opaque handles. Critical for Phases 2-4.
+2. **Circular dependencies and memory leaks** — Bidirectional parent↔child references prevent garbage collection, memory grows unbounded. Prevention: Single ownership model (dependency graph in circuit_t), weak references for parent pointers, explicit cleanup protocol in topological order.
 
-3. **Incorrect sizeof() usage with pointer types** — Current code uses `sizeof(integer)` where `integer` is pointer, allocating 8 bytes instead of full struct size (Integer.c lines 31, 37). Causes memory corruption. Prevention: always use `sizeof(type_name)` or `sizeof(*ptr)`. Must fix in Phase 1.
+3. **Exponential cost blowup with nested uncomputation** — Naive uncomputation in nested contexts causes 2^ℓ gate multiplication for ℓ nesting levels. Prevention: Immediate uncomputation mode (qubit-saving), memoization to avoid duplicate uncomputation, flatten dependency graph to identify shared intermediates.
 
-4. **Hardcoded integer sizes breaking variable-width operations** — INTEGERSIZE=8 constant prevents the planned variable-width feature. Prevention: parameterize all functions with width from day one, dynamic allocation based on runtime width. Blocks Phase 2 implementation.
+4. **Incorrect reversal of multi-controlled and conditional gates** — Multi-controlled gates, phase gates P(θ), and conditional contexts require gate-type-specific inversion logic. Prevention: Switch on gate type for custom inverse logic, test adjoint correctness (U†U = I), preserve gate metadata for inversion.
 
-5. **Big bang refactoring instead of incremental** — Attempting to fix all issues simultaneously creates unmergeable branches and regression bugs. Prevention: strangler pattern, feature flags, time-box changes to 1 week maximum, merge at least weekly. Critical discipline for ALL phases.
-
-**Additional high-risk pitfalls:**
-- **Uninitialized structure fields** — sequence_t allocated but pointers not initialized (IntegerAddition.c lines 230-250)
-- **Missing memory allocation failure checks** — no NULL checks after malloc/calloc throughout codebase
-- **Ancilla qubit leakage** — temporary qubits not uncomputed, leaving entanglement (test.py lines 66-68 has increment instead of decrement)
-- **Refactoring without characterization tests** — changing code without tests that document current behavior risks silent regressions
+5. **Integration with `with` statement conditional scoping** — Global `_controlled` flag state creates scope mismatch when intermediates created inside `with` block are uncomputed outside. Prevention: Tag dependency nodes with conditional scope, uncomputation inherits control from creation context, trigger cleanup at `with` block exit.
 
 ## Implications for Roadmap
 
-Based on research, the project requires foundational cleanup before feature additions. The existing differentiation (high-level types) is already working, but architectural issues create a fragile base for expansion.
+Based on research, suggested phase structure follows dependency order: core infrastructure (dependency tracking, gate reversal) → basic uncomputation → integration with existing features → advanced modes → testing/docs.
 
-### Phase 1: Foundation Cleanup (C Layer Architecture)
-**Rationale:** Must eliminate global state and fix memory bugs before building features. Attempting to add variable-width integers or extended arithmetic on the current foundation will compound technical debt and create cascading failures.
-
-**Delivers:**
-- All C functions take explicit circuit_t* context parameter (no globals)
-- Memory ownership documented at every allocation
-- sizeof() bugs fixed (Integer.c corrected)
-- Uninitialized structure bugs fixed (IntegerAddition.c, IntegerComparison.c)
-- malloc NULL checks added throughout
-- Characterization test suite capturing current behavior
-
-**Addresses:** None of the user-facing features yet — this is pure architectural cleanup
-
-**Avoids:**
-- Pitfall 1 (C/Python memory mixing) — clear ownership established
-- Pitfall 2 (sizeof bugs) — all instances corrected
-- Pitfall 4 (global state) — context object pattern implemented
-- Pitfall 19 (refactoring without tests) — characterization tests written first
-
-**Stack usage:** pytest + pytest-cython for testing, Valgrind + ASan for memory validation, Ruff for code quality
-
-**Time estimate:** 2-3 weeks (high risk, touches everything)
-
-**Research flag:** LOW — patterns well-documented in opaque pointer literature and scientific Python ecosystem
-
----
-
-### Phase 2: Memory Architecture (Ownership and Allocation)
-**Rationale:** With global state eliminated, establish clear memory ownership model between circuit and quantum types. Required before variable-width integers which need dynamic allocation.
+### Phase 1: Dependency Tracking Infrastructure
+**Rationale:** Foundation for all uncomputation features. Research shows dependency graph must exist before any uncomputation logic to avoid incorrect positioning (Pitfall 1). Python-level tracking is the correct layer based on architecture analysis.
 
 **Delivers:**
-- Qubit allocator module (qubit_allocator.c/h) centralizing lifecycle management
-- qint_create() takes circuit_t* context and width parameter
-- qint_free() returns qubits to pool
-- quantum_int_t borrows qubits from circuit (documented ownership)
-- Ancilla allocation explicit and trackable
+- DependencyManager class with parent→child tracking
+- qbool.dependency_list attribute
+- Operator overloading modifications to record dependencies
+- Topological sort for cascade cleanup
 
 **Addresses:**
-- Variable-width integers foundation (removes INTEGERSIZE hardcoding)
-- Must-have feature: proper memory management for stability
+- Dependency tracking (table stakes feature)
+- Nested expression support (table stakes feature)
 
 **Avoids:**
-- Pitfall 3 (unclear ownership) — ownership model documented and implemented
-- Pitfall 5 (hardcoded sizes) — width parameterized throughout
-- Pitfall 6 (missing allocation checks) — centralized allocator validates
-- Pitfall 16 (ancilla leakage) — explicit ancilla lifecycle tracking
+- Pitfall 2 (circular dependencies) via single-ownership model
+- Pitfall 1 (incorrect positioning) by building graph before inserting gates
 
-**Stack usage:** Valgrind/ASan for validation, pytest for allocator unit tests
+**Research needs:** Standard graph algorithms (topological sort), no deeper research needed.
 
-**Time estimate:** 1-2 weeks (moderate risk, changes type creation)
-
-**Research flag:** LOW — RAII patterns and arena allocation well-documented
-
----
-
-### Phase 3: Module Separation (Code Organization)
-**Rationale:** With clean architecture foundation, separate QPU.c god object into focused modules. This is low-risk internal refactoring that improves maintainability without changing APIs.
+### Phase 2: C Reverse Gate Generation
+**Rationale:** Must exist before Python can trigger uncomputation. Pure C implementation, no Python dependencies, enables testing gate reversal correctness independently.
 
 **Delivers:**
-- circuit_builder.c — create/destroy/add gates
-- circuit_optimizer.c — layer assignment and gate merging (extracted from QPU.c)
-- circuit_allocator.c — memory management helpers
-- operations/arithmetic.c, operations/comparison.c, operations/logic.c — extracted from Integer*.c
-- Clear dependency graph between modules
-
-**Addresses:** Internal code quality, no user-facing features
-
-**Avoids:**
-- Pitfall anti-pattern "god object" — QPU.c responsibilities separated
-- Future maintenance burden — changes localized to specific modules
-
-**Stack usage:** Existing test suite, no new tools needed
-
-**Time estimate:** 1-2 weeks (low risk, internal refactoring)
-
-**Research flag:** NONE — straightforward code organization, skip research
-
----
-
-### Phase 4: Variable-Width Integer Support
-**Rationale:** First major feature addition, enabled by Phase 2 memory work. This is a table-stakes feature that unblocks bit operations and extended arithmetic.
-
-**Delivers:**
-- QInt(width=N) constructor for arbitrary bit-width quantum integers
-- Dynamic allocation based on width parameter
-- Width validation in arithmetic operations (compatible widths)
-- Tests with mixed-width integers (8-bit + 32-bit cases)
-- Update Python API to expose width parameter
+- reverse_gate_generator.c with reverse_sequence() and reverse_gate()
+- Gate-type-specific adjoint logic (X→X, P(θ)→P(-θ), etc.)
+- uncomputation.c with apply_uncomputation()
+- Cython bindings for new C functions
 
 **Addresses:**
-- Must-have feature: variable-width integers for memory efficiency
-- Foundation for Phase 5 (bit operations) and Phase 6 (extended arithmetic)
+- Reverse-order uncomputation (table stakes feature)
 
 **Avoids:**
-- Pitfall 5 (hardcoded sizes) — now fully parameterized
-- Pitfall 8 (cache invalidation) — precompiled sequence cache updated with width in key
+- Pitfall 4 (incorrect gate reversal) via gate-type-specific logic
+- Pitfall 3 (exponential cost) by making reversal O(gates) not O(gates²)
 
-**Stack usage:** pytest for mixed-width test cases, ASan to catch buffer overflows
+**Research needs:** Standard quantum computing (adjoint circuits), no deeper research needed.
 
-**Time estimate:** 2 weeks (moderate complexity, needs careful testing)
-
-**Research flag:** MEDIUM — need to research optimal gate sequences for variable-width arithmetic, may benefit from literature review
-
----
-
-### Phase 5: Bit Operations for qint
-**Rationale:** With variable-width integers working, add bit-level operations required by many quantum algorithms. Complements arithmetic operations.
+### Phase 3: Basic Uncomputation Integration
+**Rationale:** Connects Phase 1 and 2 components. Extends qbool lifecycle to trigger uncomputation, validates end-to-end flow.
 
 **Delivers:**
-- Bit shifts (left/right logical and arithmetic)
-- Bit rotations (left/right)
-- Bitwise operations (AND, OR, XOR, NOT) on quantum integers
-- Python operator overloading (<<, >>, &, |, ^, ~)
-- Gate sequence optimization for bit operations
+- qbool.uncompute() method with cascade logic
+- Modified `__del__` to call uncompute() before freeing
+- weakref.finalize integration
+- Test suite for basic expressions (a & b, ~a, a > b)
 
 **Addresses:**
-- Should-have feature: bit operations needed for algorithm implementations
-- Differentiator: natural Python syntax for quantum bit operations
+- Scope-triggered cleanup (table stakes feature)
+- Both qbool and qint comparisons (table stakes feature)
+- Safety verification (table stakes, basic level)
 
 **Avoids:**
-- Pitfall 10 (depth explosion) — use efficient quantum bit operation circuits from literature
+- Pitfall 9 (type system mismatch) by handling qbool-from-comparison
+- Pitfall 8 (qubit reuse) by coordinating with allocator
 
-**Stack usage:** pytest-benchmark for performance testing, Scalene for profiling
+**Research needs:** Python lifecycle management patterns (already researched), no additional research.
 
-**Time estimate:** 2 weeks (medium complexity, patterns available in literature)
-
-**Research flag:** MEDIUM — research optimal quantum bit shift/rotate circuits before implementing
-
----
-
-### Phase 6: Extended Arithmetic Operations
-**Rationale:** Complete the arithmetic operation set. Builds on variable-width and bit operation foundations.
+### Phase 4: Context Manager Integration
+**Rationale:** Critical for conditional correctness. The `with` statement creates quantum conditionals, so uncomputation must respect conditional scopes.
 
 **Delivers:**
-- Complete multiplication (currently partial)
-- Division and modular division
-- Modular arithmetic (add/sub/mul mod N)
-- Exponentiation (classical and quantum exponents)
-- Enhanced comparison (>=, <=, not just >, <, ==)
-- Circuit optimization specific to arithmetic (QFT-based alternatives)
+- Extended `__enter__` to track context temporaries
+- Extended `__exit__` to uncompute context-local intermediates
+- Scope-aware dependency tagging
+- Test suite for nested `with` blocks
 
 **Addresses:**
-- Must-have feature: complete arithmetic for algorithm implementations
-- Should-have feature: QFT-based arithmetic for efficiency gains
+- Integration with existing conditional features
 
 **Avoids:**
-- Pitfall 10 (circuit depth explosion) — research optimal algorithms first
-- Pitfall 17 (ignoring error rates) — consider error-aware optimization
+- Pitfall 5 (conditional scope leakage) via scope-aware tracking
 
-**Stack usage:** pytest-benchmark for depth comparison, literature from PennyLane quantum arithmetic
+**Research needs:** **YES** — complex interaction between global `_controlled` state and dependency tracking. May need `/gsd:research-phase` to investigate codebase patterns in quantum_language.pyx lines 26-29.
 
-**Time estimate:** 3-4 weeks (high complexity, multiple operations)
-
-**Research flag:** HIGH — should run `/gsd:research-phase` for QFT arithmetic and modular operations to identify optimal implementations
-
----
-
-### Phase 7: Circuit Optimization and Compilation
-**Rationale:** With complete feature set, optimize generated circuits and upgrade output format. This addresses table-stakes expectations.
+### Phase 5: Qubit-Saving Mode (Eager Uncomputation)
+**Rationale:** Addresses different use cases (qubit-constrained hardware vs gate-count-constrained). Research shows both modes are industry standard.
 
 **Delivers:**
-- Automatic gate merging (identity elimination, inverse cancellation)
-- Commutation-based reordering
-- OpenQASM 3.0 export (upgrade from 2.0, adds mid-circuit measurement)
-- Circuit statistics (depth, gate count, qubit usage)
-- Visualization output (text-based circuit diagrams)
+- ql.option("uncomputation", "eager") configuration
+- Immediate intermediate cleanup after use
+- Reference counting to detect last use
+- Documentation on lazy vs eager trade-offs
 
 **Addresses:**
-- Must-have feature: OpenQASM 3.0 (industry standard as of 2026)
-- Must-have feature: circuit optimization (increasingly table stakes)
-- Must-have feature: visualization for debugging
+- Dual-mode strategy (competitive feature)
+- Zero-configuration default (competitive feature, lazy is default)
 
 **Avoids:**
-- Feature gap compared to competitors who have automatic optimization
+- Pitfall 3 (exponential cost) by providing escape valve for nested expressions
 
-**Stack usage:** OpenQASM 3.0 specification, Sphinx for documenting optimization passes
+**Research needs:** Standard pattern, no additional research needed.
 
-**Time estimate:** 2-3 weeks (medium complexity, optimization is well-documented)
-
-**Research flag:** LOW — DAG optimization patterns well-established, OpenQASM 3.0 spec is public
-
----
-
-### Phase 8: Python API Stabilization and Documentation
-**Rationale:** Final phase before potential open source release. Polish user-facing API and create comprehensive documentation.
+### Phase 6: Visualization and Documentation
+**Rationale:** Uncomputation is invisible to users without tooling. Research shows debugging difficulty is major usability issue.
 
 **Delivers:**
-- Updated Python bindings reflecting all C API changes (Phases 1-3)
-- QuantumCircuit context manager (proper resource cleanup)
-- Comprehensive docstrings (NumPy style with numpydoc)
-- Sphinx documentation with examples
-- API reference auto-generated from docstrings
-- Tutorial notebooks demonstrating features
-- Pre-commit hooks installed (Ruff, mypy)
+- Visual uncomputation markers in circuit output (OpenQASM comments)
+- Statistics tracking (qubits saved metric in get_statistics())
+- Debug mode (ql.option("debug_uncomputation"))
+- Comprehensive examples and API docs
 
 **Addresses:**
-- Must-have feature: clear error messages and good documentation
-- Developer experience polish
+- Visual markers (competitive feature)
+- Statistics tracking (competitive feature)
 
 **Avoids:**
-- Pitfall 18 (breaking changes frustrate users) — semantic versioning, deprecation warnings
-- Pitfall 20 (removing "dead" code) — deprecation period before any removals
+- Pitfall 11 (debugging difficulty) via visualization
+- Pitfall 12 (documentation mismatch) via examples-first docs
 
-**Stack usage:** Sphinx 9.1.0, numpydoc 1.11.0, Ruff 0.14.14, mypy, Furo theme
-
-**Time estimate:** 2-3 weeks (writing and polish)
-
-**Research flag:** NONE — documentation tools and patterns well-established
-
----
+**Research needs:** Documentation best practices, no technical research needed.
 
 ### Phase Ordering Rationale
 
-**Critical path:** Phases 1 → 2 → 4 → 6 → 8
-- Phase 1 (Foundation) unblocks all other work by eliminating architectural blockers
-- Phase 2 (Memory) enables Phase 4 (variable-width integers)
-- Phase 4 enables Phase 5 (bit operations) and Phase 6 (arithmetic)
-- Phase 8 (API/docs) comes last when features are stable
+- **Phase 1 before 2:** Dependency graph must exist to know WHAT to uncompute before implementing HOW to uncompute
+- **Phase 2 before 3:** C reverse gate generation must work independently before integrating with Python lifecycle
+- **Phase 3 before 4:** Basic uncomputation must work for simple cases before tackling conditional complexity
+- **Phase 4 before 5:** Scope correctness more critical than mode optimization (wrong scope = wrong result, wrong mode = inefficiency)
+- **Phase 6 last:** Tooling enhances existing features, no dependencies
 
-**Parallel opportunities:**
-- Phases 3 (Module Separation) and 2 (Memory Architecture) can proceed in parallel after Phase 1
-- Phases 5 (Bit Operations) and 6 (Extended Arithmetic) can proceed in parallel after Phase 4
-- Phase 7 (Optimization) can proceed in parallel with Phase 6 (uses same circuits)
-
-**Dependency logic:**
-- Arithmetic operations depend on variable-width integers (Phase 4 before 6)
-- Variable-width depends on clean memory model (Phase 2 before 4)
-- Clean memory model depends on eliminating global state (Phase 1 before 2)
-- Documentation depends on stable API (Phases 1-7 before 8)
-
-**Risk mitigation sequencing:**
-- Highest-risk architectural changes (Phase 1) come first when codebase is smallest
-- Incremental feature additions (Phases 4-6) come after foundation is solid
-- Each phase has clear deliverables and can be validated independently
-- No phase exceeds 4 weeks (enforcing incremental approach)
+This ordering avoids the common mistake of implementing uncomputation without dependency analysis (causes Pitfall 1), and prevents the trap of optimizing before correctness is established.
 
 ### Research Flags
 
-**Phases needing deeper research during planning:**
-- **Phase 4 (Variable-Width Integers):** Research optimal gate sequences for variable-width addition/subtraction, review PennyLane and Qiskit implementations
-- **Phase 5 (Bit Operations):** Research quantum bit shift/rotate circuits, limited literature on quantum bitwise operations
-- **Phase 6 (Extended Arithmetic):** HIGH priority for `/gsd:research-phase` — QFT-based arithmetic, modular operations, and exponentiation have complex design space
+**Phases likely needing deeper research during planning:**
+- **Phase 4 (Context Manager Integration):** Complex interaction between global `_controlled` state, `_list_of_controls`, and scope-based dependency tracking. Existing quantum_language.pyx uses global state that may conflict with scope-aware uncomputation. Recommend `/gsd:research-phase` to investigate:
+  - How `with` statement modifies global state
+  - When `_controlled` is set/reset
+  - How nested `with` blocks interact
+  - Where to inject uncomputation trigger in `__exit__`
 
 **Phases with standard patterns (skip research-phase):**
-- **Phase 1 (Foundation Cleanup):** Opaque pointer pattern well-documented, context objects standard practice
-- **Phase 2 (Memory Architecture):** RAII and arena allocation patterns well-known
-- **Phase 3 (Module Separation):** Straightforward code organization
-- **Phase 7 (Optimization):** DAG optimization and OpenQASM 3.0 well-documented
-- **Phase 8 (Documentation):** Sphinx and scientific Python documentation practices established
+- **Phase 1:** Dependency graph and topological sort are standard computer science algorithms
+- **Phase 2:** Quantum gate adjoints are well-documented (U†U = I) in quantum computing fundamentals
+- **Phase 3:** Python object lifecycle management is standard Python pattern
+- **Phase 5:** Eager vs lazy evaluation is standard programming language concept
+- **Phase 6:** Documentation and visualization are standard development practices
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Cython, pytest, Sphinx versions verified via PyPI (Jan 2026). Current setup already correct. No changes needed beyond tooling additions. |
-| Features | MEDIUM-HIGH | Table stakes and differentiators clear from framework comparisons. OpenQASM 3.0 and optimization increasingly expected. Quantum-specific feature complexity assessed via PennyLane research. |
-| Architecture | HIGH | Three-layer pattern standard in scientific Python. Anti-patterns identified via codebase audit. Opaque pointer and DAG patterns well-documented in industry literature. |
-| Pitfalls | HIGH | C/Python memory issues documented in official Python docs. Memory bugs verified by static analysis. Quantum-specific pitfalls from recent 2025 research papers. Refactoring risks from legacy code literature. |
+| Stack | HIGH | Python weakref.finalize verified in official Python 3.14.2 docs (Jan 2026), C adjoint generation is standard quantum technique |
+| Features | HIGH | Surveyed production frameworks (Q#, Qrisp, Silq) and academic research (Unqomp, Qurts, SQUARE 2024-2025), consistent patterns |
+| Architecture | HIGH | Direct analysis of existing codebase (quantum_language.pyx, qubit_allocator.h, circuit.h), integration points identified |
+| Pitfalls | HIGH | Recent academic papers (Qurts 2025, Modular Synthesis 2024, Reqomp 2024) document same pitfalls, validated by multiple sources |
 
 **Overall confidence:** HIGH
 
-The recommended approach is grounded in established patterns from the scientific Python ecosystem (NumPy, SciPy, Qiskit architecture) and verified through authoritative sources. The main uncertainty lies in quantum algorithm implementation details (optimal circuits for specific operations), which can be resolved through focused research during relevant phases.
+Research is comprehensive and well-sourced. Python lifecycle management is proven technology (PEP 442). Quantum gate reversal is fundamental quantum computing. Dependency tracking is standard compiler technique. Architecture matches existing codebase patterns.
 
 ### Gaps to Address
 
-**Quantum arithmetic implementation details:** While the high-level architecture is clear, optimal gate sequences for variable-width arithmetic operations need literature review during Phase 4 and 6. PennyLane demos provide starting points, but may need to survey academic papers for state-of-the-art approaches.
+Research identified four areas requiring validation during implementation:
 
-**Circuit optimization trade-offs:** Phase 7 optimization work should research error-aware optimization (not just gate count/depth minimization). The balance between circuit depth and gate error rates for real hardware is evolving rapidly and may need current literature review in 2026.
+- **Inverse operation availability:** Does every C operation support `invert` flag? Research assumes yes based on quantum theory, but C backend may not implement all adjoints. Resolution: Code audit during Phase 2 (reverse_gate_generator.c implementation).
 
-**Cython 3.2.4 memory view behavior:** Some memory leak issues reported in older Cython versions. Phase 8 should validate that current Cython 3.2.4 has resolved memory view leaks, or implement workarounds from GitHub issue tracking.
+- **Partial uncomputation policy:** What if only some intermediates can be safely uncomputed? Research suggests all-or-nothing for expressions, but user expectations unclear. Resolution: User study or design decision in Phase 3 (document behavior in API reference).
 
-**Cross-platform CI configuration:** GitHub Actions matrix for Python 3.10-3.13 and multiple OS (Ubuntu/macOS/Windows) needs setup during Phase 1. C compilation behavior differs across compilers (GCC vs Clang vs MSVC) — research CI configuration best practices from Scientific Python Development Guide.
+- **Sequence caching vs regeneration:** Should reversed sequences be cached (faster, more memory) or regenerated each time (slower, less memory)? Research doesn't provide clear guidance. Resolution: Performance testing during Phase 3, make configurable if significant impact.
+
+- **Weak vs strong references in dependency list:** Should `dependency_list` use `weakref.ref` (allows earlier cleanup, more complex) or strong references (simpler, prevents premature GC)? Research suggests strong references for MVP, weak for optimization. Resolution: Start with strong references in Phase 1, add weak reference option in Phase 5 if memory profiling shows issues.
 
 ## Sources
 
 ### Primary (HIGH confidence)
 
-**Technology Stack:**
-- [Cython PyPI](https://pypi.org/project/Cython/) — Version 3.2.4 confirmed (Jan 2026)
-- [pytest PyPI](https://pypi.org/project/pytest/) — Version 9.0.2 confirmed (Dec 2025)
-- [Sphinx PyPI](https://pypi.org/project/Sphinx/) — Version 9.1.0 confirmed (Dec 2025)
-- [Ruff PyPI](https://pypi.org/project/ruff/) — Version 0.14.14 confirmed (Jan 2026)
-- [Valgrind Documentation](https://valgrind.org/docs/manual/valgrind_manual.pdf) — Version 3.26.0 (Oct 2025)
-- [Scientific Python Development Guide](https://scientific-python-cookie.readthedocs.io/en/latest/guides/docs/) — Documentation and CI patterns
+**Quantum uncomputation research (2024-2026):**
+- [Qurts: Automatic Quantum Uncomputation by Affine Types with Lifetime](https://arxiv.org/abs/2411.10835) - arXiv 2024, lifetime management patterns
+- [Modular Synthesis of Efficient Quantum Uncomputation](https://dl.acm.org/doi/pdf/10.1145/3689785) - ACM 2024, exponential cost blowup documentation
+- [Unqomp: Synthesizing Uncomputation in Quantum Circuits](https://files.sri.inf.ethz.ch/website/papers/pldi21-unqomp.pdf) - PLDI 2021, dependency graph approach
+- [Scalable Memory Recycling for Large Quantum Programs](https://ar5iv.labs.arxiv.org/html/2503.00822) - arXiv 2025, qubit reuse patterns
+- [Rise of conditionally clean ancillae](https://quantum-journal.org/papers/q-2025-05-21-1752/pdf/) - Quantum Journal 2025, conditional uncomputation
 
-**Quantum Framework Patterns:**
-- [OpenQASM Live Specification](https://openqasm.com/) — Current standard
-- [OpenQASM 3 Paper](https://arxiv.org/pdf/2104.14722) — Specification details
-- [PennyLane Quantum Arithmetic Tutorial](https://pennylane.ai/qml/demos/tutorial_how_to_use_quantum_arithmetic_operators) — Implementation examples
+**Python patterns:**
+- [weakref — Weak references](https://docs.python.org/3/library/weakref.html) - Official Python 3.14.2 docs (Jan 26, 2026)
+- [PEP 442 – Safe object finalization](https://peps.python.org/pep-0442/) - Python Enhancement Proposal
+- [Python Weak References in 2025](https://medium.com/pythoneers/python-weak-references-in-2025-a-simpler-way-to-work-with-the-garbage-collector-26517aebde2e) - Medium 2025
 
-**Architecture Patterns:**
-- [Interrupt: Opaque Pointers in C](https://interrupt.memfault.com/blog/opaque-pointers) — Context object pattern
-- [Circuit Transformations for Quantum Architectures](https://arxiv.org/pdf/1902.09102) — DAG-based optimization
-- [Python Memory Management Documentation](https://docs.python.org/3/c-api/memory.html) — C/Python interop
-
-**Pitfalls:**
-- [Cython GitHub Issues](https://github.com/cython/cython/issues) — Memory leak tracking (#1638, #2828, #3046, #6850)
-- [Memory Management Strategies for Quantum Simulators](https://www.mdpi.com/2624-960X/7/3/41) — Quantum-specific patterns
-- [Scalable Memory Recycling for Quantum Programs](https://arxiv.org/abs/2503.00822) — Ancilla management
+**Framework documentation:**
+- [Q# Conjugations](https://learn.microsoft.com/en-us/azure/quantum/user-guide/language/expressions/conjugations) - Microsoft official docs
+- [Qrisp Uncomputation](https://qrisp.eu/reference/Core/Uncomputation.html) - Qrisp official docs
+- [Silq Overview](https://silq.ethz.ch/overview) - ETH Zurich
 
 ### Secondary (MEDIUM confidence)
 
-**Framework Comparisons:**
-- [Quantum Programming: Framework Comparison](https://postquantum.com/quantum-computing/quantum-programming/)
-- [Top Quantum Programming Languages 2026](https://www.andhustechnologies.com/top-articles/top-quantum-programming-languages-you-should-learn-in-2026/)
+**Quantum circuit implementation:**
+- [SQUARE: Strategic Quantum Ancilla Reuse](https://arxiv.org/abs/2004.08539) - arXiv 2020, eager vs lazy strategies
+- [Reqomp: Space-constrained Uncomputation](https://quantum-journal.org/papers/q-2024-02-19-1258/) - Quantum 2024, partial uncomputation
+- [CaQR: Compiler-Assisted Approach for Qubit Reuse](https://people.cs.rutgers.edu/zz124/assets/pdf/asplos23.pdf) - ASPLOS 2023
 
-**Legacy Code Refactoring:**
-- [7 Techniques to Regain Control of Legacy Codebase](https://understandlegacycode.com/blog/7-techniques-to-regain-control-of-legacy/)
-- [Legacy Code Refactoring: Best Practices](https://modlogix.com/blog/legacy-code-refactoring-tips-steps-and-best-practices/)
+**Performance and optimization:**
+- [Qubit-Reuse Compilation with Mid-Circuit Measurement and Reset](https://link.aps.org/doi/10.1103/PhysRevX.13.041057) - Physical Review X 2023, qubit saving modes
+- [Integrated Qubit Reuse and Circuit Cutting](https://arxiv.org/html/2312.10298v1) - arXiv 2023
 
-**Performance and Optimization:**
-- [TDAG: Tree-based DAG Partitioning for Quantum Circuits](https://www.ornl.gov/publication/tdag-tree-based-directed-acyclic-graph-partitioning-quantum-circuits)
-- [Quantum Circuit Design using Monte Carlo Tree Search](https://advanced.onlinelibrary.wiley.com/doi/10.1002/qute.202500093)
+### Codebase-Specific (HIGH confidence)
 
-### Tertiary (LOW confidence)
-
-**Emerging Practices:**
-- [A Github Actions setup for Python projects in 2025](https://ber2.github.io/posts/2025_github_actions_python/) — CI configuration patterns
-- [Quantum Error Correction: 2025 Trends](https://www.riverlane.com/blog/quantum-error-correction-our-2025-trends-and-2026-predictions) — Error-aware optimization context
+**Existing architecture:**
+- quantum_language.pyx — Python/Cython layer, global state management (_controlled, _list_of_controls lines 26-29)
+- qubit_allocator.h — Centralized qubit allocation/deallocation, ownership tracking, successful single-ownership pattern
+- circuit.h — Layer-based gate scheduling, circuit_t structure
+- comparison_ops.h — qint → qbool conversion patterns (CQ_equal_width, etc.)
+- bitwise_ops.c — Q_not, Q_and, Q_xor, Q_or return sequence_t*
 
 ---
-*Research completed: 2026-01-25*
+*Research completed: 2026-01-28*
 *Ready for roadmap: yes*
