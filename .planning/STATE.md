@@ -113,4 +113,4 @@ Resume file: None (Phase 19 complete, ready for Phase 20 with `/gsd:plan-phase 2
 **Phase 18 completed:** 2026-01-28 (2 plans: core infrastructure + integration/tests)
 **Phase 19 completed:** 2026-01-28 (1 plan: context manager integration)
 
-**Next action:** `/gsd:plan-phase 20` to create detailed plan for uncomputation modes and user control
+**Next action:** `/gsd:discuss-phase 20` to gather context and clarify approach for uncomputation modes and user control

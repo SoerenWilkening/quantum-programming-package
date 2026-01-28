@@ -23,10 +23,10 @@ Requirements for automatic uncomputation milestone. Each maps to roadmap phases.
 
 ### Scope Integration
 
-- [ ] **SCOPE-01**: Uncompute temporaries automatically when `with` block exits
+- [x] **SCOPE-01**: Uncompute temporaries automatically when `with` block exits
 - [x] **SCOPE-02**: Uncompute when qbool is destroyed or goes out of scope
 - [ ] **SCOPE-03**: Explicit `.keep()` method allows opt-out of automatic uncomputation
-- [ ] **SCOPE-04**: Scope-aware tracking handles nested `with` statements correctly
+- [x] **SCOPE-04**: Scope-aware tracking handles nested `with` statements correctly
 
 ### Uncomputation Modes
 
@@ -76,8 +76,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | UNCOMP-02 | Phase 18 | Complete |
 | UNCOMP-03 | Phase 18 | Complete |
 | SCOPE-02 | Phase 18 | Complete |
-| SCOPE-01 | Phase 19 | Pending |
-| SCOPE-04 | Phase 19 | Pending |
+| SCOPE-01 | Phase 19 | Complete |
+| SCOPE-04 | Phase 19 | Complete |
 | MODE-01 | Phase 20 | Pending |
 | MODE-02 | Phase 20 | Pending |
 | MODE-03 | Phase 20 | Pending |
