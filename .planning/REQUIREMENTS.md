@@ -67,29 +67,36 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TRACK-01 | TBD | Pending |
-| TRACK-02 | TBD | Pending |
-| TRACK-03 | TBD | Pending |
-| TRACK-04 | TBD | Pending |
-| UNCOMP-01 | TBD | Pending |
-| UNCOMP-02 | TBD | Pending |
-| UNCOMP-03 | TBD | Pending |
-| UNCOMP-04 | TBD | Pending |
-| SCOPE-01 | TBD | Pending |
-| SCOPE-02 | TBD | Pending |
-| SCOPE-03 | TBD | Pending |
-| SCOPE-04 | TBD | Pending |
-| MODE-01 | TBD | Pending |
-| MODE-02 | TBD | Pending |
-| MODE-03 | TBD | Pending |
-| CTRL-01 | TBD | Pending |
-| CTRL-02 | TBD | Pending |
+| TRACK-01 | Phase 16 | Pending |
+| TRACK-02 | Phase 16 | Pending |
+| TRACK-03 | Phase 16 | Pending |
+| TRACK-04 | Phase 16 | Pending |
+| UNCOMP-01 | Phase 17 | Pending |
+| UNCOMP-04 | Phase 17 | Pending |
+| UNCOMP-02 | Phase 18 | Pending |
+| UNCOMP-03 | Phase 18 | Pending |
+| SCOPE-02 | Phase 18 | Pending |
+| SCOPE-01 | Phase 19 | Pending |
+| SCOPE-04 | Phase 19 | Pending |
+| MODE-01 | Phase 20 | Pending |
+| MODE-02 | Phase 20 | Pending |
+| MODE-03 | Phase 20 | Pending |
+| CTRL-01 | Phase 20 | Pending |
+| CTRL-02 | Phase 20 | Pending |
+| SCOPE-03 | Phase 20 | Pending |
 
 **Coverage:**
 - v1.2 requirements: 17 total
-- Mapped to phases: 0
-- Unmapped: 17 (pending roadmap creation)
+- Mapped to phases: 17/17
+- Unmapped: 0
+
+**Phase distribution:**
+- Phase 16 (Dependency Tracking): 4 requirements
+- Phase 17 (Reverse Gate Generation): 2 requirements
+- Phase 18 (Basic Uncomputation): 3 requirements
+- Phase 19 (Context Manager Integration): 2 requirements
+- Phase 20 (Modes and Control): 6 requirements
 
 ---
 *Requirements defined: 2026-01-28*
-*Last updated: 2026-01-28 after initial definition*
+*Last updated: 2026-01-28 after roadmap creation (100% coverage achieved)*

@@ -5,91 +5,82 @@
 See: .planning/PROJECT.md (updated 2026-01-28)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Milestone v1.2 — Automatic Uncomputation
+**Current focus:** Phase 16 - Dependency Tracking Infrastructure
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-01-28 — Milestone v1.2 started
+Phase: 16 of 20 (Dependency Tracking Infrastructure)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-01-28 — Roadmap created for v1.2 Automatic Uncomputation milestone
 
-Progress: Defining requirements for automatic uncomputation
+Progress: [███████░░░] 75% (phases 1-15 complete, 16-20 pending)
 
 ## Performance Metrics
 
-**v1.0 Summary:**
-- Total plans completed: 41
-- Average duration: 5.1 min
-- Total execution time: 3.14 hours
-- Phases: 10
-- Requirements shipped: 37/37
+**Velocity:**
+- Total plans completed: 54 (v1.0: 41, v1.1: 13)
+- Average duration: ~5 min/plan
+- Total execution time: ~4.5 hours
 
-**v1.1 Progress:**
-- Total plans completed: 15
-- Average duration: 4.7 min
-- Phases complete: 5/5 (Phase 11, Phase 12, Phase 13, Phase 14, Phase 15 complete)
-- Requirements shipped: 10/10 (GLOB-01 through INIT-01 complete)
+**By Milestone:**
+
+| Milestone | Phases | Plans | Status |
+|-----------|--------|-------|--------|
+| v1.0 MVP | 1-10 | 41 | Complete (2026-01-27) |
+| v1.1 QPU State | 11-15 | 13 | Complete (2026-01-28) |
+| v1.2 Uncomputation | 16-20 | 0/? | Ready to plan |
+
+**Recent Trend:**
+- v1.1: 13 plans in 1 day (accelerated delivery)
+- v1.2: Starting fresh with research-informed roadmap
 
 ## Accumulated Context
 
 ### Decisions
 
-v1.1 decisions archived to PROJECT.md Key Decisions table.
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting v1.2 work:
 
-See also: PROJECT.md Key Decisions table for project-wide decisions.
+- v1.1: Stateless C backend — enables Python-level dependency tracking (v1.2 foundation)
+- v1.0: Circuit compilation model — uncomputation appends reverse gates to circuit
+- v1.0: Centralized qubit allocator — uncomputation integrates with existing ownership tracking
 
 ### Pending Todos
 
-None.
+None yet.
 
 ### Blockers/Concerns
 
-**Resolved in v1.0:**
-- Most global state eliminated from C backend
-- Memory bugs fixed (sizeof, NULL checks, initialization)
-- QQ_mul segfault fixed via MAXLAYERINSEQUENCE allocation
-
-**Resolved in v1.1:**
-- QPU_state completely removed — Full system is now stateless
-- Comparison functions parameterization complete for all bit widths (1-64)
-- n-controlled gate support in execution layer, optimizer, gate.c
+**From research (SUMMARY.md):**
+- Phase 19 may need deeper research during planning — complex interaction between global `_controlled` state (quantum_language.pyx lines 26-29) and scope-aware dependency tracking. Consider `/gsd:research-phase` if planning reveals complexity.
 
 **Known pre-existing issues:**
-- Multiplication tests segfault at certain widths (C backend issue)
+- Multiplication tests segfault at certain widths (C backend issue, tracked)
 
-**Known limitations (acceptable):**
-- qint_mod * qint_mod raises NotImplementedError (by design)
+**Known limitations (acceptable by design):**
+- qint_mod * qint_mod raises NotImplementedError
 - apply_merge() placeholder for phase rotation merging
-
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 001 | CQ operations refactored to take value parameter | 2026-01-26 | 7f3cd62 | [001-refactor-cq-operations](./quick/001-refactor-cq-operations-to-take-value-par/) |
 
 ## Session Continuity
 
 Last session: 2026-01-28
-Stopped at: v1.1 milestone completed
-Resume file: .planning/MILESTONES.md
-Note: v1.1 shipped! Stateless C backend, efficient comparisons, classical initialization. 149 tests at 100% pass rate. Ready for v1.2 planning.
+Stopped at: Roadmap created for v1.2 (5 phases, 17 requirements, 100% coverage)
+Resume file: None (ready to begin Phase 16 planning with `/gsd:plan-phase 16`)
 
 ---
 
-## v1.1 Milestone Summary
+## v1.2 Milestone Context
 
-**SHIPPED 2026-01-28**
+**Goal:** Automatically uncompute intermediate qubits when their lifetime ends
 
-See `.planning/MILESTONES.md` for full milestone record.
-See `.planning/milestones/v1.1-ROADMAP.md` for archived roadmap.
-See `.planning/milestones/v1.1-REQUIREMENTS.md` for archived requirements.
+**Phases:**
+- Phase 16: Dependency tracking infrastructure (4 requirements)
+- Phase 17: C reverse gate generation (2 requirements)
+- Phase 18: Basic uncomputation integration (3 requirements)
+- Phase 19: Context manager integration for `with` (2 requirements)
+- Phase 20: Modes and user control (6 requirements)
 
-**Key Achievements:**
-- QPU_state global completely removed — stateless architecture
-- Multi-controlled gates (mcx) for n-bit comparisons (1-64 bits)
-- Memory-efficient comparison operators (in-place pattern)
-- Classical qint initialization with auto-width mode
+**Research completed:** 2026-01-28 (HIGH confidence, Python weakref + C adjoint pattern validated)
 
-**Next Steps:**
-- `/gsd:new-milestone` to define v1.2 requirements and roadmap
+**Next action:** `/gsd:plan-phase 16` to create detailed plan for dependency tracking
