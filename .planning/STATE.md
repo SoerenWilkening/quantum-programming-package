@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-28)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Phase 19 complete — Context Manager Integration
+**Current focus:** Phase 20 in progress — Modes and Control
 
 ## Current Position
 
-Phase: 19 of 20 (Context Manager Integration)
-Plan: 1 of 1 in current phase (complete)
-Status: Phase 19 complete
-Last activity: 2026-01-28 — Completed quick task 003: Revisit refactoring quantum_language.pyx
+Phase: 20 of 20 (Modes and Control)
+Plan: 1 of 2 in current phase (complete)
+Status: Phase 20 in progress
+Last activity: 2026-01-28 — Completed 20-01-PLAN.md (option API and mode-aware uncomputation)
 
-Progress: [█████████░] 95% (phases 1-19 complete, phase 20 pending)
+Progress: [█████████░] 96% (phases 1-19 complete, phase 20 plan 1/2 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 60 (v1.0: 41, v1.1: 13, v1.2: 6)
+- Total plans completed: 61 (v1.0: 41, v1.1: 13, v1.2: 7)
 - Average duration: ~6 min/plan
-- Total execution time: ~6.0 hours
+- Total execution time: ~6.1 hours
 
 **By Milestone:**
 
@@ -29,7 +29,7 @@ Progress: [█████████░] 95% (phases 1-19 complete, phase 20 p
 |-----------|--------|-------|--------|
 | v1.0 MVP | 1-10 | 41 | Complete (2026-01-27) |
 | v1.1 QPU State | 11-15 | 13 | Complete (2026-01-28) |
-| v1.2 Uncomputation | 16-20 | 6/? | In progress |
+| v1.2 Uncomputation | 16-20 | 7/8 | In progress |
 
 **Recent Trend:**
 - v1.1: 13 plans in 1 day (accelerated delivery)
@@ -37,6 +37,7 @@ Progress: [█████████░] 95% (phases 1-19 complete, phase 20 p
 - v1.2 Phase 17: 1 plan in 11 min (C reverse gate generation)
 - v1.2 Phase 18: 2 plans in 25 min total (core infrastructure + integration)
 - v1.2 Phase 19: 1 plan in 9 min (context manager integration)
+- v1.2 Phase 20-01: 1 plan in 5.5 min (option API and mode-aware uncomputation)
 
 ## Accumulated Context
 
@@ -45,6 +46,10 @@ Progress: [█████████░] 95% (phases 1-19 complete, phase 20 p
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting v1.2 work:
 
+- v1.2 Phase 20-01: Mode captured at creation time — prevents retroactive mode changes, each qbool has immutable behavior
+- v1.2 Phase 20-01: Eager mode immediate uncomputation — minimizes peak qubit count by freeing on GC regardless of scope
+- v1.2 Phase 20-01: Lazy mode scope-based uncomputation — minimizes gates by keeping intermediates alive within scope
+- v1.2 Phase 20-01: _uncompute_mode made public — enables testing and debugging access to mode flag
 - v1.2 Phase 19-01: Uncompute before restore — uncomputation happens BEFORE restoring control state for quantum correctness
 - v1.2 Phase 19-01: LIFO order via _creation_order — sort scope_qbools by _creation_order descending
 - v1.2 Phase 19-01: Skip already-uncomputed in __exit__ — allows early explicit uncompute (though refcount prevents it)
@@ -97,8 +102,8 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-28
-Stopped at: Completed 19-01-PLAN.md (context manager integration)
-Resume file: None (Phase 19 complete, ready for Phase 20 with `/gsd:plan-phase 20`)
+Stopped at: Completed 20-01-PLAN.md (option API and mode-aware uncomputation)
+Resume file: None (Phase 20 plan 1 complete, plan 2 pending)
 
 ---
 
@@ -111,7 +116,7 @@ Resume file: None (Phase 19 complete, ready for Phase 20 with `/gsd:plan-phase 2
 - Phase 17: C reverse gate generation (2 requirements) — COMPLETE
 - Phase 18: Basic uncomputation integration (3 requirements) — COMPLETE
 - Phase 19: Context manager integration for `with` (2 requirements) — COMPLETE
-- Phase 20: Modes and user control (6 requirements)
+- Phase 20: Modes and user control (6 requirements) — IN PROGRESS (1/2 plans complete)
 
 **Research completed:** 2026-01-28 (HIGH confidence, Python weakref + C adjoint pattern validated)
 
@@ -119,5 +124,6 @@ Resume file: None (Phase 19 complete, ready for Phase 20 with `/gsd:plan-phase 2
 **Phase 17 completed:** 2026-01-28 (1 plan: C reverse gate generation)
 **Phase 18 completed:** 2026-01-28 (2 plans: core infrastructure + integration/tests)
 **Phase 19 completed:** 2026-01-28 (1 plan: context manager integration)
+**Phase 20-01 completed:** 2026-01-28 (option API and mode-aware uncomputation)
 
-**Next action:** `/gsd:discuss-phase 20` to gather context and clarify approach for uncomputation modes and user control
+**Next action:** Execute Phase 20-02 for .keep() and .uncompute() enhancements
