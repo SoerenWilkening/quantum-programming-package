@@ -14,6 +14,8 @@ circuit-gen-results/qsharp/*
 !circuit-gen-results/qsharp/QuantumProject.csproj
 build
 python-backend/quantum_language.c
+python-backend/quantum_language_preprocessed.pyx
+python-backend/quantum_language_preprocessed.c
 python-backend/quantum_language.cpython-311-darwin.so
 python-backend/quantum_language.cpython-*-linux-gnu.so
 __pycache__/
