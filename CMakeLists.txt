@@ -6,15 +6,15 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
 
 
 add_executable(CQ_backend_improved main.c
-        Backend/src/Integer.c
-        Backend/src/QPU.c
-        Backend/src/gate.c
-        Backend/include/definition.h
-        Backend/src/IntegerAddition.c
-        Backend/src/IntegerMultiplication.c
-        Backend/src/LogicOperations.c
-        Backend/src/IntegerComparison.c
-        Execution/src/execution.c
+        c_backend/src/Integer.c
+        c_backend/src/QPU.c
+        c_backend/src/gate.c
+        c_backend/include/definition.h
+        c_backend/src/IntegerAddition.c
+        c_backend/src/IntegerMultiplication.c
+        c_backend/src/LogicOperations.c
+        c_backend/src/IntegerComparison.c
+        c_backend/src/execution.c
         Assembly/src/AssemblyComparison.c
         Assembly/src/AssemblyReader.c
         Assembly/src/AssemblyLogic.c
@@ -22,13 +22,12 @@ add_executable(CQ_backend_improved main.c
         Assembly/src/AssemblyIntegerAddition.c
         Assembly/src/AssemblyIntegerMultiplication.c
         Assembly/src/AssemblyIntegerDivision.c
-        Backend/src/circuit_allocations.c
-        Backend/src/ciruict_outputs.c
-        Backend/src/qubit_allocator.c)
+        c_backend/src/circuit_allocations.c
+        c_backend/src/ciruict_outputs.c
+        c_backend/src/qubit_allocator.c)
 
 target_compile_options(CQ_backend_improved PRIVATE -O3)
 
 
 target_include_directories(CQ_backend_improved PRIVATE ${PROJECT_SOURCE_DIR}/Assembly/include)
-target_include_directories(CQ_backend_improved PRIVATE ${PROJECT_SOURCE_DIR}/Backend/include)
-target_include_directories(CQ_backend_improved PRIVATE ${PROJECT_SOURCE_DIR}/Execution/include)
+target_include_directories(CQ_backend_improved PRIVATE ${PROJECT_SOURCE_DIR}/c_backend/include)

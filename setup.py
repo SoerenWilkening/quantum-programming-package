@@ -12,25 +12,25 @@ from pathlib import Path
 from Cython.Build import cythonize
 from setuptools import Extension, find_packages, setup
 
-# Shared C sources from Backend
+# Shared C sources from c_backend
 # Project root is the current directory
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 c_sources = [
-    os.path.join(PROJECT_ROOT, "Backend", "src", "QPU.c"),
-    os.path.join(PROJECT_ROOT, "Backend", "src", "optimizer.c"),
-    os.path.join(PROJECT_ROOT, "Backend", "src", "qubit_allocator.c"),
-    os.path.join(PROJECT_ROOT, "Backend", "src", "circuit_allocations.c"),
-    os.path.join(PROJECT_ROOT, "Backend", "src", "circuit_output.c"),
-    os.path.join(PROJECT_ROOT, "Backend", "src", "circuit_stats.c"),
-    os.path.join(PROJECT_ROOT, "Backend", "src", "circuit_optimizer.c"),
-    os.path.join(PROJECT_ROOT, "Backend", "src", "gate.c"),
-    os.path.join(PROJECT_ROOT, "Backend", "src", "Integer.c"),
-    os.path.join(PROJECT_ROOT, "Backend", "src", "IntegerAddition.c"),
-    os.path.join(PROJECT_ROOT, "Backend", "src", "IntegerComparison.c"),
-    os.path.join(PROJECT_ROOT, "Backend", "src", "IntegerMultiplication.c"),
-    os.path.join(PROJECT_ROOT, "Backend", "src", "LogicOperations.c"),
-    os.path.join(PROJECT_ROOT, "Execution", "src", "execution.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "QPU.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "optimizer.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "qubit_allocator.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "circuit_allocations.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "circuit_output.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "circuit_stats.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "circuit_optimizer.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "gate.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "Integer.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "IntegerAddition.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "IntegerComparison.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "IntegerMultiplication.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "LogicOperations.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "execution.c"),
 ]
 
 compiler_args = ["-O3", "-flto", "-pthread"]
@@ -39,8 +39,7 @@ compiler_args = ["-O3", "-flto", "-pthread"]
 SRC_DIR = os.path.join(PROJECT_ROOT, "src")
 
 include_dirs = [
-    os.path.join(PROJECT_ROOT, "Backend", "include"),
-    os.path.join(PROJECT_ROOT, "Execution", "include"),
+    os.path.join(PROJECT_ROOT, "c_backend", "include"),
     SRC_DIR,  # CRITICAL: Allows cimport to find .pxd files in package
 ]
 
@@ -72,7 +71,7 @@ if not extensions:
             sources=["quantum_language_preprocessed.pyx"] + c_sources,
             language="c",
             extra_compile_args=compiler_args,
-            include_dirs=include_dirs[:2],  # Original include dirs
+            include_dirs=include_dirs[:1],  # Original include dir (c_backend only)
         )
     ]
 

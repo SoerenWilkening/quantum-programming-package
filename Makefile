@@ -12,9 +12,9 @@ PYTEST = $(PYTHON) -m pytest
 VENV = .venv/bin/activate
 
 # Source files
-BACKEND_SRC = Backend/src/*.c
-BACKEND_INC = -IBackend/include -IExecution/include
-EXEC_SRC = Execution/src/*.c
+BACKEND_SRC = c_backend/src/*.c
+BACKEND_INC = -Ic_backend/include
+EXEC_SRC =
 
 # Check for required tools
 HAS_CC := $(shell command -v gcc 2>/dev/null || command -v clang 2>/dev/null || command -v cc 2>/dev/null)
