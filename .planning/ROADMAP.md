@@ -88,10 +88,11 @@ Plans:
   4. User can perform in-place operations: `A += B`, `A -= B`, `A *= B`, `A &= B`, `A |= B`, `A ^= B`
   5. Mismatched array shapes raise clear error with shapes shown
   6. Result arrays preserve input shape
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 24-01: TBD
+- [ ] 24-01-PLAN.md — Implement all element-wise operator methods in qarray.pyx
+- [ ] 24-02-PLAN.md — Comprehensive test suite for element-wise operations
 
 ## Progress
 
@@ -102,7 +103,7 @@ Plans:
 | 21. Package Restructuring | v1.3 | 7/7 | Complete | 2026-01-29 |
 | 22. Array Class Foundation | v1.3 | 5/5 | Complete | 2026-01-29 |
 | 23. Array Reductions | v1.3 | 2/2 | Complete | 2026-01-29 |
-| 24. Element-wise Operations | v1.3 | 0/TBD | Not started | - |
+| 24. Element-wise Operations | v1.3 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-01-29*
