@@ -114,34 +114,101 @@ cdef class qarray:
         _width (int): Bit width for qint elements
     """
 
-    def __init__(self, data):
+    def __init__(self, data=None, *, width=None, dtype=None, dim=None):
         """
         Initialize quantum array from nested list structure.
 
         Args:
             data: List of integers (can be nested for multi-dimensional arrays)
+            width: Explicit bit width for elements (overrides auto-inference)
+            dtype: Element type (qint or qbool)
+            dim: Create array from dimensions (int or tuple)
 
         Raises:
-            ValueError: If array structure is jagged
+            ValueError: If array structure is jagged or contains mixed types
+            TypeError: If dtype is not qint or qbool
         """
+        # Validate dtype parameter if provided
+        if dtype is not None and dtype not in (qint, qbool):
+            raise TypeError(f"dtype must be qint or qbool, got {dtype}")
+
         # Detect shape from nested structure
         self._shape = _detect_shape(data)
 
         # Flatten data to 1D list
         flat_data = _flatten(data)
 
-        # Infer width from max value
-        self._width = _infer_width(flat_data)
+        # Check for mixed qint/qbool objects
+        has_qint = any(isinstance(v, qint) for v in flat_data)
+        has_qbool = any(isinstance(v, qbool) for v in flat_data)
+        if has_qint and has_qbool:
+            raise ValueError("Array must be homogeneous: cannot mix qint and qbool")
 
-        # Create qint objects for each value
-        self._elements = []
-        for value in flat_data:
-            q = qint(self._width)
-            q.value = value
-            self._elements.append(q)
+        # Determine dtype from data if not explicitly provided
+        if dtype is None:
+            if has_qbool:
+                dtype = qbool
+            elif has_qint:
+                dtype = qint
+            else:
+                dtype = qint  # Default to qint for raw integer data
+
+        # For qbool arrays, width is always 1
+        if dtype == qbool:
+            self._width = 1
+            # Create qbool objects for each value
+            self._elements = []
+            for value in flat_data:
+                if isinstance(value, qbool):
+                    self._elements.append(value)
+                else:
+                    # Convert to bool then to qbool
+                    self._elements.append(qbool(bool(value)))
+        else:
+            # qint array
+            # Determine width
+            if width is not None:
+                # Explicit width provided - check if values fit
+                numeric_values = []
+                for v in flat_data:
+                    if isinstance(v, qint):
+                        numeric_values.append(v.value)
+                    else:
+                        numeric_values.append(v)
+
+                if numeric_values:
+                    max_val = max(abs(v) for v in numeric_values)
+                    if max_val > 0 and max_val.bit_length() > width:
+                        warnings.warn(
+                            f"Values exceed {width}-bit range, will be truncated",
+                            UserWarning
+                        )
+                self._width = width
+            else:
+                # Infer width from max value
+                numeric_values = []
+                for v in flat_data:
+                    if isinstance(v, qint):
+                        numeric_values.append(v.value)
+                    else:
+                        numeric_values.append(v)
+                self._width = _infer_width(numeric_values)
+
+            # Create qint objects for each value
+            self._elements = []
+            for value in flat_data:
+                if isinstance(value, qint):
+                    # Use existing qint but ensure correct width
+                    q = qint(self._width)
+                    q.value = value.value
+                    self._elements.append(q)
+                else:
+                    q = qint(self._width)
+                    q.value = value
+                    self._elements.append(q)
 
         # Store dtype reference
-        self._dtype = qint
+        self._dtype = dtype
 
     @property
     def shape(self):
@@ -162,29 +229,193 @@ cdef class qarray:
         """Return the number of elements in the flattened array."""
         return len(self._elements)
 
-    def __getitem__(self, index):
+    def __getitem__(self, key):
         """
-        Get element by index.
+        Get element or slice by index with NumPy-style indexing.
+
+        Supports:
+        - Integer index: arr[5] returns single element
+        - Negative index: arr[-1] returns last element
+        - Slice: arr[1:3] returns view
+        - Tuple (multi-dimensional): arr[0,1] or arr[:, 0]
 
         Args:
-            index: Integer index into flattened array
+            key: int, slice, or tuple of ints/slices
 
         Returns:
-            qint or qbool: Element at specified index
+            qint/qbool or qarray: Single element or view
 
-        Note: Multi-dimensional indexing will be added in Plan 02
+        Raises:
+            IndexError: If index out of bounds
+            TypeError: If key type is unsupported
         """
-        if isinstance(index, int):
-            # Handle negative indices
-            if index < 0:
-                index = len(self._elements) + index
+        # Single integer index (flattened access)
+        if isinstance(key, int):
+            if key < 0:
+                key += len(self._elements)
+            if not 0 <= key < len(self._elements):
+                raise IndexError(f"Index {key} out of bounds for array with {len(self._elements)} elements")
+            return self._elements[key]
 
-            if index < 0 or index >= len(self._elements):
-                raise IndexError(f"Index {index} out of bounds for array of length {len(self._elements)}")
+        # Slice (returns view)
+        elif isinstance(key, slice):
+            start, stop, step = key.indices(len(self._elements))
+            indices = range(start, stop, step)
+            view_elements = [self._elements[i] for i in indices]
+            return self._create_view(view_elements, shape=(len(view_elements),))
 
-            return self._elements[index]
+        # Tuple (multi-dimensional indexing)
+        elif isinstance(key, tuple):
+            return self._handle_multi_index(key)
+
         else:
-            raise TypeError(f"Unsupported index type: {type(index).__name__}")
+            raise TypeError(f"Unsupported index type: {type(key).__name__}")
+
+    def _multi_to_flat(self, indices):
+        """
+        Convert multi-dimensional indices to flat index for row-major storage.
+
+        Args:
+            indices: Tuple of integer indices
+
+        Returns:
+            int: Flat index
+
+        Example:
+            shape (2, 3), index (1, 2) -> 1*3 + 2 = 5
+        """
+        if len(indices) != len(self._shape):
+            raise IndexError(f"Expected {len(self._shape)} indices, got {len(indices)}")
+
+        flat = 0
+        stride = 1
+
+        # Process dimensions in reverse (rightmost first for row-major)
+        for dim in reversed(range(len(self._shape))):
+            idx = indices[dim]
+
+            # Handle negative indices
+            if idx < 0:
+                idx += self._shape[dim]
+
+            # Bounds check
+            if not 0 <= idx < self._shape[dim]:
+                raise IndexError(f"Index {idx} out of bounds for dimension {dim} with size {self._shape[dim]}")
+
+            flat += idx * stride
+            stride *= self._shape[dim]
+
+        return flat
+
+    def _handle_multi_index(self, key):
+        """
+        Handle tuple-based multi-dimensional indexing.
+
+        Supports:
+        - All ints: arr[0, 1] returns single element
+        - Mixed int/slice: arr[0, :] returns row view
+        - Column slice: arr[:, 0] returns column view
+
+        Args:
+            key: Tuple of ints and/or slices
+
+        Returns:
+            qint/qbool or qarray: Single element or view
+        """
+        # Check if all elements are integers (single element access)
+        if all(isinstance(k, int) for k in key):
+            flat_idx = self._multi_to_flat(key)
+            return self._elements[flat_idx]
+
+        # Handle mixed int/slice indexing
+        # This is complex - need to handle cases like arr[0, :] or arr[:, 0]
+
+        # For now, handle the common case: arr[:, col_idx]
+        if len(key) == 2 and isinstance(key[0], slice) and isinstance(key[1], int):
+            # Column slice: arr[:, col_idx]
+            row_slice = key[0]
+            col_idx = key[1]
+
+            # Handle negative column index
+            if col_idx < 0:
+                col_idx += self._shape[1]
+            if not 0 <= col_idx < self._shape[1]:
+                raise IndexError(f"Column index {col_idx} out of bounds")
+
+            # Get row range
+            start, stop, step = row_slice.indices(self._shape[0])
+            row_indices = range(start, stop, step)
+
+            # Collect elements from column
+            view_elements = []
+            for row_idx in row_indices:
+                flat_idx = self._multi_to_flat((row_idx, col_idx))
+                view_elements.append(self._elements[flat_idx])
+
+            return self._create_view(view_elements, shape=(len(view_elements),))
+
+        # Handle row slice: arr[row_idx, :]
+        elif len(key) == 2 and isinstance(key[0], int) and isinstance(key[1], slice):
+            row_idx = key[0]
+            col_slice = key[1]
+
+            # Handle negative row index
+            if row_idx < 0:
+                row_idx += self._shape[0]
+            if not 0 <= row_idx < self._shape[0]:
+                raise IndexError(f"Row index {row_idx} out of bounds")
+
+            # Get column range
+            start, stop, step = col_slice.indices(self._shape[1])
+            col_indices = range(start, stop, step)
+
+            # Collect elements from row
+            view_elements = []
+            for col_idx in col_indices:
+                flat_idx = self._multi_to_flat((row_idx, col_idx))
+                view_elements.append(self._elements[flat_idx])
+
+            return self._create_view(view_elements, shape=(len(view_elements),))
+
+        # Handle simple 1D slice of first dimension: arr[row_slice]
+        elif len(key) == 1 and isinstance(key[0], slice):
+            # This is just regular slicing
+            return self.__getitem__(key[0])
+
+        else:
+            raise NotImplementedError(f"Complex slicing pattern not yet supported: {key}")
+
+    @classmethod
+    def _create_view(cls, elements, shape):
+        """
+        Create a view array sharing element references.
+
+        Args:
+            elements: List of qint/qbool objects to include in view
+            shape: Shape tuple for the view
+
+        Returns:
+            qarray: View sharing underlying qint/qbool objects
+        """
+        # Create new instance without calling __init__
+        arr = cls.__new__(cls)
+        arr._elements = elements  # Shared reference (view semantics)
+        arr._shape = shape
+
+        # Infer dtype and width from elements
+        if elements:
+            first = elements[0]
+            arr._dtype = type(first)
+            if hasattr(first, 'bits'):
+                arr._width = first.bits
+            else:
+                arr._width = 1  # qbool
+        else:
+            # Empty view
+            arr._dtype = qint
+            arr._width = 8
+
+        return arr
 
 
 # Register qarray as a virtual subclass of Sequence
