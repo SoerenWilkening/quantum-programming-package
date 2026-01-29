@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-29)
 
 ## Current Position
 
-Phase: 22 of 24 (Array Class Foundation) — IN PROGRESS
-Plan: 3 of 3 complete (Phase 22 complete)
-Status: Plan 22-04 complete - iteration, immutability, and repr
-Last activity: 2026-01-29 — Completed 22-04-PLAN.md (Python integration)
+Phase: 22 of 24 (Array Class Foundation) — COMPLETE
+Plan: 5 of 5 complete (Phase 22 complete)
+Status: Plan 22-05 complete - public API integration and test suite
+Last activity: 2026-01-29 — Completed 22-05-PLAN.md (Public API & Tests)
 
-Progress: [██████░...] 29%
+Progress: [███████░..] 32%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 74 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 10)
+- Total plans completed: 76 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 12)
 - Average duration: ~6 min/plan
-- Total execution time: ~7.4 hours
+- Total execution time: ~7.6 hours
 
 **By Milestone:**
 
@@ -69,6 +69,9 @@ Progress: [██████░...] 29%
 | 22-04 | Repr format: ql.array<qint:8, shape=(3,)>[1, 2, 3] | Compact type info + data - shows width (crucial for circuit analysis), shape, and values for debugging |
 | 22-04 | Truncation threshold 6 elements per dimension | NumPy-style first 3 and last 3 - prevents repr overflow while showing boundary values |
 | 22-04 | Cython cast syntax for cdef attribute access | (<qint>elem).value accesses C-level attributes from Python-typed containers - required for _elements list |
+| 22-05 | array() wrapper returns qarray objects | Complete transition from legacy list-based arrays to qarray class - provides shape metadata, indexing, and NumPy compatibility |
+| 22-05 | qarray exported in __all__ | Enables type checking with isinstance(arr, ql.qarray) and type hints with ql.qarray |
+| 22-05 | Tests verify types not values | qint objects are quantum variables - values only known after measurement, tests validate type correctness and behaviors |
 
 Additional decisions logged in PROJECT.md Key Decisions table.
 
@@ -101,8 +104,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-29
-Stopped at: Completed 22-04-PLAN.md - iteration, immutability, and repr (Phase 22 complete)
+Stopped at: Completed 22-05-PLAN.md - public API integration and test suite (Phase 22 complete)
 Resume file: None
 
 ---
-*State updated: 2026-01-29 after Phase 22 Plan 04 completion*
+*State updated: 2026-01-29 after Phase 22 Plan 05 completion*
