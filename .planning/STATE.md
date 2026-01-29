@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-01-29)
 
 ## Current Position
 
-Phase: 23 of 24 (Array Reductions) — COMPLETE
-Plan: 2/2 plans executed
-Status: Phase 23 complete — all reductions verified
-Last activity: 2026-01-29 — Phase 23 verified and complete
+Phase: 24 of 24 (Element-wise Operations) — IN PROGRESS
+Plan: 1/1 plans executed
+Status: Phase 24 plan 01 complete — element-wise operators implemented
+Last activity: 2026-01-29 — Completed 24-01-PLAN.md
 
-Progress: [█████████░] 56%
+Progress: [█████████░] 57%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 78 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 14)
+- Total plans completed: 79 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 15)
 - Average duration: ~6 min/plan
-- Total execution time: ~7.8 hours
+- Total execution time: ~7.95 hours
 
 **By Milestone:**
 
@@ -79,6 +79,9 @@ Progress: [█████████░] 56%
 | 23-02 | qbool reductions return qint | qbool inherits from qint, operators return parent type - maintains type system consistency |
 | 23-02 | Module-level reduction functions shadow builtins | ql.all/any/parity shadow Python builtins but only in ql namespace - users call ql.all(arr) not bare all(arr) |
 | 23-02 | No module-level sum() function | Avoids shadowing Python's built-in sum() - Python sum(arr) works via iteration + __radd__ |
+| 24-01 | Use property accessors for cross-instance cdef attribute access | Cython extension types can't directly access each other's cdef attributes without type casting - use other.shape not other._shape |
+| 24-01 | Cython type casting for _elements access | List comprehensions need other._elements access - requires cdef qarray other_arr then <qarray>other cast |
+| 24-01 | Comparison operators set result dtype to qbool | Comparisons return boolean arrays per NumPy convention - pass result_dtype=qbool to set _dtype and _width=1 |
 
 Additional decisions logged in PROJECT.md Key Decisions table.
 
@@ -112,8 +115,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-29
-Stopped at: Phase 23 complete — ready for Phase 24 (Element-wise Operations)
+Stopped at: Completed 24-01-PLAN.md — element-wise operators implemented
 Resume file: None
 
 ---
-*State updated: 2026-01-29 after Phase 23 completion*
+*State updated: 2026-01-29 after 24-01 completion*
