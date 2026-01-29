@@ -768,6 +768,188 @@ cdef class qarray:
 
         return result
 
+    # ============ Helper Methods for Operators ============
+
+    def _validate_shape(self, other):
+        """Validate that shapes match for element-wise operations."""
+        if self._shape != other._shape:
+            raise ValueError(
+                f"Shape mismatch for element-wise operation: cannot operate on arrays with shapes {self._shape} and {other._shape}"
+            )
+
+    def _elementwise_binary_op(self, other, op_func, result_dtype=None):
+        """
+        Generic element-wise binary operation.
+
+        Args:
+            other: int, qint, or qarray
+            op_func: Binary operation function (e.g., lambda a, b: a + b)
+            result_dtype: Optional dtype for result (e.g., qbool for comparisons)
+
+        Returns:
+            qarray: Result of element-wise operation
+        """
+        # Scalar broadcast
+        if type(other) == int or isinstance(other, qint):
+            if type(other) == int:
+                other = qint(other, width=self._width)
+            result_elements = [op_func(elem, other) for elem in self._elements]
+            result = self._create_view(result_elements, self._shape)
+            if result_dtype is not None:
+                result._dtype = result_dtype
+                result._width = 1
+            return result
+
+        # Array-array operation
+        elif isinstance(other, qarray):
+            self._validate_shape(other)
+            result_elements = [op_func(self._elements[i], other._elements[i]) for i in range(len(self._elements))]
+            result = self._create_view(result_elements, self._shape)
+            if result_dtype is not None:
+                result._dtype = result_dtype
+                result._width = 1
+            return result
+
+        else:
+            return NotImplemented
+
+    def _inplace_binary_op(self, other, iop_name):
+        """
+        Generic in-place binary operation.
+
+        Args:
+            other: int, qint, or qarray
+            iop_name: Name of in-place operation (e.g., "__iadd__")
+
+        Returns:
+            self: Modified array
+        """
+        # Scalar broadcast
+        if type(other) == int or isinstance(other, qint):
+            if type(other) == int:
+                other = qint(other, width=self._width)
+            for i in range(len(self._elements)):
+                self._elements[i] = getattr(self._elements[i], iop_name)(other)
+            return self
+
+        # Array-array operation
+        elif isinstance(other, qarray):
+            self._validate_shape(other)
+            for i in range(len(self._elements)):
+                self._elements[i] = getattr(self._elements[i], iop_name)(other._elements[i])
+            return self
+
+        else:
+            return NotImplemented
+
+    # ============ Arithmetic Operators ============
+
+    def __add__(self, other):
+        """Element-wise addition."""
+        return self._elementwise_binary_op(other, lambda a, b: a + b)
+
+    def __radd__(self, other):
+        """Element-wise addition (reversed)."""
+        return self._elementwise_binary_op(other, lambda a, b: a + b)
+
+    def __iadd__(self, other):
+        """In-place element-wise addition."""
+        return self._inplace_binary_op(other, "__iadd__")
+
+    def __sub__(self, other):
+        """Element-wise subtraction."""
+        return self._elementwise_binary_op(other, lambda a, b: a - b)
+
+    def __rsub__(self, other):
+        """Element-wise subtraction (reversed)."""
+        # NOT commutative: other - self
+        if isinstance(other, (int, qint)):
+            if isinstance(other, int):
+                other = qint(other, width=self._width)
+            result_elements = [other - elem for elem in self._elements]
+            return self._create_view(result_elements, self._shape)
+        return NotImplemented
+
+    def __isub__(self, other):
+        """In-place element-wise subtraction."""
+        return self._inplace_binary_op(other, "__isub__")
+
+    def __mul__(self, other):
+        """Element-wise multiplication."""
+        return self._elementwise_binary_op(other, lambda a, b: a * b)
+
+    def __rmul__(self, other):
+        """Element-wise multiplication (reversed)."""
+        return self._elementwise_binary_op(other, lambda a, b: a * b)
+
+    def __imul__(self, other):
+        """In-place element-wise multiplication."""
+        return self._inplace_binary_op(other, "__imul__")
+
+    # ============ Bitwise Operators ============
+
+    def __and__(self, other):
+        """Element-wise bitwise AND."""
+        return self._elementwise_binary_op(other, lambda a, b: a & b)
+
+    def __rand__(self, other):
+        """Element-wise bitwise AND (reversed)."""
+        return self._elementwise_binary_op(other, lambda a, b: a & b)
+
+    def __iand__(self, other):
+        """In-place element-wise bitwise AND."""
+        return self._inplace_binary_op(other, "__iand__")
+
+    def __or__(self, other):
+        """Element-wise bitwise OR."""
+        return self._elementwise_binary_op(other, lambda a, b: a | b)
+
+    def __ror__(self, other):
+        """Element-wise bitwise OR (reversed)."""
+        return self._elementwise_binary_op(other, lambda a, b: a | b)
+
+    def __ior__(self, other):
+        """In-place element-wise bitwise OR."""
+        return self._inplace_binary_op(other, "__ior__")
+
+    def __xor__(self, other):
+        """Element-wise bitwise XOR."""
+        return self._elementwise_binary_op(other, lambda a, b: a ^ b)
+
+    def __rxor__(self, other):
+        """Element-wise bitwise XOR (reversed)."""
+        return self._elementwise_binary_op(other, lambda a, b: a ^ b)
+
+    def __ixor__(self, other):
+        """In-place element-wise bitwise XOR."""
+        return self._inplace_binary_op(other, "__ixor__")
+
+    # ============ Comparison Operators ============
+
+    def __lt__(self, other):
+        """Element-wise less than comparison."""
+        return self._elementwise_binary_op(other, lambda a, b: a < b, result_dtype=qbool)
+
+    def __le__(self, other):
+        """Element-wise less than or equal comparison."""
+        return self._elementwise_binary_op(other, lambda a, b: a <= b, result_dtype=qbool)
+
+    def __gt__(self, other):
+        """Element-wise greater than comparison."""
+        return self._elementwise_binary_op(other, lambda a, b: a > b, result_dtype=qbool)
+
+    def __ge__(self, other):
+        """Element-wise greater than or equal comparison."""
+        return self._elementwise_binary_op(other, lambda a, b: a >= b, result_dtype=qbool)
+
+    def __eq__(self, other):
+        """Element-wise equality comparison."""
+        return self._elementwise_binary_op(other, lambda a, b: a == b, result_dtype=qbool)
+
+    def __ne__(self, other):
+        """Element-wise inequality comparison."""
+        return self._elementwise_binary_op(other, lambda a, b: a != b, result_dtype=qbool)
+
     @staticmethod
     def _create_view(elements, shape):
         """
