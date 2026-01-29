@@ -481,6 +481,118 @@ cdef class qarray:
         else:
             raise NotImplementedError(f"Complex slicing pattern not yet supported: {key}")
 
+    def __repr__(self):
+        """
+        Compact format: ql.array<qint:8, shape=(3,)>[1, 2, 3]
+
+        Truncates large arrays with ellipsis (...) NumPy-style.
+
+        Returns:
+            str: Formatted representation
+        """
+        dtype_name = self._dtype.__name__  # "qint" or "qbool"
+
+        # Format type info
+        if dtype_name == "qint":
+            type_info = f"<qint:{self._width}, shape={self._shape}>"
+        else:
+            type_info = f"<qbool, shape={self._shape}>"
+
+        # Format elements
+        if len(self._shape) == 1:
+            elem_str = self._format_1d()
+        else:
+            elem_str = self._format_nested(self._elements, self._shape, 0)
+
+        return f"ql.array{type_info}[{elem_str}]"
+
+    def __str__(self):
+        """String representation (same as __repr__)."""
+        return self.__repr__()
+
+    def _format_1d(self):
+        """
+        Format 1D array with truncation.
+
+        Returns:
+            str: Formatted element string
+        """
+        threshold = 6  # Show first 3 and last 3 if > threshold
+
+        if len(self._elements) <= threshold:
+            return ", ".join(self._get_element_str(e) for e in self._elements)
+        else:
+            first = ", ".join(self._get_element_str(e) for e in self._elements[:3])
+            last = ", ".join(self._get_element_str(e) for e in self._elements[-3:])
+            return f"{first}, ..., {last}"
+
+    def _format_nested(self, elements, shape, depth):
+        """
+        Format multi-dimensional array with nested brackets.
+
+        Args:
+            elements: List of elements to format
+            shape: Shape tuple for this level
+            depth: Current nesting depth
+
+        Returns:
+            str: Formatted nested string
+        """
+        if len(shape) == 1:
+            # Base case: format this dimension
+            if len(elements) <= 6:
+                return ", ".join(self._get_element_str(e) for e in elements)
+            else:
+                first = ", ".join(self._get_element_str(e) for e in elements[:3])
+                last = ", ".join(self._get_element_str(e) for e in elements[-3:])
+                return f"{first}, ..., {last}"
+
+        # Recursive case
+        stride = 1
+        for s in shape[1:]:
+            stride *= s
+
+        chunks = []
+        num_chunks = len(elements) // stride
+
+        # Apply truncation if too many chunks
+        if num_chunks > 6:
+            # Show first 3 and last 3 chunks
+            for i in range(3):
+                start = i * stride
+                chunk = elements[start:start+stride]
+                chunks.append("[" + self._format_nested(chunk, shape[1:], depth+1) + "]")
+            chunks.append("...")
+            for i in range(num_chunks - 3, num_chunks):
+                start = i * stride
+                chunk = elements[start:start+stride]
+                chunks.append("[" + self._format_nested(chunk, shape[1:], depth+1) + "]")
+        else:
+            # Show all chunks
+            for i in range(0, len(elements), stride):
+                chunk = elements[i:i+stride]
+                chunks.append("[" + self._format_nested(chunk, shape[1:], depth+1) + "]")
+
+        return ", ".join(chunks)
+
+    def _get_element_str(self, elem):
+        """
+        Get string representation of an element.
+
+        Args:
+            elem: qint or qbool element
+
+        Returns:
+            str: String representation of element's value
+        """
+        # Cast to appropriate type and access cdef value attribute
+        if isinstance(elem, qint):
+            return str((<qint>elem).value)
+        elif isinstance(elem, qbool):
+            return str((<qbool>elem).value)
+        else:
+            return str(elem)
+
     @staticmethod
     def _create_view(elements, shape):
         """
