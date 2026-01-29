@@ -71,10 +71,11 @@ Plans:
   4. User can sum: `result = sum(arr)` returns qint with appropriate width
   5. All reductions use pairwise tree structure achieving O(log n) circuit depth
   6. Multi-dimensional arrays are flattened before reduction
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 23-01: TBD
+- [ ] 23-01-PLAN.md — AND/OR/XOR reduction methods with pairwise tree and linear chain algorithms
+- [ ] 23-02-PLAN.md — Sum reduction, module-level functions, and comprehensive test suite
 
 ### Phase 24: Element-wise Operations
 **Goal**: Users can perform element-wise operations between arrays of equal shape
@@ -100,7 +101,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 21. Package Restructuring | v1.3 | 7/7 | Complete | 2026-01-29 |
 | 22. Array Class Foundation | v1.3 | 5/5 | Complete | 2026-01-29 |
-| 23. Array Reductions | v1.3 | 0/TBD | Not started | - |
+| 23. Array Reductions | v1.3 | 0/2 | Not started | - |
 | 24. Element-wise Operations | v1.3 | 0/TBD | Not started | - |
 
 ---
