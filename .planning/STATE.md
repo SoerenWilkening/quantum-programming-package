@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-29)
 ## Current Position
 
 Phase: 21 of 24 (Package Restructuring)
-Plan: 4 of 5 complete (21-01, 21-02, 21-03, 21-04 done; 21-05 pending)
-Status: In progress - Wave 2 executing
-Last activity: 2026-01-29 — Completed 21-03-PLAN.md (Public API surface)
+Plan: 5 of 5 complete (21-01, 21-02, 21-03, 21-04, 21-05 done)
+Status: Phase complete
+Last activity: 2026-01-29 — Completed 21-05-PLAN.md (Test import migration)
 
-Progress: [██........] 8%
+Progress: [███.......] 11%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 66 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 2)
+- Total plans completed: 67 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 3)
 - Average duration: ~6 min/plan
-- Total execution time: ~6.6 hours
+- Total execution time: ~6.7 hours
 
 **By Milestone:**
 
@@ -49,6 +49,8 @@ Progress: [██........] 8%
 | 21-04 | Include "." in include_dirs | Enables cimport to find .pxd files in package structure |
 | 21-04 | Legacy fallback in setup.py | Smooth transition while Wave 2 completes - auto-switches when src/ exists |
 | 21-04 | Package data includes .pxd files | Enables external projects to cimport quantum_language modules |
+| 21-05 | pytest.ini pythonpath = src | Centralized PYTHONPATH config for src-layout packages - cleaner than sys.path in tests |
+| 21-05 | Export AVAILABLE_PASSES from __init__.py | Required for circuit.optimize() API - users need pass names |
 
 Additional decisions logged in PROJECT.md Key Decisions table.
 
@@ -61,6 +63,8 @@ None.
 **Known pre-existing issues:**
 - Multiplication tests segfault at certain widths (C backend issue, tracked)
 - Nested quantum conditionals require quantum-quantum AND implementation
+- Some tests fail with MemoryError due to cumulative qubit allocation across test suite
+- Circuit allocator errors in some test combinations
 
 **Known limitations (acceptable by design):**
 - qint_mod * qint_mod raises NotImplementedError
@@ -69,8 +73,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-29
-Stopped at: Completed 21-03-PLAN.md (Public API surface)
+Stopped at: Completed 21-05-PLAN.md (Test import migration) - Phase 21 complete
 Resume file: None
 
 ---
-*State updated: 2026-01-29 after 21-03 execution*
+*State updated: 2026-01-29 after 21-05 execution*
