@@ -41,7 +41,15 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ### Active
 
-(No active milestone — run `/gsd:new-milestone` to start v1.3)
+**v1.3: Package Structure & ql.array**
+
+- [ ] Proper Python package structure with `__init__.py` files
+- [ ] Split large Cython files to ~200-300 lines each
+- [ ] ql.array class for homogeneous quantum arrays (qint or qbool)
+- [ ] Array initialization from Python list with auto-width or explicit width
+- [ ] Reduction operations with optimal depth: `&A`, `|A`, `^A`, `sum(A)` (pairwise tree)
+- [ ] Full element-wise operators between arrays (arithmetic, bitwise, comparison)
+- [ ] Python integration for arrays: `len()`, iteration, indexing, slicing
 
 ### Out of Scope
 
@@ -107,4 +115,4 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Scope-based cleanup | Automatic uncomputation in `with` block exit | ✓ Good — Python-idiomatic |
 
 ---
-*Last updated: 2026-01-28 after v1.2 milestone*
+*Last updated: 2026-01-29 after v1.3 milestone start*
