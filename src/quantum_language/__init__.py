@@ -84,6 +84,54 @@ def array(data=None, *, width=None, dtype=None, dim=None):
     return qarray(data, width=width, dtype=dtype, dim=dim)
 
 
+def all(arr):
+    """AND-reduce a quantum array.
+
+    Parameters
+    ----------
+    arr : qarray
+        Array to reduce.
+
+    Returns
+    -------
+    qint or qbool
+        AND reduction of all elements.
+    """
+    return arr.all()
+
+
+def any(arr):
+    """OR-reduce a quantum array.
+
+    Parameters
+    ----------
+    arr : qarray
+        Array to reduce.
+
+    Returns
+    -------
+    qint or qbool
+        OR reduction of all elements.
+    """
+    return arr.any()
+
+
+def parity(arr):
+    """XOR-reduce a quantum array.
+
+    Parameters
+    ----------
+    arr : qarray
+        Array to reduce.
+
+    Returns
+    -------
+    qint or qbool
+        XOR reduction of all elements.
+    """
+    return arr.parity()
+
+
 # Explicit public API
 __all__ = [
     # Types
@@ -96,6 +144,9 @@ __all__ = [
     # Utilities
     "array",
     "option",
+    "all",
+    "any",
+    "parity",
     # Constants
     "AVAILABLE_PASSES",
     # State (also in ql.state subpackage)
