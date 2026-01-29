@@ -46,40 +46,42 @@ from quantum_language._core import (
     option,
     reverse_instruction_range,
 )
-from quantum_language._core import array as _array_impl
+from quantum_language.qarray import qarray
 from quantum_language.qbool import qbool
 from quantum_language.qint import qint
 from quantum_language.qint_mod import qint_mod
 
 
-def array(dim, dtype=None):
+def array(data=None, *, width=None, dtype=None, dim=None):
     """Create array of quantum integers or booleans.
 
     Parameters
     ----------
-    dim : int, tuple of int, or list of int
-        Array dimensions:
-        - int: 1D array of length dim
-        - tuple (rows, cols): 2D array
-        - list of int: 1D array with specified initial values
+    data : list, numpy.ndarray, optional
+        Values to initialize array with.
+    width : int, optional
+        Bit width for qint elements (default 8).
     dtype : type, optional
         Element type: qint or qbool (default qint).
+    dim : int or tuple, optional
+        Array dimensions for zero-initialized array.
 
     Returns
     -------
-    list or list of list
-        Array of quantum integers/booleans.
+    qarray
+        Quantum array object.
 
     Examples
     --------
-    >>> arr = array(5)              # [qint(), qint(), qint(), qint(), qint()]
-    >>> arr = array([1, 2, 3])      # [qint(1), qint(2), qint(3)]
-    >>> arr = array((2, 3))         # 2x3 2D array
-    >>> arr = array(3, dtype=qbool) # [qbool(), qbool(), qbool()]
+    >>> arr = array([1, 2, 3])           # From values
+    >>> arr = array([1, 2], width=16)    # Explicit width
+    >>> arr = array([[1,2],[3,4]])       # 2D array
+    >>> arr = array(dim=(3, 3))          # Zero-initialized 3x3
+    >>> arr = array(dim=5, dtype=qbool)  # 5 qbools
     """
     if dtype is None:
         dtype = qint
-    return _array_impl(dim, dtype)
+    return qarray(data, width=width, dtype=dtype, dim=dim)
 
 
 # Explicit public API
@@ -88,6 +90,7 @@ __all__ = [
     "qint",
     "qbool",
     "qint_mod",
+    "qarray",
     # Circuit
     "circuit",
     # Utilities
