@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-29)
 ## Current Position
 
 Phase: 22 of 24 (Array Class Foundation) — IN PROGRESS
-Plan: 1 of 3 complete
-Status: Plan 22-01 complete - qarray core structure established
-Last activity: 2026-01-29 — Completed 22-01-PLAN.md (qarray foundation)
+Plan: 2 of 3 complete
+Status: Plan 22-03 complete - extended construction API with width/dtype/dim parameters
+Last activity: 2026-01-29 — Completed 22-03-PLAN.md (extended construction API)
 
-Progress: [██████....] 26%
+Progress: [██████░...] 28%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 70 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 6 → Phase 22 in progress)
+- Total plans completed: 72 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 8 → Phase 22 in progress)
 - Average duration: ~6 min/plan
-- Total execution time: ~7.2 hours
+- Total execution time: ~7.3 hours
 
 **By Milestone:**
 
@@ -58,6 +58,10 @@ Progress: [██████....] 26%
 | 22-01 | Flattened storage with shape metadata | Arrays store elements as 1D list with shape tuple - simplifies access and matches NumPy internal representation |
 | 22-01 | Width inference using bit_length() with INTEGERSIZE floor | Auto-detect bit width from max value, always use at least INTEGERSIZE=8 bits - minimizes qubits while preventing over-narrow types |
 | 22-01 | Virtual Sequence registration instead of inheritance | Cython extension types cannot inherit from Python ABCs - use Sequence.register(qarray) for protocol compliance |
+| 22-03 | Keyword-only parameters for width/dtype/dim | NumPy-style API design using * to force keyword-only parameters - prevents positional argument confusion |
+| 22-03 | Homogeneity enforcement for qarray | Arrays must contain only qint OR only qbool, not both - simplifies element access and dtype is array-level property |
+| 22-03 | NumPy dtype.itemsize for width inference | Use dtype.itemsize * 8 (bytes to bits) for width calculation - direct mapping from NumPy types |
+| 22-03 | dim/data mutual exclusivity | Specifying both raises ValueError - dimension-based creates zeros, data-based uses values (ambiguous semantics) |
 
 Additional decisions logged in PROJECT.md Key Decisions table.
 
@@ -90,8 +94,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-29
-Stopped at: Completed 22-01-PLAN.md - qarray core structure with flat list construction
+Stopped at: Completed 22-03-PLAN.md - extended construction API with width/dtype/dim parameters
 Resume file: None
 
 ---
-*State updated: 2026-01-29 after Phase 22 Plan 01 completion*
+*State updated: 2026-01-29 after Phase 22 Plan 03 completion*
