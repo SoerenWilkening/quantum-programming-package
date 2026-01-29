@@ -1,16 +1,10 @@
 """Pytest configuration and fixtures for quantum language testing."""
 
-import os
 import re
-import sys
 
 import pytest
 
-# Add python-backend to path for importing quantum_language
-project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-sys.path.insert(0, os.path.join(project_root, "python-backend"))
-
-# Import after path modification
+# Clean import - package structure with PYTHONPATH=src
 import quantum_language as ql
 
 
