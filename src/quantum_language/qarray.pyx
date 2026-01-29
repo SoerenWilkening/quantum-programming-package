@@ -772,9 +772,9 @@ cdef class qarray:
 
     def _validate_shape(self, other):
         """Validate that shapes match for element-wise operations."""
-        if self._shape != other._shape:
+        if self._shape != other.shape:
             raise ValueError(
-                f"Shape mismatch for element-wise operation: cannot operate on arrays with shapes {self._shape} and {other._shape}"
+                f"Shape mismatch for element-wise operation: cannot operate on arrays with shapes {self._shape} and {other.shape}"
             )
 
     def _elementwise_binary_op(self, other, op_func, result_dtype=None):
@@ -789,6 +789,9 @@ cdef class qarray:
         Returns:
             qarray: Result of element-wise operation
         """
+        cdef qarray other_arr
+        cdef qarray result
+
         # Scalar broadcast
         if type(other) == int or isinstance(other, qint):
             if type(other) == int:
@@ -803,7 +806,8 @@ cdef class qarray:
         # Array-array operation
         elif isinstance(other, qarray):
             self._validate_shape(other)
-            result_elements = [op_func(self._elements[i], other._elements[i]) for i in range(len(self._elements))]
+            other_arr = <qarray>other
+            result_elements = [op_func(self._elements[i], other_arr._elements[i]) for i in range(len(self._elements))]
             result = self._create_view(result_elements, self._shape)
             if result_dtype is not None:
                 result._dtype = result_dtype
@@ -824,6 +828,8 @@ cdef class qarray:
         Returns:
             self: Modified array
         """
+        cdef qarray other_arr
+
         # Scalar broadcast
         if type(other) == int or isinstance(other, qint):
             if type(other) == int:
@@ -835,8 +841,9 @@ cdef class qarray:
         # Array-array operation
         elif isinstance(other, qarray):
             self._validate_shape(other)
+            other_arr = <qarray>other
             for i in range(len(self._elements)):
-                self._elements[i] = getattr(self._elements[i], iop_name)(other._elements[i])
+                self._elements[i] = getattr(self._elements[i], iop_name)(other_arr._elements[i])
             return self
 
         else:
