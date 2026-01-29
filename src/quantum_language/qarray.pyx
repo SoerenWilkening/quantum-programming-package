@@ -267,6 +267,57 @@ cdef class qarray:
         """Return the number of elements in the flattened array."""
         return len(self._elements)
 
+    def __iter__(self):
+        """
+        Iterate over flattened elements.
+
+        Yields
+        ------
+        qint or qbool
+            Each element in row-major order.
+
+        Examples
+        --------
+        >>> arr = qarray([1, 2, 3])
+        >>> for x in arr:
+        ...     print(x)
+        """
+        return iter(self._elements)
+
+    def __contains__(self, item):
+        """
+        Check if element in array.
+
+        Args:
+            item: Element to search for
+
+        Returns:
+            bool: True if item is in array
+        """
+        return item in self._elements
+
+    def __setitem__(self, key, value):
+        """
+        Prevent mutation - arrays are immutable.
+
+        Raises
+        ------
+        TypeError
+            Always (arrays cannot be modified after creation).
+        """
+        raise TypeError("'qarray' object does not support item assignment")
+
+    def __delitem__(self, key):
+        """
+        Prevent deletion - arrays are immutable.
+
+        Raises
+        ------
+        TypeError
+            Always (arrays cannot be deleted from).
+        """
+        raise TypeError("'qarray' object does not support item deletion")
+
     def __getitem__(self, key):
         """
         Get element or slice by index with NumPy-style indexing.
