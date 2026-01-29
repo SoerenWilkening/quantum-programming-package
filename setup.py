@@ -87,10 +87,10 @@ setup(
             "embedsignature": True,  # Preserves docstrings in compiled modules
         },
     ),
-    # Include .pxd files for potential cimport by external projects
+    # Include .pxd and .py files for installed package (e.g. __init__.py wrappers)
     package_data={
-        "quantum_language": ["*.pxd"],
-        "quantum_language.state": ["*.pxd"],
+        "quantum_language": ["*.pxd", "*.py"],
+        "quantum_language.state": ["*.pxd", "*.py"],
     },
     python_requires=">=3.11",
 )
