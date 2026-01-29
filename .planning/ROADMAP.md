@@ -13,7 +13,7 @@ This milestone transforms Quantum Assembly's package structure for maintainabili
 
 ## Phases
 
-- [ ] **Phase 21: Package Restructuring** - Split large Cython files, create proper package structure
+- [x] **Phase 21: Package Restructuring** - Split large Cython files, create proper package structure
 - [ ] **Phase 22: Array Class Foundation** - Create ql.array with qint/qbool support and Python integration
 - [ ] **Phase 23: Array Reductions** - Implement AND/OR/XOR/sum reductions with pairwise tree structure
 - [ ] **Phase 24: Element-wise Operations** - Implement arithmetic, bitwise, and comparison operators between arrays
@@ -37,8 +37,8 @@ Plans:
 - [x] 21-03-PLAN.md — Create state/ subpackage and __init__.py public API
 - [x] 21-04-PLAN.md — Update setup.py for multi-extension build
 - [x] 21-05-PLAN.md — Migrate test imports to use installed package
-- [ ] 21-06-PLAN.md — (Gap closure) Extract arithmetic and bitwise operations to include files
-- [ ] 21-07-PLAN.md — (Gap closure) Extract comparison and division operations, refactor qint.pyx
+- [x] 21-06-PLAN.md — (Gap closure) Extract arithmetic and bitwise operations to include files
+- [x] 21-07-PLAN.md — (Gap closure) Extract comparison and division operations (Cython limitation blocked refactor)
 
 ### Phase 22: Array Class Foundation
 **Goal**: Users can create and manipulate multi-dimensional quantum arrays with natural Python syntax
@@ -94,7 +94,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 21. Package Restructuring | v1.3 | 5/7 | Gap closure | - |
+| 21. Package Restructuring | v1.3 | 7/7 | Complete | 2026-01-29 |
 | 22. Array Class Foundation | v1.3 | 0/TBD | Not started | - |
 | 23. Array Reductions | v1.3 | 0/TBD | Not started | - |
 | 24. Element-wise Operations | v1.3 | 0/TBD | Not started | - |
