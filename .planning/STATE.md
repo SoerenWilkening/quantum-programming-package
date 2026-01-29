@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-29)
 ## Current Position
 
 Phase: 21 of 24 (Package Restructuring)
-Plan: 6 in progress (21-01, 21-02, 21-03, 21-04, 21-05, 21-06 done)
+Plan: 7 in progress (21-01 through 21-07 done)
 Status: In progress
-Last activity: 2026-01-29 — Completed 21-06-PLAN.md (qint arithmetic and bitwise extraction)
+Last activity: 2026-01-29 — Completed 21-07-PLAN.md (qint comparison/division extraction, Cython limitation discovered)
 
 Progress: [███.......] 12%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 68 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 4)
+- Total plans completed: 69 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 5)
 - Average duration: ~6 min/plan
-- Total execution time: ~6.9 hours
+- Total execution time: ~7.0 hours
 
 **By Milestone:**
 
@@ -53,6 +53,8 @@ Progress: [███.......] 12%
 | 21-05 | Export AVAILABLE_PASSES from __init__.py | Required for circuit.optimize() API - users need pass names |
 | 21-06 | Extract methods to .pxi include files | Cython include files allow splitting cdef class across files while maintaining single compilation unit |
 | 21-06 | Preserve exact implementations in .pxi | Complete method extraction with docstrings and internal calls - no imports or class declarations |
+| 21-07 | Cython include pattern not viable for cdef classes | Discovered Cython 3.x limitation: include directives not supported inside cdef class definitions |
+| 21-07 | Keep qint.pyx as single file | Accept ~2400 lines for cohesion - Cython include pattern proved incompatible with cdef classes |
 
 Additional decisions logged in PROJECT.md Key Decisions table.
 
@@ -71,12 +73,13 @@ None.
 **Known limitations (acceptable by design):**
 - qint_mod * qint_mod raises NotImplementedError
 - apply_merge() placeholder for phase rotation merging
+- Cython include directives not supported for cdef class method injection (Cython 3.x design constraint)
 
 ## Session Continuity
 
 Last session: 2026-01-29
-Stopped at: Completed 21-06-PLAN.md (qint arithmetic and bitwise extraction)
+Stopped at: Completed 21-07-PLAN.md (qint comparison/division extraction, Cython limitation discovered)
 Resume file: None
 
 ---
-*State updated: 2026-01-29 after 21-06 execution*
+*State updated: 2026-01-29 after 21-07 execution*
