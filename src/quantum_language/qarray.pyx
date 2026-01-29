@@ -733,6 +733,41 @@ cdef class qarray:
         else:
             return _reduce_tree(elems, lambda a, b: a ^ b)
 
+    def sum(self, *, width=None):
+        """
+        Sum all elements. Returns qint. For qbool arrays, returns popcount. Use width= to override result width.
+
+        Parameters:
+            width: Optional bit width for result (overrides default)
+
+        Returns:
+            qint or qbool: Sum of all elements
+
+        Raises:
+            ValueError: If array is empty
+
+        Examples:
+            >>> arr = qarray([1, 2, 3])
+            >>> result = arr.sum()  # 1 + 2 + 3
+            >>> arr = qarray([True, True, False], dtype=qbool)
+            >>> popcount = arr.sum()  # Count of True values
+        """
+        if len(self._elements) == 0:
+            raise ValueError("cannot reduce empty array")
+
+        if len(self._elements) == 1:
+            return self._elements[0]
+
+        elems = list(self._elements)  # Copy to avoid mutation
+        op = lambda a, b: a + b
+
+        if _get_qubit_saving_mode():
+            result = _reduce_linear(elems, op)
+        else:
+            result = _reduce_tree(elems, op)
+
+        return result
+
     @staticmethod
     def _create_view(elements, shape):
         """
