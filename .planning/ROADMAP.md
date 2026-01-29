@@ -51,10 +51,14 @@ Plans:
   4. User can access elements with NumPy-style indexing: `A[i,j]`, `A[:, j]`, `A[1:3, 0:2]`
   5. User can iterate over flattened array: `for x in arr: ...`
   6. Mixed-type arrays (qint + qbool) raise clear error at construction time
-**Plans**: TBD
+**Plans**: 5 plans in 4 waves
 
 Plans:
-- [ ] 22-01: TBD
+- [ ] 22-01-PLAN.md — Create qarray.pyx/pxd with core data structure and flat list construction
+- [ ] 22-02-PLAN.md — Multi-dimensional construction and NumPy-style indexing with view semantics
+- [ ] 22-03-PLAN.md — Extended construction API: width, dtype, dim, NumPy array support
+- [ ] 22-04-PLAN.md — Python integration: iteration, immutability, compact repr
+- [ ] 22-05-PLAN.md — Public API integration and comprehensive test suite
 
 ### Phase 23: Array Reductions
 **Goal**: Users can reduce arrays to single values with optimal circuit depth
@@ -95,7 +99,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 21. Package Restructuring | v1.3 | 7/7 | Complete | 2026-01-29 |
-| 22. Array Class Foundation | v1.3 | 0/TBD | Not started | - |
+| 22. Array Class Foundation | v1.3 | 0/5 | Not started | - |
 | 23. Array Reductions | v1.3 | 0/TBD | Not started | - |
 | 24. Element-wise Operations | v1.3 | 0/TBD | Not started | - |
 
