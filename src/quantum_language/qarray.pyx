@@ -652,6 +652,87 @@ cdef class qarray:
         else:
             return str(elem)
 
+    def all(self):
+        """
+        Reduce array with AND. Returns single element (bitwise AND for qint, logical AND for qbool).
+
+        Returns:
+            qint or qbool: Result of AND reduction across all elements
+
+        Raises:
+            ValueError: If array is empty
+
+        Examples:
+            >>> arr = qarray([1, 2, 3])
+            >>> result = arr.all()  # 1 & 2 & 3
+        """
+        if len(self._elements) == 0:
+            raise ValueError("cannot reduce empty array")
+
+        if len(self._elements) == 1:
+            return self._elements[0]
+
+        elems = list(self._elements)  # Copy to avoid mutation
+
+        if _get_qubit_saving_mode():
+            return _reduce_linear(elems, lambda a, b: a & b)
+        else:
+            return _reduce_tree(elems, lambda a, b: a & b)
+
+    def any(self):
+        """
+        Reduce array with OR. Returns single element (bitwise OR for qint, logical OR for qbool).
+
+        Returns:
+            qint or qbool: Result of OR reduction across all elements
+
+        Raises:
+            ValueError: If array is empty
+
+        Examples:
+            >>> arr = qarray([1, 2, 3])
+            >>> result = arr.any()  # 1 | 2 | 3
+        """
+        if len(self._elements) == 0:
+            raise ValueError("cannot reduce empty array")
+
+        if len(self._elements) == 1:
+            return self._elements[0]
+
+        elems = list(self._elements)  # Copy to avoid mutation
+
+        if _get_qubit_saving_mode():
+            return _reduce_linear(elems, lambda a, b: a | b)
+        else:
+            return _reduce_tree(elems, lambda a, b: a | b)
+
+    def parity(self):
+        """
+        Reduce array with XOR. Returns single element (bitwise XOR for qint, logical XOR for qbool).
+
+        Returns:
+            qint or qbool: Result of XOR reduction across all elements
+
+        Raises:
+            ValueError: If array is empty
+
+        Examples:
+            >>> arr = qarray([1, 2, 3])
+            >>> result = arr.parity()  # 1 ^ 2 ^ 3
+        """
+        if len(self._elements) == 0:
+            raise ValueError("cannot reduce empty array")
+
+        if len(self._elements) == 1:
+            return self._elements[0]
+
+        elems = list(self._elements)  # Copy to avoid mutation
+
+        if _get_qubit_saving_mode():
+            return _reduce_linear(elems, lambda a, b: a ^ b)
+        else:
+            return _reduce_tree(elems, lambda a, b: a ^ b)
+
     @staticmethod
     def _create_view(elements, shape):
         """
