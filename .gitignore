@@ -12,11 +12,13 @@ circuit-gen-results/qsharp/*
 !circuit-gen-results/qsharp/MyQFT.qs
 !circuit-gen-results/qsharp/Program.cs
 !circuit-gen-results/qsharp/QuantumProject.csproj
-build
-python-backend/quantum_language.c
-python-backend/quantum_language_preprocessed.pyx
-python-backend/quantum_language_preprocessed.c
-python-backend/quantum_language.cpython-311-darwin.so
-python-backend/quantum_language.cpython-*-linux-gnu.so
-__pycache__/
+# Build artifacts
+build/
 *.egg-info/
+__pycache__/
+
+# Cython-generated files (NOT hand-written C code in Backend/ or Execution/)
+src/quantum_language/*.c
+src/quantum_language/**/*.c
+src/quantum_language/*.so
+src/quantum_language/**/*.so
