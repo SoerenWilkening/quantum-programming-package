@@ -128,6 +128,44 @@ cdef class qarray:
             ValueError: If array structure is jagged or contains mixed types
             TypeError: If dtype is not qint or qbool
         """
+        # Handle dimension-based construction first
+        if dim is not None:
+            if data is not None:
+                raise ValueError("Cannot specify both data and dim")
+            if dtype is None:
+                dtype = qint  # Default to qint
+
+            # Handle int or tuple
+            if isinstance(dim, int):
+                shape = (dim,)
+            else:
+                shape = tuple(dim)
+
+            # Calculate total elements
+            total = 1
+            for d in shape:
+                total *= d
+
+            # Create elements (default value 0)
+            if dtype == qbool:
+                self._elements = [qbool() for _ in range(total)]
+                self._width = 1
+            else:
+                self._elements = [qint(width or INTEGERSIZE) for _ in range(total)]
+                self._width = width or INTEGERSIZE
+
+            self._shape = shape
+            self._dtype = dtype
+            return  # Skip normal data processing
+
+        # Handle NumPy array input
+        if isinstance(data, np.ndarray):
+            # Use NumPy dtype to determine width
+            if width is None:
+                width = data.dtype.itemsize * 8  # bytes to bits
+            # Convert to nested Python list for shape detection
+            data = data.tolist()
+
         # Validate dtype parameter if provided
         if dtype is not None and dtype not in (qint, qbool):
             raise TypeError(f"dtype must be qint or qbool, got {dtype}")
@@ -249,13 +287,20 @@ cdef class qarray:
             IndexError: If index out of bounds
             TypeError: If key type is unsupported
         """
-        # Single integer index (flattened access)
+        # Single integer index
         if isinstance(key, int):
-            if key < 0:
-                key += len(self._elements)
-            if not 0 <= key < len(self._elements):
-                raise IndexError(f"Index {key} out of bounds for array with {len(self._elements)} elements")
-            return self._elements[key]
+            # For multi-dimensional arrays, treat single index as selecting from first dimension
+            if len(self._shape) > 1:
+                # arr[0] on 2D array returns first row
+                # Convert to tuple indexing: arr[0] -> arr[0, :]
+                return self._handle_multi_index((key, slice(None)))
+            else:
+                # 1D array - direct element access
+                if key < 0:
+                    key += len(self._elements)
+                if not 0 <= key < len(self._elements):
+                    raise IndexError(f"Index {key} out of bounds for array with {len(self._elements)} elements")
+                return self._elements[key]
 
         # Slice (returns view)
         elif isinstance(key, slice):
