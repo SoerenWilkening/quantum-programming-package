@@ -1,51 +1,82 @@
 # Requirements: Quantum Assembly
 
-**Defined:** 2026-01-29
+**Defined:** 2026-01-30
 **Core Value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
 
-## v1.3 Requirements
+## v1.4 Requirements
 
-Requirements for Package Structure & ql.array milestone. Each maps to roadmap phases.
+Requirements for OpenQASM Export & Verification milestone. Each maps to roadmap phases.
+
+### C Backend Export (EXP)
+
+- [ ] **EXP-01**: New `circuit_to_qasm_string()` C function returning malloc'd OpenQASM 3.0 string buffer
+- [ ] **EXP-02**: Export all single-qubit gates: X, Y, Z, H (lowercase OpenQASM syntax)
+- [ ] **EXP-03**: Export all rotation gates: P(θ), Rx(θ), Ry(θ), Rz(θ) with `%.17g` angle precision
+- [ ] **EXP-04**: Multi-controlled gate export: `cx` (1 ctrl), `ccx` (2 ctrl), `ctrl(n) @ gate` (>2 ctrl)
+- [ ] **EXP-05**: `large_control` array support for gates with >2 control qubits
+- [ ] **EXP-06**: Measurement export with classical register: `bit[n] c;` + `c[i] = measure q[i];`
+- [ ] **EXP-07**: Error handling: NULL circuit check, malloc failure returns NULL
+- [ ] **EXP-08**: Fix existing `circuit_to_opanqasm()`: add fclose, fix gate no-ops, fix measurement syntax
+
+### Python API (API)
+
+- [ ] **API-01**: Cython `to_openqasm()` method with memory-safe C buffer cleanup (try/finally + free)
+- [ ] **API-02**: Module-level `ql.to_openqasm()` convenience function returning QASM string
+- [ ] **API-03**: Add `extras_require` for optional Qiskit verification dependencies
+
+### Verification Script (VER)
+
+- [ ] **VER-01**: Standalone `scripts/verify_circuit.py` with Qiskit integration (qasm3.loads + AerSimulator)
+- [ ] **VER-02**: Built-in arithmetic test cases: addition, subtraction, multiplication with overflow
+- [ ] **VER-03**: Built-in comparison test cases: <, <=, ==, >=, >, !=
+- [ ] **VER-04**: Deterministic verification using 1 shot exact match for classical-init circuits
+- [ ] **VER-05**: Pass/fail reporting with summary output and non-zero exit code on failure
+- [ ] **VER-06**: Built-in bitwise test cases: AND, OR, XOR, NOT
+- [ ] **VER-07**: Detailed failure diagnostics: expected vs actual values, QASM snippet for failing test
+
+## v1.3 Requirements (Complete)
+
+Requirements for Package Structure & ql.array milestone. All complete.
 
 ### Package Structure (PKG)
 
-- [ ] **PKG-01**: Create proper Python package with `__init__.py` files
-- [ ] **PKG-02**: Split large Cython files to ~200-300 lines each
-- [ ] **PKG-03**: Maintain all existing functionality after restructuring
-- [ ] **PKG-04**: Update imports across codebase to use new package structure
+- [x] **PKG-01**: Create proper Python package with `__init__.py` files
+- [x] **PKG-02**: Split large Cython files to ~200-300 lines each
+- [x] **PKG-03**: Maintain all existing functionality after restructuring
+- [x] **PKG-04**: Update imports across codebase to use new package structure
 
 ### Array Class Core (ARR)
 
-- [ ] **ARR-01**: Create `ql.array` class for homogeneous quantum arrays
-- [ ] **ARR-02**: Support qint arrays (array of quantum integers)
-- [ ] **ARR-03**: Support qbool arrays (array of quantum booleans)
-- [ ] **ARR-04**: Initialize array from Python list or NumPy array with auto-width inference: `ql.array([1, 2, 3])` or `ql.array(np_array)`
-- [ ] **ARR-05**: Initialize array with explicit width parameter: `ql.array([1, 2, 3], width=8)`
-- [ ] **ARR-06**: Initialize array from dimensions with dtype: `ql.array(dim=(3,3), dtype=ql.qint)`
-- [ ] **ARR-07**: Support multi-dimensional arrays with arbitrary shapes
-- [ ] **ARR-08**: Validate homogeneity (reject mixed qint/qbool)
+- [x] **ARR-01**: Create `ql.array` class for homogeneous quantum arrays
+- [x] **ARR-02**: Support qint arrays (array of quantum integers)
+- [x] **ARR-03**: Support qbool arrays (array of quantum booleans)
+- [x] **ARR-04**: Initialize array from Python list or NumPy array with auto-width inference
+- [x] **ARR-05**: Initialize array with explicit width parameter
+- [x] **ARR-06**: Initialize array from dimensions with dtype
+- [x] **ARR-07**: Support multi-dimensional arrays with arbitrary shapes
+- [x] **ARR-08**: Validate homogeneity (reject mixed qint/qbool)
 
 ### Array Reductions (RED)
 
-- [ ] **RED-01**: AND reduction (`&A`) with pairwise tree for O(log n) depth
-- [ ] **RED-02**: OR reduction (`|A`) with pairwise tree for O(log n) depth
-- [ ] **RED-03**: XOR reduction (`^A`) with pairwise tree for O(log n) depth
-- [ ] **RED-04**: Sum reduction `sum(A)` with pairwise tree for O(log n) depth
+- [x] **RED-01**: AND reduction with pairwise tree for O(log n) depth
+- [x] **RED-02**: OR reduction with pairwise tree for O(log n) depth
+- [x] **RED-03**: XOR reduction with pairwise tree for O(log n) depth
+- [x] **RED-04**: Sum reduction with pairwise tree for O(log n) depth
 
 ### Element-wise Operations (ELM)
 
-- [ ] **ELM-01**: Element-wise arithmetic (`A + B`, `A - B`, `A * B`) between arrays
-- [ ] **ELM-02**: Element-wise bitwise (`A & B`, `A | B`, `A ^ B`) between arrays
-- [ ] **ELM-03**: Element-wise comparison (`A < B`, `A > B`, `A <= B`, `A >= B`, `A == B`, `A != B`) between arrays
-- [ ] **ELM-04**: Array shape validation for element-wise operations
-- [ ] **ELM-05**: In-place element-wise operations (`A += B`, `A -= B`, `A *= B`, `A &= B`, `A |= B`, `A ^= B`)
+- [x] **ELM-01**: Element-wise arithmetic between arrays
+- [x] **ELM-02**: Element-wise bitwise between arrays
+- [x] **ELM-03**: Element-wise comparison between arrays
+- [x] **ELM-04**: Array shape validation for element-wise operations
+- [x] **ELM-05**: In-place element-wise operations
 
 ### Python Integration (PYI)
 
-- [ ] **PYI-01**: `len(A)` returns total element count (flattened length)
-- [ ] **PYI-02**: Iteration support (`for x in A` iterates over flattened elements)
-- [ ] **PYI-03**: NumPy-style indexing (`A[i]`, `A[i,j]`, `A[:, j]` column access)
-- [ ] **PYI-04**: NumPy-style slicing (`A[1:3]`, `A[1:3, 0:2]`)
+- [x] **PYI-01**: `len(A)` returns total element count
+- [x] **PYI-02**: Iteration support
+- [x] **PYI-03**: NumPy-style indexing
+- [x] **PYI-04**: NumPy-style slicing
 
 ## Future Requirements
 
@@ -60,18 +91,19 @@ Deferred to later milestones.
 ### Advanced Operations
 
 - **ADV-01**: Bit shift operations for qint (<<, >>)
-- **ADV-02**: OpenQASM 3.0 export format
 
 ## Out of Scope
 
-Explicitly excluded from v1.3.
+Explicitly excluded from v1.4.
 
 | Feature | Reason |
 |---------|--------|
-| Mixed-type arrays | Homogeneous arrays simpler, cleaner semantics |
-| Array broadcasting | NumPy-style broadcasting adds complexity, defer |
-| Sparse arrays | Not needed for current use cases |
-| Axis parameter for reductions | Flatten-then-reduce simpler for v1.3 |
+| OpenQASM 2.0 export | Deprecated format, industry moved to 3.0 |
+| Noise model simulation | Out of scope, use Qiskit Aer separately |
+| Hardware backend execution | QASM export enables this separately |
+| Statistical verification | Deterministic circuits don't need shots |
+| Dynamic circuits (mid-circuit measurement, reset) | Not supported by framework |
+| Custom gate definitions in QASM | Decompose to standard gates |
 
 ## Traceability
 
@@ -79,37 +111,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PKG-01 | Phase 21 | Complete |
-| PKG-02 | Phase 21 | Complete |
-| PKG-03 | Phase 21 | Complete |
-| PKG-04 | Phase 21 | Complete |
-| ARR-01 | Phase 22 | Complete |
-| ARR-02 | Phase 22 | Complete |
-| ARR-03 | Phase 22 | Complete |
-| ARR-04 | Phase 22 | Complete |
-| ARR-05 | Phase 22 | Complete |
-| ARR-06 | Phase 22 | Complete |
-| ARR-07 | Phase 22 | Complete |
-| ARR-08 | Phase 22 | Complete |
-| RED-01 | Phase 23 | Complete |
-| RED-02 | Phase 23 | Complete |
-| RED-03 | Phase 23 | Complete |
-| RED-04 | Phase 23 | Complete |
-| ELM-01 | Phase 24 | Complete |
-| ELM-02 | Phase 24 | Complete |
-| ELM-03 | Phase 24 | Complete |
-| ELM-04 | Phase 24 | Complete |
-| ELM-05 | Phase 24 | Complete |
-| PYI-01 | Phase 22 | Complete |
-| PYI-02 | Phase 22 | Complete |
-| PYI-03 | Phase 22 | Complete |
-| PYI-04 | Phase 22 | Complete |
+| EXP-01 | Phase 25 | Pending |
+| EXP-02 | Phase 25 | Pending |
+| EXP-03 | Phase 25 | Pending |
+| EXP-04 | Phase 25 | Pending |
+| EXP-05 | Phase 25 | Pending |
+| EXP-06 | Phase 25 | Pending |
+| EXP-07 | Phase 25 | Pending |
+| EXP-08 | Phase 25 | Pending |
+| API-01 | Phase 26 | Pending |
+| API-02 | Phase 26 | Pending |
+| API-03 | Phase 26 | Pending |
+| VER-01 | Phase 27 | Pending |
+| VER-02 | Phase 27 | Pending |
+| VER-03 | Phase 27 | Pending |
+| VER-04 | Phase 27 | Pending |
+| VER-05 | Phase 27 | Pending |
+| VER-06 | Phase 27 | Pending |
+| VER-07 | Phase 27 | Pending |
 
 **Coverage:**
-- v1.3 requirements: 25 total
-- Mapped to phases: 25
+- v1.4 requirements: 18 total
+- Mapped to phases: 18
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-01-29*
-*Last updated: 2026-01-29 after Phase 24 completion*
+*Requirements defined: 2026-01-30*
+*Last updated: 2026-01-30*

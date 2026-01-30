@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements for v1.4
-Last activity: 2026-01-30 — Milestone v1.4 started
+Phase: Phase 25 (C Backend OpenQASM Export)
+Plan: Not yet planned
+Status: Requirements defined, roadmap created, ready for phase planning
+Last activity: 2026-01-30 — v1.4 requirements and roadmap defined
 
 Progress: [░░░░░░░░░░] 0%
 
