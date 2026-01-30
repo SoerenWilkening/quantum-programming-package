@@ -26,13 +26,13 @@ Requirements for OpenQASM Export & Verification milestone. Each maps to roadmap 
 
 ### Verification Script (VER)
 
-- [ ] **VER-01**: Standalone `scripts/verify_circuit.py` with Qiskit integration (qasm3.loads + AerSimulator)
-- [ ] **VER-02**: Built-in arithmetic test cases: addition, subtraction, multiplication with overflow
-- [ ] **VER-03**: Built-in comparison test cases: <, <=, ==, >=, >, !=
-- [ ] **VER-04**: Deterministic verification using 1 shot exact match for classical-init circuits
-- [ ] **VER-05**: Pass/fail reporting with summary output and non-zero exit code on failure
-- [ ] **VER-06**: Built-in bitwise test cases: AND, OR, XOR, NOT
-- [ ] **VER-07**: Detailed failure diagnostics: expected vs actual values, QASM snippet for failing test
+- [x] **VER-01**: Standalone `scripts/verify_circuit.py` with Qiskit integration (qasm3.loads + AerSimulator)
+- [x] **VER-02**: Built-in arithmetic test cases: addition, subtraction, multiplication with overflow
+- [x] **VER-03**: Built-in comparison test cases: <, <=, ==, >=, >, !=
+- [x] **VER-04**: Deterministic verification using 1 shot exact match for classical-init circuits
+- [x] **VER-05**: Pass/fail reporting with summary output and non-zero exit code on failure
+- [x] **VER-06**: Built-in bitwise test cases: AND, OR, XOR, NOT
+- [x] **VER-07**: Detailed failure diagnostics: expected vs actual values, QASM snippet for failing test
 
 ## v1.3 Requirements (Complete)
 
@@ -122,13 +122,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | API-01 | Phase 26 | Complete |
 | API-02 | Phase 26 | Complete |
 | API-03 | Phase 26 | Complete |
-| VER-01 | Phase 27 | Pending |
-| VER-02 | Phase 27 | Pending |
-| VER-03 | Phase 27 | Pending |
-| VER-04 | Phase 27 | Pending |
-| VER-05 | Phase 27 | Pending |
-| VER-06 | Phase 27 | Pending |
-| VER-07 | Phase 27 | Pending |
+| VER-01 | Phase 27 | Complete |
+| VER-02 | Phase 27 | Complete |
+| VER-03 | Phase 27 | Complete |
+| VER-04 | Phase 27 | Complete |
+| VER-05 | Phase 27 | Complete |
+| VER-06 | Phase 27 | Complete |
+| VER-07 | Phase 27 | Complete |
 
 **Coverage:**
 - v1.4 requirements: 18 total

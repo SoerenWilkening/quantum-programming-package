@@ -10,13 +10,13 @@ This milestone adds production-quality OpenQASM 3.0 string export from the C bac
 - v1.1 QPU State - Phases 11-15 (shipped 2026-01-28)
 - v1.2 Uncomputation - Phases 16-20 (shipped 2026-01-28)
 - v1.3 Package Structure & ql.array - Phases 21-24 (shipped 2026-01-29)
-- **v1.4 OpenQASM Export & Verification** - Phases 25-27 (in progress)
+- **v1.4 OpenQASM Export & Verification** - Phases 25-27 (shipped 2026-01-30)
 
 ## Phases
 
 - [x] **Phase 25: C Backend OpenQASM Export** - Fix all gate exports, add string-return function, handle large_control and measurements
 - [x] **Phase 26: Python API Bindings** - Cython wrapper with memory safety, module-level ql.to_openqasm(), optional deps
-- [ ] **Phase 27: Verification Script** - Standalone Qiskit-based verification with built-in test cases and pass/fail reporting
+- [x] **Phase 27: Verification Script** - Standalone Qiskit-based verification with built-in test cases and pass/fail reporting
 
 ## Phase Details
 
@@ -54,7 +54,7 @@ Plans:
 **Requirements**: VER-01, VER-02, VER-03, VER-04, VER-05, VER-06, VER-07
 **Plans:** 1 plan
 Plans:
-- [ ] 27-01-PLAN.md — Create verification script with framework, CLI, test cases, and end-to-end validation
+- [x] 27-01-PLAN.md — Create verification script with framework, CLI, test cases, and end-to-end validation
 **Success Criteria** (what must be TRUE):
   1. Running `python scripts/verify_circuit.py` executes all built-in test cases
   2. Arithmetic tests verify addition, subtraction, multiplication including overflow
@@ -72,8 +72,8 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 25. C Backend OpenQASM Export | v1.4 | 2/2 | Complete | 2026-01-30 |
 | 26. Python API Bindings | v1.4 | 2/2 | Complete | 2026-01-30 |
-| 27. Verification Script | v1.4 | 0/1 | Not Started | — |
+| 27. Verification Script | v1.4 | 1/1 | Complete | 2026-01-30 |
 
 ---
 *Roadmap created: 2026-01-30*
-*Last updated: 2026-01-30 (Phase 26 complete)*
+*Last updated: 2026-01-30 (Phase 27 complete — v1.4 milestone shipped)*
