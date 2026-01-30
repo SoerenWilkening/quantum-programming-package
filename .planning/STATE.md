@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 28 of 33 (Verification Framework & Init)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-01-30 -- Roadmap created for v1.5
+Plan: 01 of 02 (Verification Framework)
+Status: In progress
+Last activity: 2026-01-30 -- Completed 28-01-PLAN.md (Verification Framework)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 10%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 86 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6)
+- Total plans completed: 87 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 1)
 - Average duration: ~8 min/plan
 - Total execution time: ~11.6 hours
 
@@ -40,6 +40,15 @@ Progress: [░░░░░░░░░░] 0%
 
 Milestone decisions archived. See PROJECT.md Key Decisions table for full history.
 
+**Recent (Phase 28):**
+
+| Phase | Decision | Rationale |
+|-------|----------|-----------|
+| 28-01 | Separate tests/conftest.py for verification tests vs tests/python/conftest.py for unit tests | Keep fixture namespaces distinct, avoid conflicts between test categories |
+| 28-01 | verify_circuit returns (actual, expected) tuple instead of asserting directly | Gives tests flexibility in assertion style and failure message formatting |
+| 28-01 | Exhaustive testing threshold at 4 bits, sampled testing for 5+ bits | Balance coverage (all 256 pairs at 4-bit) vs runtime (sampled edge cases + random at higher widths) |
+| 28-01 | Deterministic sampling with random.seed(42) | Reproducible test cases across runs for debugging |
+
 ### Pending Todos
 
 None.
@@ -59,9 +68,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-30
-Stopped at: Roadmap created for v1.5
+Stopped at: Completed 28-01-PLAN.md
 Resume file: None
-Resume action: Plan Phase 28 (Verification Framework & Init)
+Resume action: Continue with Phase 28 Plan 02 (Init Verification)
 
 ---
-*State updated: 2026-01-30 after v1.5 roadmap creation*
+*State updated: 2026-01-30 after completing 28-01-PLAN.md*
