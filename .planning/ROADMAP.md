@@ -52,6 +52,9 @@ Plans:
 **Goal**: Standalone script that exports circuits to OpenQASM, simulates via Qiskit, and verifies outcomes match expected values
 **Depends on**: Phase 26
 **Requirements**: VER-01, VER-02, VER-03, VER-04, VER-05, VER-06, VER-07
+**Plans:** 1 plan
+Plans:
+- [ ] 27-01-PLAN.md — Create verification script with framework, CLI, test cases, and end-to-end validation
 **Success Criteria** (what must be TRUE):
   1. Running `python scripts/verify_circuit.py` executes all built-in test cases
   2. Arithmetic tests verify addition, subtraction, multiplication including overflow
@@ -69,7 +72,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 25. C Backend OpenQASM Export | v1.4 | 2/2 | Complete | 2026-01-30 |
 | 26. Python API Bindings | v1.4 | 2/2 | Complete | 2026-01-30 |
-| 27. Verification Script | v1.4 | 0/? | Not Started | — |
+| 27. Verification Script | v1.4 | 0/1 | Not Started | — |
 
 ---
 *Roadmap created: 2026-01-30*
