@@ -24,6 +24,10 @@ This milestone adds production-quality OpenQASM 3.0 string export from the C bac
 **Goal**: Production-quality OpenQASM 3.0 string export from C backend with all gate types, multi-controlled gates, measurements, and error handling
 **Depends on**: v1.3 completion (Phase 24)
 **Requirements**: EXP-01, EXP-02, EXP-03, EXP-04, EXP-05, EXP-06, EXP-07, EXP-08
+**Plans:** 2 plans
+Plans:
+- [ ] 25-01-PLAN.md — Implement circuit_to_qasm_string() with all gate types, controls, measurements, error handling
+- [ ] 25-02-PLAN.md — Fix circuit_to_opanqasm() and add circuit_to_openqasm() file-based wrapper
 **Success Criteria** (what must be TRUE):
   1. `circuit_to_qasm_string()` returns valid OpenQASM 3.0 for circuits with X, Y, Z, H, P, Rx, Ry, Rz gates
   2. Multi-controlled gates with >2 controls use `ctrl(n) @ gate` syntax reading from `large_control` array
@@ -59,7 +63,7 @@ This milestone adds production-quality OpenQASM 3.0 string export from the C bac
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 25. C Backend OpenQASM Export | v1.4 | 0/? | Not Started | — |
+| 25. C Backend OpenQASM Export | v1.4 | 0/2 | Planned | — |
 | 26. Python API Bindings | v1.4 | 0/? | Not Started | — |
 | 27. Verification Script | v1.4 | 0/? | Not Started | — |
 
