@@ -38,18 +38,19 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - ✓ Context manager integration (`with` block cleanup) — v1.2
 - ✓ Uncomputation modes (lazy vs eager, `ql.option("qubit_saving")`) — v1.2
 - ✓ User control methods (`.uncompute()`, `.keep()`, clear error messages) — v1.2
+- ✓ Proper Python package structure with `__init__.py` files — v1.3
+- ✓ ql.array class for homogeneous quantum arrays (qint or qbool) — v1.3
+- ✓ Array reductions with optimal depth (`&A`, `|A`, `^A`, `sum(A)`) — v1.3
+- ✓ Element-wise operators between arrays (arithmetic, bitwise, comparison) — v1.3
+- ✓ Python integration for arrays (`len()`, iteration, indexing, slicing) — v1.3
 
 ### Active
 
-**v1.3: Package Structure & ql.array**
+**v1.4: OpenQASM Export & Verification**
 
-- [ ] Proper Python package structure with `__init__.py` files
-- [ ] Split large Cython files to ~200-300 lines each
-- [ ] ql.array class for homogeneous quantum arrays (qint or qbool)
-- [ ] Array initialization from Python list with auto-width or explicit width
-- [ ] Reduction operations with optimal depth: `&A`, `|A`, `^A`, `sum(A)` (pairwise tree)
-- [ ] Full element-wise operators between arrays (arithmetic, bitwise, comparison)
-- [ ] Python integration for arrays: `len()`, iteration, indexing, slicing
+- [ ] Production-quality C-level OpenQASM 3.0 export (all gate types, large_control, proper error handling)
+- [ ] `ql.to_openqasm()` Python API returning QASM string (in-memory, no file I/O)
+- [ ] Standalone verification script with built-in test cases (classical init → export → Qiskit simulate → check outcomes)
 
 ### Out of Scope
 
@@ -65,7 +66,7 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 **Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) → Cython bindings → Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
 
-**Current state:** v1.2 shipped. Clean modular C backend with types.h, circuit.h, arithmetic_ops.h, comparison_ops.h, bitwise_ops.h. Centralized qubit allocator with ownership tracking. Variable-width quantum integers (1-64 bits) with complete arithmetic, comparison, and initialization operations. Automatic uncomputation with dependency tracking, mode control (lazy/eager), and user override methods.
+**Current state:** v1.3 shipped. Clean modular C backend with types.h, circuit.h, arithmetic_ops.h, comparison_ops.h, bitwise_ops.h. Centralized qubit allocator with ownership tracking. Variable-width quantum integers (1-64 bits) with complete arithmetic, comparison, and initialization operations. Automatic uncomputation with dependency tracking, mode control (lazy/eager), and user override methods. Proper package structure with ql.array supporting multi-dimensional arrays, reductions, and element-wise operations.
 
 **Codebase:**
 - ~81,459 lines of code (Python, Cython, C)
@@ -115,4 +116,4 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Scope-based cleanup | Automatic uncomputation in `with` block exit | ✓ Good — Python-idiomatic |
 
 ---
-*Last updated: 2026-01-29 after v1.3 milestone start*
+*Last updated: 2026-01-30 after v1.4 milestone start*
