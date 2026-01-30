@@ -33,7 +33,7 @@ c_sources = [
     os.path.join(PROJECT_ROOT, "c_backend", "src", "execution.c"),
 ]
 
-compiler_args = ["-O3", "-flto", "-pthread"]
+compiler_args = ["-O3", "-pthread"]  # Removed -flto due to GCC LTO bug
 
 # src/ directory is at project root, not in python-backend
 SRC_DIR = os.path.join(PROJECT_ROOT, "src")
