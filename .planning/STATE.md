@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: Phase 25 (C Backend OpenQASM Export)
-Plan: Not yet planned
-Status: Requirements defined, roadmap created, ready for phase planning
-Last activity: 2026-01-30 — v1.4 requirements and roadmap defined
+Plan: 01 of 2 (in phase)
+Status: In progress
+Last activity: 2026-01-30 — Completed 25-01-PLAN.md
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [█░░░░░░░░░] 1%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 80 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16)
+- Total plans completed: 81 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 1)
 - Average duration: ~8 min/plan
 - Total execution time: ~10.7 hours
 
@@ -31,6 +31,7 @@ Progress: [░░░░░░░░░░] 0%
 | v1.1 QPU State | 11-15 | 13 | Complete (2026-01-28) |
 | v1.2 Uncomputation | 16-20 | 10 | Complete (2026-01-28) |
 | v1.3 Package & Array | 21-24 | 16 | Complete (2026-01-29) |
+| v1.4 OpenQASM Export | 25-27 | 1/TBD | In progress (started 2026-01-30) |
 
 ## Accumulated Context
 
@@ -82,6 +83,11 @@ Progress: [░░░░░░░░░░] 0%
 | 24-01 | Use property accessors for cross-instance cdef attribute access | Cython extension types can't directly access each other's cdef attributes without type casting - use other.shape not other._shape |
 | 24-01 | Cython type casting for _elements access | List comprehensions need other._elements access - requires cdef qarray other_arr then <qarray>other cast |
 | 24-01 | Comparison operators set result dtype to qbool | Comparisons return boolean arrays per NumPy convention - pass result_dtype=qbool to set _dtype and _width=1 |
+| 25-01 | Use %.17g precision for rotation angle export | Preserves full double precision while avoiding trailing zeros and exponential notation |
+| 25-01 | Normalize angles to [0, 2π) before OpenQASM export | Ensures consistent output regardless of internal angle storage |
+| 25-01 | Measurement syntax: 'c[i] = measure q[i];' | OpenQASM 3.0 assignment syntax more explicit than arrow syntax |
+| 25-01 | Duplicate gate_get_control() as _get_control_qubit() | Avoid adding header dependencies while providing large_control access |
+| 25-01 | Dynamic buffer: 512 + (gates * 100) bytes, doubles on overflow | 512 bytes for header, 100/gate handles ctrl(n) @ syntax |
 
 Additional decisions logged in PROJECT.md Key Decisions table.
 
@@ -116,9 +122,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-29 20:14:38 UTC
-Stopped at: Completed quick task 009
+Last session: 2026-01-30 13:36:32 UTC
+Stopped at: Completed 25-01-PLAN.md
 Resume file: None
 
 ---
-*State updated: 2026-01-30 after v1.4 milestone start*
+*State updated: 2026-01-30 after plan 25-01 completion*
