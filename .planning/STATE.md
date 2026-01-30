@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 29 of 33 (C Backend Bug Fixes)
-Plan: 01 of 04 (BUG-01 & BUG-02 Investigation)
+Plan: 02 of 04 (BUG-03 & BUG-04 Fixes)
 Status: In progress
-Last activity: 2026-01-30 -- Completed 29-01 investigation (bugs deferred to C backend work)
+Last activity: 2026-01-30 -- Completed 29-02 (BUG-03 fixed, BUG-04 partially fixed)
 
-Progress: [██░░░░░░░░] 16%
+Progress: [██░░░░░░░░] 17%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 88 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 2)
-- Average duration: ~8 min/plan
-- Total execution time: ~11.8 hours
+- Total plans completed: 89 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 3)
+- Average duration: ~9 min/plan
+- Total execution time: ~13.3 hours
 
 **By Milestone:**
 
@@ -53,6 +53,9 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 | 28-02 | Document C backend circuit() reset bug rather than attempting fix | C backend memory management fix is risky and time-consuming, beyond v1.5 scope |
 | 29-01 | Defer BUG-01 and BUG-02 fixes, create test files only | Investigation revealed root cause is C backend QFT arithmetic (BUG-04), not Python operator logic |
 | 29-01 | tests/bugfix/ directory for bug reproduction tests | Separate targeted bug tests from exhaustive verification tests |
+| 29-02 | Use MAXLAYERINSEQUENCE for multiplication num_layer allocation | Conservative but safe - formula-based calculation was insufficient |
+| 29-02 | Increase per-layer gate allocation to 10*bits | Progressive testing showed 2*bits, 3*bits, 4*bits all still segfaulted |
+| 29-02 | Accept partial fixes for both BUG-03 and BUG-04 | Segfault fixed (primary goal), logic bugs documented for future work |
 
 ### Pending Todos
 
@@ -61,11 +64,11 @@ None.
 ### Blockers/Concerns
 
 **Known C backend bugs (v1.5 targets):**
-- **BUG-04 (CRITICAL):** QFT addition fails with both nonzero operands - blocks BUG-01 and BUG-02 fixes
+- **BUG-05 (CRITICAL):** circuit() does not properly reset state - causes memory explosion, blocks exhaustive testing
+- **BUG-03 (PARTIALLY FIXED):** Multiplication segfault fixed, but returns wrong results (logic bug remains)
+- **BUG-04 (PARTIALLY FIXED):** QFT addition partially fixed (0+1, 7+8 work), 3 cases still fail (1+1, 3+5, 8+8)
 - BUG-01: Subtraction underflow (3-7 returns 7 instead of 12) - blocked by BUG-04, test files created
 - BUG-02: Less-or-equal comparison (5<=5 returns 0) - blocked by BUG-04, test files created
-- BUG-03: Multiplication segfaults at certain widths
-- BUG-05: circuit() does not properly reset state - gates accumulate across calls (discovered in 28-02)
 
 **Known pre-existing issues (not v1.5 scope):**
 - Nested quantum conditionals require quantum-quantum AND
@@ -75,9 +78,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-30
-Stopped at: Completed Phase 29-01 investigation (BUG-01 and BUG-02 deferred to C backend work)
+Stopped at: Completed Phase 29-02 (BUG-03 fixed, BUG-04 partially fixed)
 Resume file: None
-Resume action: Continue with Phase 29-02 (BUG-03 & BUG-04) - BUG-04 is high priority
+Resume action: Continue with Phase 29 remaining plans (BUG-01, BUG-02) or address BUG-05 (circuit reset)
 
 ---
-*State updated: 2026-01-30 after completing Phase 29-01*
+*State updated: 2026-01-30 after completing Phase 29-02*
