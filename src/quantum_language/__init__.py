@@ -46,6 +46,7 @@ from ._core import (
     option,
     reverse_instruction_range,
 )
+from .openqasm import to_openqasm
 from .qarray import qarray
 from .qbool import qbool
 from .qint import qint
@@ -149,6 +150,8 @@ __all__ = [
     "parity",
     # Constants
     "AVAILABLE_PASSES",
+    # Export
+    "to_openqasm",
     # State (also in ql.state subpackage)
     "circuit_stats",
     "get_current_layer",

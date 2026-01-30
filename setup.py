@@ -92,5 +92,8 @@ setup(
         "quantum_language": ["*.pxd", "*.py"],
         "quantum_language.state": ["*.pxd", "*.py"],
     },
+    extras_require={
+        "verification": ["qiskit>=1.0"],
+    },
     python_requires=">=3.11",
 )
