@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 
 ## Current Position
 
-Phase: 28 of 33 (Verification Framework & Init)
-Plan: 02 of 02 (Init Verification Tests)
-Status: Phase complete
-Last activity: 2026-01-30 -- Completed 28-02-PLAN.md (Init Verification Tests)
+Phase: 29 of 33 (C Backend Bug Fixes)
+Plan: 01 of 04 (BUG-01 & BUG-02 Investigation)
+Status: In progress
+Last activity: 2026-01-30 -- Completed 29-01 investigation (bugs deferred to C backend work)
 
-Progress: [██░░░░░░░░] 15%
+Progress: [██░░░░░░░░] 16%
 
 ## Performance Metrics
 
@@ -40,7 +40,7 @@ Progress: [██░░░░░░░░] 15%
 
 Milestone decisions archived. See PROJECT.md Key Decisions table for full history.
 
-**Recent (Phase 28):**
+**Recent (Phase 28-29):**
 
 | Phase | Decision | Rationale |
 |-------|----------|-----------|
@@ -51,6 +51,8 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 | 28-02 | Generate parametrize data at module level via helper functions | Clean test structure, avoids pytest collection overhead from dynamic generation |
 | 28-02 | Use default argument binding in circuit_builder closures | Avoids Python closure variable capture issues in loops |
 | 28-02 | Document C backend circuit() reset bug rather than attempting fix | C backend memory management fix is risky and time-consuming, beyond v1.5 scope |
+| 29-01 | Defer BUG-01 and BUG-02 fixes, create test files only | Investigation revealed root cause is C backend QFT arithmetic (BUG-04), not Python operator logic |
+| 29-01 | tests/bugfix/ directory for bug reproduction tests | Separate targeted bug tests from exhaustive verification tests |
 
 ### Pending Todos
 
@@ -59,10 +61,10 @@ None.
 ### Blockers/Concerns
 
 **Known C backend bugs (v1.5 targets):**
-- BUG-01: Subtraction underflow (3-7 returns 7 instead of 12)
-- BUG-02: Less-or-equal comparison (5<=5 returns 0)
+- **BUG-04 (CRITICAL):** QFT addition fails with both nonzero operands - blocks BUG-01 and BUG-02 fixes
+- BUG-01: Subtraction underflow (3-7 returns 7 instead of 12) - blocked by BUG-04, test files created
+- BUG-02: Less-or-equal comparison (5<=5 returns 0) - blocked by BUG-04, test files created
 - BUG-03: Multiplication segfaults at certain widths
-- BUG-04: QFT addition fails with both nonzero operands
 - BUG-05: circuit() does not properly reset state - gates accumulate across calls (discovered in 28-02)
 
 **Known pre-existing issues (not v1.5 scope):**
@@ -73,9 +75,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-30
-Stopped at: Completed Phase 28 (Verification Framework & Init)
+Stopped at: Completed Phase 29-01 investigation (BUG-01 and BUG-02 deferred to C backend work)
 Resume file: None
-Resume action: Continue with Phase 29 (Binary Operations Verification)
+Resume action: Continue with Phase 29-02 (BUG-03 & BUG-04) - BUG-04 is high priority
 
 ---
-*State updated: 2026-01-30 after completing Phase 28-02*
+*State updated: 2026-01-30 after completing Phase 29-01*
