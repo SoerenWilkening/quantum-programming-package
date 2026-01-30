@@ -49,7 +49,19 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ### Active
 
-(No active requirements — next milestone not yet planned)
+- [ ] Fix subtraction underflow bug (3-7 returns 7 instead of wrapping)
+- [ ] Fix less-or-equal comparison bug (5<=5 returns 0 instead of 1)
+- [ ] Fix multiplication segfaults at certain widths
+- [ ] Fix QFT addition bug (fails with both nonzero operands)
+- [ ] Reusable Qiskit-based verification test framework
+- [ ] Exhaustive verification of all arithmetic operations (small widths: all combos)
+- [ ] Exhaustive verification of all comparison operations
+- [ ] Exhaustive verification of bitwise operations
+- [ ] Verification of modular arithmetic operations
+- [ ] Verification of automatic uncomputation
+- [ ] Verification of quantum conditionals
+- [ ] Verification of ql.array operations
+- [ ] Representative testing at larger bit widths
 
 ### Out of Scope
 
@@ -85,10 +97,10 @@ Write quantum algorithms in natural programming style that compiles to efficient
 **Known limitations:**
 - qint_mod * qint_mod raises NotImplementedError (by design)
 - apply_merge() placeholder for future phase rotation merging
-- Multiplication tests segfault at certain widths (C backend issue, pre-existing)
+- Multiplication tests segfault at certain widths (C backend issue — v1.5 target)
 - Nested quantum conditionals require quantum-quantum AND implementation (future work)
-- Subtraction underflow incorrect: 3-7 returns 7 instead of wrapping (C backend bug)
-- Less-or-equal comparison bug: 5<=5 returns 0 instead of 1 (C backend bug)
+- Subtraction underflow incorrect: 3-7 returns 7 instead of wrapping (C backend bug — v1.5 target)
+- Less-or-equal comparison bug: 5<=5 returns 0 instead of 1 (C backend bug — v1.5 target)
 
 ## Constraints
 
@@ -122,4 +134,4 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | MSB-first bit extraction for Qiskit | Qiskit bitstrings have highest qubit index leftmost | ✓ Good — correct result extraction |
 
 ---
-*Last updated: 2026-01-30 after v1.4 milestone*
+*Last updated: 2026-01-30 after v1.5 milestone started*

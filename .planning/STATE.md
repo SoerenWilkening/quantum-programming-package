@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-30)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Planning next milestone
+**Current focus:** v1.5 Bug Fixes & Exhaustive Verification
 
 ## Current Position
 
-Phase: Ready for next milestone
-Plan: Not started
-Status: v1.4 milestone complete, ready to plan next milestone
-Last activity: 2026-01-30 — v1.4 OpenQASM Export & Verification milestone archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements for v1.5
+Last activity: 2026-01-30 — Milestone v1.5 started
 
-Progress: [███████░░░] 69%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -77,9 +77,9 @@ None — v1.4 milestone complete.
 ## Session Continuity
 
 Last session: 2026-01-30
-Stopped at: v1.4 milestone archived — ready for next milestone
+Stopped at: Defining requirements for v1.5
 Resume file: None
-Resume action: `/gsd:new-milestone` to start next milestone cycle
+Resume action: Continue requirements definition
 
 ---
-*State updated: 2026-01-30 after v1.4 milestone completion*
+*State updated: 2026-01-30 after v1.5 milestone started*
