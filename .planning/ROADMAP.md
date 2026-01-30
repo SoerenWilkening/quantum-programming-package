@@ -15,7 +15,7 @@ This milestone adds production-quality OpenQASM 3.0 string export from the C bac
 ## Phases
 
 - [x] **Phase 25: C Backend OpenQASM Export** - Fix all gate exports, add string-return function, handle large_control and measurements
-- [ ] **Phase 26: Python API Bindings** - Cython wrapper with memory safety, module-level ql.to_openqasm(), optional deps
+- [x] **Phase 26: Python API Bindings** - Cython wrapper with memory safety, module-level ql.to_openqasm(), optional deps
 - [ ] **Phase 27: Verification Script** - Standalone Qiskit-based verification with built-in test cases and pass/fail reporting
 
 ## Phase Details
@@ -41,8 +41,8 @@ Plans:
 **Requirements**: API-01, API-02, API-03
 **Plans:** 2 plans
 Plans:
-- [ ] 26-01-PLAN.md — Create openqasm.pxd/pyx Cython wrapper, update __init__.py and setup.py
-- [ ] 26-02-PLAN.md — Build package, create tests, verify full pipeline
+- [x] 26-01-PLAN.md — Create openqasm.pxd/pyx Cython wrapper, update __init__.py and setup.py
+- [x] 26-02-PLAN.md — Build package, create tests, verify full pipeline
 **Success Criteria** (what must be TRUE):
   1. Cython `to_openqasm()` method returns Python string and frees C buffer in finally block
   2. `ql.to_openqasm()` module-level function returns QASM string for current circuit
@@ -68,9 +68,9 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 25. C Backend OpenQASM Export | v1.4 | 2/2 | Complete | 2026-01-30 |
-| 26. Python API Bindings | v1.4 | 0/2 | Not Started | — |
+| 26. Python API Bindings | v1.4 | 2/2 | Complete | 2026-01-30 |
 | 27. Verification Script | v1.4 | 0/? | Not Started | — |
 
 ---
 *Roadmap created: 2026-01-30*
-*Last updated: 2026-01-30 (Phase 25 complete)*
+*Last updated: 2026-01-30 (Phase 26 complete)*

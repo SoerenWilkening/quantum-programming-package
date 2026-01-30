@@ -20,9 +20,9 @@ Requirements for OpenQASM Export & Verification milestone. Each maps to roadmap 
 
 ### Python API (API)
 
-- [ ] **API-01**: Cython `to_openqasm()` method with memory-safe C buffer cleanup (try/finally + free)
-- [ ] **API-02**: Module-level `ql.to_openqasm()` convenience function returning QASM string
-- [ ] **API-03**: Add `extras_require` for optional Qiskit verification dependencies
+- [x] **API-01**: Cython `to_openqasm()` method with memory-safe C buffer cleanup (try/finally + free)
+- [x] **API-02**: Module-level `ql.to_openqasm()` convenience function returning QASM string
+- [x] **API-03**: Add `extras_require` for optional Qiskit verification dependencies
 
 ### Verification Script (VER)
 
@@ -119,9 +119,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EXP-06 | Phase 25 | Complete |
 | EXP-07 | Phase 25 | Complete |
 | EXP-08 | Phase 25 | Complete |
-| API-01 | Phase 26 | Pending |
-| API-02 | Phase 26 | Pending |
-| API-03 | Phase 26 | Pending |
+| API-01 | Phase 26 | Complete |
+| API-02 | Phase 26 | Complete |
+| API-03 | Phase 26 | Complete |
 | VER-01 | Phase 27 | Pending |
 | VER-02 | Phase 27 | Pending |
 | VER-03 | Phase 27 | Pending |
