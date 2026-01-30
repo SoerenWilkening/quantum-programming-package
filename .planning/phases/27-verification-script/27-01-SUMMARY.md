@@ -129,18 +129,32 @@ Each test:
 ### Critical Issues Requiring Resolution
 
 **1. Bit Extraction Logic Incorrect**
-- **Status:** Blocking - all tests currently fail
-- **Symptom:** Expected 8, got 19 for addition_basic test
-- **Root cause:** `extract_result()` function extracts last N bits from measurement bitstring, but this doesn't correspond to result qubits
-- **Analysis:**
-  - Circuit allocates qubits sequentially: a (4 bits), b (4 bits), result (4 bits)
-  - Qiskit measurement bitstring is little-endian: result | b | a (rightmost is qubit 0)
-  - Extracting last N bits gets a portion of result+b, not just result
-  - Example: bitstring `011001010011` = qubits [a=3, b=5, result=?]
-    - Last 5 bits: `10011` = 19 (incorrect - spans b and result)
-    - Need to extract bits [8:11] specifically for result
-- **Fix needed:** Determine correct qubit indices for result register, extract those specific bits
-- **Complexity:** Requires understanding library's qubit allocation strategy, possibly qubit uncomputation
+- **Status:** Blocking - tests currently fail
+- **Root cause:** `extract_result()` extracts last N bits from bitstring, but result register is at a specific qubit offset, not at the end of the bitstring
+- **Orchestrator debugging findings (qubit layout confirmed):**
+  - Qiskit bitstring is MSB-first: leftmost = highest qubit index
+  - For binary ops (AND, OR, XOR): a=q[0:4], b=q[4:8], result=q[8:12] — result is **first 4 chars** of bitstring (highest indices)
+  - For NOT: in-place — only 4 qubits total, result IS a at q[0:4]
+  - For comparison: a=q[0:4], b=q[4:8], result=q[8] (1 bit) — 9 qubits total
+  - For addition/subtraction: a=q[0:4], b=q[4:8], result=q[8:12] — same layout as binary ops
+  - **Correct extraction:** Read first `width` chars from bitstring (= MSB of highest-index qubits), except NOT which reads last `width` chars
+- **Verified working operations (with correct extraction):**
+  - AND: `5 & 3 = 1` ✓
+  - OR: `5 | 3 = 7` ✓
+  - XOR: `5 ^ 3 = 6` ✓
+  - NOT: `~2 = 13` ✓ (unsigned, in-place, 4 qubits only)
+  - Comparison `3 < 7 = 1` ✓
+  - Subtraction `7 - 3 = 4` ✓
+  - Addition `0 + 5 = 5` ✓, `5 + 0 = 5` ✓, `3 + 4 = 7` ✓
+- **QFT addition bug discovered:**
+  - `1+1=0` ✗, `2+2=1` ✗, `2+3=0` ✗, `3+5=6` ✗ (expected 2, 4, 5, 8)
+  - Pattern: additions work when one operand is 0, fail with both non-zero in many cases
+  - `3+4=7` works but `1+1=0` does not — inconsistent, likely QFT phase rotation bug in C backend
+  - Subtraction uses same QFT approach but `7-3=4` works correctly
+- **Memory accumulation confirmed:**
+  - `ql.circuit()` does NOT deallocate previous qubits when called in same process
+  - Second circuit in same process uses 1M+ qubits, causing OOM
+  - **Each test MUST run in a subprocess** for isolation
 
 **2. PYTHONPATH Dependency**
 - **Status:** Workaround exists
@@ -216,19 +230,15 @@ FAIL: addition_basic
 
 **Alternative considered:** Store QASM strings directly - rejected because circuit() must be called at execution time, not definition time
 
-### Bit Extraction Strategy
-**Current implementation:** Extract last `width` bits from full measurement bitstring
-
-**Limitation:** Assumes result qubits are last allocated (highest indices), but:
-- Doesn't account for qubit ordering in Qiskit little-endian format
-- Doesn't identify which bits correspond to result vs inputs vs ancilla
-- Requires knowledge of qubit allocation strategy in ql library
-
-**Future strategy needed:**
-- Option A: Parse QASM to identify result qubit indices explicitly
-- Option B: Predict full measurement outcome (including inputs) and compare
-- Option C: Instrument ql library to tag result qubits, export metadata with QASM
-- **Recommendation:** Option A most robust - parse qubit declarations in QASM to map register names to bit positions
+### Bit Extraction Strategy (RESOLVED)
+**Correct approach confirmed by orchestrator debugging:**
+- Bitstring is MSB-first (Qiskit convention): first chars = highest qubit indices
+- Result register is the 3rd allocation (q[8:12] for 4-bit operands)
+- **Extract first `width` chars of bitstring** for binary/arithmetic/comparison ops
+- **Exception: NOT is in-place** — only 1 allocation, result at q[0:4], extract last `width` chars
+- **Exception: comparison** — result is 1 bit at q[8], extract first char of bitstring (9 qubits total)
+- Must also handle variable total qubit counts (NOT=4, comparison=9, binary=12, etc.)
+- **Subprocess isolation required** — `ql.circuit()` doesn't deallocate, each test needs fresh process
 
 ### ANSI Color Detection
 **Decision:** Implement `should_use_colors()` checking `NO_COLOR`, `CLICOLOR_FORCE`, and `isatty()`
