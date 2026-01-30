@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A quantum programming framework that enables writing quantum algorithms using standard programming constructs — operator overloading on variable-width quantum integers (qint, 1-64 bits) and quantum booleans (qbool), with Python's `with` statement implementing quantum conditionals. Operations compile to optimized quantum circuits via a C backend with Cython bindings. Includes circuit optimization, visualization, and statistics.
+A quantum programming framework that enables writing quantum algorithms using standard programming constructs — operator overloading on variable-width quantum integers (qint, 1-64 bits) and quantum booleans (qbool), with Python's `with` statement implementing quantum conditionals. Operations compile to optimized quantum circuits via a C backend with Cython bindings. Includes circuit optimization, visualization, statistics, OpenQASM 3.0 export, and Qiskit-based verification.
 
 ## Core Value
 
@@ -43,14 +43,13 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - ✓ Array reductions with optimal depth (`&A`, `|A`, `^A`, `sum(A)`) — v1.3
 - ✓ Element-wise operators between arrays (arithmetic, bitwise, comparison) — v1.3
 - ✓ Python integration for arrays (`len()`, iteration, indexing, slicing) — v1.3
+- ✓ Production-quality C-level OpenQASM 3.0 export (all gate types, large_control, proper error handling) — v1.4
+- ✓ `ql.to_openqasm()` Python API returning QASM string (in-memory, no file I/O) — v1.4
+- ✓ Standalone verification script with built-in test cases (classical init -> export -> Qiskit simulate -> check outcomes) — v1.4
 
 ### Active
 
-**v1.4: OpenQASM Export & Verification**
-
-- [ ] Production-quality C-level OpenQASM 3.0 export (all gate types, large_control, proper error handling)
-- [ ] `ql.to_openqasm()` Python API returning QASM string (in-memory, no file I/O)
-- [ ] Standalone verification script with built-in test cases (classical init → export → Qiskit simulate → check outcomes)
+(No active requirements — next milestone not yet planned)
 
 ### Out of Scope
 
@@ -64,14 +63,14 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ## Context
 
-**Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) → Cython bindings → Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
+**Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) -> Cython bindings -> Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
 
-**Current state:** v1.3 shipped. Clean modular C backend with types.h, circuit.h, arithmetic_ops.h, comparison_ops.h, bitwise_ops.h. Centralized qubit allocator with ownership tracking. Variable-width quantum integers (1-64 bits) with complete arithmetic, comparison, and initialization operations. Automatic uncomputation with dependency tracking, mode control (lazy/eager), and user override methods. Proper package structure with ql.array supporting multi-dimensional arrays, reductions, and element-wise operations.
+**Current state:** v1.4 shipped. Full-featured quantum programming framework with OpenQASM 3.0 export and Qiskit-based verification. Clean modular C backend with types.h, circuit.h, arithmetic_ops.h, comparison_ops.h, bitwise_ops.h, circuit_output.h. Centralized qubit allocator with ownership tracking. Variable-width quantum integers (1-64 bits) with complete arithmetic, comparison, and initialization operations. Automatic uncomputation with dependency tracking, mode control (lazy/eager), and user override methods. Proper package structure with ql.array supporting multi-dimensional arrays, reductions, and element-wise operations. Memory-safe Python-to-C bridge with Cython try-finally cleanup. Standalone verification pipeline: Python -> C circuit -> OpenQASM 3.0 -> Qiskit -> AerSimulator -> result verification.
 
 **Codebase:**
-- ~81,459 lines of code (Python, Cython, C)
+- ~161,445 lines of code (Python, Cython, C)
 - Version 0.1.0
-- Tech stack: Python 3.11+, Cython, C backend
+- Tech stack: Python 3.11+, Cython, C backend, Qiskit (optional verification)
 
 **Performance:** Benchmarks in `circuit-gen-results/` demonstrate speed and memory superiority over Qiskit, Cirq, PennyLane, and other backends for QFT circuits up to 2000 variables.
 
@@ -88,6 +87,8 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - apply_merge() placeholder for future phase rotation merging
 - Multiplication tests segfault at certain widths (C backend issue, pre-existing)
 - Nested quantum conditionals require quantum-quantum AND implementation (future work)
+- Subtraction underflow incorrect: 3-7 returns 7 instead of wrapping (C backend bug)
+- Less-or-equal comparison bug: 5<=5 returns 0 instead of 1 (C backend bug)
 
 ## Constraints
 
@@ -104,7 +105,7 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Keep circuit compilation model | Direct execution is future; current approach works | ✓ Good — works well |
 | types.h as foundation module | Single source of truth for shared types | ✓ Good — clean dependencies |
 | Right-aligned qubit array layout | Supports variable-width with minimal changes | ✓ Good — 1-64 bits work |
-| MAXLAYERINSEQUENCE for QQ_mul | Original formula underestimated layer needs | ⚠️ Revisit — may need optimization |
+| MAXLAYERINSEQUENCE for QQ_mul | Original formula underestimated layer needs | Revisit — may need optimization |
 | Single README format | GitHub-rendered, accessible without build | ✓ Good — easy to maintain |
 | Stateless C backend | Global state eliminated for cleaner architecture | ✓ Good — v1.1 complete |
 | Multi-controlled gates via large_control | Supports n-controlled X without ancilla qubits | ✓ Good — efficient for comparisons |
@@ -114,6 +115,11 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | LIFO cascade uncomputation | Reverse creation order for correct quantum state | ✓ Good — verified correct |
 | Mode capture at creation | Immutable per-qbool behavior, predictable | ✓ Good — no retroactive changes |
 | Scope-based cleanup | Automatic uncomputation in `with` block exit | ✓ Good — Python-idiomatic |
+| %.17g precision for angle export | Preserves full double precision in OpenQASM | ✓ Good — lossless rotation export |
+| Delegation pattern for legacy API | Old circuit_to_opanqasm() delegates to new impl | ✓ Good — fixed 14 bugs, backward compatible |
+| try-finally for C memory in Cython | Guaranteed free() even on exceptions | ✓ Good — no memory leaks |
+| Subprocess isolation for verification | C backend doesn't deallocate qubits in-process | ✓ Good — 18/18 tests pass reliably |
+| MSB-first bit extraction for Qiskit | Qiskit bitstrings have highest qubit index leftmost | ✓ Good — correct result extraction |
 
 ---
-*Last updated: 2026-01-30 after v1.4 milestone start*
+*Last updated: 2026-01-30 after v1.4 milestone*
