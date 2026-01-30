@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 29 of 33 (C Backend Bug Fixes)
-Plan: 02 of 04 (BUG-03 & BUG-04 Fixes)
+Plan: 03 of 04 (BUG-04 Complete Fix)
 Status: In progress
-Last activity: 2026-01-30 -- Completed 29-02 (BUG-03 fixed, BUG-04 partially fixed)
+Last activity: 2026-01-30 -- Completed 29-03 (BUG-04 bit-ordering fix complete)
 
-Progress: [██░░░░░░░░] 17%
+Progress: [██░░░░░░░░] 18%
 
 ## Performance Metrics
 
@@ -56,6 +56,9 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 | 29-02 | Use MAXLAYERINSEQUENCE for multiplication num_layer allocation | Conservative but safe - formula-based calculation was insufficient |
 | 29-02 | Increase per-layer gate allocation to 10*bits | Progressive testing showed 2*bits, 3*bits, 4*bits all still segfaulted |
 | 29-02 | Accept partial fixes for both BUG-03 and BUG-04 | Segfault fixed (primary goal), logic bugs documented for future work |
+| 29-03 | Fix bit-ordering with bin[bits-1-bit_idx] reversal | two_complement() returns MSB-first, QFT formula needs LSB-first iteration |
+| 29-03 | Fix cache update to use rotations[i] not rotations[bits-i-1] | Must match initial build path indexing for gate value consistency |
+| 29-03 | Verify formula against Qiskit reference | Analytical verification when BUG-05 prevents reliable test execution |
 
 ### Pending Todos
 
@@ -64,11 +67,11 @@ None.
 ### Blockers/Concerns
 
 **Known C backend bugs (v1.5 targets):**
-- **BUG-05 (CRITICAL):** circuit() does not properly reset state - causes memory explosion, blocks exhaustive testing
+- **BUG-05 (CRITICAL):** circuit() does not properly reset state - causes memory explosion, blocks exhaustive testing AND prevents verification of BUG-04 fix
 - **BUG-03 (PARTIALLY FIXED):** Multiplication segfault fixed, but returns wrong results (logic bug remains)
-- **BUG-04 (PARTIALLY FIXED):** QFT addition partially fixed (0+1, 7+8 work), 3 cases still fail (1+1, 3+5, 8+8)
-- BUG-01: Subtraction underflow (3-7 returns 7 instead of 12) - blocked by BUG-04, test files created
-- BUG-02: Less-or-equal comparison (5<=5 returns 0) - blocked by BUG-04, test files created
+- **BUG-04 (FIXED):** QFT addition bit-ordering corrected (29-03), verified against Qiskit reference - test verification blocked by BUG-05
+- BUG-01: Subtraction underflow (3-7 returns 7 instead of 12) - root cause (BUG-04) fixed, needs testing after BUG-05 resolved
+- BUG-02: Less-or-equal comparison (5<=5 returns 0) - root cause (BUG-04) fixed, needs testing after BUG-05 resolved
 
 **Known pre-existing issues (not v1.5 scope):**
 - Nested quantum conditionals require quantum-quantum AND
@@ -78,9 +81,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-30
-Stopped at: Completed Phase 29-02 (BUG-03 fixed, BUG-04 partially fixed)
+Stopped at: Completed Phase 29-03 (BUG-04 bit-ordering fix complete)
 Resume file: None
-Resume action: Continue with Phase 29 remaining plans (BUG-01, BUG-02) or address BUG-05 (circuit reset)
+Resume action: Address BUG-05 (circuit reset) to enable verification, then continue with Phase 29 remaining plans
 
 ---
-*State updated: 2026-01-30 after completing Phase 29-02*
+*State updated: 2026-01-30 after completing Phase 29-03*
