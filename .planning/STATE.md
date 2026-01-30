@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: Phase 25 (C Backend OpenQASM Export)
-Plan: 01 of 2 (in phase)
-Status: In progress
-Last activity: 2026-01-30 — Completed 25-01-PLAN.md
+Plan: 02 of 2 (in phase)
+Status: Phase complete
+Last activity: 2026-01-30 — Completed 25-02-PLAN.md
 
-Progress: [█░░░░░░░░░] 1%
+Progress: [██░░░░░░░░] 2%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 81 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 1)
+- Total plans completed: 82 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 2)
 - Average duration: ~8 min/plan
-- Total execution time: ~10.7 hours
+- Total execution time: ~10.8 hours
 
 **By Milestone:**
 
@@ -31,7 +31,7 @@ Progress: [█░░░░░░░░░] 1%
 | v1.1 QPU State | 11-15 | 13 | Complete (2026-01-28) |
 | v1.2 Uncomputation | 16-20 | 10 | Complete (2026-01-28) |
 | v1.3 Package & Array | 21-24 | 16 | Complete (2026-01-29) |
-| v1.4 OpenQASM Export | 25-27 | 1/TBD | In progress (started 2026-01-30) |
+| v1.4 OpenQASM Export | 25-27 | 2/TBD | In progress (started 2026-01-30) |
 
 ## Accumulated Context
 
@@ -88,6 +88,9 @@ Progress: [█░░░░░░░░░] 1%
 | 25-01 | Measurement syntax: 'c[i] = measure q[i];' | OpenQASM 3.0 assignment syntax more explicit than arrow syntax |
 | 25-01 | Duplicate gate_get_control() as _get_control_qubit() | Avoid adding header dependencies while providing large_control access |
 | 25-01 | Dynamic buffer: 512 + (gates * 100) bytes, doubles on overflow | 512 bytes for header, 100/gate handles ctrl(n) @ syntax |
+| 25-02 | Delegate old circuit_to_opanqasm() to circuit_to_openqasm() | Backward compatibility while fixing all bugs via delegation pattern |
+| 25-02 | circuit_to_openqasm() reuses circuit_to_qasm_string() | File export composes string export + file write - eliminates code duplication |
+| 25-02 | File export calls string export then writes result | Single source of truth for QASM generation ensures consistency |
 
 Additional decisions logged in PROJECT.md Key Decisions table.
 
@@ -122,9 +125,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-30 13:36:32 UTC
-Stopped at: Completed 25-01-PLAN.md
+Last session: 2026-01-30 13:40:47 UTC
+Stopped at: Completed 25-02-PLAN.md
 Resume file: None
 
 ---
-*State updated: 2026-01-30 after plan 25-01 completion*
+*State updated: 2026-01-30 after plan 25-02 completion*
