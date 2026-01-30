@@ -277,57 +277,8 @@ void circuit_visualize(circuit_t *circ) {
 }
 
 void circuit_to_opanqasm(circuit_t *circ, char *path) {
-    char p[512];
-    sprintf(p, "%s/circuit.qasm", path);
-    FILE *oq_file = fopen(p, "w");
-    fprintf(oq_file,
-            "// Version declaration\n"
-            "OPENQASM 3.0;\n\n"
-            "// Include standard Library\n"
-            "include \"stdgates.inc\";\n\n"
-            "// Initialize Registers\n"
-            "qubit[%d] q;\n\n"
-            "// The quantum Circuit\n",
-            circ->used_qubits + 1);
-
-    for (int layer_index = 0; layer_index < circ->used_layer; ++layer_index) {
-        for (int gate_index = 0; gate_index < circ->used_gates_per_layer[layer_index];
-             ++gate_index) {
-            gate_t g = circ->sequence[layer_index][gate_index];
-            for (int i = 0; i < g.NumControls; i++)
-                fprintf(oq_file, "c");
-            switch (g.Gate) {
-            case P:
-                fprintf(oq_file, "p(%.20f) ", g.GateValue);
-                break;
-            case X:
-                fprintf(oq_file, "x ");
-                break;
-            case H:
-                fprintf(oq_file, "h ");
-                break;
-            case Z:
-                fprintf(oq_file, "z ");
-                break;
-            case M:
-                fprintf(oq_file, "m ");
-                break;
-            case Y:
-                break;
-            case R:
-                break;
-            case Rx:
-                break;
-            case Ry:
-                break;
-            case Rz:
-                break;
-            }
-            for (int i = 0; i < g.NumControls; i++)
-                fprintf(oq_file, "q[%d],", g.Control[i]);
-            fprintf(oq_file, "q[%d];\n", g.Target);
-        }
-    }
+    // Delegate to fixed implementation (ignores return value for backward compat)
+    circuit_to_openqasm(circ, path);
 }
 
 // ======================================================
@@ -630,4 +581,33 @@ char *circuit_to_qasm_string(circuit_t *circ) {
     buffer[offset] = '\0';
 
     return buffer;
+}
+
+// Export circuit to OpenQASM 3.0 file (fixed version)
+int circuit_to_openqasm(circuit_t *circ, const char *path) {
+    if (circ == NULL || path == NULL) {
+        return -1;
+    }
+
+    // Get QASM string using the string export function
+    char *qasm = circuit_to_qasm_string(circ);
+    if (qasm == NULL) {
+        return -1;
+    }
+
+    // Build file path
+    char filepath[512];
+    snprintf(filepath, sizeof(filepath), "%s/circuit.qasm", path);
+
+    // Write to file
+    FILE *f = fopen(filepath, "w");
+    if (f == NULL) {
+        free(qasm);
+        return -1;
+    }
+
+    fputs(qasm, f);
+    fclose(f);
+    free(qasm);
+    return 0;
 }
