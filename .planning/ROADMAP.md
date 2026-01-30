@@ -54,9 +54,9 @@ Plans:
 Plans:
 - [x] 29-01-PLAN.md -- Investigate BUG-01 & BUG-02, create test files
 - [x] 29-02-PLAN.md -- Fix BUG-03 segfault and BUG-04 partial QFT addition fix
-- [ ] 29-03-PLAN.md -- Complete BUG-04 QFT addition fix (bit-ordering mismatch)
-- [ ] 29-04-PLAN.md -- Retest and fix BUG-01 subtraction & BUG-02 comparison
-- [ ] 29-05-PLAN.md -- Fix BUG-03 multiplication logic (returns 0)
+- [x] 29-03-PLAN.md -- Complete BUG-04 QFT addition fix (CQ_add bit-ordering)
+- [x] 29-04-PLAN.md -- Retest BUG-01 & BUG-02 (blocked by QQ_add)
+- [x] 29-05-PLAN.md -- Investigate BUG-03 multiplication logic (partial fix)
 
 ### Phase 30: Arithmetic Verification
 **Goal**: Every arithmetic operation (add, subtract, multiply, divide, modulo, modular arithmetic) is exhaustively verified at small bit widths and representatively tested at larger widths.
@@ -121,7 +121,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 28. Verification Framework & Init | v1.5 | 2/2 | ✓ Complete | 2026-01-30 |
-| 29. C Backend Bug Fixes | v1.5 | 0/TBD | Not started | - |
+| 29. C Backend Bug Fixes | v1.5 | 5/5 | ⚠ Gaps found | 2026-01-30 |
 | 30. Arithmetic Verification | v1.5 | 0/TBD | Not started | - |
 | 31. Comparison Verification | v1.5 | 0/TBD | Not started | - |
 | 32. Bitwise Verification | v1.5 | 0/TBD | Not started | - |
