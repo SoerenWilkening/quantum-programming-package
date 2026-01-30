@@ -130,11 +130,11 @@ sequence_t *CQ_mul(int bits, int64_t value) {
 
             double value = 0;
             for (int bit_int2 = 0; bit_int2 < bits; ++bit_int2) {
-                value += bin[bit_int2] * 2 * M_PI / (pow(2, i + 1)) * pow(2, bits - bit_int2 - 1);
-                //				printf("%d %f ", bit_int2, 2 * M_PI / (pow(2, i +
-                // 1)) * pow(2, bits - bit_int2 - 1));
+                // FIX BUG-03: two_complement returns MSB-first, reverse indexing for LSB-first
+                // We need bin[bits-1-bit_int2] to get LSB-first access
+                // Then bit_int2=0 accesses LSB, which should have weight pow(2,0)
+                value += bin[bits - 1 - bit_int2] * 2 * M_PI / (pow(2, i + 1)) * pow(2, bit_int2);
             }
-            //			printf("\n");
             gate_t *g = &mul->seq[layer][mul->gates_per_layer[layer]++];
             cp(g, target, control, value);
             layer++;
@@ -297,7 +297,8 @@ sequence_t *cCQ_mul(int bits, int64_t value) {
     memset(values, 0, 64 * sizeof(double));
     for (int i = 0; i < bits; ++i) {
         for (int bit_int2 = 0; bit_int2 < bits; ++bit_int2) {
-            values[i] += bin[bit_int2] * 2 * M_PI / (pow(2, i + 1)) * pow(2, bits - bit_int2 - 1);
+            // FIX BUG-03: same as CQ_mul - reverse bin indexing for LSB-first access
+            values[i] += bin[bits - 1 - bit_int2] * 2 * M_PI / (pow(2, i + 1)) * pow(2, bit_int2);
         }
     }
 
