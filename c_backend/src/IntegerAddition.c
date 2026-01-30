@@ -46,11 +46,15 @@ sequence_t *CQ_add(int bits, int64_t value) {
         free(bin);
         return NULL;
     }
-    for (int i = 0; i < bits; ++i) {
-        for (int j = 0; j < bits - i; ++j) {
-            rotations[j + i] += bin[bits - i - 1] * 2 * M_PI / (pow(2, j + 1));
+    for (int bit_idx = 0; bit_idx < bits; ++bit_idx) {
+        for (int qubit = bit_idx; qubit < bits; ++qubit) {
+            // bin[bit_idx]: bit_idx=0 is LSB, bit_idx=bits-1 is MSB
+            // qubit: qubit=0 is LSB, qubit=bits-1 is MSB
+            // Higher bits don't affect lower qubits, so only iterate qubit >= bit_idx
+            // Phase for qubit from bit: 2*PI / 2^(qubit-bit+1)
+            rotations[qubit] += bin[bit_idx] * 2 * M_PI / pow(2, qubit - bit_idx + 1);
         }
-        if (rotations[i] != 0)
+        if (rotations[bit_idx] != 0)
             NonZeroCount++;
     }
     free(bin);
@@ -107,8 +111,7 @@ sequence_t *CQ_add(int bits, int64_t value) {
 
     // Phase rotation gates: target qubits are at indices [0, bits-1]
     for (int i = 0; i < bits; ++i) {
-        p(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i,
-          rotations[bits - i - 1]);
+        p(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i, rotations[i]);
     }
     free(rotations);
     add->used_layer++;
@@ -227,11 +230,15 @@ sequence_t *cCQ_add(int bits, int64_t value) {
         free(bin);
         return NULL;
     }
-    for (int i = 0; i < bits; ++i) {
-        for (int j = 0; j < bits - i; ++j) {
-            rotations[j + i] += bin[bits - i - 1] * 2 * M_PI / (pow(2, j + 1));
+    for (int bit_idx = 0; bit_idx < bits; ++bit_idx) {
+        for (int qubit = bit_idx; qubit < bits; ++qubit) {
+            // bin[bit_idx]: bit_idx=0 is LSB, bit_idx=bits-1 is MSB
+            // qubit: qubit=0 is LSB, qubit=bits-1 is MSB
+            // Higher bits don't affect lower qubits, so only iterate qubit >= bit_idx
+            // Phase for qubit from bit: 2*PI / 2^(qubit-bit+1)
+            rotations[qubit] += bin[bit_idx] * 2 * M_PI / pow(2, qubit - bit_idx + 1);
         }
-        if (rotations[i] != 0)
+        if (rotations[bit_idx] != 0)
             NonZeroCount++;
     }
     free(bin);
@@ -289,7 +296,7 @@ sequence_t *cCQ_add(int bits, int64_t value) {
     // Controlled phase rotation gates: target at [0, bits-1], control at [bits]
     for (int i = 0; i < bits; ++i) {
         cp(&add->seq[start_layer + i][add->gates_per_layer[start_layer + i]++], i, bits,
-           rotations[bits - i - 1]);
+           rotations[i]);
     }
     free(rotations);
     add->used_layer++;
