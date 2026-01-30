@@ -49,11 +49,11 @@ Plans:
   3. Multiplication operations complete without segfault across all tested bit widths (1-4 bits exhaustive)
   4. QFT-based addition of two nonzero operands (e.g., `qint(3) + qint(5)`) returns the correct sum
   5. All four fixes pass through the full verification pipeline (OpenQASM export -> Qiskit simulate -> result check)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 29-01: TBD
-- [ ] 29-02: TBD
+- [ ] 29-01-PLAN.md -- Fix BUG-01 (subtraction underflow) and BUG-02 (less-or-equal comparison) in Python operator logic
+- [ ] 29-02-PLAN.md -- Fix BUG-03 (multiplication segfault) and BUG-04 (QFT addition) in C backend
 
 ### Phase 30: Arithmetic Verification
 **Goal**: Every arithmetic operation (add, subtract, multiply, divide, modulo, modular arithmetic) is exhaustively verified at small bit widths and representatively tested at larger widths.
