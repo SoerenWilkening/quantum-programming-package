@@ -30,7 +30,8 @@ void CP_sequence(sequence_t *mul, num_t *layer, int rounds, num_t control, doubl
 }
 void CX_sequence(sequence_t *mul, num_t *layer, int bit_int2, int bits) {
     for (int bit = bits - 1; bit >= 0; --bit) {
-        num_t control = bits + bit;
+        // FIX BUG-03: Control qubit reversal (same as QQ_add fix in plan 29-06)
+        num_t control = 2 * bits - 1 - bit;
         gate_t *g = &mul->seq[*layer][mul->gates_per_layer[*layer]++];
         cx(g, control, 3 * bits + bit_int2 - 1);
         (*layer)++;
@@ -46,7 +47,8 @@ void CX2_sequence(sequence_t *mul, num_t *layer, int bit_int2, int bits) {
 }
 void CCX_sequence(sequence_t *mul, num_t *layer, int bit_int2, int bits) {
     for (int bit = bits - 1; bit >= 0; --bit) {
-        num_t control = bits + bit;
+        // FIX BUG-03: Control qubit reversal (same as QQ_add fix in plan 29-06)
+        num_t control = 2 * bits - 1 - bit;
         gate_t *g = &mul->seq[*layer][mul->gates_per_layer[*layer]++];
         ccx(g, control, 3 * bits + bit_int2 - 1, 4 * bits - 1);
         (*layer)++;
@@ -55,7 +57,8 @@ void CCX_sequence(sequence_t *mul, num_t *layer, int bit_int2, int bits) {
 void all_rot(sequence_t *mul, num_t *layer, int inverted, double multiplyer, int bits) {
     int rounds = 0;
     for (int bit = bits - 1; bit >= 0; --bit) {
-        num_t control = bits + bit;
+        // FIX BUG-03: Control qubit reversal (same as QQ_add fix in plan 29-06)
+        num_t control = 2 * bits - 1 - bit;
         //        CP_sequence(mul, layer, rounds, control, -(pow(2, bits) - 1) / 2 *
         //        multiplyer, inverted, bits);
         CP_sequence(mul, layer, rounds, control, -multiplyer / 2, inverted, bits);
@@ -124,7 +127,9 @@ sequence_t *CQ_mul(int bits, int64_t value) {
     // all the CP block of the first decomp step can be merged
     for (int bit = bits - 1; bit >= 0; --bit) {
         layer = 2 * bits + 2 * rounds - 1;
-        num_t control = bits + bit;
+        // FIX BUG-03: Control qubit mapping was reversed (same issue as QQ_add in plan 29-06)
+        // bit=bits-1 should map to LSB control, bit=0 should map to MSB control
+        num_t control = 2 * bits - 1 - bit;
         for (int i = 0; i < bits - rounds; ++i) {
             num_t target = bits - i - 1 - rounds;
 
@@ -133,7 +138,11 @@ sequence_t *CQ_mul(int bits, int64_t value) {
                 // FIX BUG-03: two_complement returns MSB-first, reverse indexing for LSB-first
                 // We need bin[bits-1-bit_int2] to get LSB-first access
                 // Then bit_int2=0 accesses LSB, which should have weight pow(2,0)
-                value += bin[bits - 1 - bit_int2] * 2 * M_PI / (pow(2, i + 1)) * pow(2, bit_int2);
+                // CRITICAL: Also multiply by pow(2, bits-1-bit) for the control qubit's positional
+                // weight With reversed control mapping: bit=bits-1 (LSB control) needs weight 2^0
+                // bit=0 (MSB control) needs weight 2^(bits-1)
+                value += bin[bits - 1 - bit_int2] * 2 * M_PI / (pow(2, i + 1)) * pow(2, bit_int2) *
+                         pow(2, bits - 1 - bit);
             }
             gate_t *g = &mul->seq[layer][mul->gates_per_layer[layer]++];
             cp(g, target, control, value);
@@ -202,7 +211,8 @@ sequence_t *QQ_mul(int bits) {
     // all the CP block of the first decomp step can be merged
     for (int bit = bits - 1; bit >= 0; --bit) {
         layer = 2 * bits + 2 * rounds - 1;
-        CP_sequence(mul, &layer, rounds, bits + bit, pow(2, bits) - 1, false, bits);
+        // FIX BUG-03: Same control reversal as in CQ_mul and QQ_add (plan 29-06)
+        CP_sequence(mul, &layer, rounds, 2 * bits - 1 - bit, pow(2, bits) - 1, false, bits);
         rounds++;
     }
     layer++;
