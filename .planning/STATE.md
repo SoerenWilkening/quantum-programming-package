@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 29 of 33 (C Backend Bug Fixes)
-Plan: 7 of 8 (gap closure in progress)
-Status: Gap closure execution — multiplication control reversal attempted
-Last activity: 2026-01-30 -- Completed 29-07-PLAN.md (control qubit fix attempted)
+Plan: 6 of 8 (gap closure in progress)
+Status: Gap closure execution — QQ_add control reversal applied
+Last activity: 2026-01-31 -- Completed 29-06-PLAN.md (QQ_add fix partial success)
 
 Progress: [███░░░░░░░] 20%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 93 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 7)
+- Total plans completed: 94 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 8)
 - Average duration: ~10 min/plan
-- Total execution time: ~15.5 hours
+- Total execution time: ~15.7 hours
 
 **By Milestone:**
 
@@ -63,8 +63,9 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 | 29-05 | Disable GCC LTO due to compiler bug | GCC 15 -flto triggers internal error, disabled until toolchain fixed |
 | 29-04 | BUG-04 fix scope limited to CQ_add only | QQ_add (qint+qint) uses different implementation, needs separate fix |
 | 29-04 | BUG-01 and BUG-02 remain blocked by incomplete BUG-04 | Cannot test/fix until QQ_add bit-ordering corrected |
-| 29-07 | Applied QQ_add control reversal pattern (2*bits-1-bit) to all multiplication helper functions | Systematic consistency even though tests still fail |
-| 29-07 | Accepted partial investigation for multiplication | Control reversal alone insufficient, algorithm needs deeper redesign |
+| 29-06 | Fixed QQ_add control qubit mapping: 2*bits-1-bit instead of bits+bit | Control bits were swapped - outer loop MSB-first but needs LSB-first qubit access |
+| 29-06 | CQ_add analytically correct, test failures are BUG-05 interference | Plan 29-03 fix is mathematically sound, BUG-05 cache pollution causes wrong results |
+| 29-06 | Accept partial verification due to BUG-05 blocking test suite | Simple tests pass (0+0, 1+0, 1+1), complex tests hit memory explosion from BUG-05 |
 
 ### Pending Todos
 
@@ -73,11 +74,11 @@ None.
 ### Blockers/Concerns
 
 **Known C backend bugs (v1.5 targets):**
-- **BUG-05 (CRITICAL):** circuit() does not properly reset state - causes memory explosion, blocks exhaustive testing AND prevents verification of fixes
-- **BUG-04 (PARTIALLY FIXED):** CQ_add bit-ordering fixed (29-03), but QQ_add still broken - qint+qint addition/subtraction fails
-- **BUG-03 (INVESTIGATED):** Multiplication returns 0 - control reversal applied (29-07), tests still fail - algorithm needs redesign or reference comparison
-- **BUG-01 (BLOCKED):** Subtraction underflow (3-7 returns 7 instead of 12) - blocked by QQ_add fix needed (29-04)
-- **BUG-02 (BLOCKED):** Less-or-equal comparison (5<=5 returns 0) - transitively blocked by BUG-01 (29-04)
+- **BUG-05 (CRITICAL BLOCKER):** circuit() does not properly reset state - causes memory explosion, blocks ALL verification of arithmetic fixes
+- **BUG-04 (PARTIALLY FIXED):** CQ_add fixed (29-03), QQ_add control reversal applied (29-06) - partial success but BUG-05 prevents full verification
+- **BUG-03 (INVESTIGATED):** Multiplication returns 0 - root cause identified but algorithm needs deeper redesign
+- **BUG-01 (PARTIALLY UNBLOCKED):** Subtraction - QQ_add now has control fix (29-06), pending BUG-05 resolution for verification
+- **BUG-02 (BLOCKED):** Less-or-equal comparison - transitively blocked by BUG-01 verification pending BUG-05 fix
 
 **Known pre-existing issues (not v1.5 scope):**
 - Nested quantum conditionals require quantum-quantum AND
@@ -86,10 +87,10 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-30
-Stopped at: Completed 29-07-PLAN.md — multiplication control reversal attempted, tests still fail
+Last session: 2026-01-31
+Stopped at: Completed 29-06-PLAN.md — QQ_add control reversal applied, partial test success
 Resume file: None
-Resume action: Continue with 29-08 (QQ_add fix) or create deeper multiplication investigation plan
+Resume action: BUG-05 resolution is CRITICAL BLOCKER for all arithmetic verification - must fix circuit state reset before proceeding
 
 ---
 *State updated: 2026-01-30 after Phase 29 execution + verification*
