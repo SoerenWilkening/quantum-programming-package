@@ -7,10 +7,10 @@
 
 ### Bug Fixes
 
-- [ ] **BUG-01**: Fix subtraction underflow (3-7 returns 7 instead of wrapping to correct unsigned result)
-- [ ] **BUG-02**: Fix less-or-equal comparison (5<=5 returns 0 instead of 1)
-- [ ] **BUG-03**: Fix multiplication segfaults at certain widths
-- [ ] **BUG-04**: Fix QFT addition bug with both nonzero operands
+- [x] **BUG-01**: Fix subtraction underflow (3-7 returns 7 instead of wrapping to correct unsigned result)
+- [x] **BUG-02**: Fix less-or-equal comparison (5<=5 returns 0 instead of 1)
+- [x] **BUG-03**: Fix multiplication segfaults at certain widths
+- [x] **BUG-04**: Fix QFT addition bug with both nonzero operands
 
 ### Verification Framework
 
@@ -67,10 +67,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| BUG-01 | Phase 29 | Pending |
-| BUG-02 | Phase 29 | Pending |
-| BUG-03 | Phase 29 | Pending |
-| BUG-04 | Phase 29 | Pending |
+| BUG-01 | Phase 29 | Complete |
+| BUG-02 | Phase 29 | Complete |
+| BUG-03 | Phase 29 | Complete |
+| BUG-04 | Phase 29 | Complete |
 | VFWK-01 | Phase 28 | Complete |
 | VFWK-02 | Phase 28 | Complete |
 | VFWK-03 | Phase 28 | Complete |
@@ -96,4 +96,4 @@
 
 ---
 *Requirements defined: 2026-01-30*
-*Last updated: 2026-01-30 after roadmap creation*
+*Last updated: 2026-01-31 after Phase 29 completion*

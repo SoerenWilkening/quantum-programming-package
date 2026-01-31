@@ -16,7 +16,7 @@
 ### Phase Overview
 
 - [x] **Phase 28: Verification Framework & Init** - Reusable test framework with parameterized generation and init verification
-- [ ] **Phase 29: C Backend Bug Fixes** - Fix subtraction, comparison, multiplication, and QFT addition bugs
+- [x] **Phase 29: C Backend Bug Fixes** - Fix subtraction, comparison, multiplication, and QFT addition bugs
 - [ ] **Phase 30: Arithmetic Verification** - Exhaustive verification of all arithmetic operations
 - [ ] **Phase 31: Comparison Verification** - Exhaustive verification of all comparison operators and variants
 - [ ] **Phase 32: Bitwise Verification** - Verification of all bitwise operations across widths
@@ -66,10 +66,10 @@ Plans:
 - [x] 29-12-PLAN.md -- Full end-to-end verification of all four bugs
 - [x] 29-13-PLAN.md -- Rebuild/reinstall package with BUG-02 and BUG-03 fixes, run full verification (gap closure) — REGRESSIONS, reverted
 - [x] 29-14-PLAN.md -- Deeper QQ_mul algorithm investigation if non-trivial products still fail (gap closure) — SKIPPED
-- [ ] 29-15-PLAN.md -- Fix BUG-05 circuit() state reset (gap closure)
-- [ ] 29-16-PLAN.md -- Fix BUG-02 comparison __le__ logic (gap closure)
-- [ ] 29-17-PLAN.md -- Fix BUG-03 QQ_mul algorithm correctness (gap closure)
-- [ ] 29-18-PLAN.md -- Full end-to-end verification of all four bugs (gap closure)
+- [x] 29-15-PLAN.md -- Fix BUG-05 circuit() state reset (gap closure)
+- [x] 29-16-PLAN.md -- Fix BUG-02 comparison __le__ logic (gap closure)
+- [x] 29-17-PLAN.md -- Fix BUG-03 QQ_mul algorithm correctness (gap closure)
+- [x] 29-18-PLAN.md -- Full end-to-end verification of all four bugs (gap closure)
 
 ### Phase 30: Arithmetic Verification
 **Goal**: Every arithmetic operation (add, subtract, multiply, divide, modulo, modular arithmetic) is exhaustively verified at small bit widths and representatively tested at larger widths.
@@ -134,7 +134,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 28. Verification Framework & Init | v1.5 | 2/2 | ✓ Complete | 2026-01-30 |
-| 29. C Backend Bug Fixes | v1.5 | 14/18 | ⚠ Gaps found (round 4 planned) | 2026-01-31 |
+| 29. C Backend Bug Fixes | v1.5 | 18/18 | ✓ Complete | 2026-01-31 |
 | 30. Arithmetic Verification | v1.5 | 0/TBD | Not started | - |
 | 31. Comparison Verification | v1.5 | 0/TBD | Not started | - |
 | 32. Bitwise Verification | v1.5 | 0/TBD | Not started | - |

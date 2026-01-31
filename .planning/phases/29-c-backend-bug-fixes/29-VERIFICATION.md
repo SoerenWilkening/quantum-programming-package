@@ -1,91 +1,55 @@
 ---
 phase: 29-c-backend-bug-fixes
-verified: 2026-01-31T14:45:00Z
-status: gaps_found
-score: 2.5/5 must-haves verified
+verified: 2026-01-31T15:36:00Z
+status: passed
+score: 5/5 must-haves verified
 re_verification:
   previous_status: gaps_found
-  previous_score: 1/5
+  previous_score: 2.5/5
+  previous_verified: 2026-01-31T14:45:00Z
   gaps_closed:
-    - "BUG-01: Subtraction underflow fully fixed"
-    - "BUG-04: QFT addition fully fixed"
-  gaps_remaining:
-    - "BUG-02: Comparison (2/6 tests pass)"
-    - "BUG-03: Multiplication (1/5 tests pass, non-deterministic)"
-  regressions:
-    - item: "BUG-03 multiplication non-determinism"
-      before: "Plan 29-12 reported 2/5 pass deterministically (0*5, 1*1)"
-      now: "Only 0*5 passes consistently; 1*1 affected by BUG-05"
-      reason: "BUG-05 cache pollution causes non-deterministic behavior"
-gaps:
-  - truth: "qint(5) <= qint(5) returns 1 (true), not 0"
-    status: failed
-    reason: "Comparison logic returns 0 for most true comparisons (4/6 fail)"
-    artifacts:
-      - path: "src/quantum_language/qint.pyx"
-        issue: "__le__ implementation (lines ~1901-1996) has logic error — returns 0 for 5<=5, 3<=7, 0<=0, 0<=15"
-    missing:
-      - "Fix __le__ comparison extraction logic (not blocked by subtraction anymore)"
-      - "Verify __gt__ implementation correctness"
-      - "Test qbool result extraction/measurement logic"
-  
-  - truth: "Multiplication operations complete without segfault and return correct values"
-    status: failed
-    reason: "Segfault fixed but only trivial 0*N products work; 1*1 is non-deterministic, all others fail"
-    artifacts:
-      - path: "c_backend/src/IntegerMultiplication.c"
-        issue: "Control reversal applied but algorithm still broken — 2*3=13, 1*1 flips between 1 and 3"
-    missing:
-      - "Fix BUG-05 circuit cache pollution for deterministic testing"
-      - "Investigate QQ_mul phase formula or target qubit mapping beyond control fix"
-      - "Compare implementation against reference QFT multiplication algorithm"
-  
-  - truth: "Full verification pipeline: >= 14/19 tests pass"
-    status: partial
-    reason: "15/23 tests pass (65.2%) but only 1/5 multiplication tests pass, BUG-03 mostly broken"
-    artifacts:
-      - path: "tests/bugfix/"
-        issue: "BUG-03 has only 20% pass rate (1/5), BUG-02 has 33% pass rate (2/6)"
-    missing:
-      - "Fix remaining BUG-02 comparison issues"
-      - "Fix BUG-03 multiplication algorithm"
-      - "Address BUG-05 for reliable testing"
+    - "BUG-02: Comparison operators (all 6 tests now pass)"
+    - "BUG-03: Multiplication algorithm (all 5 tests now pass)"
+    - "BUG-05: Circuit reset for deterministic testing"
+  gaps_remaining: []
+  regressions: []
 ---
 
 # Phase 29: C Backend Bug Fixes Verification Report
 
 **Phase Goal:** All four known C backend bugs are fixed -- subtraction underflow, less-or-equal comparison, multiplication segfault, and QFT addition with nonzero operands all produce correct results.
 
-**Verified:** 2026-01-31T14:45:00Z
-**Status:** gaps_found  
-**Re-verification:** Yes — after plans 29-09 through 29-12, with 29-13/29-14 reverted
+**Verified:** 2026-01-31T15:36:00Z
+**Status:** PASSED
+**Re-verification:** Yes — after gap closure plans 29-15 through 29-18
 
 ## Re-Verification Summary
 
-**Previous verification:** 2026-01-31T00:18:17Z (29-VERIFICATION-RE2)
-- Status: gaps_found
-- Score: 1/5 must-haves verified
-
-**Current verification:** 2026-01-31T14:45:00Z (after revert of 29-13)
+**Previous verification:** 2026-01-31T14:45:00Z
 - Status: gaps_found
 - Score: 2.5/5 must-haves verified
-- **SIGNIFICANT IMPROVEMENT** from 1/5 to 2.5/5
+- BUG-01: ✓ Fixed (5/5 tests)
+- BUG-02: ✗ Broken (2/6 tests)
+- BUG-03: ✗ Broken (1/5 tests)
+- BUG-04: ✓ Fixed (7/7 tests)
+- BUG-05: Not yet addressed
 
-**Work completed since initial verification:**
-- Plan 29-09: Fixed QQ_add target qubit mapping (Draper derivation) - FULL SUCCESS for BUG-01
-- Plan 29-10: Fixed CQ_add cache pollution and asymmetry - FULL SUCCESS for BUG-04
-- Plan 29-11: Fixed CQ_mul target qubit mapping - PARTIAL SUCCESS for BUG-03
-- Plan 29-12: Full end-to-end verification (14/19 baseline established)
-- Plan 29-13: Attempted BUG-02 and BUG-03 fixes - REVERTED due to regressions
-- Plan 29-14: Skipped (premise invalid after 29-13 revert)
+**Current verification:** 2026-01-31T15:36:00Z
+- Status: PASSED
+- Score: 5/5 must-haves verified
+- BUG-01: ✓ Fixed (5/5 tests pass)
+- BUG-02: ✓ Fixed (6/6 tests pass)
+- BUG-03: ✓ Fixed (5/5 tests pass)
+- BUG-04: ✓ Fixed (7/7 tests pass)
+- BUG-05: ✓ Fixed (deterministic testing achieved)
 
-**Gaps closed since initial verification:** 2 major bugs
-- BUG-01 (subtraction) - FULLY FIXED (5/5 tests pass)
-- BUG-04 (QFT addition) - FULLY FIXED (7/7 tests pass)
+**Work completed since previous verification:**
+- Plan 29-15: Fixed circuit() state reset — BUG-05 resolved
+- Plan 29-16: Fixed comparison operators (__le__, __gt__, __lt__) — BUG-02 resolved
+- Plan 29-17: Rewrote QQ_mul with correct algorithm — BUG-03 resolved
+- Plan 29-18: Full end-to-end verification — all 24 tests pass deterministically
 
-**Gaps remaining:** 2 bugs
-- BUG-02 (comparison) - PARTIALLY BROKEN (2/6 pass, 33%)
-- BUG-03 (multiplication) - MOSTLY BROKEN (1/5 pass, 20%)
+**All gaps closed. No regressions. Phase 29 complete.**
 
 ## Goal Achievement
 
@@ -93,246 +57,257 @@ gaps:
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | qint(3) - qint(7) = 12 (unsigned wrap) | ✓ VERIFIED | All 5 subtraction tests pass deterministically |
-| 2 | qint(5) <= qint(5) = 1 (true) | ✗ FAILED | Returns 0 (4/6 comparison tests fail) |
-| 3 | Multiplication no segfault, correct values | ⚠ PARTIAL | No segfault ✓, but only 0*N passes; 1*1 non-deterministic, 2*3=13 |
-| 4 | 3 + 5 = 8 (QFT addition works) | ✓ VERIFIED | All 7 addition tests pass deterministically |
-| 5 | Full pipeline: all four fixes pass | ⚠ PARTIAL | 15/23 tests pass (65.2%), but BUG-02/BUG-03 not fully fixed |
+| 1 | qint(3) - qint(7) = 12 (unsigned wrap) | ✓ VERIFIED | All 5 subtraction tests pass (test_bug01_subtraction.py) |
+| 2 | qint(5) <= qint(5) = 1 (true) | ✓ VERIFIED | All 6 comparison tests pass (test_bug02_comparison.py) |
+| 3 | Multiplication no segfault, correct values | ✓ VERIFIED | All 5 multiplication tests pass (test_bug03_multiplication.py) |
+| 4 | 3 + 5 = 8 (QFT addition works) | ✓ VERIFIED | All 7 addition tests pass (test_bug04_qft_addition.py) |
+| 5 | Full pipeline: all four fixes pass | ✓ VERIFIED | 24/24 tests pass in single pytest run, deterministic across runs |
 
-**Score:** 2.5/5 truths verified (1✓ + 4✓ + partial credit for 3,5)
+**Score:** 5/5 truths verified
 
-### Detailed Test Results
+### Test Results (Current Verification)
 
-**Tests run individually to avoid BUG-05 interference (circuit cache pollution).**
+**Combined pytest run: 24/24 tests PASS (100%)**
+
+Execution time: 1.46s
+Deterministic: Yes (verified across multiple runs per plan 29-18)
 
 #### BUG-01 Subtraction — 5/5 PASS (100%) ✓ FULLY FIXED
 
-| Test | Expected | Status | Notes |
-|------|----------|--------|-------|
-| 3 - 7 (4-bit) | 12 | **PASS** | Deterministic |
-| 7 - 3 (4-bit) | 4 | **PASS** | Deterministic |
-| 0 - 1 (4-bit) | 15 | **PASS** | Deterministic |
-| 5 - 5 (4-bit) | 0 | **PASS** | Deterministic |
-| 15 - 0 (4-bit) | 15 | **PASS** | Deterministic (with range warnings) |
+| Test | Expected | Actual | Status |
+|------|----------|--------|--------|
+| 3 - 7 (4-bit) | 12 | 12 | PASS |
+| 7 - 3 (4-bit) | 4 | 4 | PASS |
+| 0 - 1 (4-bit) | 15 | 15 | PASS |
+| 5 - 5 (4-bit) | 0 | 0 | PASS |
+| 15 - 0 (4-bit) | 15 | 15 | PASS |
 
-**Analysis:** Plan 29-09 (QQ_add target qubit mapping fix) completely resolved subtraction underflow bug. All tests pass consistently.
+**Root cause:** Subtraction relied on QQ_add with invert=True. QQ_add had wrong target qubit mapping.
+**Fix:** Plan 29-09 corrected QQ_add control mapping to `2*bits - 1 - bit` (line 199 IntegerAddition.c)
+**Files:** c_backend/src/IntegerAddition.c
 
-#### BUG-02 Comparison — 2/6 PASS (33%) ✗ PARTIALLY BROKEN
+#### BUG-02 Comparison — 6/6 PASS (100%) ✓ FULLY FIXED
 
-| Test | Expected | Actual | Status | Notes |
-|------|----------|--------|--------|-------|
-| 5 <= 5 (4-bit) | 1 | 0 | **FAIL** | Core bug case |
-| 3 <= 7 (4-bit) | 1 | 0 | **FAIL** | Returns wrong value |
-| 7 <= 3 (4-bit) | 0 | 0 | **PASS** | May be coincidental |
-| 0 <= 0 (4-bit) | 1 | ? | **FAIL** | Actual value unknown |
-| 0 <= 15 (4-bit) | 1 | ? | **FAIL** | Actual value unknown |
-| 15 <= 0 (4-bit) | 0 | 0 | **PASS** | May be coincidental |
+| Test | Expected | Actual | Status |
+|------|----------|--------|--------|
+| 5 <= 5 (4-bit) | 1 | 1 | PASS |
+| 3 <= 7 (4-bit) | 1 | 1 | PASS |
+| 7 <= 3 (4-bit) | 0 | 0 | PASS |
+| 0 <= 0 (4-bit) | 1 | 1 | PASS |
+| 0 <= 15 (4-bit) | 1 | 1 | PASS |
+| 15 <= 0 (4-bit) | 0 | 0 | PASS |
 
-**Analysis:** With BUG-01 subtraction fixed, the comparison bug is now isolated to the __le__ implementation itself. The logic incorrectly returns 0 for most true comparisons. This is NOT a subtraction dependency issue anymore — it's a comparison extraction/qbool logic bug.
+**Root causes:** 
+1. MSB index was 64-width (pointing to LSB) instead of 63 (true MSB)
+2. Comparison result qbools had layer tracking that triggered GC-based gate reversal
+3. n-bit modular subtraction wraps for unsigned differences >= 2^(n-1)
 
-#### BUG-03 Multiplication — 1/5 PASS (20%) ✗ MOSTLY BROKEN
+**Fixes (plan 29-16, commit d8341cc):**
+1. Changed MSB access from `self[64-self.bits]` to `self[63]` (5 occurrences)
+2. Removed `_start_layer`/`_end_layer` assignment from comparison results (prevents GC uncomputation)
+3. Rewrote __gt__ to use (n+1)-bit widened temporaries for unsigned-safe comparison
+4. Simplified __le__ to delegate to `~(self > other)`
 
-| Test | Expected | Actual | Status | Notes |
-|------|----------|--------|--------|-------|
-| 0 * 5 (4-bit) | 0 | 0 | **PASS** | Deterministic (trivial case) |
-| 1 * 1 (2-bit) | 1 | 1 or 3 | **FAIL** | NON-DETERMINISTIC (BUG-05) |
-| 2 * 3 (4-bit) | 6 | 13 | **FAIL** | Wrong value |
-| 2 * 2 (3-bit) | 4 | ? | **FAIL** | Unknown actual value |
-| 3 * 3 (4-bit) | 9 | ? | **FAIL** | Unknown actual value |
+**Files:** src/quantum_language/qint.pyx (lines 1823-1973)
 
-**Analysis:** 
-- Segfault eliminated (plan 29-02 fix stable)
-- Control reversal applied (plan 29-11) but insufficient
-- Only trivial 0*N case works consistently
-- 1*1 shows non-deterministic behavior (passes on first run, fails on subsequent runs with result=3) — clear BUG-05 interference
-- Non-trivial products return wrong values
-- Algorithm needs deeper investigation beyond qubit mapping
+#### BUG-03 Multiplication — 5/5 PASS (100%) ✓ FULLY FIXED
 
-**BUG-05 Impact:** Multiplication tests show classic cache pollution symptoms. The same test gives different results depending on execution order.
+| Test | Expected | Actual | Status |
+|------|----------|--------|--------|
+| 2 * 3 (4-bit) | 6 | 6 | PASS |
+| 1 * 1 (2-bit) | 1 | 1 | PASS |
+| 3 * 3 (4-bit) | 9 | 9 | PASS |
+| 0 * 5 (4-bit) | 0 | 0 | PASS |
+| 2 * 2 (3-bit) | 4 | 4 | PASS |
+
+**Root causes:**
+1. CCP decomposition helper functions had inverted target formula
+2. b-operand qubit mapping used `3*bits-1-j` instead of `2*bits+j`
+
+**Fix (plan 29-17, commit 541fed4):**
+- Rewrote QQ_mul with explicit CCP decomposition (no helper functions)
+- Corrected b qubit mapping to `2*bits+j` for bit at weight 2^j
+- Documented qubit layout: result [0..bits-1], operand a [bits..2*bits-1], operand b [2*bits..3*bits-1]
+
+**Files:** c_backend/src/IntegerMultiplication.c (lines 157-299)
 
 #### BUG-04 QFT Addition — 7/7 PASS (100%) ✓ FULLY FIXED
 
-| Test | Expected | Status | Notes |
-|------|----------|--------|-------|
-| 0 + 0 (4-bit) | 0 | **PASS** | Deterministic |
-| 0 + 1 (4-bit) | 1 | **PASS** | Deterministic |
-| 1 + 0 (4-bit) | 1 | **PASS** | Deterministic |
-| 1 + 1 (4-bit) | 2 | **PASS** | Deterministic |
-| 3 + 5 (4-bit) | 8 | **PASS** | Deterministic |
-| 7 + 8 (5-bit) | 15 | **PASS** | Deterministic |
-| 8 + 8 (4-bit) | 0 | **PASS** | Overflow wraps correctly |
+| Test | Expected | Actual | Status |
+|------|----------|--------|--------|
+| 0 + 0 (4-bit) | 0 | 0 | PASS |
+| 0 + 1 (4-bit) | 1 | 1 | PASS |
+| 1 + 0 (4-bit) | 1 | 1 | PASS |
+| 1 + 1 (4-bit) | 2 | 2 | PASS |
+| 3 + 5 (4-bit) | 8 | 8 | PASS |
+| 7 + 8 (5-bit) | 15 | 15 | PASS |
+| 8 + 8 (4-bit) | 0 | 0 | PASS (overflow) |
 
-**Analysis:** Plans 29-09 (QQ_add) and 29-10 (CQ_add) fully resolved both QFT addition paths. All tests pass consistently, including edge cases (0+0, overflow).
+**Root causes:**
+1. QQ_add target qubit mapping (same as BUG-01)
+2. CQ_add cache pollution and asymmetry
 
-### Overall Pass Rate
+**Fixes:**
+- Plan 29-09: Fixed QQ_add control mapping (same fix as BUG-01)
+- Plan 29-10: Fixed CQ_add to use direct rotation mapping (line 72-74 IntegerAddition.c)
 
-**Total: 15/23 tests pass (65.2%)**
-- BUG-01: 5/5 (100%) ✓
-- BUG-02: 2/6 (33%) ✗
-- BUG-03: 1/5 (20%) ✗
-- BUG-04: 7/7 (100%) ✓
+**Files:** c_backend/src/IntegerAddition.c
 
-**Note:** Test count differs from previous reports (23 vs 19) because BUG-02 test file contains 6 tests, not 2.
+#### BUG-05 Circuit Reset — FULLY FIXED
+
+**Symptom:** Non-deterministic test results, memory explosion when running tests together
+**Root cause:** circuit() did not reset Python globals or free old circuit
+
+**Fix (plan 29-15, commit 360256a):**
+- Modified circuit.__init__ to call free_circuit() before init_circuit()
+- Reset all Python-level global state (_num_qubits, _int_counter, _controlled, etc.)
+- Added `type(self) is circuit` guard to prevent subclass super().__init__() from destroying active circuit
+
+**Files:** src/quantum_language/_core.pyx (lines 263-280)
+**Impact:** Enables deterministic testing, allows combined pytest runs
 
 ### Required Artifacts Status
 
 | Artifact | Level 1: Exists | Level 2: Substantive | Level 3: Wired | Status |
 |----------|----------------|---------------------|---------------|---------|
-| test_bug01_subtraction.py | ✓ (81 lines) | ✓ 5 tests | ✓ Uses framework | ✓ VERIFIED |
-| test_bug02_comparison.py | ✓ (95 lines) | ✓ 6 tests | ✓ Uses framework | ✓ VERIFIED |
-| test_bug03_multiplication.py | ✓ (79 lines) | ✓ 5 tests | ✓ Uses framework | ✓ VERIFIED |
-| test_bug04_qft_addition.py | ✓ (96 lines) | ✓ 7 tests | ✓ Uses framework | ✓ VERIFIED |
-| IntegerAddition.c QQ_add fix | ✓ (525 lines) | ✓ SUBSTANTIVE | ✓ WORKING | ✓ VERIFIED (BUG-01/BUG-04 fixed) |
-| IntegerAddition.c CQ_add fix | ✓ (525 lines) | ✓ SUBSTANTIVE | ✓ WORKING | ✓ VERIFIED (BUG-04 fixed) |
-| IntegerMultiplication.c CQ_mul | ✓ (491 lines) | ✓ SUBSTANTIVE | ⚠ PARTIAL | ⚠ PARTIAL (control fixed, algorithm broken) |
-| qint.pyx __le__ implementation | ✓ (2433 lines) | ✓ SUBSTANTIVE | ✗ BROKEN | ✗ STUB/BROKEN (returns 0 for most cases) |
+| test_bug01_subtraction.py | ✓ (81 lines) | ✓ 5 tests | ✓ All pass | ✓ VERIFIED |
+| test_bug02_comparison.py | ✓ (95 lines) | ✓ 6 tests | ✓ All pass | ✓ VERIFIED |
+| test_bug03_multiplication.py | ✓ (79 lines) | ✓ 5 tests | ✓ All pass | ✓ VERIFIED |
+| test_bug04_qft_addition.py | ✓ (96 lines) | ✓ 7 tests | ✓ All pass | ✓ VERIFIED |
+| test_cq_add_isolated.py | ✓ (34 lines) | ✓ 1 test | ✓ Pass | ✓ VERIFIED |
+| IntegerAddition.c QQ_add | ✓ (525 lines) | ✓ SUBSTANTIVE | ✓ WORKING | ✓ VERIFIED |
+| IntegerAddition.c CQ_add | ✓ (525 lines) | ✓ SUBSTANTIVE | ✓ WORKING | ✓ VERIFIED |
+| IntegerMultiplication.c QQ_mul | ✓ (491 lines) | ✓ SUBSTANTIVE | ✓ WORKING | ✓ VERIFIED |
+| qint.pyx __le__, __gt__, __lt__ | ✓ (2433 lines) | ✓ SUBSTANTIVE | ✓ WORKING | ✓ VERIFIED |
+| _core.pyx circuit.__init__ | ✓ (4158 lines) | ✓ SUBSTANTIVE | ✓ WORKING | ✓ VERIFIED |
 
-**Key findings:**
-- All test files substantive and properly wired to verification framework
-- Addition fixes (QQ_add, CQ_add) fully working
-- Multiplication (CQ_mul) control reversal applied but algorithm still broken
-- Comparison (__le__) has independent logic bug
+**All artifacts exist, are substantive, and are correctly wired.**
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|----|--------|---------|
-| qint subtraction | QQ_add | __sub__ calls QQ_add with invert=True | ✓ WIRED | All 5 tests pass |
-| qint comparison | __gt__, __le__ | Calls subtraction and logic | ⚠ PARTIAL | __gt__ may work, __le__ broken |
-| qint multiplication | CQ_mul, QQ_mul | __mul__ dispatches to C backend | ⚠ PARTIAL | Called but returns wrong values |
-| qint addition | CQ_add, QQ_add | __add__ dispatches based on operand types | ✓ WIRED | All 7 tests pass |
-| Test framework | Qiskit simulation | build_circuit → export_qasm → simulate | ✓ WIRED | All tests execute pipeline |
+| qint subtraction | QQ_add | __sub__ calls QQ_add with invert=True | ✓ WIRED | 5/5 tests pass |
+| qint comparison | __gt__, __le__ | Widened subtraction + delegation | ✓ WIRED | 6/6 tests pass |
+| qint multiplication | QQ_mul | __mul__ dispatches to C backend | ✓ WIRED | 5/5 tests pass |
+| qint addition | CQ_add, QQ_add | __add__ dispatches based on operand types | ✓ WIRED | 7/7 tests pass |
+| Test framework | Qiskit simulation | build_circuit → export_qasm → simulate | ✓ WIRED | 24/24 tests execute pipeline |
+| circuit() reset | free_circuit, init_circuit | __init__ with type guard | ✓ WIRED | Deterministic runs verified |
+
+**All key links verified as correctly wired.**
 
 ### Requirements Coverage
 
-| Requirement | Status | Progress | Evidence |
-|-------------|--------|----------|----------|
-| BUG-01: Subtraction underflow | ✓ SATISFIED | 100% | All 5 tests pass deterministically |
-| BUG-02: Comparison | ✗ BLOCKED | 33% | 2/6 pass, __le__ logic broken |
-| BUG-03: Multiplication segfault | ⚠ PARTIAL | 60% | Segfault fixed, control reversed, but 80% of tests fail |
-| BUG-04: QFT addition | ✓ SATISFIED | 100% | All 7 tests pass deterministically |
+| Requirement | Status | Evidence |
+|-------------|--------|----------|
+| BUG-01: Subtraction underflow | ✓ SATISFIED | 5/5 tests pass (100%) |
+| BUG-02: Comparison | ✓ SATISFIED | 6/6 tests pass (100%) |
+| BUG-03: Multiplication segfault | ✓ SATISFIED | 5/5 tests pass (100%), no segfaults |
+| BUG-04: QFT addition | ✓ SATISFIED | 7/7 tests pass (100%) |
 
-**Coverage:** 2/4 requirements fully satisfied, 1 partially (segfault aspect), 1 blocked
+**Coverage:** 4/4 requirements fully satisfied (100%)
 
 ### Anti-Patterns Found
 
-| File | Line/Area | Pattern | Severity | Impact |
-|------|-----------|---------|----------|--------|
-| qint.pyx | __le__ (~1901-1996) | Returns 0 for most true comparisons | 🛑 BLOCKER | Blocks BUG-02 |
-| IntegerMultiplication.c | QQ_mul algorithm | Phase formula or target mapping wrong | 🛑 BLOCKER | Blocks BUG-03 non-trivial products |
-| Test environment | Circuit cache | BUG-05 causes non-deterministic results | ⚠ WARNING | Affects BUG-03 verification reliability |
-| IntegerMultiplication.c | All functions | Control reversal applied but incomplete | ℹ INFO | Necessary but not sufficient |
+None. All code changes follow best practices:
+- Proper memory management (free_circuit before init_circuit)
+- Clear qubit layout documentation
+- Type guards for subclass safety
+- Delegation pattern for code reuse (__le__ delegates to __gt__)
 
-### Code Changes Since Previous Verification
+### Code Changes Summary
 
-**Reverted changes (plan 29-13):**
-- qint.pyx __le__ rewrite (didn't fix bug, reverted)
-- IntegerMultiplication.c target qubit reversals (made things worse, reverted)
+**Commits implementing fixes:**
+- 360256a: fix(29-15) circuit() reset (BUG-05)
+- d8341cc: fix(29-16) comparison operators (BUG-02)
+- 541fed4: fix(29-17) QQ_mul rewrite (BUG-03)
+- (BUG-01 and BUG-04 fixed in earlier plans 29-09, 29-10)
 
-**Current stable state (plan 29-12 baseline):**
-- Plan 29-09: QQ_add target qubit mapping fixed (BUG-01 fixed)
-- Plan 29-10: CQ_add cache/asymmetry fixed (BUG-04 fixed)
-- Plan 29-11: CQ_mul control reversal applied (partial BUG-03 improvement)
+**Files modified:**
+- src/quantum_language/_core.pyx — circuit reset
+- src/quantum_language/qint.pyx — comparison operators
+- c_backend/src/IntegerMultiplication.c — QQ_mul algorithm
+- c_backend/src/IntegerAddition.c — QQ_add and CQ_add (earlier)
 
-## Gaps Summary
+**Lines of code changed:** ~300 lines across 4 files
+**Test coverage added:** 24 tests across 5 test files
 
-**Phase 29 goal PARTIALLY achieved:** 2 of 4 bugs fully fixed, 2 remain broken.
+## Success Criteria Status
 
-**Significant Progress:**
-- BUG-01 subtraction: ✓ FULLY FIXED (was 2/5 pass, now 5/5 pass)
-- BUG-04 QFT addition: ✓ FULLY FIXED (was 3/5 pass, now 7/7 pass)
+| # | Criterion | Status | Evidence |
+|---|-----------|--------|----------|
+| 1 | qint(3) - qint(7) = 12 | ✓ PASS | test_sub_3_minus_7 PASSED |
+| 2 | qint(5) <= qint(5) = 1 | ✓ PASS | test_le_5_le_5 PASSED |
+| 3 | 2*3 = 6 (no segfault) | ✓ PASS | test_mul_2x3_4bit PASSED |
+| 4 | 3 + 5 = 8 | ✓ PASS | test_add_3_plus_5 PASSED |
+| 5 | All four bugs fixed | ✓ PASS | 24/24 tests pass in combined run |
 
-**Remaining Gaps:**
-- BUG-02 comparison: 2/6 tests pass, core logic broken
-- BUG-03 multiplication: 1/5 tests pass, algorithm broken, BUG-05 interference
+**Final Score: 5/5 criteria met (100%)**
 
-### Critical Missing Work
+**Phase 29 Status: COMPLETE**
 
-1. **Fix BUG-02 comparison logic** (high priority - straightforward bug):
-   - Root cause: __le__ implementation returns 0 for most true comparisons
-   - NOT blocked by subtraction anymore (BUG-01 fixed)
-   - Investigate __gt__ implementation correctness
-   - Debug qbool result extraction/measurement logic
-   - May be related to ancilla qubit handling or boolean inversion
+## Verification Methodology
 
-2. **Fix BUG-03 multiplication algorithm** (high priority - complex):
-   - Segfault fixed ✓
-   - Control reversal applied ✓
-   - But only trivial 0*N case works
-   - Non-trivial products return wrong values (2*3=13, not 6)
-   - 1*1 non-deterministic (BUG-05 interference)
-   - Likely needs target qubit mapping or phase formula fixes
-   - Consider comparing against reference QFT multiplication implementation
+### Test Execution
+```bash
+cd /Users/sorenwilkening/Desktop/UNI/Promotion/Projects/Quantum Programming Language/Quantum_Assembly
+PYTHONPATH=src python3 -m pytest tests/bugfix/ -xvs
+```
 
-3. **Address BUG-05 circuit cache pollution** (medium priority - improves reliability):
-   - Affects BUG-03 verification (1*1 flips between correct and wrong)
-   - Tests must be run individually to get consistent results
-   - Running tests together triggers exponential memory requirements
-   - Fixing BUG-05 would enable batch testing and clearer BUG-03 debugging
+**Results:** 24 passed, 5 warnings in 1.46s
 
-### Success Criteria Status
+### Artifact Inspection
+- Verified circuit() reset implementation in _core.pyx (lines 263-280)
+- Verified comparison operators in qint.pyx (lines 1823-1973)
+- Verified QQ_mul rewrite in IntegerMultiplication.c (lines 157-299)
+- Verified QQ_add and CQ_add fixes in IntegerAddition.c
 
-| # | Criterion | Status | Notes |
-|---|-----------|--------|-------|
-| 1 | qint(3) - qint(7) = 12 | ✓ PASS | All subtraction tests pass |
-| 2 | qint(5) <= qint(5) = 1 | ✗ FAIL | Returns 0 (4/6 comparison tests fail) |
-| 3 | 2*3 = 6 (no segfault) | ⚠ PARTIAL | No segfault ✓, but returns 13 ✗ |
-| 4 | 3 + 5 = 8 | ✓ PASS | All addition tests pass |
-| 5 | All four bugs fixed | ✗ FAIL | Only 2/4 bugs fully fixed |
+### Determinism Verification
+Per plan 29-18, tests run twice with identical results:
+- Run 1: 24/24 passed in 1.45s
+- Run 2: 24/24 passed in 1.77s
+- Current verification: 24/24 passed in 1.46s
 
-**Final Score: 2.5/5 criteria met** (pass #1 and #4 fully, partial credit for #3 and #5)
+No flaky tests. No circuit pollution. BUG-05 confirmed fixed.
 
-**Phase 29 Status: INCOMPLETE** — Needs gap closure plans for BUG-02 and BUG-03.
+## Phase 30 Readiness
 
-## Recommendations
+**READY** — All prerequisites satisfied:
+- ✓ All four C backend bugs fixed
+- ✓ Verification framework working (Phase 28)
+- ✓ Deterministic testing achieved (BUG-05 fixed)
+- ✓ Full pipeline validated (OpenQASM export → Qiskit simulate → result check)
 
-### Immediate Next Steps
-
-1. **Create plan 29-15: Fix BUG-02 comparison logic**
-   - Investigate __le__ implementation in qint.pyx
-   - Check if __gt__ works correctly (7<=3 passes, might indicate __gt__ works)
-   - Debug qbool extraction and measurement logic
-   - Test hypothesis: comparison result inversion or ancilla qubit handling
-
-2. **Create plan 29-16: Fix BUG-03 multiplication algorithm**
-   - Analyze QQ_mul phase rotation formulas
-   - Verify target qubit indexing in all three QQ_mul blocks
-   - Compare implementation against proven QFT multiplication algorithm
-   - Test minimal cases (2*2, 1*1) with circuit inspection
-
-3. **Consider plan 29-17: Fix BUG-05 circuit cache pollution** (optional but helpful)
-   - Improves verification reliability
-   - Enables batch testing
-   - Clarifies BUG-03 debugging (removes non-determinism)
-
-### Phase 30 Readiness
-
-**BLOCKED** — Cannot proceed with arithmetic verification until BUG-02 and BUG-03 are resolved.
-
-Phase 30 requires working arithmetic operations. With multiplication 80% broken and comparison 67% broken, exhaustive verification would just document failures.
-
-### Verification Approach
-
-**Individual test isolation works well:**
-- BUG-05 interference eliminated when tests run individually
-- Deterministic results for BUG-01 and BUG-04
-- BUG-03 still shows some non-determinism (1*1 test)
-
-**Recommendation:** Continue individual test approach until BUG-05 is fixed.
+Phase 30 (Arithmetic Verification) can proceed with exhaustive verification of all arithmetic operations.
 
 ## Human Verification Required
 
-None at this stage. All gaps are programmatically verifiable through automated tests.
+None. All verification performed programmatically through automated tests.
 
-Human verification would be useful AFTER BUG-02 and BUG-03 are fixed:
-1. Performance check (operations not exponentially slow)
-2. Extended bit width testing (5-8 bits)
-3. Integration testing (combined operations in realistic algorithms)
-4. Cross-validation against Qiskit reference implementations
+**Optional human verification (beyond phase scope):**
+1. Performance testing at larger bit widths (8-16 bits)
+2. Extended edge case exploration
+3. Integration testing with real quantum algorithms
+4. Cross-validation against alternative quantum simulators
+
+These are recommended for future work but not required for Phase 29 completion.
+
+## Conclusion
+
+**Phase 29 goal FULLY ACHIEVED.**
+
+All four known C backend bugs (BUG-01 through BUG-04) are fixed and verified through comprehensive automated testing. Additional BUG-05 (circuit reset) was discovered and fixed during gap closure, improving overall system reliability.
+
+**Test coverage:** 24 tests covering all bug scenarios and edge cases
+**Pass rate:** 100% (24/24)
+**Determinism:** Verified across multiple runs
+**Pipeline integration:** All tests execute full OpenQASM → Qiskit workflow
+
+Phase 29 complete. Ready to proceed to Phase 30.
 
 ---
 
-_Verified: 2026-01-31T14:45:00Z_
+_Verified: 2026-01-31T15:36:00Z_
 _Verifier: Claude (gsd-verifier)_
-_Baseline: Plan 29-12 (plans 29-13/29-14 reverted)_
-_Test methodology: Individual test isolation to avoid BUG-05 interference_
+_Test methodology: Automated pytest with full pipeline integration_
+_Baseline: Plans 29-15 through 29-18 (all gap closure plans complete)_
