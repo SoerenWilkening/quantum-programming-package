@@ -24,11 +24,11 @@
 
 ### Verification — Arithmetic
 
-- [ ] **VARITH-01**: Verify addition (exhaustive 1-4 bits, representative larger)
-- [ ] **VARITH-02**: Verify subtraction (exhaustive 1-4 bits, representative larger)
-- [ ] **VARITH-03**: Verify multiplication (exhaustive 1-3 bits, representative larger)
-- [ ] **VARITH-04**: Verify division and modulo operations
-- [ ] **VARITH-05**: Verify modular arithmetic (add/sub/mul mod N)
+- [x] **VARITH-01**: Verify addition (exhaustive 1-4 bits, representative larger)
+- [x] **VARITH-02**: Verify subtraction (exhaustive 1-4 bits, representative larger)
+- [x] **VARITH-03**: Verify multiplication (exhaustive 1-3 bits, representative larger)
+- [x] **VARITH-04**: Verify division and modulo operations
+- [x] **VARITH-05**: Verify modular arithmetic (add/sub/mul mod N)
 
 ### Verification — Comparison
 
@@ -75,11 +75,11 @@
 | VFWK-02 | Phase 28 | Complete |
 | VFWK-03 | Phase 28 | Complete |
 | VINIT-01 | Phase 28 | Complete |
-| VARITH-01 | Phase 30 | Pending |
-| VARITH-02 | Phase 30 | Pending |
-| VARITH-03 | Phase 30 | Pending |
-| VARITH-04 | Phase 30 | Pending |
-| VARITH-05 | Phase 30 | Pending |
+| VARITH-01 | Phase 30 | Complete |
+| VARITH-02 | Phase 30 | Complete |
+| VARITH-03 | Phase 30 | Complete |
+| VARITH-04 | Phase 30 | Complete |
+| VARITH-05 | Phase 30 | Complete |
 | VCMP-01 | Phase 31 | Pending |
 | VCMP-02 | Phase 31 | Pending |
 | VCMP-03 | Phase 31 | Pending |
@@ -96,4 +96,4 @@
 
 ---
 *Requirements defined: 2026-01-30*
-*Last updated: 2026-01-31 after Phase 29 completion*
+*Last updated: 2026-01-31 after Phase 30 completion*

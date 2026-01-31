@@ -17,7 +17,7 @@
 
 - [x] **Phase 28: Verification Framework & Init** - Reusable test framework with parameterized generation and init verification
 - [x] **Phase 29: C Backend Bug Fixes** - Fix subtraction, comparison, multiplication, and QFT addition bugs
-- [ ] **Phase 30: Arithmetic Verification** - Exhaustive verification of all arithmetic operations
+- [x] **Phase 30: Arithmetic Verification** - Exhaustive verification of all arithmetic operations
 - [ ] **Phase 31: Comparison Verification** - Exhaustive verification of all comparison operators and variants
 - [ ] **Phase 32: Bitwise Verification** - Verification of all bitwise operations across widths
 - [ ] **Phase 33: Advanced Feature Verification** - Verify uncomputation, conditionals, and array operations
@@ -84,10 +84,10 @@ Plans:
 **Plans**: 4 plans
 
 Plans:
-- [ ] 30-01-PLAN.md -- Exhaustive addition and subtraction verification (QQ + CQ variants, 1-8 bits)
-- [ ] 30-02-PLAN.md -- Exhaustive multiplication verification (QQ + CQ variants, 1-5 bits)
-- [ ] 30-03-PLAN.md -- Division and modulo verification with custom extraction (1-4 bits)
-- [ ] 30-04-PLAN.md -- Modular arithmetic verification (qint_mod add/sub/mul, representative inputs)
+- [x] 30-01-PLAN.md -- Exhaustive addition and subtraction verification (QQ + CQ variants, 1-8 bits)
+- [x] 30-02-PLAN.md -- Exhaustive multiplication verification (QQ + CQ variants, 1-5 bits)
+- [x] 30-03-PLAN.md -- Division and modulo verification with custom extraction (1-4 bits)
+- [x] 30-04-PLAN.md -- Modular arithmetic verification (qint_mod add/sub/mul, representative inputs)
 
 ### Phase 31: Comparison Verification
 **Goal**: All six comparison operators are verified across qint-vs-int and qint-vs-qint variants, including edge cases.
@@ -137,11 +137,11 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 28. Verification Framework & Init | v1.5 | 2/2 | ✓ Complete | 2026-01-30 |
 | 29. C Backend Bug Fixes | v1.5 | 18/18 | ✓ Complete | 2026-01-31 |
-| 30. Arithmetic Verification | v1.5 | 0/4 | Not started | - |
+| 30. Arithmetic Verification | v1.5 | 4/4 | ✓ Complete | 2026-01-31 |
 | 31. Comparison Verification | v1.5 | 0/TBD | Not started | - |
 | 32. Bitwise Verification | v1.5 | 0/TBD | Not started | - |
 | 33. Advanced Feature Verification | v1.5 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-01-30*
-*Last updated: 2026-01-31*
+*Last updated: 2026-01-31 (Phase 30 complete)*
