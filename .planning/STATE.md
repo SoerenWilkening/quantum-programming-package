@@ -11,17 +11,17 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 
 Phase: 29 of 33 (C Backend Bug Fixes)
 Plan: 11 of 12 (gap closure round 3 in progress)
-Status: In progress -- QFT convention fix complete (plan 29-09), BUG-01 RESOLVED
-Last activity: 2026-01-31 -- Completed 29-09-PLAN.md (QFT/IQFT convention fix)
+Status: In progress -- CQ_mul fixed (plan 29-11), QQ_mul needs deeper redesign
+Last activity: 2026-01-31 -- Completed 29-11-PLAN.md (multiplication target qubit fix)
 
-Progress: [███░░░░░░░] 23%
+Progress: [███░░░░░░░] 24%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 97 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 11)
+- Total plans completed: 98 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 12)
 - Average duration: ~10 min/plan
-- Total execution time: ~16.5 hours
+- Total execution time: ~17.1 hours
 
 **By Milestone:**
 
@@ -74,6 +74,8 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 | 29-09 | Fix QFT processing order at the source (gate.c) rather than patching adders | Fixing the root cause (QFT convention) eliminates all downstream workarounds |
 | 29-09 | Revert 29-10 CQ_add workarounds after QFT fix | With correct QFT, qubit_array reversal and rotation reversal double-compensate |
 | 29-09 | Accept comparison failures as BUG-05 pre-existing | Verified identical failures with original code; BUG-05 cache contamination is root cause |
+| 29-11 | Fix CQ_mul value formula by removing pow(2,bits-1-bit) factor | Double-counting positional weight caused phase wrapping; CQ_mul now 100% correct |
+| 29-11 | Keep QQ_mul unchanged from baseline | Target reversal alone insufficient; CCP decomposition needs deeper algorithm redesign |
 
 ### Pending Todos
 
@@ -84,7 +86,7 @@ None.
 **Known C backend bugs (v1.5 targets):**
 - **BUG-05 (CRITICAL BLOCKER - ESCALATED):** circuit() does not properly reset state - causes memory explosion, blocks ALL verification of arithmetic fixes. Comparison tests (BUG-02) fail specifically because QQ_add cache is reused incorrectly when called twice in same circuit.
 - **BUG-04 (FULLY FIXED):** QFT convention fix (29-09) resolves the root cause. CQ_add: all 7 tests pass. QQ_add: all 5 subtraction tests pass.
-- **BUG-03 (INVESTIGATED):** Multiplication returns 0 - root cause identified but algorithm needs deeper redesign
+- **BUG-03 (PARTIALLY FIXED):** CQ_mul now 100% correct (10/10 tests). QQ_mul still at 2/5 baseline -- algorithm needs deeper redesign beyond target qubit mapping. The CCP decomposition has block-to-block consistency requirements that simple target reversal doesn't satisfy.
 - **BUG-01 (RESOLVED):** All 5 subtraction tests pass (3-7=12, 7-3=4, 5-5=0, 0-1=15, 15-0=15). Fixed by QFT convention correction in 29-09.
 - **BUG-02 (BLOCKED BY BUG-05):** Comparison tests fail due to BUG-05 circuit cache contamination when QQ_add is called twice (subtract + restore). The comparison logic itself is correct. Requires BUG-05 fix for resolution.
 
@@ -96,9 +98,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-31
-Stopped at: Completed 29-09-PLAN.md -- QFT convention fix, BUG-01 resolved, BUG-04 fully fixed
+Stopped at: Completed 29-11-PLAN.md -- CQ_mul fixed, QQ_mul needs deeper redesign
 Resume file: None
-Resume action: Continue with remaining gap closure plans (29-11, 29-12) or address BUG-05 for comparison verification
+Resume action: Continue with plan 29-12 or address BUG-05 for comparison verification
 
 ---
-*State updated: 2026-01-31 after Phase 29 plan 09 completion*
+*State updated: 2026-01-31 after Phase 29 plan 11 completion*
