@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-01-30)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v1.5 Bug Fixes & Exhaustive Verification -- Phase 29: C Backend Bug Fixes (gaps found round 3)
+**Current focus:** v1.5 Bug Fixes & Exhaustive Verification -- Phase 29 COMPLETE, ready for Phase 30+
 
 ## Current Position
 
 Phase: 29 of 33 (C Backend Bug Fixes)
-Plan: 17 of 18 (gap closure round)
-Status: In progress -- BUG-01 through BUG-05 all fixed, final verification remains
-Last activity: 2026-01-31 -- Completed 29-17-PLAN.md (QQ_mul multiplication fix)
+Plan: 18 of 18 (COMPLETE)
+Status: Phase complete -- all 5 bugs fixed and verified, 5/5 success criteria met
+Last activity: 2026-01-31 -- Completed 29-18-PLAN.md (end-to-end integration verification)
 
-Progress: [████░░░░░░] 30%
+Progress: [████░░░░░░] 31%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 103 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 17)
+- Total plans completed: 104 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 18)
 - Average duration: ~10 min/plan
 - Total execution time: ~18.1 hours
 
@@ -65,9 +65,9 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 ## Session Continuity
 
 Last session: 2026-01-31
-Stopped at: Completed 29-17-PLAN.md (BUG-03 QQ_mul multiplication fix)
+Stopped at: Completed 29-18-PLAN.md (Phase 29 complete -- all bugs verified)
 Resume file: None
-Resume action: Execute 29-18-PLAN.md (final verification)
+Resume action: Proceed to Phase 30+
 
 ---
-*State updated: 2026-01-31 after completing plan 29-17 (BUG-03 QQ_mul fix)*
+*State updated: 2026-01-31 after completing plan 29-18 (end-to-end verification, Phase 29 complete)*
