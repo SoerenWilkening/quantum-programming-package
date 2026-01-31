@@ -20,7 +20,7 @@ void CP_sequence(sequence_t *mul, num_t *layer, int rounds, num_t control, doubl
         l2 = 0;
         fac = -1;
     }
-    for (int i = l1; i < l2; i += fac) {
+    for (int i = l1; (fac > 0 ? i < l2 : i > l2); i += fac) {
         num_t target = bits - i - 1 - rounds;
         double value = M_PI / (pow(2, i + 1)) * multiplyer;
         gate_t *g = &mul->seq[*layer][mul->gates_per_layer[*layer]++];
@@ -131,18 +131,15 @@ sequence_t *CQ_mul(int bits, int64_t value) {
         // bit=bits-1 should map to LSB control, bit=0 should map to MSB control
         num_t control = 2 * bits - 1 - bit;
         for (int i = 0; i < bits - rounds; ++i) {
-            num_t target = bits - i - 1 - rounds;
+            num_t target = rounds + i;
 
             double value = 0;
             for (int bit_int2 = 0; bit_int2 < bits; ++bit_int2) {
-                // FIX BUG-03: two_complement returns MSB-first, reverse indexing for LSB-first
-                // We need bin[bits-1-bit_int2] to get LSB-first access
-                // Then bit_int2=0 accesses LSB, which should have weight pow(2,0)
-                // CRITICAL: Also multiply by pow(2, bits-1-bit) for the control qubit's positional
-                // weight With reversed control mapping: bit=bits-1 (LSB control) needs weight 2^0
-                // bit=0 (MSB control) needs weight 2^(bits-1)
-                value += bin[bits - 1 - bit_int2] * 2 * M_PI / (pow(2, i + 1)) * pow(2, bit_int2) *
-                         pow(2, bits - 1 - bit);
+                // Phase for Draper QFT multiplication: encode v * 2^(bit_weight) in Fourier domain
+                // With target = rounds + i and rounds tracking the control bit's position,
+                // the positional weight is already accounted for by the target offset.
+                // No additional pow(2, bits-1-bit) factor needed.
+                value += bin[bits - 1 - bit_int2] * 2 * M_PI / (pow(2, i + 1)) * pow(2, bit_int2);
             }
             gate_t *g = &mul->seq[layer][mul->gates_per_layer[layer]++];
             cp(g, target, control, value);
