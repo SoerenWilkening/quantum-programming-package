@@ -1893,9 +1893,8 @@ cdef class qint(circuit):
 			if other > max_val:
 				return qbool(False)  # qint always < large value, so not >
 
-			# Convert to qint and use direct qint path (avoids circular dependency with __le__)
-			temp = qint(other, width=self.bits)
-			return self > temp
+			# For int: a > b is NOT(a <= b)
+			return ~(self <= other)
 
 		raise TypeError("Comparison requires qint or int")
 
@@ -1923,22 +1922,78 @@ cdef class qint(circuit):
 
 		Notes
 		-----
-		a <= b is equivalent to NOT(a > b).
-		Delegates to __gt__ which uses the proven MSB-only check pattern.
+		Phase 14: Refactored to use in-place subtract-add-back pattern.
+		a <= b means (a - b) is negative OR zero.
 		"""
 		from .qbool import qbool
+		cdef int start_layer
+		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
+		cdef bint _circuit_initialized = _get_circuit_initialized()
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
 		if isinstance(other, qint):
 			(<qint>other)._check_not_uncomputed()
 
+		# Capture start layer
+		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+
 		# Self-comparison optimization
 		if self is other:
 			return qbool(True)  # x <= x is always true
 
-		# a <= b is NOT(a > b)
-		return ~(self > other)
+		# Handle qint operand
+		if type(other) == qint:
+			self -= other
+			# Check MSB (negative)
+			is_negative = self[64 - self.bits]
+			# Check zero using Phase 13 pattern
+			is_zero = (self == 0)
+			# OR combination: result = is_negative | is_zero
+			result = qbool()
+			result ^= is_negative
+			temp_zero = qbool()
+			temp_zero ^= is_zero
+			result |= temp_zero
+			# Restore operand
+			self += other
+			# Track dependencies
+			result.add_dependency(self)
+			result.add_dependency(other)
+			result.operation_type = 'LE'
+			# Capture layer boundaries
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+			return result
+
+		# Handle int operand
+		if type(other) == int:
+			# Classical overflow checks
+			max_val = (1 << self.bits) - 1 if self.bits < 64 else (1 << 63) - 1
+			if other < 0:
+				return qbool(False)  # qint >= 0, so qint <= negative is false
+			if other > max_val:
+				return qbool(True)  # qint always <= large value
+
+			self -= other
+			is_negative = self[64 - self.bits]
+			is_zero = (self == 0)
+			result = qbool()
+			result ^= is_negative
+			temp_zero = qbool()
+			temp_zero ^= is_zero
+			result |= temp_zero
+			# Restore operand
+			self += other
+			# Track dependency on qint
+			result.add_dependency(self)
+			result.operation_type = 'LE'
+			# Capture layer boundaries
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+			return result
+
+		raise TypeError("Comparison requires qint or int")
 
 	def __ge__(self, other):
 		"""Greater-than-or-equal comparison: self >= other

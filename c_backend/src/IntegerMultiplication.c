@@ -21,7 +21,7 @@ void CP_sequence(sequence_t *mul, num_t *layer, int rounds, num_t control, doubl
         fac = -1;
     }
     for (int i = l1; (fac > 0 ? i < l2 : i > l2); i += fac) {
-        num_t target = rounds + i;
+        num_t target = bits - i - 1 - rounds;
         double value = M_PI / (pow(2, i + 1)) * multiplyer;
         gate_t *g = &mul->seq[*layer][mul->gates_per_layer[*layer]++];
         cp(g, target, control, value);
@@ -229,7 +229,7 @@ sequence_t *QQ_mul(int bits) {
             //		    printf("%d %d %f %f\n", bit_int2, i, pow(2, i + 1) - 1, pow(2,
             // bit_int2));
             double value = pow(2, -i - 1) * M_PI * (pow(2, i + 1) - 1) * pow(2, bit_int2);
-            cp(g, i, 3 * bits - bit_int2 - 1, value);
+            cp(g, bits - i - 1, 3 * bits - bit_int2 - 1, value);
             layer++;
         }
     }
@@ -425,7 +425,7 @@ sequence_t *cQQ_mul(int bits) {
     for (int bit = 0; bit < bits; ++bit) {
         gate_t *g = &mul->seq[layer][mul->gates_per_layer[layer]++];
         double value = M_PI / 2 * (pow(2, bits) - 1) * pow(2, -bit - 1) * (pow(2, bit + 1) - 1);
-        cp(g, bit, 4 * bits - 1, value);
+        cp(g, bits - bit - 1, 4 * bits - 1, value);
         layer++;
     }
 
@@ -441,7 +441,7 @@ sequence_t *cQQ_mul(int bits) {
         for (int bit = 0; bit < bits; ++bit) {
             gate_t *g = &mul->seq[layer][mul->gates_per_layer[layer]++];
             double value = -M_PI * pow(2, bit_int2) * (pow(2, bit + 1) - 1) * pow(2, -bit - 1) / 2;
-            cp(g, bit, 4 * bits - 1, value);
+            cp(g, bits - bit - 1, 4 * bits - 1, value);
             layer++;
         }
         CCX_sequence(mul, &layer, -bit_int2, bits);
@@ -450,7 +450,7 @@ sequence_t *cQQ_mul(int bits) {
         for (int i = 0; i < bits; ++i) {
             gate_t *g = &mul->seq[layer][mul->gates_per_layer[layer]++];
             double value = pow(2, -i - 1) * M_PI * (pow(2, i + 1) - 1) * pow(2, bit_int2) / 2;
-            cp(g, i, 3 * bits - bit_int2 - 1, value);
+            cp(g, bits - i - 1, 3 * bits - bit_int2 - 1, value);
             layer++;
         }
 
@@ -461,7 +461,7 @@ sequence_t *cQQ_mul(int bits) {
         for (int i = 0; i < bits; ++i) {
             gate_t *g = &mul->seq[layer][mul->gates_per_layer[layer]++];
             double value = -pow(2, -i - 1) * M_PI * (pow(2, i + 1) - 1) * pow(2, bit_int2) / 2;
-            cp(g, i, 3 * bits - bit_int2 - 1, value);
+            cp(g, bits - i - 1, 3 * bits - bit_int2 - 1, value);
             layer++;
         }
         g = &mul->seq[layer][mul->gates_per_layer[layer]++];
@@ -471,7 +471,7 @@ sequence_t *cQQ_mul(int bits) {
         for (int i = 0; i < bits; ++i) {
             gate_t *g = &mul->seq[layer][mul->gates_per_layer[layer]++];
             double value = pow(2, -i - 1) * M_PI * (pow(2, i + 1) - 1) * pow(2, bit_int2) / 2;
-            cp(g, i, 4 * bits - 1, value);
+            cp(g, bits - i - 1, 4 * bits - 1, value);
             layer++;
         }
     }
