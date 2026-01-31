@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-01-30)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v1.5 Bug Fixes & Exhaustive Verification -- Phase 28: Verification Framework & Init
+**Current focus:** v1.5 Bug Fixes & Exhaustive Verification -- Phase 29: C Backend Bug Fixes (gaps found, round 2)
 
 ## Current Position
 
 Phase: 29 of 33 (C Backend Bug Fixes)
 Plan: 8 of 8 (phase complete)
-Status: Phase complete — BUG-05 escalated as CRITICAL BLOCKER
-Last activity: 2026-01-31 -- Completed 29-08-PLAN.md (BUG-01/BUG-02 verification — no improvement)
+Status: Gaps found (round 2) — 1/5 must-haves verified, incremental progress
+Last activity: 2026-01-31 -- Phase 29 gap closure round 2 complete, verification found gaps persist
 
 Progress: [███░░░░░░░] 21%
 
@@ -93,7 +93,7 @@ None.
 Last session: 2026-01-31
 Stopped at: Completed 29-08-PLAN.md — Phase 29 complete, BUG-05 escalated as CRITICAL BLOCKER
 Resume file: None
-Resume action: **CRITICAL DECISION POINT:** BUG-05 (circuit state reset) MUST be resolved before any further arithmetic work. Consider pausing Phase 29 gap closure until BUG-05 is fixed, as no verification is reliable.
+Resume action: Run /gsd:plan-phase 29 --gaps for round 3 gap closure (target qubit mapping + phase formula fixes), OR address BUG-05 first if reliable testing is needed
 
 ---
 *State updated: 2026-01-31 after Phase 29 plan 08 completion*
