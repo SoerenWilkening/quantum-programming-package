@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 29 of 33 (C Backend Bug Fixes)
-Plan: 8 of 8 (phase complete)
-Status: Gaps found (round 2) — 1/5 must-haves verified, incremental progress
-Last activity: 2026-01-31 -- Phase 29 gap closure round 2 complete, verification found gaps persist
+Plan: 10 of 12 (gap closure round 3 in progress)
+Status: In progress -- CQ_add convention fix complete (plan 29-10)
+Last activity: 2026-01-31 -- Completed 29-10-PLAN.md (CQ_add qubit convention fix)
 
-Progress: [███░░░░░░░] 21%
+Progress: [███░░░░░░░] 22%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 95 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 9)
+- Total plans completed: 96 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 10)
 - Average duration: ~10 min/plan
 - Total execution time: ~15.8 hours
 
@@ -69,6 +69,8 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 | 29-08 | QQ_add basic addition verified working (3+5=8) | Plan 29-06 control fix works for simple addition cases |
 | 29-08 | Subtraction and comparison failures transitive from QQ_add errors | Comparison logic is correct, failures trace to subtraction which depends on QQ_add |
 | 29-08 | BUG-05 prevents definitive QQ_add diagnosis | Cannot distinguish QQ_add bit-ordering bugs from BUG-05 cache pollution |
+| 29-10 | Two-part CQ_add fix: qubit_array reversal + rotation reversal | QFT-no-swaps convention mismatch requires compensating at both Python and C layers |
+| 29-10 | Path taken: convention fix (not BUG-05 cache) | Isolation test confirmed 0+1 fails in fresh process, ruling out cache pollution |
 
 ### Pending Todos
 
@@ -78,7 +80,7 @@ None.
 
 **Known C backend bugs (v1.5 targets):**
 - **BUG-05 (CRITICAL BLOCKER - ESCALATED):** circuit() does not properly reset state - causes memory explosion, blocks ALL verification of arithmetic fixes. Phase 29 cannot proceed without BUG-05 resolution.
-- **BUG-04 (PARTIALLY FIXED):** CQ_add fixed (29-03), QQ_add control reversal applied (29-06) but still failing tests (29-08: 2/5 subtraction tests pass). Additional bit-ordering issues remain, but cannot diagnose due to BUG-05.
+- **BUG-04 (CQ_add FIXED, QQ_add PARTIAL):** CQ_add fully fixed (29-10: qubit_array reversal + rotation reversal). All 7 addition tests pass. QQ_add control reversal applied (29-06) but still has issues (29-08: subtraction failures).
 - **BUG-03 (INVESTIGATED):** Multiplication returns 0 - root cause identified but algorithm needs deeper redesign
 - **BUG-01 (STILL BROKEN):** Subtraction verified in 29-08: 2/5 tests pass (0-1, 15-0 work; 3-7, 7-3, 5-5 fail). QQ_add fix incomplete.
 - **BUG-02 (STILL BROKEN):** Comparison verified in 29-08: 2/6 tests pass. Failures are transitive from BUG-01 subtraction errors. Comparison logic itself is correct.
@@ -91,9 +93,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-31
-Stopped at: Completed 29-08-PLAN.md — Phase 29 complete, BUG-05 escalated as CRITICAL BLOCKER
+Stopped at: Completed 29-10-PLAN.md -- CQ_add convention fix verified (all 7 tests pass)
 Resume file: None
-Resume action: Run /gsd:plan-phase 29 --gaps for round 3 gap closure (target qubit mapping + phase formula fixes), OR address BUG-05 first if reliable testing is needed
+Resume action: Continue with remaining gap closure plans (29-11, 29-12) or address BUG-05 for reliable multi-test verification
 
 ---
-*State updated: 2026-01-31 after Phase 29 plan 08 completion*
+*State updated: 2026-01-31 after Phase 29 plan 10 completion*
