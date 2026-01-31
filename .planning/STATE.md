@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 29 of 33 (C Backend Bug Fixes)
-Plan: 6 of 8 (gap closure in progress)
-Status: Gap closure execution — QQ_add control reversal applied
-Last activity: 2026-01-31 -- Completed 29-06-PLAN.md (QQ_add fix partial success)
+Plan: 8 of 8 (phase complete)
+Status: Phase complete — BUG-05 escalated as CRITICAL BLOCKER
+Last activity: 2026-01-31 -- Completed 29-08-PLAN.md (BUG-01/BUG-02 verification — no improvement)
 
-Progress: [███░░░░░░░] 20%
+Progress: [███░░░░░░░] 21%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 94 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 8)
+- Total plans completed: 95 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 9)
 - Average duration: ~10 min/plan
-- Total execution time: ~15.7 hours
+- Total execution time: ~15.8 hours
 
 **By Milestone:**
 
@@ -66,6 +66,9 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 | 29-06 | Fixed QQ_add control qubit mapping: 2*bits-1-bit instead of bits+bit | Control bits were swapped - outer loop MSB-first but needs LSB-first qubit access |
 | 29-06 | CQ_add analytically correct, test failures are BUG-05 interference | Plan 29-03 fix is mathematically sound, BUG-05 cache pollution causes wrong results |
 | 29-06 | Accept partial verification due to BUG-05 blocking test suite | Simple tests pass (0+0, 1+0, 1+1), complex tests hit memory explosion from BUG-05 |
+| 29-08 | QQ_add basic addition verified working (3+5=8) | Plan 29-06 control fix works for simple addition cases |
+| 29-08 | Subtraction and comparison failures transitive from QQ_add errors | Comparison logic is correct, failures trace to subtraction which depends on QQ_add |
+| 29-08 | BUG-05 prevents definitive QQ_add diagnosis | Cannot distinguish QQ_add bit-ordering bugs from BUG-05 cache pollution |
 
 ### Pending Todos
 
@@ -74,11 +77,11 @@ None.
 ### Blockers/Concerns
 
 **Known C backend bugs (v1.5 targets):**
-- **BUG-05 (CRITICAL BLOCKER):** circuit() does not properly reset state - causes memory explosion, blocks ALL verification of arithmetic fixes
-- **BUG-04 (PARTIALLY FIXED):** CQ_add fixed (29-03), QQ_add control reversal applied (29-06) - partial success but BUG-05 prevents full verification
+- **BUG-05 (CRITICAL BLOCKER - ESCALATED):** circuit() does not properly reset state - causes memory explosion, blocks ALL verification of arithmetic fixes. Phase 29 cannot proceed without BUG-05 resolution.
+- **BUG-04 (PARTIALLY FIXED):** CQ_add fixed (29-03), QQ_add control reversal applied (29-06) but still failing tests (29-08: 2/5 subtraction tests pass). Additional bit-ordering issues remain, but cannot diagnose due to BUG-05.
 - **BUG-03 (INVESTIGATED):** Multiplication returns 0 - root cause identified but algorithm needs deeper redesign
-- **BUG-01 (PARTIALLY UNBLOCKED):** Subtraction - QQ_add now has control fix (29-06), pending BUG-05 resolution for verification
-- **BUG-02 (BLOCKED):** Less-or-equal comparison - transitively blocked by BUG-01 verification pending BUG-05 fix
+- **BUG-01 (STILL BROKEN):** Subtraction verified in 29-08: 2/5 tests pass (0-1, 15-0 work; 3-7, 7-3, 5-5 fail). QQ_add fix incomplete.
+- **BUG-02 (STILL BROKEN):** Comparison verified in 29-08: 2/6 tests pass. Failures are transitive from BUG-01 subtraction errors. Comparison logic itself is correct.
 
 **Known pre-existing issues (not v1.5 scope):**
 - Nested quantum conditionals require quantum-quantum AND
@@ -88,9 +91,9 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-31
-Stopped at: Completed 29-06-PLAN.md — QQ_add control reversal applied, partial test success
+Stopped at: Completed 29-08-PLAN.md — Phase 29 complete, BUG-05 escalated as CRITICAL BLOCKER
 Resume file: None
-Resume action: BUG-05 resolution is CRITICAL BLOCKER for all arithmetic verification - must fix circuit state reset before proceeding
+Resume action: **CRITICAL DECISION POINT:** BUG-05 (circuit state reset) MUST be resolved before any further arithmetic work. Consider pausing Phase 29 gap closure until BUG-05 is fixed, as no verification is reliable.
 
 ---
-*State updated: 2026-01-30 after Phase 29 execution + verification*
+*State updated: 2026-01-31 after Phase 29 plan 08 completion*
