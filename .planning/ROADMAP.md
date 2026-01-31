@@ -81,11 +81,13 @@ Plans:
   3. Multiplication is verified for all input pairs at 1-3 bit widths and representative pairs at 4-5 bits
   4. Division and modulo operations produce correct quotient and remainder for tested input pairs
   5. Modular arithmetic (add mod N, sub mod N, mul mod N) produces correct results for representative inputs
-**Plans**: TBD
+**Plans**: 4 plans
 
 Plans:
-- [ ] 30-01: TBD
-- [ ] 30-02: TBD
+- [ ] 30-01-PLAN.md -- Exhaustive addition and subtraction verification (QQ + CQ variants, 1-8 bits)
+- [ ] 30-02-PLAN.md -- Exhaustive multiplication verification (QQ + CQ variants, 1-5 bits)
+- [ ] 30-03-PLAN.md -- Division and modulo verification with custom extraction (1-4 bits)
+- [ ] 30-04-PLAN.md -- Modular arithmetic verification (qint_mod add/sub/mul, representative inputs)
 
 ### Phase 31: Comparison Verification
 **Goal**: All six comparison operators are verified across qint-vs-int and qint-vs-qint variants, including edge cases.
@@ -135,7 +137,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 28. Verification Framework & Init | v1.5 | 2/2 | ✓ Complete | 2026-01-30 |
 | 29. C Backend Bug Fixes | v1.5 | 18/18 | ✓ Complete | 2026-01-31 |
-| 30. Arithmetic Verification | v1.5 | 0/TBD | Not started | - |
+| 30. Arithmetic Verification | v1.5 | 0/4 | Not started | - |
 | 31. Comparison Verification | v1.5 | 0/TBD | Not started | - |
 | 32. Bitwise Verification | v1.5 | 0/TBD | Not started | - |
 | 33. Advanced Feature Verification | v1.5 | 0/TBD | Not started | - |
