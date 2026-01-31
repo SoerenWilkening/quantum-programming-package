@@ -258,10 +258,30 @@ cdef class circuit:
 		>>> b = qint(3)
 		>>> result = a + b
 		"""
-		global _circuit_initialized, _circuit, _num_qubits
-		if not _circuit_initialized:
+		global _circuit_initialized, _circuit, _num_qubits, _int_counter, _smallest_allocated_qubit, _controlled, _control_bool, _list_of_controls, _global_creation_counter, _scope_stack
+		# Only reset circuit when called directly as circuit(), not from subclass super().__init__()
+		if type(self) is circuit:
+			if _circuit_initialized:
+				# Free the old circuit before creating a new one
+				free_circuit(<circuit_t*>_circuit)
 			_circuit = init_circuit()
-		_circuit_initialized = True
+			_circuit_initialized = True
+			# Reset all Python-level global state
+			_num_qubits = 0
+			_int_counter = 0
+			_smallest_allocated_qubit = 0
+			_controlled = False
+			_control_bool = None
+			_list_of_controls = []
+			_global_creation_counter = 0
+			_scope_stack = []
+			# Reset legacy ancilla tracking
+			for i in range(NUMANCILLY):
+				ancilla[i] = i
+		elif not _circuit_initialized:
+			# First-time init from subclass (should not normally happen)
+			_circuit = init_circuit()
+			_circuit_initialized = True
 
 	def add_qubits(self, qubits):
 		"""Allocate additional qubits to the circuit.
