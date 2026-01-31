@@ -49,7 +49,7 @@ Plans:
   3. Multiplication operations complete without segfault across all tested bit widths (1-4 bits exhaustive)
   4. QFT-based addition of two nonzero operands (e.g., `qint(3) + qint(5)`) returns the correct sum
   5. All four fixes pass through the full verification pipeline (OpenQASM export -> Qiskit simulate -> result check)
-**Plans**: 14 plans
+**Plans**: 18 plans
 
 Plans:
 - [x] 29-01-PLAN.md -- Investigate BUG-01 & BUG-02, create test files
@@ -66,6 +66,10 @@ Plans:
 - [x] 29-12-PLAN.md -- Full end-to-end verification of all four bugs
 - [x] 29-13-PLAN.md -- Rebuild/reinstall package with BUG-02 and BUG-03 fixes, run full verification (gap closure) — REGRESSIONS, reverted
 - [x] 29-14-PLAN.md -- Deeper QQ_mul algorithm investigation if non-trivial products still fail (gap closure) — SKIPPED
+- [ ] 29-15-PLAN.md -- Fix BUG-05 circuit() state reset (gap closure)
+- [ ] 29-16-PLAN.md -- Fix BUG-02 comparison __le__ logic (gap closure)
+- [ ] 29-17-PLAN.md -- Fix BUG-03 QQ_mul algorithm correctness (gap closure)
+- [ ] 29-18-PLAN.md -- Full end-to-end verification of all four bugs (gap closure)
 
 ### Phase 30: Arithmetic Verification
 **Goal**: Every arithmetic operation (add, subtract, multiply, divide, modulo, modular arithmetic) is exhaustively verified at small bit widths and representatively tested at larger widths.
@@ -130,7 +134,7 @@ Plans:
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
 | 28. Verification Framework & Init | v1.5 | 2/2 | ✓ Complete | 2026-01-30 |
-| 29. C Backend Bug Fixes | v1.5 | 14/14 | ⚠ Gaps found (round 3) | 2026-01-31 |
+| 29. C Backend Bug Fixes | v1.5 | 14/18 | ⚠ Gaps found (round 4 planned) | 2026-01-31 |
 | 30. Arithmetic Verification | v1.5 | 0/TBD | Not started | - |
 | 31. Comparison Verification | v1.5 | 0/TBD | Not started | - |
 | 32. Bitwise Verification | v1.5 | 0/TBD | Not started | - |
