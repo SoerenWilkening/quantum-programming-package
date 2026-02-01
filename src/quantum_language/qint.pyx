@@ -1807,6 +1807,9 @@ cdef class qint(circuit):
 		from .qbool import qbool
 		cdef int start_layer
 		cdef int comp_width
+		cdef int operand_bits, i_bit
+		cdef sequence_t *seq
+		cdef unsigned int[:] arr
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _circuit_initialized = _get_circuit_initialized()
 
@@ -1831,9 +1834,33 @@ cdef class qint(circuit):
 			comp_width = max(self.bits, (<qint>other).bits) + 1
 			# Create widened copies (zero-extended to comp_width)
 			temp_self = qint(0, width=comp_width)
-			temp_self ^= self  # Copy self's bits into widened temp
 			temp_other = qint(0, width=comp_width)
-			temp_other ^= other  # Copy other's bits into widened temp
+
+			# Copy operand bits to temp using LSB-aligned CNOT (upper bits stay 0 = zero-extension)
+			# CRITICAL: Cannot use ^= operator here because __ixor__ misaligns qubits when widths differ.
+			# When temp has comp_width bits and operand has fewer bits, __ixor__ builds qubit_array as
+			# [temp_all_bits, operand_all_bits] and calls Q_xor(min(w1,w2)), which can read from wrong
+			# array positions when the combined array overlaps temp's own qubits with operand qubits.
+			# Instead, copy each bit individually with CNOT to ensure LSB-aligned zero-extension.
+
+			# Copy self's bits to temp_self (LSB-aligned)
+			operand_bits = self.bits
+			for i_bit in range(operand_bits):
+				qubit_array[0] = (<qint>temp_self).qubits[64 - comp_width + i_bit]  # target (LSB-aligned in widened temp)
+				qubit_array[1] = self.qubits[64 - operand_bits + i_bit]       # source
+				arr = qubit_array
+				seq = Q_xor(1)
+				run_instruction(seq, &arr[0], False, _circuit)
+
+			# Copy other's bits to temp_other (LSB-aligned)
+			operand_bits = (<qint>other).bits
+			for i_bit in range(operand_bits):
+				qubit_array[0] = (<qint>temp_other).qubits[64 - comp_width + i_bit]  # target (LSB-aligned in widened temp)
+				qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]  # source
+				arr = qubit_array
+				seq = Q_xor(1)
+				run_instruction(seq, &arr[0], False, _circuit)
+
 			# Subtract: temp_self -= temp_other
 			temp_self -= temp_other
 			# MSB of widened result is the true sign bit
@@ -1895,6 +1922,9 @@ cdef class qint(circuit):
 		from .qbool import qbool
 		cdef int start_layer
 		cdef int comp_width
+		cdef int operand_bits, i_bit
+		cdef sequence_t *seq
+		cdef unsigned int[:] arr
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _circuit_initialized = _get_circuit_initialized()
 
@@ -1919,9 +1949,30 @@ cdef class qint(circuit):
 			comp_width = max(self.bits, (<qint>other).bits) + 1
 			# Create widened copies (zero-extended to comp_width)
 			temp_other = qint(0, width=comp_width)
-			temp_other ^= other  # Copy other's bits into widened temp
 			temp_self = qint(0, width=comp_width)
-			temp_self ^= self  # Copy self's bits into widened temp
+
+			# Copy operand bits to temp using LSB-aligned CNOT (upper bits stay 0 = zero-extension)
+			# CRITICAL: Cannot use ^= operator here because __ixor__ misaligns qubits when widths differ.
+			# See __lt__ for detailed explanation of the alignment bug.
+
+			# Copy other's bits to temp_other (LSB-aligned)
+			operand_bits = (<qint>other).bits
+			for i_bit in range(operand_bits):
+				qubit_array[0] = (<qint>temp_other).qubits[64 - comp_width + i_bit]  # target (LSB-aligned in widened temp)
+				qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]  # source
+				arr = qubit_array
+				seq = Q_xor(1)
+				run_instruction(seq, &arr[0], False, _circuit)
+
+			# Copy self's bits to temp_self (LSB-aligned)
+			operand_bits = self.bits
+			for i_bit in range(operand_bits):
+				qubit_array[0] = (<qint>temp_self).qubits[64 - comp_width + i_bit]  # target (LSB-aligned in widened temp)
+				qubit_array[1] = self.qubits[64 - operand_bits + i_bit]       # source
+				arr = qubit_array
+				seq = Q_xor(1)
+				run_instruction(seq, &arr[0], False, _circuit)
+
 			# Subtract: temp_other -= temp_self
 			temp_other -= temp_self
 			# MSB of widened result is the true sign bit
