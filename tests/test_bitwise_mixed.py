@@ -12,11 +12,12 @@ qint objects alive until after OpenQASM export. Without this, Python's garbage
 collector may run qint destructors (which add uncomputation gates) before
 to_openqasm() is called, corrupting the circuit.
 
-Bug status:
-- BUG-BIT-01: FIXED. QQ mixed-width bitwise operations now work correctly.
-  CQ mixed-width has a design limitation: plain int operands have no width
-  metadata, so result width is determined by b.bit_length() rather than an
-  intended width. CQ tests where b.bit_length() < intended_width are xfail.
+Design notes:
+- QQ mixed-width: fully working after BUG-BIT-01 fix.
+- CQ mixed-width: plain int operands have no width metadata, so the C backend
+  determines classical width from b.bit_length(). When b.bit_length() < wb
+  (intended width), the result is narrower than expected. These cases are
+  marked xfail (non-strict) to document the limitation without blocking CI.
 """
 
 import random
@@ -53,15 +54,9 @@ QL_OPS_CQ = {
     "xor": lambda qa, b: qa ^ b,
 }
 
-# ---------------------------------------------------------------------------
-# BUG-BIT-01: QQ mixed-width FIXED. CQ mixed-width has design limitation:
-# CQ path uses b.bit_length() to determine classical width, so when b is
-# small (e.g., b=1 with intended width 3), result_bits = max(qa.bits, 1)
-# instead of max(qa.bits, 3). The test expects max(wa, wb) extraction width
-# but the code can only use max(wa, b.bit_length()). This is a known
-# limitation of the plain-int CQ interface.
-# ---------------------------------------------------------------------------
-
+# CQ mixed-width design limitation: plain int has no width metadata, so
+# result width = max(qa.bits, b.bit_length()) instead of max(qa.bits, wb).
+# Non-strict xfail: cases where b.bit_length() < wb may fail or pass.
 _CQ_MIXED_WIDTH_XFAIL = pytest.mark.xfail(
     reason="CQ mixed-width: plain int has no width metadata, result width "
     "determined by b.bit_length() not intended width",
