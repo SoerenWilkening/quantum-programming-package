@@ -1,5 +1,33 @@
 # Project Milestones: Quantum Assembly
 
+## v1.5 Bug Fixes & Exhaustive Verification (Shipped: 2026-02-01)
+
+**Delivered:** Fixed all 4 known C backend bugs and exhaustively verified every operation category (arithmetic, comparison, bitwise, advanced features) through the full pipeline, creating 8,365 tests with 7,410 passing and 968 xfail documenting newly discovered bugs.
+
+**Phases completed:** 28-33 (33 plans total)
+
+**Key accomplishments:**
+
+- Reusable parameterized verification framework (build circuit -> OpenQASM -> Qiskit simulate -> check)
+- Fixed 4 critical C backend bugs: subtraction underflow, comparison operators, multiplication segfault, QFT addition
+- Exhaustive arithmetic verification: 2,048 passing tests for add/sub/mul across all small bit widths
+- Exhaustive comparison verification: 1,095 passing tests across all 6 operators, QQ and CQ variants
+- Exhaustive bitwise verification: 3,048 passing tests for AND/OR/XOR/NOT including mixed-width
+- Advanced feature verification: uncomputation, quantum conditionals, and array operations validated
+
+**Stats:**
+
+- 123 files created/modified
+- +20,426 lines (166,585 total LOC)
+- 6 phases, 33 plans
+- 3 days (2026-01-30 -> 2026-02-01)
+
+**Git range:** `docs(28) ec76341` -> `docs(33) 9dbb49c`
+
+**What's next:** TBD — next milestone planning via `/gsd:new-milestone`
+
+---
+
 ## v1.4 OpenQASM Export & Verification (Shipped: 2026-01-30)
 
 **Delivered:** Production-quality OpenQASM 3.0 export from C backend with Python API and standalone Qiskit-based verification script validating the full pipeline.
