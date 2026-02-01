@@ -173,6 +173,9 @@ cdef class qarray:
         _width (int): Bit width for qint elements
     """
 
+    # Tell NumPy to defer arithmetic to qarray's operators
+    __array_ufunc__ = None
+
     def __init__(self, data=None, *, width=None, dtype=None, dim=None):
         """
         Initialize quantum array from nested list structure.
@@ -777,12 +780,35 @@ cdef class qarray:
                 f"Shape mismatch for element-wise operation: cannot operate on arrays with shapes {self._shape} and {other.shape}"
             )
 
+    def _coerce_sequence(self, other):
+        """
+        Coerce a list or numpy array to flat integer values with shape validation.
+
+        Args:
+            other: list or np.ndarray
+
+        Returns:
+            list: Flattened list of integer values
+
+        Raises:
+            ValueError: If shape doesn't match self._shape
+        """
+        if isinstance(other, np.ndarray):
+            other = other.tolist()
+
+        shape = _detect_shape(other)
+        if shape != self._shape:
+            raise ValueError(
+                f"Shape mismatch for element-wise operation: cannot operate on arrays with shapes {self._shape} and {shape}"
+            )
+        return _flatten(other)
+
     def _elementwise_binary_op(self, other, op_func, result_dtype=None):
         """
         Generic element-wise binary operation.
 
         Args:
-            other: int, qint, or qarray
+            other: int, qint, qarray, list, or np.ndarray
             op_func: Binary operation function (e.g., lambda a, b: a + b)
             result_dtype: Optional dtype for result (e.g., qbool for comparisons)
 
@@ -794,11 +820,7 @@ cdef class qarray:
 
         # Scalar broadcast
         if type(other) == int or isinstance(other, qint):
-            # if type(other) == int:
-            #     other = qint(other, width=self._width)
-            # print(self._elements)
             result_elements = [op_func(elem, other) for elem in self._elements]
-            # print(result_elements)
             result = self._create_view(result_elements, self._shape)
             if result_dtype is not None:
                 result._dtype = result_dtype
@@ -816,6 +838,16 @@ cdef class qarray:
                 result._width = 1
             return result
 
+        # List or numpy array - element-wise with classical values
+        elif isinstance(other, (list, np.ndarray)):
+            flat_values = self._coerce_sequence(other)
+            result_elements = [op_func(self._elements[i], flat_values[i]) for i in range(len(self._elements))]
+            result = self._create_view(result_elements, self._shape)
+            if result_dtype is not None:
+                result._dtype = result_dtype
+                result._width = 1
+            return result
+
         else:
             return NotImplemented
 
@@ -824,7 +856,7 @@ cdef class qarray:
         Generic in-place binary operation.
 
         Args:
-            other: int, qint, or qarray
+            other: int, qint, qarray, list, or np.ndarray
             iop_name: Name of in-place operation (e.g., "__iadd__")
 
         Returns:
@@ -846,6 +878,14 @@ cdef class qarray:
             other_arr = <qarray>other
             for i in range(len(self._elements)):
                 self._elements[i] = getattr(self._elements[i], iop_name)(other_arr._elements[i])
+            return self
+
+        # List or numpy array - element-wise with classical values
+        elif isinstance(other, (list, np.ndarray)):
+            flat_values = self._coerce_sequence(other)
+            for i in range(len(self._elements)):
+                val = qint(flat_values[i], width=self._width) if type(flat_values[i]) == int else flat_values[i]
+                self._elements[i] = getattr(self._elements[i], iop_name)(val)
             return self
 
         else:
@@ -876,6 +916,15 @@ cdef class qarray:
             if isinstance(other, int):
                 other = qint(other, width=self._width)
             result_elements = [other - elem for elem in self._elements]
+            return self._create_view(result_elements, self._shape)
+        elif isinstance(other, (list, np.ndarray)):
+            flat_values = self._coerce_sequence(other)
+            result_elements = []
+            for i in range(len(self._elements)):
+                v = flat_values[i]
+                if type(v) == int:
+                    v = qint(v, width=self._width)
+                result_elements.append(v - self._elements[i])
             return self._create_view(result_elements, self._shape)
         return NotImplemented
 

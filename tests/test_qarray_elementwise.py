@@ -1,5 +1,6 @@
 """Tests for qarray element-wise operations - Phase 24 Element-wise Operations."""
 
+import numpy as np
 import pytest
 
 import quantum_language as ql
@@ -511,3 +512,194 @@ class TestShapePreservation:
         c = a < 3
         assert c.shape == (2, 2)
         assert c.dtype == qbool
+
+
+class TestListArithmetic:
+    """Element-wise arithmetic between qarray and Python list."""
+
+    def test_add_list(self):
+        """qarray + list returns qarray with correct shape."""
+        _c = ql.circuit()
+        a = ql.array([1, 2, 3])
+        c = a + [4, 5, 6]
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+        assert c.dtype == qint
+
+    def test_radd_list(self):
+        """list + qarray returns qarray via __radd__."""
+        _c = ql.circuit()
+        a = ql.array([1, 2, 3])
+        c = [4, 5, 6] + a
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+        assert c.dtype == qint
+
+    def test_sub_list(self):
+        """qarray - list returns qarray."""
+        _c = ql.circuit()
+        a = ql.array([10, 20, 30])
+        c = a - [1, 2, 3]
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+
+    def test_rsub_list(self):
+        """list - qarray returns qarray via __rsub__."""
+        _c = ql.circuit()
+        a = ql.array([1, 2, 3])
+        c = [10, 20, 30] - a
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+
+    def test_and_list(self):
+        """qarray & list returns qarray."""
+        _c = ql.circuit()
+        a = ql.array([3, 5, 7])
+        c = a & [1, 4, 2]
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+
+    def test_or_list(self):
+        """qarray | list returns qarray."""
+        _c = ql.circuit()
+        a = ql.array([3, 5, 7])
+        c = a | [1, 4, 2]
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+
+    def test_xor_list(self):
+        """qarray ^ list returns qarray."""
+        _c = ql.circuit()
+        a = ql.array([3, 5, 7])
+        c = a ^ [1, 4, 2]
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+
+    def test_lt_list(self):
+        """qarray < list returns qbool array."""
+        _c = ql.circuit()
+        a = ql.array([1, 5, 3])
+        c = a < [2, 4, 6]
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+        assert c.dtype == qbool
+
+    def test_eq_list(self):
+        """qarray == list returns qbool array."""
+        _c = ql.circuit()
+        a = ql.array([1, 2, 3])
+        c = a == [1, 5, 3]
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+        assert c.dtype == qbool
+
+    def test_list_shape_mismatch(self):
+        """Mismatched list shape raises ValueError."""
+        _c = ql.circuit()
+        a = ql.array([1, 2, 3])
+        with pytest.raises(ValueError, match="Shape mismatch"):
+            a + [1, 2]
+
+    def test_iadd_list(self):
+        """qarray += list modifies in-place."""
+        _c = ql.circuit()
+        a = ql.array([1, 2, 3])
+        orig_id = id(a)
+        a += [10, 20, 30]
+        assert id(a) == orig_id
+        assert a.shape == (3,)
+
+    def test_isub_list(self):
+        """qarray -= list modifies in-place."""
+        _c = ql.circuit()
+        a = ql.array([10, 20, 30])
+        orig_id = id(a)
+        a -= [1, 2, 3]
+        assert id(a) == orig_id
+        assert a.shape == (3,)
+
+    def test_2d_add_list(self):
+        """2D qarray + nested list preserves shape."""
+        _c = ql.circuit()
+        a = ql.array([[1, 2], [3, 4]])
+        c = a + [[10, 20], [30, 40]]
+        assert isinstance(c, qarray)
+        assert c.shape == (2, 2)
+
+
+class TestNumpyArithmetic:
+    """Element-wise arithmetic between qarray and numpy array."""
+
+    def test_add_numpy(self):
+        """qarray + np.ndarray returns qarray."""
+        _c = ql.circuit()
+        a = ql.array([1, 2, 3])
+        c = a + np.array([4, 5, 6])
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+        assert c.dtype == qint
+
+    def test_radd_numpy(self):
+        """np.ndarray + qarray returns qarray via __radd__."""
+        _c = ql.circuit()
+        a = ql.array([1, 2, 3])
+        c = np.array([4, 5, 6]) + a
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+
+    def test_sub_numpy(self):
+        """qarray - np.ndarray returns qarray."""
+        _c = ql.circuit()
+        a = ql.array([10, 20, 30])
+        c = a - np.array([1, 2, 3])
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+
+    def test_rsub_numpy(self):
+        """np.ndarray - qarray returns qarray via __rsub__."""
+        _c = ql.circuit()
+        a = ql.array([1, 2, 3])
+        c = np.array([10, 20, 30]) - a
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+
+    def test_and_numpy(self):
+        """qarray & np.ndarray returns qarray."""
+        _c = ql.circuit()
+        a = ql.array([3, 5, 7])
+        c = a & np.array([1, 4, 2])
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+
+    def test_lt_numpy(self):
+        """qarray < np.ndarray returns qbool array."""
+        _c = ql.circuit()
+        a = ql.array([1, 5, 3])
+        c = a < np.array([2, 4, 6])
+        assert isinstance(c, qarray)
+        assert c.shape == (3,)
+        assert c.dtype == qbool
+
+    def test_numpy_shape_mismatch(self):
+        """Mismatched numpy shape raises ValueError."""
+        _c = ql.circuit()
+        a = ql.array([1, 2, 3])
+        with pytest.raises(ValueError, match="Shape mismatch"):
+            a + np.array([1, 2])
+
+    def test_iadd_numpy(self):
+        """qarray += np.ndarray modifies in-place."""
+        _c = ql.circuit()
+        a = ql.array([1, 2, 3])
+        orig_id = id(a)
+        a += np.array([10, 20, 30])
+        assert id(a) == orig_id
+        assert a.shape == (3,)
+
+    def test_2d_add_numpy(self):
+        """2D qarray + 2D np.ndarray preserves shape."""
+        _c = ql.circuit()
+        a = ql.array([[1, 2], [3, 4]])
+        c = a + np.array([[10, 20], [30, 40]])
+        assert isinstance(c, qarray)
+        assert c.shape == (2, 2)
