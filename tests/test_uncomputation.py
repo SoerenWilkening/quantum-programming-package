@@ -355,9 +355,12 @@ def _is_msb_spanning(a, b, width):
 
 
 def _make_cmp_result_params():
-    """Generate comparison test parameters for result correctness."""
+    """Generate comparison test parameters for result correctness.
+
+    All BUG-CMP-01/02 bugs fixed in v1.6 — no xfail markers needed.
+    """
     params = []
-    # Ordering comparisons with safe values (no MSB spanning at width=3)
+    # Ordering comparisons
     cases = [
         ("gt", 3, 1, 3),
         ("lt", 1, 3, 3),
@@ -365,14 +368,6 @@ def _make_cmp_result_params():
         ("le", 1, 2, 3),
     ]
     for op_name, a, b, width in cases:
-        marks = []
-        if _is_msb_spanning(a, b, width):
-            marks.append(
-                pytest.mark.xfail(
-                    reason="BUG-CMP-02: ordering comparison error for MSB-spanning values",
-                    strict=False,
-                )
-            )
         params.append(
             pytest.param(
                 op_name,
@@ -380,11 +375,10 @@ def _make_cmp_result_params():
                 b,
                 width,
                 id=f"{op_name}_{a}v{b}_w{width}",
-                marks=marks,
             )
         )
 
-    # eq/ne cases: always xfail due to BUG-CMP-01
+    # eq/ne cases (BUG-CMP-01 fixed in v1.6)
     eq_ne_cases = [
         ("eq", 2, 2, 3),
         ("ne", 1, 2, 3),
@@ -397,10 +391,6 @@ def _make_cmp_result_params():
                 b,
                 width,
                 id=f"{op_name}_{a}v{b}_w{width}",
-                marks=pytest.mark.xfail(
-                    reason="BUG-CMP-01: eq/ne return inverted results",
-                    strict=False,
-                ),
             )
         )
     return params
@@ -447,7 +437,8 @@ def _make_cmp_ancilla_params():
     """Generate comparison ancilla cleanup test parameters.
 
     gt/le use widened (w+1) temporaries that leave ancilla dirty.
-    These are xfailed as a known uncomputation limitation.
+    These are xfailed as a known uncomputation limitation (NOT a bug).
+    BUG-CMP-02 fixed in v1.6 — no longer needs xfail.
     """
     params = []
     cases = [
@@ -462,13 +453,6 @@ def _make_cmp_ancilla_params():
             marks.append(
                 pytest.mark.xfail(
                     reason=f"Comparison {op_name} uses widened temporaries leaving ancilla dirty",
-                    strict=False,
-                )
-            )
-        if _is_msb_spanning(a, b, width):
-            marks.append(
-                pytest.mark.xfail(
-                    reason="BUG-CMP-02: ordering comparison error for MSB-spanning values",
                     strict=False,
                 )
             )
@@ -578,11 +562,10 @@ def test_uncomp_compound_or():
     )
 
 
-@pytest.mark.xfail(reason="BUG-CMP-01: eq returns inverted results", strict=False)
 def test_uncomp_compound_eq():
     """Compound with eq: (a == 2) & (b < 3) with a=2, b=1, width=3.
 
-    Both True -> result True. Uses eq which is known inverted (BUG-CMP-01).
+    Both True -> result True. BUG-CMP-01 fixed in v1.6.
     """
     width = 3
     result_width = 1
