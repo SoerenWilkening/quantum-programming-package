@@ -1806,6 +1806,7 @@ cdef class qint(circuit):
 		"""
 		from .qbool import qbool
 		cdef int start_layer
+		cdef int comp_width
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _circuit_initialized = _get_circuit_initialized()
 
@@ -1823,22 +1824,29 @@ cdef class qint(circuit):
 
 		# Handle qint operand
 		if type(other) == qint:
-			# In-place subtraction on self
-			self -= other
-			# Check MSB (sign bit) - if 1, result is negative (self < other)
-			# MSB is at index 63 (right-aligned storage: LSB at 64-width, MSB at 63)
-			msb = self[63]
+			# a < b means (a - b) is negative in signed interpretation.
+			# To handle full unsigned range, use (n+1)-bit subtraction:
+			# extend both operands by 1 bit (MSB=0 = unsigned) so the sign bit
+			# is never polluted by valid data bits.
+			comp_width = max(self.bits, (<qint>other).bits) + 1
+			# Create widened copies (zero-extended to comp_width)
+			temp_self = qint(0, width=comp_width)
+			temp_self ^= self  # Copy self's bits into widened temp
+			temp_other = qint(0, width=comp_width)
+			temp_other ^= other  # Copy other's bits into widened temp
+			# Subtract: temp_self -= temp_other
+			temp_self -= temp_other
+			# MSB of widened result is the true sign bit
+			msb = temp_self[63]
 			result = qbool()
-			result ^= msb  # Copy MSB to result
-			# Restore operand
-			self += other
-			# Track dependencies
+			result ^= msb
+			# Track dependencies on original operands
 			result.add_dependency(self)
 			result.add_dependency(other)
 			result.operation_type = 'LT'
 			# Note: deliberately NOT setting _start_layer/_end_layer here.
-			# Comparison results must persist in the circuit even when GC'd,
-			# matching the pattern of arithmetic results (no auto-uncompute).
+			# Comparison results must persist in the circuit even when GC'd.
+			# temp_self and temp_other will be cleaned up by GC.
 			return result
 
 		# Handle int operand
@@ -1850,18 +1858,10 @@ cdef class qint(circuit):
 			if other > max_val:
 				return qbool(True)  # qint always < large value that doesn't fit
 
-			# In-place subtraction with classical value
-			self -= other
-			# MSB is at index 63 (right-aligned storage: LSB at 64-width, MSB at 63)
-			msb = self[63]
-			result = qbool()
-			result ^= msb
-			# Restore operand
-			self += other
-			# Track dependency on qint
-			result.add_dependency(self)
-			result.operation_type = 'LT'
-			return result
+			# Create temp qint to use the qint-qint __lt__ path
+			# (ensures consistent widened comparison logic)
+			temp = qint(other, width=self.bits)
+			return self < temp
 
 		raise TypeError("Comparison requires qint or int")
 
