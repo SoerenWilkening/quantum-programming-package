@@ -32,11 +32,10 @@ v1.6 fixes three categories of bugs discovered during v1.5 exhaustive verificati
   3. `A + B` and `A - B` between two arrays produce circuits that simulate to correct results via Qiskit
   4. `A += B` and `A -= B` produce correct circuits when both arrays have matching element widths
   5. All previously xfail array verification tests from v1.5 pass
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 34-01: Fix array constructor and verify element initialization
-- [ ] 34-02: Fix element-wise operations and verify with Qiskit simulation
+- [ ] 34-01: Fix array constructor and verify all array operations
 
 ### Phase 35: Comparison Bug Fixes
 **Goal**: All six comparison operators produce correct results for all value pairs and reasonable circuit sizes
@@ -72,7 +71,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 34. Array Fixes | v1.6 | 0/2 | Not started | - |
+| 34. Array Fixes | v1.6 | 0/1 | Not started | - |
 | 35. Comparison Bug Fixes | v1.6 | 0/2 | Not started | - |
 | 36. Verification & Regression | v1.6 | 0/1 | Not started | - |
 
