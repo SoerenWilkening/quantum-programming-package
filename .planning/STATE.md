@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-01-30)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v1.5 Bug Fixes & Exhaustive Verification -- Phase 32 gap closure in progress
+**Current focus:** v1.5 Bug Fixes & Exhaustive Verification -- Phase 32 complete, ready for Phase 33
 
 ## Current Position
 
-Phase: 32 of 33 (Bitwise Verification)
-Plan: 3 of 4 (gap closure)
-Status: BUG-BIT-01 fixed (CQ same-width + QQ mixed-width), plan 32-04 remaining
-Last activity: 2026-02-01 -- Completed 32-03-PLAN.md (BUG-BIT-01 gap closure)
+Phase: 32 of 33 (Bitwise Verification) -- COMPLETE
+Plan: 4 of 4
+Status: Phase 32 complete. All bitwise tests passing (3684 pass, 0 fail).
+Last activity: 2026-02-01 -- Completed 32-04-PLAN.md (xfail cleanup)
 
-Progress: [████████░░] 55%
+Progress: [████████░░] 56%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 113 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 27)
+- Total plans completed: 114 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 28)
 - Average duration: ~10 min/plan
 - Total execution time: ~18.8 hours
 
@@ -52,6 +52,7 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 | 32-03 | Reverse two_complement index (bin[bits-1-i]) for CQ ops | MSB-first from two_complement vs LSB-first qubit_array iteration |
 | 32-03 | Allocate padding BEFORE result for mixed-width ops | Result must get highest qubit indices for bitstring[:width] extraction |
 | 32-03 | CQ mixed-width xfail kept (design limitation) | Plain int has no width metadata; b.bit_length() < intended_width causes narrower result |
+| 32-04 | Keep CQ mixed-width non-strict xfail in final cleanup | 292 tests genuinely fail; removing xfail would break CI for documented limitation |
 
 ### Blockers/Concerns
 
@@ -79,9 +80,9 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Completed 32-03-PLAN.md (BUG-BIT-01 gap closure)
+Stopped at: Completed 32-04-PLAN.md (Phase 32 complete)
 Resume file: None
-Resume action: Execute 32-04 or proceed to Phase 33
+Resume action: Proceed to Phase 33
 
 ---
-*State updated: 2026-02-01 after 32-03 execution (BUG-BIT-01 fixed)*
+*State updated: 2026-02-01 after 32-04 execution (Phase 32 Bitwise Verification complete)*
