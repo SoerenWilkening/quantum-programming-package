@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-01-30)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v1.5 Bug Fixes & Exhaustive Verification -- Phase 33 in progress
+**Current focus:** v1.5 Bug Fixes & Exhaustive Verification -- Phase 33 COMPLETE
 
 ## Current Position
 
-Phase: 33 of 33 (Advanced Feature Verification)
-Plan: 2 of 3 (33-01 and 33-02 complete, 33-03 remaining)
-Status: Plan 33-01 complete. Uncomputation verified (20 tests: 15 pass, 2 xfail, 3 xpass).
-Last activity: 2026-02-01 -- Completed 33-01-PLAN.md (uncomputation verification)
+Phase: 33 of 33 (Advanced Feature Verification) -- COMPLETE
+Plan: 3 of 3
+Status: Phase 33 complete. Array verification done (5 pass, 7 xfail, 2 xpass). All VADV plans executed.
+Last activity: 2026-02-01 -- Completed 33-03-PLAN.md (array verification)
 
-Progress: [█████████░] 58%
+Progress: [██████████] 58%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 116 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 30)
+- Total plans completed: 117 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 31)
 - Average duration: ~10 min/plan
 - Total execution time: ~18.8 hours
 
@@ -50,6 +50,8 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 | 33-01 | Separate result correctness from ancilla cleanup for comparisons | gt/le use widened temps leaving ancilla dirty by design |
 | 33-01 | Use width=3 for all uncomputation tests | 2-bit signed range too narrow for meaningful tests |
 | 33-01 | Verify input preservation as part of uncomputation check | Ensures uncomputation does not corrupt input operands |
+| 33-03 | Non-strict xfail for all array tests | BUG-ARRAY-INIT blocks correct initialization; some single-element cases accidentally pass |
+| 33-03 | Added manual sanity tests alongside array tests | Proves underlying operations work when array init bug is absent |
 
 ### Blockers/Concerns
 
@@ -77,18 +79,22 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 **New bugs discovered (Phase 33):**
 - **BUG-COND-MUL-01 (Controlled Multiplication Corruption):** cCQ_mul produces 0 for both True and False conditional branches, corrupting the result register entirely. Controlled add/sub work correctly.
 
+**New bugs discovered (Phase 33 - arrays):**
+- **BUG-ARRAY-INIT (Array Constructor Bug):** `ql.array([values], width=w)` passes `self._width` as VALUE to `qint()` instead of as width parameter. All elements get quantum value = width, ignoring user data. Fix: `q = qint(value, width=self._width)` in qarray.pyx line 303.
+
 **Key findings (Phase 33):**
 - BUG-CMP-01 (eq/ne inversion) does NOT affect conditional gating. The qbool produced by eq/ne correctly controls `with` blocks despite returning inverted comparison values.
 - Arithmetic uncomputation (EAGER mode) works fully: correct results, preserved inputs, clean ancilla for add/sub/mul.
 - Comparison uncomputation partial: gt/le leave ancilla dirty (widened temporaries). lt/ge clean up fully.
 - eq/ne unexpectedly pass with uncomputation enabled (xpass, non-strict).
+- Array operations (sum, AND, OR, element-wise) work correctly when qints are constructed manually; only the array constructor is broken.
 
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Completed 33-01-PLAN.md
+Stopped at: Completed 33-03-PLAN.md (final plan of final phase)
 Resume file: None
-Resume action: Continue to 33-03
+Resume action: Phase 33 complete. All v1.5 verification phases done.
 
 ---
-*State updated: 2026-02-01 after 33-01 execution (Uncomputation Verification complete)*
+*State updated: 2026-02-01 after 33-03 execution (Array Verification complete)*
