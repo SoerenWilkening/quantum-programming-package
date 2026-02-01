@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements for v1.6
-Last activity: 2026-02-01 — Milestone v1.6 started
+Phase: 34 of 36 (Array Fixes)
+Plan: 0 of 2 in current phase
+Status: Ready to plan
+Last activity: 2026-02-01 — Roadmap created for v1.6
 
-Progress: [░░░░░░░░░░] 0% (v1.6)
+Progress: [░░░░░░░░░░] 0% (v1.6: 0/5 plans)
 
 ## Performance Metrics
 
@@ -33,7 +33,7 @@ Progress: [░░░░░░░░░░] 0% (v1.6)
 | v1.3 Package & Array | 21-24 | 16 | Complete (2026-01-29) |
 | v1.4 OpenQASM Export | 25-27 | 6 | Complete (2026-01-30) |
 | v1.5 Bug Fixes & Verification | 28-33 | 33 | Complete (2026-02-01) |
-| v1.6 Array & Comparison Fixes | 34-? | — | In Progress |
+| v1.6 Array & Comparison Fixes | 34-36 | 5 | In Progress |
 
 ## Accumulated Context
 
@@ -43,28 +43,22 @@ See PROJECT.md Key Decisions table for full history.
 
 ### Blockers/Concerns
 
-**v1.6 targets:**
-- BUG-ARRAY-INIT: Array constructor ignores user values (passes width as value)
-- Array element-wise ops: wrong circuits due to width mismatches from BUG-ARRAY-INIT
-- Array in-place ops: width mismatch between elements and operands
+**v1.6 targets (3 phases, 5 plans):**
+- BUG-ARRAY-INIT: Array constructor passes width as value instead of user data
+- Array element-wise ops produce wrong circuits due to width mismatches from BUG-ARRAY-INIT
 - BUG-CMP-01: eq/ne return inverted results (488 xfail tests)
 - BUG-CMP-02: Ordering comparison errors at MSB boundary
 - BUG-CMP-03: Circuit size explosion at widths >= 6 for gt/le
 
 **Deferred to future milestone:**
-- BUG-DIV-01: Comparison overflow in restoring division
-- BUG-DIV-02: MSB comparison leak for large values
-- BUG-MOD-REDUCE: _reduce_mod result corruption
-- BUG-MOD-SUB: Subtraction extraction position instability
-- BUG-COND-MUL-01: Controlled multiplication corruption
-- CQ mixed-width design limitation (plain int has no width metadata)
+- BUG-DIV-01, BUG-MOD-REDUCE, BUG-COND-MUL-01
 
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: v1.6 milestone initialization
+Stopped at: v1.6 roadmap created
 Resume file: None
-Resume action: Define requirements and roadmap
+Resume action: Plan Phase 34 via `/gsd:plan-phase 34`
 
 ---
-*State updated: 2026-02-01 after v1.6 milestone initialization*
+*State updated: 2026-02-01 after v1.6 roadmap creation*
