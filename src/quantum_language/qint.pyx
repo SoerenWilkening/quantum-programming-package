@@ -1720,9 +1720,10 @@ cdef class qint(circuit):
 			qubit_array[0] = (<qint>result).qubits[63]
 
 			# Self operand qubits (right-aligned)
+			# C backend expects MSB-first, so reverse bit order
 			self_offset = 64 - self.bits
 			for i in range(self.bits):
-				qubit_array[1 + i] = self.qubits[self_offset + i]
+				qubit_array[1 + i] = self.qubits[self_offset + (self.bits - 1 - i)]
 
 			start = 1 + self.bits
 
