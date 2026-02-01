@@ -62,13 +62,22 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ### Active
 
+#### Current Milestone: v1.6 Array & Comparison Fixes
+
+**Goal:** Fix array constructor and element-wise operations to produce correct circuits, then fix comparison operator bugs.
+
+- [ ] Fix array constructor value initialization (BUG-ARRAY-INIT)
+- [ ] Fix array element-wise arithmetic producing wrong circuits
+- [ ] Fix array in-place operations with width mismatches
 - [ ] Fix eq/ne comparison inversion (BUG-CMP-01)
 - [ ] Fix ordering comparison errors at MSB boundary (BUG-CMP-02)
 - [ ] Fix circuit size explosion for gt/le at widths >= 6 (BUG-CMP-03)
+
+#### Deferred (future milestone)
+
 - [ ] Fix division comparison overflow (BUG-DIV-01)
 - [ ] Fix _reduce_mod result corruption (BUG-MOD-REDUCE)
 - [ ] Fix controlled multiplication corruption (BUG-COND-MUL-01)
-- [ ] Fix array constructor value initialization (BUG-ARRAY-INIT)
 
 ### Out of Scope
 
@@ -149,4 +158,4 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Separate result vs ancilla verification | gt/le leave ancilla dirty by design | ✓ Good — clear test expectations |
 
 ---
-*Last updated: 2026-02-01 after v1.5 milestone completion*
+*Last updated: 2026-02-01 after v1.6 milestone initialization*
