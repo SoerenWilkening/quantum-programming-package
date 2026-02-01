@@ -8,6 +8,8 @@ Python quantum_language API -> C backend circuit -> OpenQASM 3.0 export ->
 Qiskit simulation -> result extraction and validation.
 """
 
+import gc
+
 import pytest
 import qiskit.qasm3
 from qiskit_aer import AerSimulator
@@ -50,7 +52,12 @@ def verify_circuit():
         """Execute verification pipeline.
 
         Args:
-            circuit_builder: Function that builds circuit and returns expected value
+            circuit_builder: Function that builds circuit and returns expected value.
+                May return either:
+                - int: the expected result value
+                - tuple (int, list): expected value and list of qint references
+                  to keep alive until after OpenQASM export (prevents premature
+                  uncomputation gate injection from garbage collection)
             width: Bit width of result register
             in_place: Whether operation is in-place (affects result extraction)
 
@@ -61,14 +68,31 @@ def verify_circuit():
         Raises:
             Exception: If simulation fails, includes QASM in error for debugging
         """
+        # Force garbage collection of old qint objects before circuit reset.
+        # Without this, qint destructors from the previous test may fire AFTER
+        # ql.circuit() and inject uncomputation gates into the new circuit.
+        # This is needed because bitwise operations use garbage collection
+        # (uncomputation) and their destructors add gates to the active circuit.
+        gc.collect()
+
         # Reset circuit state
         ql.circuit()
 
-        # Build circuit and get expected value
-        expected = circuit_builder()
+        # Build circuit and get expected value.
+        # circuit_builder may return (expected, keepalive_refs) to prevent
+        # premature GC of qint objects before OpenQASM export.
+        result = circuit_builder()
+        if isinstance(result, tuple):
+            expected, _keepalive = result
+        else:
+            expected = result
+            _keepalive = None
 
-        # Export to OpenQASM 3.0
+        # Export to OpenQASM 3.0 (must happen while qint refs are alive)
         qasm_str = ql.to_openqasm()
+
+        # Now safe to release qint references
+        _keepalive = None
 
         try:
             # Load QASM into Qiskit
