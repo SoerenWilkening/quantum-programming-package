@@ -46,11 +46,11 @@ Plans:
   2. Ordering comparisons at MSB boundary values (e.g., 3 < 4 where 4 is MSB for 3-bit) return correct results
   3. `gt` and `le` operations at width=6 produce circuits with gate count proportional to width (not exponential)
   4. All 488 previously xfail eq/ne tests pass after the inversion fix
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 35-01: Fix eq/ne comparison inversion in C backend
-- [ ] 35-02: Fix MSB boundary errors and circuit explosion for ordering comparisons
+- [ ] 35-01: Fix eq/ne comparison inversion (remove GC-triggering layer tracking from __eq__)
+- [ ] 35-02: Fix ordering comparison MSB boundary errors (widen __lt__) and investigate circuit explosion
 
 ### Phase 36: Verification & Regression
 **Goal**: All fixed bugs are verified passing and no existing tests regress
