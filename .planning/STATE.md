@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-01-30)
 ## Current Position
 
 Phase: 33 of 33 (Advanced Feature Verification)
-Plan: 2 of 3
-Status: Plan 33-02 complete. Quantum conditionals verified (12 pass, 2 xfail).
-Last activity: 2026-02-01 -- Completed 33-02-PLAN.md (conditional verification)
+Plan: 2 of 3 (33-01 and 33-02 complete, 33-03 remaining)
+Status: Plan 33-01 complete. Uncomputation verified (20 tests: 15 pass, 2 xfail, 3 xpass).
+Last activity: 2026-02-01 -- Completed 33-01-PLAN.md (uncomputation verification)
 
-Progress: [█████████░] 57%
+Progress: [█████████░] 58%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 115 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 29)
+- Total plans completed: 116 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 30)
 - Average duration: ~10 min/plan
 - Total execution time: ~18.8 hours
 
@@ -47,6 +47,9 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 | 33-02 | Remove eq/ne xfail from conditional tests | BUG-CMP-01 does not affect conditional gating -- qbool controls with-block correctly |
 | 33-02 | Document BUG-COND-MUL-01 as new bug | cCQ_mul corrupts result register; needs C backend fix |
 | 33-02 | Keep all condition values in [0,3] for width=3 | Avoids BUG-CMP-02 MSB boundary issues |
+| 33-01 | Separate result correctness from ancilla cleanup for comparisons | gt/le use widened temps leaving ancilla dirty by design |
+| 33-01 | Use width=3 for all uncomputation tests | 2-bit signed range too narrow for meaningful tests |
+| 33-01 | Verify input preservation as part of uncomputation check | Ensures uncomputation does not corrupt input operands |
 
 ### Blockers/Concerns
 
@@ -74,15 +77,18 @@ Milestone decisions archived. See PROJECT.md Key Decisions table for full histor
 **New bugs discovered (Phase 33):**
 - **BUG-COND-MUL-01 (Controlled Multiplication Corruption):** cCQ_mul produces 0 for both True and False conditional branches, corrupting the result register entirely. Controlled add/sub work correctly.
 
-**Key finding (Phase 33):**
+**Key findings (Phase 33):**
 - BUG-CMP-01 (eq/ne inversion) does NOT affect conditional gating. The qbool produced by eq/ne correctly controls `with` blocks despite returning inverted comparison values.
+- Arithmetic uncomputation (EAGER mode) works fully: correct results, preserved inputs, clean ancilla for add/sub/mul.
+- Comparison uncomputation partial: gt/le leave ancilla dirty (widened temporaries). lt/ge clean up fully.
+- eq/ne unexpectedly pass with uncomputation enabled (xpass, non-strict).
 
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Completed 33-02-PLAN.md
+Stopped at: Completed 33-01-PLAN.md
 Resume file: None
 Resume action: Continue to 33-03
 
 ---
-*State updated: 2026-02-01 after 33-02 execution (Conditional Verification complete)*
+*State updated: 2026-02-01 after 33-01 execution (Uncomputation Verification complete)*
