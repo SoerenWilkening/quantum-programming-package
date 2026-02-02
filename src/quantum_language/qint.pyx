@@ -550,12 +550,15 @@ cdef class qint(circuit):
 			# LAZY mode (qubit_saving=False, default): Only uncompute when scope has exited.
 			# This minimizes gate count by keeping intermediates alive longer (shared gates).
 			# Use Phase 19's scope stack to check if we're still in the creation scope.
+			# Phase 41: Use strict < instead of <= so that scope-0 qints (top-level)
+			# don't auto-uncompute on GC. Only qints created inside with-blocks
+			# (scope > 0) auto-uncompute when their scope exits.
 			current = current_scope_depth.get()
-			if current <= self.creation_scope:
-				# Scope has exited (depth decreased) - safe to uncompute
+			if current < self.creation_scope:
+				# Scope has exited (depth decreased below creation scope) - safe to uncompute
 				self._do_uncompute(from_del=True)
-			# else: Still in creation scope - defer uncomputation until scope exits
-			# The qbool will be uncomputed later when its containing scope exits
+			# else: Still in or at creation scope - defer uncomputation
+			# Scope-internal qints are uncomputed by __exit__ scope cleanup
 
 		# Keep backward compat tracking (deprecated, but maintained for older code)
 		if not self._is_uncomputed and self.bits > 0:
@@ -1861,7 +1864,6 @@ cdef class qint(circuit):
 		Uses widened temporaries (n+1 bits) to handle MSB boundary cases correctly.
 		"""
 		from .qbool import qbool
-		cdef int start_layer
 		cdef int comp_width
 		cdef int operand_bits, i_bit
 		cdef sequence_t *seq
@@ -1873,9 +1875,6 @@ cdef class qint(circuit):
 		self._check_not_uncomputed()
 		if isinstance(other, qint):
 			(<qint>other)._check_not_uncomputed()
-
-		# Phase 41: Capture start layer for uncomputation
-		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		# Self-comparison optimization
 		if self is other:
@@ -1923,9 +1922,9 @@ cdef class qint(circuit):
 			result.add_dependency(self)
 			result.add_dependency(other)
 			result.operation_type = 'LT'
-			# Phase 41: Layer tracking for uncomputation
-			result._start_layer = start_layer
-			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+			# Note: NOT setting _start_layer/_end_layer for widened-temp comparisons.
+			# The widened temps (temp_self, temp_other) self-uncompute via GC.
+			# Setting layer tracking here would double-reverse those gates.
 			return result
 
 		# Handle int operand
@@ -1967,7 +1966,6 @@ cdef class qint(circuit):
 		>>> # result is qbool representing |True>
 		"""
 		from .qbool import qbool
-		cdef int start_layer
 		cdef int comp_width
 		cdef int operand_bits, i_bit
 		cdef sequence_t *seq
@@ -1979,9 +1977,6 @@ cdef class qint(circuit):
 		self._check_not_uncomputed()
 		if isinstance(other, qint):
 			(<qint>other)._check_not_uncomputed()
-
-		# Phase 41: Capture start layer for uncomputation
-		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		# Self-comparison optimization
 		if self is other:
@@ -2024,9 +2019,8 @@ cdef class qint(circuit):
 			result.add_dependency(self)
 			result.add_dependency(other)
 			result.operation_type = 'GT'
-			# Phase 41: Layer tracking for uncomputation
-			result._start_layer = start_layer
-			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+			# Note: NOT setting _start_layer/_end_layer for widened-temp comparisons.
+			# The widened temps self-uncompute via GC.
 			return result
 
 		# Handle int operand
