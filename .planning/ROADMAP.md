@@ -46,10 +46,10 @@ Plans:
   2. The copied qint has the same bit width as the source
   3. Measuring the copy produces the same value as measuring the source (for computational basis states)
   4. The copy's qubits are distinct from the source's qubits (no shared qubit references)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 42-01: Implement CNOT-based quantum copy for qint
+- [ ] 42-01-PLAN.md — Implement copy()/copy_onto() on qint, qbool.copy() override, and Qiskit-verified tests
 
 ### Phase 43: Copy-Aware Binary Operations
 **Goal**: Binary operations on qint and qarray preserve quantum state by using quantum copy instead of classical value initialization
