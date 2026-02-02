@@ -1657,6 +1657,133 @@ cdef class qint(circuit):
 
 		return self
 
+	# ====================================================================
+	# QUANTUM COPY OPERATIONS
+	# Phase 42: CNOT-based state copying for quantum expressions
+	# ====================================================================
+
+	def copy(self):
+		"""Create a quantum copy of this integer.
+
+		Allocates fresh qubits and applies CNOT gates from each source qubit
+		to the corresponding target qubit, producing a new qint whose
+		computational-basis measurement outcome matches the source.
+
+		Returns
+		-------
+		qint
+			New quantum integer with CNOT-entangled fresh qubits.
+
+		Raises
+		------
+		ValueError
+			If this qint has been uncomputed.
+
+		Examples
+		--------
+		>>> a = qint(5, width=4)
+		>>> b = a.copy()
+		>>> b.width
+		4
+
+		Notes
+		-----
+		The copy has distinct qubits from the source (no shared references).
+		The copy participates in scope-based automatic uncomputation.
+		For computational basis states, the copy measures to the same value.
+		"""
+		cdef sequence_t *seq
+		cdef unsigned int[:] arr
+		cdef int self_offset, result_offset
+		cdef int start_layer
+		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
+		cdef bint _circuit_initialized = _get_circuit_initialized()
+
+		self._check_not_uncomputed()
+
+		# Capture start layer before any gates
+		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+
+		# Allocate fresh result qint with |0> qubits
+		result = qint(width=self.bits)
+
+		# Apply CNOTs: source -> result (XOR pattern, result starts at 0)
+		self_offset = 64 - self.bits
+		result_offset = 64 - result.bits
+		qubit_array[:self.bits] = result.qubits[result_offset:result_offset + self.bits]
+		qubit_array[self.bits:2*self.bits] = self.qubits[self_offset:64]
+		arr = qubit_array
+		seq = Q_xor(self.bits)
+		run_instruction(seq, &arr[0], False, _circuit)
+
+		# Layer tracking for uncomputation
+		result._start_layer = start_layer
+		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+		result.operation_type = 'COPY'
+		result.add_dependency(self)
+
+		return result
+
+	def copy_onto(self, target):
+		"""XOR-copy this integer's state onto an existing target.
+
+		Applies CNOT gates from each source qubit to the corresponding
+		target qubit: target ^= self. If target starts at |0>, this
+		produces a copy of self. If target is non-zero, this XORs self
+		into target.
+
+		Parameters
+		----------
+		target : qint
+			Target quantum integer to copy onto. Must have same bit width.
+
+		Raises
+		------
+		ValueError
+			If target width does not match source width.
+		ValueError
+			If this qint has been uncomputed.
+		TypeError
+			If target is not a qint.
+
+		Examples
+		--------
+		>>> a = qint(5, width=4)
+		>>> b = qint(width=4)
+		>>> a.copy_onto(b)
+		>>> # b now holds a copy of a's state
+
+		Notes
+		-----
+		This is a raw CNOT operation. The caller manages the target's
+		lifecycle and uncomputation. No layer tracking or dependency
+		is set on the target by this method.
+		"""
+		cdef sequence_t *seq
+		cdef unsigned int[:] arr
+		cdef int self_offset, target_offset
+		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
+
+		self._check_not_uncomputed()
+
+		if not isinstance(target, qint):
+			raise TypeError("copy_onto target must be a qint")
+
+		if (<qint>target).bits != self.bits:
+			raise ValueError(
+				f"Width mismatch: source has {self.bits} bits, "
+				f"target has {(<qint>target).bits} bits"
+			)
+
+		# Apply CNOTs: source -> target
+		self_offset = 64 - self.bits
+		target_offset = 64 - (<qint>target).bits
+		qubit_array[:self.bits] = (<qint>target).qubits[target_offset:target_offset + self.bits]
+		qubit_array[self.bits:2*self.bits] = self.qubits[self_offset:64]
+		arr = qubit_array
+		seq = Q_xor(self.bits)
+		run_instruction(seq, &arr[0], False, _circuit)
+
 	def __getitem__(self, item: int):
 		"""Access individual qubit as qbool: self[index]
 
