@@ -43,6 +43,12 @@ def __floordiv__(self, divisor):
 	Quantum divisor: O(quotient) circuit via repeated subtraction.
 	"""
 	from quantum_language.qbool import qbool
+	cdef int start_layer
+	cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+	cdef bint _circ_init = _get_circuit_initialized()
+
+	# Capture start layer before any gates
+	start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
 
 	# Classical divisor case
 	if type(divisor) == int:
@@ -76,11 +82,24 @@ def __floordiv__(self, divisor):
 				remainder -= trial_value
 				quotient += (1 << bit_pos)
 
+		# Layer tracking for uncomputation
+		quotient._start_layer = start_layer
+		quotient._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+		quotient.operation_type = 'DIV'
+		quotient.add_dependency(self)
+
 		return quotient
 
 	elif type(divisor) == qint:
 		# Quantum divisor - delegate to quantum division method
-		return self._floordiv_quantum(divisor)
+		result = self._floordiv_quantum(divisor)
+		# Layer tracking for uncomputation
+		result._start_layer = start_layer
+		result._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+		result.operation_type = 'DIV'
+		result.add_dependency(self)
+		result.add_dependency(divisor)
+		return result
 	else:
 		raise TypeError("Divisor must be int or qint")
 
@@ -160,6 +179,13 @@ def __mod__(self, divisor):
 	>>> r = a % 5
 	>>> # r represents |2>
 	"""
+	cdef int start_layer
+	cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+	cdef bint _circ_init = _get_circuit_initialized()
+
+	# Capture start layer before any gates
+	start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 	# Classical divisor case
 	if type(divisor) == int:
 		if divisor == 0:
@@ -187,11 +213,24 @@ def __mod__(self, divisor):
 			with can_subtract:
 				remainder -= trial_value
 
+		# Layer tracking for uncomputation
+		remainder._start_layer = start_layer
+		remainder._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+		remainder.operation_type = 'MOD'
+		remainder.add_dependency(self)
+
 		return remainder
 
 	elif type(divisor) == qint:
 		# Quantum divisor - use quantum modulo
-		return self._mod_quantum(divisor)
+		result = self._mod_quantum(divisor)
+		# Layer tracking for uncomputation
+		result._start_layer = start_layer
+		result._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+		result.operation_type = 'MOD'
+		result.add_dependency(self)
+		result.add_dependency(divisor)
+		return result
 	else:
 		raise TypeError("Divisor must be int or qint")
 
@@ -257,6 +296,13 @@ def __divmod__(self, divisor):
 	>>> q, r = divmod(a, 5)
 	>>> # q represents |3>, r represents |2>
 	"""
+	cdef int start_layer
+	cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+	cdef bint _circ_init = _get_circuit_initialized()
+
+	# Capture start layer before any gates
+	start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 	# Classical divisor case
 	if type(divisor) == int:
 		if divisor == 0:
@@ -285,11 +331,35 @@ def __divmod__(self, divisor):
 				remainder -= trial_value
 				quotient += (1 << bit_pos)
 
+		# Layer tracking for uncomputation
+		end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+		quotient._start_layer = start_layer
+		quotient._end_layer = end_layer
+		quotient.operation_type = 'DIVMOD'
+		quotient.add_dependency(self)
+		remainder._start_layer = start_layer
+		remainder._end_layer = end_layer
+		remainder.operation_type = 'DIVMOD'
+		remainder.add_dependency(self)
+
 		return (quotient, remainder)
 
 	elif type(divisor) == qint:
 		# Quantum divisor - compute both
-		return self._divmod_quantum(divisor)
+		q, r = self._divmod_quantum(divisor)
+		# Layer tracking for uncomputation
+		end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+		q._start_layer = start_layer
+		q._end_layer = end_layer
+		q.operation_type = 'DIVMOD'
+		q.add_dependency(self)
+		q.add_dependency(divisor)
+		r._start_layer = start_layer
+		r._end_layer = end_layer
+		r.operation_type = 'DIVMOD'
+		r.add_dependency(self)
+		r.add_dependency(divisor)
+		return (q, r)
 	else:
 		raise TypeError("Divisor must be int or qint")
 

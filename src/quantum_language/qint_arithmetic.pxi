@@ -96,6 +96,13 @@ def __add__(self, other: qint | int):
 	>>> c.width
 	8
 	"""
+	cdef int start_layer
+	cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+	cdef bint _circ_init = _get_circuit_initialized()
+
+	# Capture start layer before any gates
+	start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 	# out of place addition - result width is max of operands
 	if type(other) == qint:
 		result_width = max(self.bits, (<qint>other).bits)
@@ -103,6 +110,15 @@ def __add__(self, other: qint | int):
 		result_width = self.bits
 	a = qint(value = self.value, width = result_width)
 	a += other
+
+	# Layer tracking for uncomputation
+	a._start_layer = start_layer
+	a._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+	a.operation_type = 'ADD'
+	a.add_dependency(self)
+	if type(other) == qint:
+		a.add_dependency(other)
+
 	return a
 
 def __radd__(self, other: qint | int):
@@ -125,6 +141,13 @@ def __radd__(self, other: qint | int):
 	>>> b.width
 	8
 	"""
+	cdef int start_layer
+	cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+	cdef bint _circ_init = _get_circuit_initialized()
+
+	# Capture start layer before any gates
+	start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 	# out of place addition - result width is max of operands
 	if type(other) == qint:
 		result_width = max(self.bits, (<qint>other).bits)
@@ -132,6 +155,15 @@ def __radd__(self, other: qint | int):
 		result_width = self.bits
 	a = qint(value = self.value, width = result_width)
 	a += other
+
+	# Layer tracking for uncomputation
+	a._start_layer = start_layer
+	a._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+	a.operation_type = 'ADD'
+	a.add_dependency(self)
+	if type(other) == qint:
+		a.add_dependency(other)
+
 	return a
 
 def __iadd__(self, other: qint | int):
@@ -179,6 +211,13 @@ def __sub__(self, other: qint | int):
 	>>> c.width
 	8
 	"""
+	cdef int start_layer
+	cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+	cdef bint _circ_init = _get_circuit_initialized()
+
+	# Capture start layer before any gates
+	start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 	# out of place subtraction - result width is max of operands
 	if type(other) == qint:
 		result_width = max(self.bits, (<qint>other).bits)
@@ -186,6 +225,15 @@ def __sub__(self, other: qint | int):
 		result_width = self.bits
 	a = qint(value = self.value, width = result_width)
 	a -= other
+
+	# Layer tracking for uncomputation
+	a._start_layer = start_layer
+	a._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+	a.operation_type = 'SUB'
+	a.add_dependency(self)
+	if type(other) == qint:
+		a.add_dependency(other)
+
 	return a
 
 def __isub__(self, other: qint | int):
@@ -307,6 +355,13 @@ def __mul__(self, other):
 	>>> c.width
 	16
 	"""
+	cdef int start_layer
+	cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+	cdef bint _circ_init = _get_circuit_initialized()
+
+	# Capture start layer before any gates
+	start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 	# Determine result width
 	if isinstance(other, qint):  # Includes qint subclasses like qint_mod
 		result_width = max(self.bits, (<qint>other).bits)
@@ -320,6 +375,14 @@ def __mul__(self, other):
 
 	# Perform multiplication into result
 	self.multiplication_inplace(other, result)
+
+	# Layer tracking for uncomputation
+	result._start_layer = start_layer
+	result._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+	result.operation_type = 'MUL'
+	result.add_dependency(self)
+	if isinstance(other, qint):
+		result.add_dependency(other)
 
 	return result
 
@@ -343,6 +406,13 @@ def __rmul__(self, other):
 	>>> b.width
 	8
 	"""
+	cdef int start_layer
+	cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+	cdef bint _circ_init = _get_circuit_initialized()
+
+	# Capture start layer before any gates
+	start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 	# For int * qint, result width is qint's width
 	if type(other) == int:
 		result_width = self.bits
@@ -352,6 +422,15 @@ def __rmul__(self, other):
 
 	result = qint(width=result_width)
 	self.multiplication_inplace(other, result)
+
+	# Layer tracking for uncomputation
+	result._start_layer = start_layer
+	result._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+	result.operation_type = 'MUL'
+	result.add_dependency(self)
+	if isinstance(other, qint):
+		result.add_dependency(other)
+
 	return result
 
 def __imul__(self, other):
