@@ -11,13 +11,20 @@ Coverage:
 - Qubit distinctness: copy produces fresh qubits
 """
 
+import gc
+import warnings
+
 import pytest
+import qiskit.qasm3
+from qiskit_aer import AerSimulator
 from verify_helpers import (
     format_failure_message,
     generate_exhaustive_values,
 )
 
 import quantum_language as ql
+
+warnings.filterwarnings("ignore", message="Value .* exceeds")
 
 # ====================================================================
 # PARAMETRIZE DATA
@@ -132,3 +139,59 @@ def test_qbool_copy_value(verify_circuit, value):
 
     actual, expected = verify_circuit(circuit_builder, width=1)
     assert actual == expected, f"qbool.copy({value}): expected {expected}, got {actual}"
+
+
+# ====================================================================
+# UNCOMPUTATION TESTS
+# ====================================================================
+
+
+def test_copy_uncomputation():
+    """Test that copy() participates in scope-based automatic uncomputation.
+
+    Creates a copy inside a with-block with EAGER mode enabled.
+    After scope exit, the copy's ancilla qubits should be uncomputed (|0>).
+    """
+    gc.collect()
+    ql.circuit()
+    ql.option("qubit_saving", True)
+
+    width = 3
+    value = 5
+
+    a = ql.qint(value, width=width)
+    with ql.qbool(True):
+        b = a.copy()
+
+    # After with-block, b should be uncomputed
+    qasm_str = ql.to_openqasm()
+    ql.option("qubit_saving", False)
+
+    # Keep references alive until after QASM export
+    del a, b
+
+    circuit = qiskit.qasm3.loads(qasm_str)
+    if not circuit.cregs:
+        circuit.measure_all()
+
+    sim = AerSimulator(method="statevector")
+    job = sim.run(circuit, shots=1)
+    counts = job.result().get_counts()
+    bitstring = list(counts.keys())[0]
+
+    n = len(bitstring)
+
+    # Layout: [copy_bits (uncomputed)][condition_bit][input_a_bits]
+    # input_a is rightmost (first allocated), width=3
+    # condition bit is next (1 bit for qbool)
+    # copy bits should be uncomputed (all 0)
+    input_a_bits = bitstring[n - width :]
+    actual_a = int(input_a_bits, 2)
+    assert actual_a == value, f"Input a corrupted: expected {value}, got {actual_a}"
+
+    # Everything left of input_a and condition should be 0 (uncomputed)
+    # The copy qubits and any intermediates should be cleaned up
+    ancilla_region = bitstring[: n - width - 1]  # exclude input_a and condition bit
+    assert all(bit == "0" for bit in ancilla_region), (
+        f"Ancilla not clean after uncomputation: {ancilla_region} (full: {bitstring})"
+    )
