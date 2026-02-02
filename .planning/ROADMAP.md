@@ -8,7 +8,7 @@
 - v1.3 Package & Array - Phases 21-24 (shipped 2026-01-29)
 - v1.4 OpenQASM Export - Phases 25-27 (shipped 2026-01-30)
 - v1.5 Bug Fixes & Verification - Phases 28-33 (shipped 2026-02-01)
-- v1.6 Array & Comparison Fixes - Phases 34-36 (in progress)
+- v1.6 Array & Comparison Fixes - Phases 34-36 (shipped 2026-02-01)
 
 ## Overview
 
@@ -18,7 +18,7 @@ v1.6 fixes three categories of bugs discovered during v1.5 exhaustive verificati
 
 - [x] **Phase 34: Array Fixes** - Fix constructor value initialization and element-wise operations
 - [x] **Phase 35: Comparison Bug Fixes** - Fix eq/ne inversion, MSB boundary errors, and circuit explosion
-- [ ] **Phase 36: Verification & Regression** - Convert xfail tests to passing and confirm no regressions
+- [x] **Phase 36: Verification & Regression** - Convert xfail tests to passing and confirm no regressions
 
 ## Phase Details
 
@@ -64,7 +64,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 36-01: Convert xfail tests to passing and run full regression suite
+- [x] 36-01: Convert xfail tests to passing and run full regression suite
 
 ## Progress
 
@@ -74,7 +74,7 @@ Plans:
 |-------|-----------|----------------|--------|-----------|
 | 34. Array Fixes | v1.6 | 1/1 | Complete | 2026-02-01 |
 | 35. Comparison Bug Fixes | v1.6 | 3/3 | Complete | 2026-02-01 |
-| 36. Verification & Regression | v1.6 | 0/1 | Not started | - |
+| 36. Verification & Regression | v1.6 | 1/1 | Complete | 2026-02-01 |
 
 ---
 *Roadmap created: 2026-02-01 for v1.6 Array & Comparison Fixes*

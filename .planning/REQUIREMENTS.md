@@ -23,8 +23,8 @@ Requirements for Array & Comparison Fixes milestone. Each maps to roadmap phases
 
 ### Verification
 
-- [ ] **VER-01**: All previously xfail tests for fixed bugs convert to passing
-- [ ] **VER-02**: No regressions in existing passing tests
+- [x] **VER-01**: All previously xfail tests for fixed bugs convert to passing
+- [x] **VER-02**: No regressions in existing passing tests
 
 ## Future Requirements
 
@@ -60,8 +60,8 @@ Deferred to later milestones.
 | CMP-FIX-01 | Phase 35 | Complete |
 | CMP-FIX-02 | Phase 35 | Complete |
 | CMP-FIX-03 | Phase 35 | Complete |
-| VER-01 | Phase 36 | Pending |
-| VER-02 | Phase 36 | Pending |
+| VER-01 | Phase 36 | Complete |
+| VER-02 | Phase 36 | Complete |
 
 **Coverage:**
 - v1.6 requirements: 10 total
@@ -70,4 +70,4 @@ Deferred to later milestones.
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-01 after Phase 35 completion*
+*Last updated: 2026-02-01 after Phase 36 completion*
