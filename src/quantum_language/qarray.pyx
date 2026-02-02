@@ -862,10 +862,8 @@ cdef class qarray:
         """
         cdef qarray other_arr
 
-        # Scalar broadcast
+        # Scalar broadcast (int passed directly - qint operators handle int natively via CQ_*)
         if type(other) == int or isinstance(other, qint):
-            if type(other) == int:
-                other = qint(other, width=self._width)
             for i in range(len(self._elements)):
                 self._elements[i] = getattr(self._elements[i], iop_name)(other)
             return self
@@ -879,11 +877,11 @@ cdef class qarray:
             return self
 
         # List or numpy array - element-wise with classical values
+        # (values passed directly - qint operators handle int natively via CQ_*)
         elif isinstance(other, (list, np.ndarray)):
             flat_values = self._coerce_sequence(other)
             for i in range(len(self._elements)):
-                val = qint(flat_values[i], width=self._width) if type(flat_values[i]) == int else flat_values[i]
-                self._elements[i] = getattr(self._elements[i], iop_name)(val)
+                self._elements[i] = getattr(self._elements[i], iop_name)(flat_values[i])
             return self
 
         else:
