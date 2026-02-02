@@ -9,7 +9,7 @@ Requirements for v1.8 release. Each maps to roadmap phases.
 
 ### Quantum Copy
 
-- [ ] **COPY-01**: qint supports CNOT-based quantum state copy (allocate new qubits, CNOT each bit from source to target)
+- [x] **COPY-01**: qint supports CNOT-based quantum state copy (allocate new qubits, CNOT each bit from source to target)
 - [ ] **COPY-02**: qarray binary ops (`+`, `-`, `*`, etc.) produce new arrays with quantum-copied elements instead of classical-value-initialized elements
 - [ ] **COPY-03**: qint binary ops (`qint + int`, `qint + qint`) use quantum copy for the source operand before applying the operation
 
@@ -45,7 +45,7 @@ Requirements for v1.8 release. Each maps to roadmap phases.
 |-------------|-------|--------|
 | UNCOMP-01 | Phase 41 | Complete |
 | UNCOMP-02 | Phase 41 | Complete |
-| COPY-01 | Phase 42 | Pending |
+| COPY-01 | Phase 42 | Complete |
 | COPY-02 | Phase 43 | Pending |
 | COPY-03 | Phase 43 | Pending |
 | AMUT-01 | Phase 44 | Pending |

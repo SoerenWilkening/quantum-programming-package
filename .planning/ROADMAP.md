@@ -16,7 +16,7 @@
 - Decimal phases (e.g., 42.1): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 41: Uncomputation Fix** - Investigate and fix the uncomputation regression
-- [ ] **Phase 42: Quantum Copy Foundation** - CNOT-based quantum state copy for qint
+- [x] **Phase 42: Quantum Copy Foundation** - CNOT-based quantum state copy for qint
 - [ ] **Phase 43: Copy-Aware Binary Operations** - Binary ops use quantum copy instead of classical initialization
 - [ ] **Phase 44: Array Mutability** - In-place augmented assignment for qarray elements
 
@@ -49,7 +49,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 42-01-PLAN.md — Implement copy()/copy_onto() on qint, qbool.copy() override, and Qiskit-verified tests
+- [x] 42-01-PLAN.md — Implement copy()/copy_onto() on qint, qbool.copy() override, and Qiskit-verified tests
 
 ### Phase 43: Copy-Aware Binary Operations
 **Goal**: Binary operations on qint and qarray preserve quantum state by using quantum copy instead of classical value initialization
@@ -90,7 +90,7 @@ Phases execute in numeric order: 41 -> 42 -> 43 -> 44
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 41. Uncomputation Fix | 2/2 | ✓ Complete | 2026-02-02 |
-| 42. Quantum Copy Foundation | 0/TBD | Not started | - |
+| 42. Quantum Copy Foundation | 1/1 | ✓ Complete | 2026-02-02 |
 | 43. Copy-Aware Binary Ops | 0/TBD | Not started | - |
 | 44. Array Mutability | 0/TBD | Not started | - |
 

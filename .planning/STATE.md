@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 Phase: 42 of 44 (Quantum Copy Foundation)
 Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-02-02 - Completed 42-01-PLAN.md (copy primitives)
+Last activity: 2026-02-02 - Completed 42-01-PLAN.md + gap closure (uncomputation test)
 
 Progress: [####################] 50% (2/4 phases in v1.8)
 
