@@ -792,7 +792,8 @@ cdef class qint(circuit):
 			result_width = max(self.bits, (<qint>other).bits)
 		else:
 			result_width = self.bits
-		a = qint(value = self.value, width = result_width)
+		a = qint(width=result_width)
+		a ^= self
 		a += other
 
 		# Phase 41: Layer tracking for uncomputation
@@ -837,7 +838,8 @@ cdef class qint(circuit):
 			result_width = max(self.bits, (<qint>other).bits)
 		else:
 			result_width = self.bits
-		a = qint(value = self.value, width = result_width)
+		a = qint(width=result_width)
+		a ^= self
 		a += other
 
 		# Phase 41: Layer tracking for uncomputation
@@ -907,7 +909,8 @@ cdef class qint(circuit):
 			result_width = max(self.bits, (<qint>other).bits)
 		else:
 			result_width = self.bits
-		a = qint(value = self.value, width = result_width)
+		a = qint(width=result_width)
+		a ^= self
 		a -= other
 
 		# Phase 41: Layer tracking for uncomputation
