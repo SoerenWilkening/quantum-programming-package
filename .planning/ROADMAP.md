@@ -66,10 +66,10 @@ Plans:
   3. All element-wise arithmetic ops (add, sub, mul) with classical values optimized
   4. All element-wise bitwise ops (and, or, xor) with classical values optimized
   5. Existing array tests pass with no behavioral changes (optimization only)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 40-01: TBD
+- [ ] 40-01-PLAN.md — Remove temporary qint allocation for classical operands in array in-place operations
 
 ### Phase 41: Verification & Regression
 
