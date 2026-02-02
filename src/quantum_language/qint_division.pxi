@@ -62,7 +62,9 @@ def __floordiv__(self, divisor):
 		# For Phase 7, use general algorithm - optimization later
 
 		# Restoring division: try subtracting divisor * 2^bit for each bit position
-		for bit_pos in range(self.bits - 1, -1, -1):
+		# Limit loop to positions where divisor << bit_pos fits in register width
+		max_bit_pos = self.bits - divisor.bit_length()
+		for bit_pos in range(max_bit_pos, -1, -1):
 			# Try subtracting divisor << bit_pos
 			trial_value = divisor << bit_pos
 
@@ -173,7 +175,9 @@ def __mod__(self, divisor):
 
 		# Efficient modulo: just compute remainder, no quotient needed
 		# Use same restoring division but only track remainder
-		for bit_pos in range(self.bits - 1, -1, -1):
+		# Limit loop to positions where divisor << bit_pos fits in register width
+		max_bit_pos = self.bits - divisor.bit_length()
+		for bit_pos in range(max_bit_pos, -1, -1):
 			trial_value = divisor << bit_pos
 
 			# Check if remainder >= trial_value
@@ -268,7 +272,9 @@ def __divmod__(self, divisor):
 		remainder ^= self
 
 		# Restoring division: compute both quotient and remainder
-		for bit_pos in range(self.bits - 1, -1, -1):
+		# Limit loop to positions where divisor << bit_pos fits in register width
+		max_bit_pos = self.bits - divisor.bit_length()
+		for bit_pos in range(max_bit_pos, -1, -1):
 			trial_value = divisor << bit_pos
 
 			# Check if remainder >= trial_value
