@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-02)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Phase 37 - Division Overflow Fix
+**Current focus:** Phase 40 array optimization complete; phases 38-39, 41 deferred
 
 ## Current Position
 
-Phase: 37 of 41 (Division Overflow Fix)
+Phase: 40 of 41 (Array Classical Optimization) — complete
 Plan: 1 of 1 (complete)
-Status: Phase complete
-Last activity: 2026-02-02 — Completed 37-01-PLAN.md
+Status: Phase 40 complete; phases 38-39, 41 deferred
+Last activity: 2026-02-02 — Completed 40-01-PLAN.md
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 22% (v1.7)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 125 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 1)
+- Total plans completed: 126 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2)
 - Average duration: ~13 min/plan
 - Total execution time: ~21.6 hours
 
@@ -43,6 +43,8 @@ Progress: [██░░░░░░░░] 20%
 See PROJECT.md Key Decisions table for full history.
 
 Recent decisions:
+- Phase 40: Remove all temporary qint wrapping in _inplace_binary_op; qint operators handle int natively via CQ_*
+- Phase 38: DEFERRED — Beauregard-style fix attempted but incomplete (see findings below)
 - Phase 37: max_bit_pos = self.bits - divisor.bit_length() for safe division loop bounds
 - Phase 37: BUG-DIV-02 identified as separate MSB comparison leak (9 cases per test file)
 - Phase 36: Target index formula (64 - comp_width + i_bit) for proper LSB alignment in widened comparisons
@@ -53,8 +55,18 @@ Recent decisions:
 **Active (targeted for v1.7):**
 - ~~BUG-DIV-01: Division overflow for divisor >= 2^(w-1) → Phase 37~~ FIXED
 - BUG-DIV-02: MSB comparison leak in division (9 cases, values >= 2^(w-1))
-- BUG-MOD-REDUCE: _reduce_mod result corruption → Phase 38
-- BUG-COND-MUL-01: Controlled multiplication corruption → Phase 39
+- BUG-MOD-REDUCE: _reduce_mod result corruption → Phase 38 (DEFERRED)
+- BUG-COND-MUL-01: Controlled multiplication corruption → Phase 39 (DEFERRED)
+
+**Phase 38 Attempt Findings (for future reference):**
+- Beauregard-style subtract-and-check-sign pattern was implemented
+- Add/mul mostly work for small moduli (N=3,5) but:
+  - __sub__ fix causes "duplicate qubit arguments" errors for N>=7 (MSB sign bit creates view that shares physical qubit, causing conflicts in controlled operations)
+  - N=13 multiplication circuits require 524GB+ memory for simulation (too many qubits from iterative widening)
+  - The iteration count (max_subtractions = (max_val-1)//N) creates too many iterations for larger moduli, each widening adds qubits
+- Test run: 83 passed, 22 failed (memory), 107 xfailed out of 212
+- Root issue: the widening-per-iteration approach doesn't scale; needs a fundamentally different circuit structure for larger moduli
+- Research and plan exist at .planning/phases/38-modular-reduction-fix/ for when this is reprioritized
 
 **Known limitations (not bugs):**
 - Dirty ancilla in gt/le comparisons (by design, 2 xfail preserved)
@@ -62,9 +74,9 @@ Recent decisions:
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 37-01-PLAN.md
+Stopped at: Completed 40-01-PLAN.md
 Resume file: None
-Resume action: Begin Phase 38 planning with `/gsd:plan-phase 38`
+Resume action: User decides next priority (phases 38-39, 41 still deferred)
 
 ---
-*State updated: 2026-02-02 after Phase 37 Plan 01 execution*
+*State updated: 2026-02-02 — Phase 40 complete, array classical optimization*
