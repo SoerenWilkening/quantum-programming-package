@@ -4,6 +4,9 @@
 # This file is included into qint.pyx via "include" directive.
 # Do NOT add imports, cdef class declarations, or standalone code.
 # Methods are indented at class level (one tab).
+#
+# Phase 41: Updated to match inline implementations with widened temps
+# for MSB-boundary correctness, plus layer tracking for uncomputation.
 
 # ====================================================================
 # COMPARISON OPERATIONS
@@ -79,7 +82,7 @@ def __eq__(self, other):
 		result.add_dependency(other)
 		result.operation_type = 'EQ'
 
-		# Capture layer boundaries
+		# Phase 41: Layer tracking for uncomputation
 		result._start_layer = start_layer
 		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
@@ -117,9 +120,10 @@ def __eq__(self, other):
 		qubit_array[0] = (<qint>result).qubits[63]
 
 		# Self operand qubits (right-aligned)
+		# C backend expects MSB-first, so reverse bit order
 		self_offset = 64 - self.bits
 		for i in range(self.bits):
-			qubit_array[1 + i] = self.qubits[self_offset + i]
+			qubit_array[1 + i] = self.qubits[self_offset + (self.bits - 1 - i)]
 
 		start = 1 + self.bits
 
@@ -130,15 +134,11 @@ def __eq__(self, other):
 		arr = qubit_array
 		run_instruction(seq, &arr[0], False, _circuit)
 
-		# Note: seq is caller-owned per comparison_ops.h, but we don't have
-		# a free_sequence binding exposed. This is consistent with existing
-		# codebase patterns where sequences are not explicitly freed.
-
 		# Track dependency on compared qint (classical doesn't need tracking)
 		result.add_dependency(self)
 		result.operation_type = 'EQ'
 
-		# Capture layer boundaries
+		# Phase 41: Layer tracking for uncomputation
 		result._start_layer = start_layer
 		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
@@ -197,10 +197,14 @@ def __lt__(self, other):
 	Notes
 	-----
 	Computes self - other in-place, checks MSB (sign bit), then restores self.
-	Phase 14: Refactored to use in-place subtract-add-back pattern without temporary qint allocation.
+	Uses widened (n+1)-bit temporaries to handle MSB boundary cases correctly.
 	"""
 	from quantum_language.qbool import qbool
 	cdef int start_layer
+	cdef int comp_width
+	cdef int operand_bits, i_bit
+	cdef sequence_t *seq
+	cdef unsigned int[:] arr
 	cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 	cdef bint _circuit_initialized = _get_circuit_initialized()
 
@@ -218,19 +222,47 @@ def __lt__(self, other):
 
 	# Handle qint operand
 	if type(other) == qint:
-		# In-place subtraction on self
-		self -= other
-		# Check MSB (sign bit) - if 1, result is negative (self < other)
-		msb = self[64 - self.bits]
+		# a < b means (a - b) is negative in signed interpretation.
+		# To handle full unsigned range, use (n+1)-bit subtraction:
+		# extend both operands by 1 bit (MSB=0 = unsigned) so the sign bit
+		# is never polluted by valid data bits.
+		comp_width = max(self.bits, (<qint>other).bits) + 1
+		# Create widened copies (zero-extended to comp_width)
+		temp_self = qint(0, width=comp_width)
+		temp_other = qint(0, width=comp_width)
+
+		# Copy operand bits to temp using LSB-aligned CNOT (upper bits stay 0 = zero-extension)
+		# CRITICAL: Cannot use ^= operator here because __ixor__ misaligns qubits when widths differ.
+
+		# Copy self's bits to temp_self (LSB-aligned)
+		operand_bits = self.bits
+		for i_bit in range(operand_bits):
+			qubit_array[0] = (<qint>temp_self).qubits[64 - comp_width + i_bit]  # target (LSB-aligned in widened temp)
+			qubit_array[1] = self.qubits[64 - operand_bits + i_bit]       # source
+			arr = qubit_array
+			seq = Q_xor(1)
+			run_instruction(seq, &arr[0], False, _circuit)
+
+		# Copy other's bits to temp_other (LSB-aligned)
+		operand_bits = (<qint>other).bits
+		for i_bit in range(operand_bits):
+			qubit_array[0] = (<qint>temp_other).qubits[64 - comp_width + i_bit]  # target (LSB-aligned in widened temp)
+			qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]  # source
+			arr = qubit_array
+			seq = Q_xor(1)
+			run_instruction(seq, &arr[0], False, _circuit)
+
+		# Subtract: temp_self -= temp_other
+		temp_self -= temp_other
+		# MSB of widened result is the true sign bit
+		msb = temp_self[63]
 		result = qbool()
-		result ^= msb  # Copy MSB to result
-		# Restore operand
-		self += other
-		# Track dependencies
+		result ^= msb
+		# Track dependencies on original operands
 		result.add_dependency(self)
 		result.add_dependency(other)
 		result.operation_type = 'LT'
-		# Capture layer boundaries
+		# Phase 41: Layer tracking for uncomputation
 		result._start_layer = start_layer
 		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 		return result
@@ -244,20 +276,10 @@ def __lt__(self, other):
 		if other > max_val:
 			return qbool(True)  # qint always < large value that doesn't fit
 
-		# In-place subtraction with classical value
-		self -= other
-		msb = self[64 - self.bits]
-		result = qbool()
-		result ^= msb
-		# Restore operand
-		self += other
-		# Track dependency on qint
-		result.add_dependency(self)
-		result.operation_type = 'LT'
-		# Capture layer boundaries
-		result._start_layer = start_layer
-		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
-		return result
+		# Create temp qint to use the qint-qint __lt__ path
+		# (ensures consistent widened comparison logic)
+		temp = qint(other, width=self.bits)
+		return self < temp
 
 	raise TypeError("Comparison requires qint or int")
 
@@ -285,11 +307,15 @@ def __gt__(self, other):
 
 	Notes
 	-----
-	Phase 14: Refactored to use in-place pattern for qint operands.
-	For int operands, uses NOT(self <= other) for efficiency.
+	Uses widened (n+1)-bit temporaries for qint operands.
+	For int operands, creates temp qint and delegates.
 	"""
 	from quantum_language.qbool import qbool
 	cdef int start_layer
+	cdef int comp_width
+	cdef int operand_bits, i_bit
+	cdef sequence_t *seq
+	cdef unsigned int[:] arr
 	cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 	cdef bint _circuit_initialized = _get_circuit_initialized()
 
@@ -307,19 +333,47 @@ def __gt__(self, other):
 
 	# Handle qint operand
 	if type(other) == qint:
-		# a > b means (b - a) is negative
-		# Subtract self from other (in-place on other, then restore)
-		other -= self
-		msb = other[64 - (<qint>other).bits]
+		# a > b means (b - a) is negative in signed interpretation.
+		# To handle full unsigned range, use (n+1)-bit subtraction:
+		# extend both operands by 1 bit (MSB=0 = unsigned) so the sign bit
+		# is never polluted by valid data bits.
+		comp_width = max(self.bits, (<qint>other).bits) + 1
+		# Create widened copies (zero-extended to comp_width)
+		temp_other = qint(0, width=comp_width)
+		temp_self = qint(0, width=comp_width)
+
+		# Copy operand bits to temp using LSB-aligned CNOT (upper bits stay 0 = zero-extension)
+		# CRITICAL: Cannot use ^= operator here because __ixor__ misaligns qubits when widths differ.
+
+		# Copy other's bits to temp_other (LSB-aligned)
+		operand_bits = (<qint>other).bits
+		for i_bit in range(operand_bits):
+			qubit_array[0] = (<qint>temp_other).qubits[64 - comp_width + i_bit]  # target (LSB-aligned in widened temp)
+			qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]  # source
+			arr = qubit_array
+			seq = Q_xor(1)
+			run_instruction(seq, &arr[0], False, _circuit)
+
+		# Copy self's bits to temp_self (LSB-aligned)
+		operand_bits = self.bits
+		for i_bit in range(operand_bits):
+			qubit_array[0] = (<qint>temp_self).qubits[64 - comp_width + i_bit]  # target (LSB-aligned in widened temp)
+			qubit_array[1] = self.qubits[64 - operand_bits + i_bit]       # source
+			arr = qubit_array
+			seq = Q_xor(1)
+			run_instruction(seq, &arr[0], False, _circuit)
+
+		# Subtract: temp_other -= temp_self
+		temp_other -= temp_self
+		# MSB of widened result is the true sign bit
+		msb = temp_other[63]
 		result = qbool()
 		result ^= msb
-		# Restore operand
-		other += self
-		# Track dependencies
+		# Track dependencies on original operands
 		result.add_dependency(self)
 		result.add_dependency(other)
 		result.operation_type = 'GT'
-		# Capture layer boundaries
+		# Phase 41: Layer tracking for uncomputation
 		result._start_layer = start_layer
 		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 		return result
@@ -333,8 +387,10 @@ def __gt__(self, other):
 		if other > max_val:
 			return qbool(False)  # qint always < large value, so not >
 
-		# For int: a > b is NOT(a <= b)
-		return ~(self <= other)
+		# Create temp qint to use the qint-qint __gt__ path
+		# (avoids circular __gt__ -> __le__ -> __gt__ dependency)
+		temp = qint(other, width=self.bits)
+		return self > temp
 
 	raise TypeError("Comparison requires qint or int")
 
@@ -362,8 +418,7 @@ def __le__(self, other):
 
 	Notes
 	-----
-	Phase 14: Refactored to use in-place subtract-add-back pattern.
-	a <= b means (a - b) is negative OR zero.
+	a <= b is equivalent to NOT(a > b).
 	"""
 	from quantum_language.qbool import qbool
 	cdef int start_layer
@@ -384,27 +439,8 @@ def __le__(self, other):
 
 	# Handle qint operand
 	if type(other) == qint:
-		self -= other
-		# Check MSB (negative)
-		is_negative = self[64 - self.bits]
-		# Check zero using Phase 13 pattern
-		is_zero = (self == 0)
-		# OR combination: result = is_negative | is_zero
-		result = qbool()
-		result ^= is_negative
-		temp_zero = qbool()
-		temp_zero ^= is_zero
-		result |= temp_zero
-		# Restore operand
-		self += other
-		# Track dependencies
-		result.add_dependency(self)
-		result.add_dependency(other)
-		result.operation_type = 'LE'
-		# Capture layer boundaries
-		result._start_layer = start_layer
-		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
-		return result
+		# a <= b is equivalent to NOT(a > b)
+		return ~(self > other)
 
 	# Handle int operand
 	if type(other) == int:
@@ -415,23 +451,8 @@ def __le__(self, other):
 		if other > max_val:
 			return qbool(True)  # qint always <= large value
 
-		self -= other
-		is_negative = self[64 - self.bits]
-		is_zero = (self == 0)
-		result = qbool()
-		result ^= is_negative
-		temp_zero = qbool()
-		temp_zero ^= is_zero
-		result |= temp_zero
-		# Restore operand
-		self += other
-		# Track dependency on qint
-		result.add_dependency(self)
-		result.operation_type = 'LE'
-		# Capture layer boundaries
-		result._start_layer = start_layer
-		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
-		return result
+		# a <= b is equivalent to NOT(a > b)
+		return ~(self > other)
 
 	raise TypeError("Comparison requires qint or int")
 
@@ -457,8 +478,7 @@ def __ge__(self, other):
 
 	Notes
 	-----
-	Phase 14: Added self-comparison optimization.
-	Delegates to NOT(self < other) which uses in-place pattern.
+	Delegates to NOT(self < other) which uses widened-temp pattern.
 	"""
 	from quantum_language.qbool import qbool
 

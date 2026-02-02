@@ -767,6 +767,13 @@ cdef class qint(circuit):
 		>>> c.width
 		8
 		"""
+		cdef int start_layer
+		cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+		cdef bint _circ_init = _get_circuit_initialized()
+
+		# Phase 41: Capture start layer before any gates
+		start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 		# out of place addition - result width is max of operands
 		if type(other) == qint:
 			result_width = max(self.bits, (<qint>other).bits)
@@ -774,6 +781,15 @@ cdef class qint(circuit):
 			result_width = self.bits
 		a = qint(value = self.value, width = result_width)
 		a += other
+
+		# Phase 41: Layer tracking for uncomputation
+		a._start_layer = start_layer
+		a._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+		a.operation_type = 'ADD'
+		a.add_dependency(self)
+		if type(other) == qint:
+			a.add_dependency(other)
+
 		return a
 
 	def __radd__(self, other: qint | int):
@@ -796,6 +812,13 @@ cdef class qint(circuit):
 		>>> b.width
 		8
 		"""
+		cdef int start_layer
+		cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+		cdef bint _circ_init = _get_circuit_initialized()
+
+		# Phase 41: Capture start layer before any gates
+		start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 		# out of place addition - result width is max of operands
 		if type(other) == qint:
 			result_width = max(self.bits, (<qint>other).bits)
@@ -803,6 +826,15 @@ cdef class qint(circuit):
 			result_width = self.bits
 		a = qint(value = self.value, width = result_width)
 		a += other
+
+		# Phase 41: Layer tracking for uncomputation
+		a._start_layer = start_layer
+		a._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+		a.operation_type = 'ADD'
+		a.add_dependency(self)
+		if type(other) == qint:
+			a.add_dependency(other)
+
 		return a
 
 	def __iadd__(self, other: qint | int):
@@ -850,6 +882,13 @@ cdef class qint(circuit):
 		>>> c.width
 		8
 		"""
+		cdef int start_layer
+		cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+		cdef bint _circ_init = _get_circuit_initialized()
+
+		# Phase 41: Capture start layer before any gates
+		start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 		# out of place subtraction - result width is max of operands
 		if type(other) == qint:
 			result_width = max(self.bits, (<qint>other).bits)
@@ -857,6 +896,15 @@ cdef class qint(circuit):
 			result_width = self.bits
 		a = qint(value = self.value, width = result_width)
 		a -= other
+
+		# Phase 41: Layer tracking for uncomputation
+		a._start_layer = start_layer
+		a._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+		a.operation_type = 'SUB'
+		a.add_dependency(self)
+		if type(other) == qint:
+			a.add_dependency(other)
+
 		return a
 
 	def __isub__(self, other: qint | int):
@@ -978,6 +1026,13 @@ cdef class qint(circuit):
 		>>> c.width
 		16
 		"""
+		cdef int start_layer
+		cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+		cdef bint _circ_init = _get_circuit_initialized()
+
+		# Phase 41: Capture start layer before any gates
+		start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 		# Determine result width
 		if isinstance(other, qint):  # Includes qint subclasses like qint_mod
 			result_width = max(self.bits, (<qint>other).bits)
@@ -991,6 +1046,14 @@ cdef class qint(circuit):
 
 		# Perform multiplication into result
 		self.multiplication_inplace(other, result)
+
+		# Phase 41: Layer tracking for uncomputation
+		result._start_layer = start_layer
+		result._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+		result.operation_type = 'MUL'
+		result.add_dependency(self)
+		if isinstance(other, qint):
+			result.add_dependency(other)
 
 		return result
 
@@ -1014,6 +1077,13 @@ cdef class qint(circuit):
 		>>> b.width
 		8
 		"""
+		cdef int start_layer
+		cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+		cdef bint _circ_init = _get_circuit_initialized()
+
+		# Phase 41: Capture start layer before any gates
+		start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 		# For int * qint, result width is qint's width
 		if type(other) == int:
 			result_width = self.bits
@@ -1023,6 +1093,15 @@ cdef class qint(circuit):
 
 		result = qint(width=result_width)
 		self.multiplication_inplace(other, result)
+
+		# Phase 41: Layer tracking for uncomputation
+		result._start_layer = start_layer
+		result._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+		result.operation_type = 'MUL'
+		result.add_dependency(self)
+		if isinstance(other, qint):
+			result.add_dependency(other)
+
 		return result
 
 	def __imul__(self, other):
@@ -1416,13 +1495,10 @@ cdef class qint(circuit):
 		# So we need to first copy self to result, then XOR other into result
 
 		# Copy self qubits to result using CNOT pattern
-		# For now, we do out-of-place: result = self, then result ^= other
 		self_offset = 64 - self.bits
 		result_offset = 64 - result_bits
 
 		# First, copy self to result by XORing self into result (result starts at 0)
-		# Q_xor(n) expects: [0:n]=target, [n:2n]=source
-		# Only copy self.bits LSBs; upper result bits stay |0> (zero-extension)
 		qubit_array[:self.bits] = result.qubits[result_offset:result_offset + self.bits]
 		qubit_array[self.bits:2*self.bits] = self.qubits[self_offset:64]
 		arr = qubit_array
@@ -1431,30 +1507,16 @@ cdef class qint(circuit):
 
 		# Now XOR other into result
 		if type(other) == int:
-			# Classical XOR: apply X gates where classical bits are 1
-			# We don't have CQ_xor, so we'll apply X gates manually
-			# Actually, Q_xor with a classical value is just applying X where bit=1
-			# For now, we use a simple loop pattern via existing NOT functionality
-			# This is a limitation - we don't have CQ_xor exposed
-			# We can simulate: for each bit i where (other >> i) & 1, apply X to result[i]
 			if _controlled:
 				raise NotImplementedError("Controlled classical-quantum XOR not yet supported")
 			else:
-				# Apply X gates for each 1 bit in the classical value
-				# Qubit storage is LSB-first: qubits[64-width] = bit 0 (LSB),
-				# qubits[63] = bit (width-1) (MSB)
 				for i in range(result_bits):
 					if (other >> i) & 1:
-						# Apply X to result bit i (from LSB)
-						# result.qubits[64 - result_bits + i] is the i-th bit from LSB
 						qubit_array[0] = result.qubits[64 - result_bits + i]
 						arr = qubit_array
 						seq = Q_not(1)
 						run_instruction(seq, &arr[0], False, _circuit)
 		else:
-			# Quantum-quantum XOR: result ^= other
-			# Q_xor(n) expects: [0:n]=target, [n:2n]=source
-			# We only need to XOR the other.bits LSBs of result
 			other_offset = 64 - (<qint>other).bits
 			qubit_array[:(<qint>other).bits] = result.qubits[result_offset:result_offset + (<qint>other).bits]
 			qubit_array[(<qint>other).bits:2*(<qint>other).bits] = (<qint>other).qubits[other_offset:64]
@@ -1504,20 +1566,16 @@ cdef class qint(circuit):
 		self_offset = 64 - self.bits
 
 		if type(other) == int:
-			# Classical XOR: apply X gates where classical bits are 1
 			if _controlled:
 				raise NotImplementedError("Controlled classical-quantum XOR not yet supported")
 			else:
 				for i in range(self.bits):
 					if (other >> i) & 1:
-						# Apply X to self bit i (from LSB)
-						# qubits[64 - width + i] is bit i (LSB-first storage)
 						qubit_array[0] = self.qubits[64 - self.bits + i]
 						arr = qubit_array
 						seq = Q_not(1)
 						run_instruction(seq, &arr[0], False, _circuit)
 		elif isinstance(other, qint):
-			# Quantum-quantum XOR: self ^= other
 			other_offset = 64 - (<qint>other).bits
 			qubit_array[:self.bits] = self.qubits[self_offset:64]
 			qubit_array[self.bits:self.bits + (<qint>other).bits] = (<qint>other).qubits[other_offset:64]
@@ -1613,6 +1671,7 @@ cdef class qint(circuit):
 
 	# ====================================================================
 	# COMPARISON OPERATIONS
+	# Phase 41: Added layer tracking for uncomputation support
 	# ====================================================================
 
 	def __eq__(self, other):
@@ -1648,6 +1707,7 @@ cdef class qint(circuit):
 		cdef unsigned int[:] arr
 		cdef int self_offset
 		cdef int start
+		cdef int start_layer
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _circuit_initialized = _get_circuit_initialized()
 		cdef bint _controlled = _get_controlled()
@@ -1657,6 +1717,9 @@ cdef class qint(circuit):
 		self._check_not_uncomputed()
 		if isinstance(other, qint):
 			(<qint>other)._check_not_uncomputed()
+
+		# Phase 41: Capture start layer for uncomputation
+		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		# Handle qint == qint case first (must come before int check)
 		if type(other) == qint:
@@ -1681,10 +1744,9 @@ cdef class qint(circuit):
 			result.add_dependency(other)
 			result.operation_type = 'EQ'
 
-			# Note: deliberately NOT setting _start_layer/_end_layer here.
-			# Comparison results must persist in the circuit even when GC'd,
-			# matching the pattern of arithmetic results (no auto-uncompute).
-			# See Phase 29-16 D29-16-2 for rationale.
+			# Phase 41: Layer tracking for uncomputation
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 			return result
 
@@ -1734,18 +1796,13 @@ cdef class qint(circuit):
 			arr = qubit_array
 			run_instruction(seq, &arr[0], False, _circuit)
 
-			# Note: seq is caller-owned per comparison_ops.h, but we don't have
-			# a free_sequence binding exposed. This is consistent with existing
-			# codebase patterns where sequences are not explicitly freed.
-
 			# Track dependency on compared qint (classical doesn't need tracking)
 			result.add_dependency(self)
 			result.operation_type = 'EQ'
 
-			# Note: deliberately NOT setting _start_layer/_end_layer here.
-			# Comparison results must persist in the circuit even when GC'd,
-			# matching the pattern of arithmetic results (no auto-uncompute).
-			# See Phase 29-16 D29-16-2 for rationale.
+			# Phase 41: Layer tracking for uncomputation
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 			return result
 
@@ -1780,7 +1837,7 @@ cdef class qint(circuit):
 	def __lt__(self, other):
 		"""Less-than comparison: self < other
 
-		Uses in-place subtraction and sign bit check. Preserves inputs.
+		Uses widened (n+1)-bit subtraction and sign bit check. Preserves inputs.
 
 		Parameters
 		----------
@@ -1801,8 +1858,7 @@ cdef class qint(circuit):
 
 		Notes
 		-----
-		Computes self - other in-place, checks MSB (sign bit), then restores self.
-		Phase 14: Refactored to use in-place subtract-add-back pattern without temporary qint allocation.
+		Uses widened temporaries (n+1 bits) to handle MSB boundary cases correctly.
 		"""
 		from .qbool import qbool
 		cdef int start_layer
@@ -1818,7 +1874,7 @@ cdef class qint(circuit):
 		if isinstance(other, qint):
 			(<qint>other)._check_not_uncomputed()
 
-		# Capture start layer
+		# Phase 41: Capture start layer for uncomputation
 		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		# Self-comparison optimization
@@ -1838,16 +1894,12 @@ cdef class qint(circuit):
 
 			# Copy operand bits to temp using LSB-aligned CNOT (upper bits stay 0 = zero-extension)
 			# CRITICAL: Cannot use ^= operator here because __ixor__ misaligns qubits when widths differ.
-			# When temp has comp_width bits and operand has fewer bits, __ixor__ builds qubit_array as
-			# [temp_all_bits, operand_all_bits] and calls Q_xor(min(w1,w2)), which can read from wrong
-			# array positions when the combined array overlaps temp's own qubits with operand qubits.
-			# Instead, copy each bit individually with CNOT to ensure LSB-aligned zero-extension.
 
 			# Copy self's bits to temp_self (LSB-aligned)
 			operand_bits = self.bits
 			for i_bit in range(operand_bits):
-				qubit_array[0] = (<qint>temp_self).qubits[64 - comp_width + i_bit]  # target (LSB-aligned in widened temp)
-				qubit_array[1] = self.qubits[64 - operand_bits + i_bit]       # source
+				qubit_array[0] = (<qint>temp_self).qubits[64 - comp_width + i_bit]
+				qubit_array[1] = self.qubits[64 - operand_bits + i_bit]
 				arr = qubit_array
 				seq = Q_xor(1)
 				run_instruction(seq, &arr[0], False, _circuit)
@@ -1855,8 +1907,8 @@ cdef class qint(circuit):
 			# Copy other's bits to temp_other (LSB-aligned)
 			operand_bits = (<qint>other).bits
 			for i_bit in range(operand_bits):
-				qubit_array[0] = (<qint>temp_other).qubits[64 - comp_width + i_bit]  # target (LSB-aligned in widened temp)
-				qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]  # source
+				qubit_array[0] = (<qint>temp_other).qubits[64 - comp_width + i_bit]
+				qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]
 				arr = qubit_array
 				seq = Q_xor(1)
 				run_instruction(seq, &arr[0], False, _circuit)
@@ -1871,9 +1923,9 @@ cdef class qint(circuit):
 			result.add_dependency(self)
 			result.add_dependency(other)
 			result.operation_type = 'LT'
-			# Note: deliberately NOT setting _start_layer/_end_layer here.
-			# Comparison results must persist in the circuit even when GC'd.
-			# temp_self and temp_other will be cleaned up by GC.
+			# Phase 41: Layer tracking for uncomputation
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 			return result
 
 		# Handle int operand
@@ -1886,7 +1938,6 @@ cdef class qint(circuit):
 				return qbool(True)  # qint always < large value that doesn't fit
 
 			# Create temp qint to use the qint-qint __lt__ path
-			# (ensures consistent widened comparison logic)
 			temp = qint(other, width=self.bits)
 			return self < temp
 
@@ -1895,7 +1946,8 @@ cdef class qint(circuit):
 	def __gt__(self, other):
 		"""Greater-than comparison: self > other
 
-		Uses in-place subtraction on other operand or delegates to <= for ints.
+		Uses widened (n+1)-bit subtraction for qint operands.
+		For int operands, creates temp qint and delegates.
 
 		Parameters
 		----------
@@ -1913,11 +1965,6 @@ cdef class qint(circuit):
 		>>> b = qint(3, width=8)
 		>>> result = (a > b)
 		>>> # result is qbool representing |True>
-
-		Notes
-		-----
-		Phase 14: Refactored to use in-place pattern for qint operands.
-		For int operands, uses NOT(self <= other) for efficiency.
 		"""
 		from .qbool import qbool
 		cdef int start_layer
@@ -1933,7 +1980,7 @@ cdef class qint(circuit):
 		if isinstance(other, qint):
 			(<qint>other)._check_not_uncomputed()
 
-		# Capture start layer
+		# Phase 41: Capture start layer for uncomputation
 		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		# Self-comparison optimization
@@ -1943,23 +1990,17 @@ cdef class qint(circuit):
 		# Handle qint operand
 		if type(other) == qint:
 			# a > b means (b - a) is negative in signed interpretation.
-			# To handle full unsigned range, use (n+1)-bit subtraction:
-			# extend both operands by 1 bit (MSB=0 = unsigned) so the sign bit
-			# is never polluted by valid data bits.
 			comp_width = max(self.bits, (<qint>other).bits) + 1
 			# Create widened copies (zero-extended to comp_width)
 			temp_other = qint(0, width=comp_width)
 			temp_self = qint(0, width=comp_width)
 
-			# Copy operand bits to temp using LSB-aligned CNOT (upper bits stay 0 = zero-extension)
-			# CRITICAL: Cannot use ^= operator here because __ixor__ misaligns qubits when widths differ.
-			# See __lt__ for detailed explanation of the alignment bug.
-
+			# Copy operand bits to temp using LSB-aligned CNOT
 			# Copy other's bits to temp_other (LSB-aligned)
 			operand_bits = (<qint>other).bits
 			for i_bit in range(operand_bits):
-				qubit_array[0] = (<qint>temp_other).qubits[64 - comp_width + i_bit]  # target (LSB-aligned in widened temp)
-				qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]  # source
+				qubit_array[0] = (<qint>temp_other).qubits[64 - comp_width + i_bit]
+				qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]
 				arr = qubit_array
 				seq = Q_xor(1)
 				run_instruction(seq, &arr[0], False, _circuit)
@@ -1967,8 +2008,8 @@ cdef class qint(circuit):
 			# Copy self's bits to temp_self (LSB-aligned)
 			operand_bits = self.bits
 			for i_bit in range(operand_bits):
-				qubit_array[0] = (<qint>temp_self).qubits[64 - comp_width + i_bit]  # target (LSB-aligned in widened temp)
-				qubit_array[1] = self.qubits[64 - operand_bits + i_bit]       # source
+				qubit_array[0] = (<qint>temp_self).qubits[64 - comp_width + i_bit]
+				qubit_array[1] = self.qubits[64 - operand_bits + i_bit]
 				arr = qubit_array
 				seq = Q_xor(1)
 				run_instruction(seq, &arr[0], False, _circuit)
@@ -1983,9 +2024,9 @@ cdef class qint(circuit):
 			result.add_dependency(self)
 			result.add_dependency(other)
 			result.operation_type = 'GT'
-			# Note: deliberately NOT setting _start_layer/_end_layer here.
-			# Comparison results must persist in the circuit even when GC'd.
-			# temp_other and temp_self will be cleaned up by GC.
+			# Phase 41: Layer tracking for uncomputation
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 			return result
 
 		# Handle int operand
@@ -1998,7 +2039,6 @@ cdef class qint(circuit):
 				return qbool(False)  # qint always < large value, so not >
 
 			# Create temp qint to use the qint-qint __gt__ path
-			# (avoids circular __gt__ -> __le__ -> __gt__ dependency)
 			temp = qint(other, width=self.bits)
 			return self > temp
 
@@ -2006,8 +2046,6 @@ cdef class qint(circuit):
 
 	def __le__(self, other):
 		"""Less-than-or-equal comparison: self <= other
-
-		Uses in-place subtraction to check if result is negative or zero.
 
 		Parameters
 		----------
@@ -2028,21 +2066,14 @@ cdef class qint(circuit):
 
 		Notes
 		-----
-		Phase 14: Refactored to use in-place subtract-add-back pattern.
-		a <= b means (a - b) is negative OR zero.
+		a <= b is equivalent to NOT(a > b).
 		"""
 		from .qbool import qbool
-		cdef int start_layer
-		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
-		cdef bint _circuit_initialized = _get_circuit_initialized()
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
 		if isinstance(other, qint):
 			(<qint>other)._check_not_uncomputed()
-
-		# Capture start layer
-		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
 		# Self-comparison optimization
 		if self is other:
@@ -2089,8 +2120,7 @@ cdef class qint(circuit):
 
 		Notes
 		-----
-		Phase 14: Added self-comparison optimization.
-		Delegates to NOT(self < other) which uses in-place pattern.
+		Delegates to NOT(self < other) which uses widened-temp pattern.
 		"""
 		from .qbool import qbool
 
@@ -2107,6 +2137,7 @@ cdef class qint(circuit):
 
 	# ====================================================================
 	# DIVISION OPERATIONS
+	# Phase 41: Added layer tracking for uncomputation support
 	# ====================================================================
 
 	def __floordiv__(self, divisor):
@@ -2143,6 +2174,12 @@ cdef class qint(circuit):
 		Quantum divisor: O(quotient) circuit via repeated subtraction.
 		"""
 		from quantum_language.qbool import qbool
+		cdef int start_layer
+		cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+		cdef bint _circ_init = _get_circuit_initialized()
+
+		# Phase 41: Capture start layer
+		start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
 
 		# Classical divisor case
 		if type(divisor) == int:
@@ -2158,9 +2195,6 @@ cdef class qint(circuit):
 			# Copy self to remainder via XOR (remainder starts at 0)
 			remainder ^= self
 
-			# Special case: power of 2 division (just right shift)
-			# For Phase 7, use general algorithm - optimization later
-
 			# Restoring division: try subtracting divisor * 2^bit for each bit position
 			for bit_pos in range(self.bits - 1, -1, -1):
 				# Try subtracting divisor << bit_pos
@@ -2174,56 +2208,39 @@ cdef class qint(circuit):
 					remainder -= trial_value
 					quotient += (1 << bit_pos)
 
+			# Phase 41: Layer tracking for uncomputation
+			quotient._start_layer = start_layer
+			quotient._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+			quotient.operation_type = 'DIV'
+			quotient.add_dependency(self)
+
 			return quotient
 
 		elif type(divisor) == qint:
 			# Quantum divisor - delegate to quantum division method
-			return self._floordiv_quantum(divisor)
+			result = self._floordiv_quantum(divisor)
+			# Phase 41: Layer tracking for uncomputation
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+			result.operation_type = 'DIV'
+			result.add_dependency(self)
+			result.add_dependency(divisor)
+			return result
 		else:
 			raise TypeError("Divisor must be int or qint")
 
 	def _floordiv_quantum(self, divisor: qint):
-		"""Floor division with quantum divisor: self // divisor
-
-		Uses repeated quantum comparison and conditional subtraction.
-		Per arXiv:1809.09732, implements restoring division algorithm.
-
-		Parameters
-		----------
-		divisor : qint
-			Quantum divisor.
-
-		Returns
-		-------
-		qint
-			Quotient.
-
-		Notes
-		-----
-		For quantum divisor, we cannot use bit-level algorithm
-		(shifting quantum values is expensive). Instead, we use
-		repeated subtraction: while remainder >= divisor, subtract.
-		This creates a circuit with O(quotient) iterations.
-		"""
+		"""Floor division with quantum divisor: self // divisor"""
 		cdef int comp_bits = max(self.bits, (<qint>divisor).bits)
 
-		# Allocate quotient and remainder
 		quotient = qint(0, width=comp_bits)
 		remainder = qint(0, width=comp_bits)
-
-		# Copy self to remainder via XOR (remainder starts at 0)
 		remainder ^= self
 
-		# Repeated conditional subtraction
-		# Maximum possible quotient is 2^comp_bits - 1
-		# We need to iterate enough times to complete division
 		max_iterations = (1 << comp_bits)
 
 		for _ in range(max_iterations):
-			# Check if remainder >= divisor
 			can_subtract = remainder >= divisor
-
-			# Conditional subtraction and increment
 			with can_subtract:
 				remainder -= divisor
 				quotient += 1
@@ -2258,6 +2275,13 @@ cdef class qint(circuit):
 		>>> r = a % 5
 		>>> # r represents |2>
 		"""
+		cdef int start_layer
+		cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+		cdef bint _circ_init = _get_circuit_initialized()
+
+		# Phase 41: Capture start layer
+		start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 		# Classical divisor case
 		if type(divisor) == int:
 			if divisor == 0:
@@ -2265,61 +2289,46 @@ cdef class qint(circuit):
 			if divisor < 0:
 				raise NotImplementedError("Negative divisor not yet supported")
 
-			# Allocate remainder
 			remainder = qint(0, width=self.bits)
-
-			# Copy self to remainder via XOR (remainder starts at 0)
 			remainder ^= self
 
-			# Efficient modulo: just compute remainder, no quotient needed
-			# Use same restoring division but only track remainder
 			for bit_pos in range(self.bits - 1, -1, -1):
 				trial_value = divisor << bit_pos
-
-				# Check if remainder >= trial_value
 				can_subtract = remainder >= trial_value
-
-				# Conditional subtraction (no quotient tracking)
 				with can_subtract:
 					remainder -= trial_value
+
+			# Phase 41: Layer tracking for uncomputation
+			remainder._start_layer = start_layer
+			remainder._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+			remainder.operation_type = 'MOD'
+			remainder.add_dependency(self)
 
 			return remainder
 
 		elif type(divisor) == qint:
-			# Quantum divisor - use quantum modulo
-			return self._mod_quantum(divisor)
+			result = self._mod_quantum(divisor)
+			# Phase 41: Layer tracking for uncomputation
+			result._start_layer = start_layer
+			result._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+			result.operation_type = 'MOD'
+			result.add_dependency(self)
+			result.add_dependency(divisor)
+			return result
 		else:
 			raise TypeError("Divisor must be int or qint")
 
 	def _mod_quantum(self, divisor: qint):
-		"""Modulo with quantum divisor: self % divisor
-
-		Parameters
-		----------
-		divisor : qint
-			Quantum divisor.
-
-		Returns
-		-------
-		qint
-			Remainder.
-		"""
+		"""Modulo with quantum divisor: self % divisor"""
 		cdef int comp_bits = max(self.bits, (<qint>divisor).bits)
 
-		# Allocate remainder
 		remainder = qint(0, width=comp_bits)
-
-		# Copy self to remainder via XOR
 		remainder ^= self
 
-		# Repeated conditional subtraction (same as division but no quotient)
 		max_iterations = (1 << comp_bits)
 
 		for _ in range(max_iterations):
-			# Check if remainder >= divisor
 			can_subtract = remainder >= divisor
-
-			# Conditional subtraction
 			with can_subtract:
 				remainder -= divisor
 
@@ -2353,6 +2362,13 @@ cdef class qint(circuit):
 		>>> q, r = divmod(a, 5)
 		>>> # q represents |3>, r represents |2>
 		"""
+		cdef int start_layer
+		cdef circuit_t *_circ = <circuit_t*><unsigned long long>_get_circuit()
+		cdef bint _circ_init = _get_circuit_initialized()
+
+		# Phase 41: Capture start layer
+		start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+
 		# Classical divisor case
 		if type(divisor) == int:
 			if divisor == 0:
@@ -2360,63 +2376,60 @@ cdef class qint(circuit):
 			if divisor < 0:
 				raise NotImplementedError("Negative divisor not yet supported")
 
-			# Allocate quotient and remainder
 			quotient = qint(0, width=self.bits)
 			remainder = qint(0, width=self.bits)
-
-			# Copy self to remainder via XOR
 			remainder ^= self
 
-			# Restoring division: compute both quotient and remainder
 			for bit_pos in range(self.bits - 1, -1, -1):
 				trial_value = divisor << bit_pos
-
-				# Check if remainder >= trial_value
 				can_subtract = remainder >= trial_value
-
-				# Conditional subtraction and quotient bit set
 				with can_subtract:
 					remainder -= trial_value
 					quotient += (1 << bit_pos)
 
+			# Phase 41: Layer tracking for uncomputation
+			end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+			quotient._start_layer = start_layer
+			quotient._end_layer = end_layer
+			quotient.operation_type = 'DIVMOD'
+			quotient.add_dependency(self)
+			remainder._start_layer = start_layer
+			remainder._end_layer = end_layer
+			remainder.operation_type = 'DIVMOD'
+			remainder.add_dependency(self)
+
 			return (quotient, remainder)
 
 		elif type(divisor) == qint:
-			# Quantum divisor - compute both
-			return self._divmod_quantum(divisor)
+			q, r = self._divmod_quantum(divisor)
+			# Phase 41: Layer tracking for uncomputation
+			end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
+			q._start_layer = start_layer
+			q._end_layer = end_layer
+			q.operation_type = 'DIVMOD'
+			q.add_dependency(self)
+			q.add_dependency(divisor)
+			r._start_layer = start_layer
+			r._end_layer = end_layer
+			r.operation_type = 'DIVMOD'
+			r.add_dependency(self)
+			r.add_dependency(divisor)
+			return (q, r)
 		else:
 			raise TypeError("Divisor must be int or qint")
 
 	def _divmod_quantum(self, divisor: qint):
-		"""Divmod with quantum divisor: divmod(self, divisor)
-
-		Parameters
-		----------
-		divisor : qint
-			Quantum divisor.
-
-		Returns
-		-------
-		tuple
-			(quotient, remainder) where both are qint.
-		"""
+		"""Divmod with quantum divisor: divmod(self, divisor)"""
 		cdef int comp_bits = max(self.bits, (<qint>divisor).bits)
 
-		# Allocate quotient and remainder
 		quotient = qint(0, width=comp_bits)
 		remainder = qint(0, width=comp_bits)
-
-		# Copy self to remainder via XOR
 		remainder ^= self
 
-		# Repeated conditional subtraction (compute both quotient and remainder)
 		max_iterations = (1 << comp_bits)
 
 		for _ in range(max_iterations):
-			# Check if remainder >= divisor
 			can_subtract = remainder >= divisor
-
-			# Conditional subtraction and increment
 			with can_subtract:
 				remainder -= divisor
 				quotient += 1
@@ -2424,82 +2437,25 @@ cdef class qint(circuit):
 		return (quotient, remainder)
 
 	def __rfloordiv__(self, other):
-		"""Reverse floor division: other // self
-
-		Parameters
-		----------
-		other : int
-			Dividend (numerator).
-
-		Returns
-		-------
-		qint
-			Quotient.
-
-		Examples
-		--------
-		>>> a = qint(5, width=8)
-		>>> q = 17 // a
-		>>> # q represents |3>
-		"""
-		# Convert int to qint and perform division
+		"""Reverse floor division: other // self"""
 		if type(other) == int:
 			other_qint = qint(other, width=self.bits)
 			return other_qint // self
 		else:
-			# For qint // qint, __floordiv__ should be called, not __rfloordiv__
 			raise TypeError("Reverse floor division requires int divisor")
 
 	def __rmod__(self, other):
-		"""Reverse modulo: other % self
-
-		Parameters
-		----------
-		other : int
-			Dividend (numerator).
-
-		Returns
-		-------
-		qint
-			Remainder.
-
-		Examples
-		--------
-		>>> a = qint(5, width=8)
-		>>> r = 17 % a
-		>>> # r represents |2>
-		"""
-		# Convert int to qint and perform modulo
+		"""Reverse modulo: other % self"""
 		if type(other) == int:
 			other_qint = qint(other, width=self.bits)
 			return other_qint % self
 		else:
-			# For qint % qint, __mod__ should be called, not __rmod__
 			raise TypeError("Reverse modulo requires int divisor")
 
 	def __rdivmod__(self, other):
-		"""Reverse divmod: divmod(other, self)
-
-		Parameters
-		----------
-		other : int
-			Dividend (numerator).
-
-		Returns
-		-------
-		tuple of qint
-			(quotient, remainder).
-
-		Examples
-		--------
-		>>> a = qint(5, width=8)
-		>>> q, r = divmod(17, a)
-		>>> # q represents |3>, r represents |2>
-		"""
-		# Convert int to qint and perform divmod
+		"""Reverse divmod: divmod(other, self)"""
 		if type(other) == int:
 			other_qint = qint(other, width=self.bits)
 			return divmod(other_qint, self)
 		else:
-			# For qint divmod qint, __divmod__ should be called
 			raise TypeError("Reverse divmod requires int divisor")

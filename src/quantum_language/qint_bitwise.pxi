@@ -9,6 +9,9 @@
 # Methods are indented at class level and become part of the qint class
 # when the file is compiled. Do NOT include imports or class declarations
 # here - those remain in qint.pyx.
+#
+# Phase 41: Updated to match inline implementations with correct
+# allocation ordering (padding before result) and layer tracking.
 # ====================================================================
 
 def __and__(self, other):
@@ -60,7 +63,17 @@ def __and__(self, other):
 	else:
 		raise TypeError("Operand must be qint or int")
 
-	# Allocate result (ancilla qubits)
+	# Allocate padding ancilla BEFORE result so result gets highest qubit indices
+	# (result must be last-allocated for bitstring[:width] extraction to work)
+	_self_pad_qint = None
+	_other_pad_qint = None
+	if self.bits < result_bits:
+		_self_pad_qint = qint(width=result_bits - self.bits)
+	if type(other) != int and isinstance(other, qint):
+		if (<qint>other).bits < result_bits:
+			_other_pad_qint = qint(width=result_bits - (<qint>other).bits)
+
+	# Allocate result (ancilla qubits) -- must be last for extraction
 	result = qint(width=result_bits)
 
 	# Register dependencies
@@ -70,8 +83,6 @@ def __and__(self, other):
 	result.operation_type = 'AND'
 
 	# Build qubit array: [output:N], [self:N], [other:N]
-	# Q_and expects: [0:bits] = output, [bits:2*bits] = A, [2*bits:3*bits] = B
-	# Qubit storage is LSB-first: index 0 = LSB
 	self_offset = 64 - self.bits
 	result_offset = 64 - result_bits
 
@@ -79,17 +90,13 @@ def __and__(self, other):
 	qubit_array[:result_bits] = result.qubits[result_offset:64]
 	# Self qubits (LSB positions) - at position result_bits
 	qubit_array[result_bits:result_bits + self.bits] = self.qubits[self_offset:64]
-	# Zero-extend self if narrower: allocate ancilla for MSB padding
-	if self.bits < result_bits:
+	# Zero-extend self if narrower: use pre-allocated padding for MSB
+	if _self_pad_qint is not None:
 		_self_pad = result_bits - self.bits
-		_self_pad_qint = qint(width=_self_pad)
 		qubit_array[result_bits + self.bits:2*result_bits] = _self_pad_qint.qubits[64 - _self_pad:64]
-	else:
-		_self_pad_qint = None
 
 	if type(other) == int:
 		# Classical-quantum AND
-		# CQ_and expects: [0:bits] = output, [bits:2*bits] = quantum operand
 		if _controlled:
 			raise NotImplementedError("Controlled classical-quantum AND not yet supported")
 		else:
@@ -98,13 +105,10 @@ def __and__(self, other):
 		# Quantum-quantum AND
 		other_offset = 64 - (<qint>other).bits
 		qubit_array[2*result_bits:2*result_bits + (<qint>other).bits] = (<qint>other).qubits[other_offset:64]
-		# Zero-extend other if narrower
-		if (<qint>other).bits < result_bits:
+		# Zero-extend other if narrower: use pre-allocated padding for MSB
+		if _other_pad_qint is not None:
 			_other_pad = result_bits - (<qint>other).bits
-			_other_pad_qint = qint(width=_other_pad)
 			qubit_array[2*result_bits + (<qint>other).bits:3*result_bits] = _other_pad_qint.qubits[64 - _other_pad:64]
-		else:
-			_other_pad_qint = None
 
 		if _controlled:
 			raise NotImplementedError("Controlled quantum-quantum AND not yet supported")
@@ -201,7 +205,16 @@ def __or__(self, other):
 	else:
 		raise TypeError("Operand must be qint or int")
 
-	# Allocate result (ancilla qubits)
+	# Allocate padding ancilla BEFORE result so result gets highest qubit indices
+	_self_pad_qint = None
+	_other_pad_qint = None
+	if self.bits < result_bits:
+		_self_pad_qint = qint(width=result_bits - self.bits)
+	if type(other) != int and isinstance(other, qint):
+		if (<qint>other).bits < result_bits:
+			_other_pad_qint = qint(width=result_bits - (<qint>other).bits)
+
+	# Allocate result (ancilla qubits) -- must be last for extraction
 	result = qint(width=result_bits)
 
 	# Register dependencies
@@ -210,9 +223,7 @@ def __or__(self, other):
 		result.add_dependency(other)
 	result.operation_type = 'OR'
 
-	# Build qubit array: [output:N], [self:N], [other:N]
-	# Q_or expects: [0:bits] = output, [bits:2*bits] = A, [2*bits:3*bits] = B
-	# Qubit storage is LSB-first: index 0 = LSB
+	# Build qubit array
 	self_offset = 64 - self.bits
 	result_offset = 64 - result_bits
 
@@ -220,17 +231,13 @@ def __or__(self, other):
 	qubit_array[:result_bits] = result.qubits[result_offset:64]
 	# Self qubits (LSB positions) - at position result_bits
 	qubit_array[result_bits:result_bits + self.bits] = self.qubits[self_offset:64]
-	# Zero-extend self if narrower: allocate ancilla for MSB padding
-	if self.bits < result_bits:
+	# Zero-extend self if narrower
+	if _self_pad_qint is not None:
 		_self_pad = result_bits - self.bits
-		_self_pad_qint = qint(width=_self_pad)
 		qubit_array[result_bits + self.bits:2*result_bits] = _self_pad_qint.qubits[64 - _self_pad:64]
-	else:
-		_self_pad_qint = None
 
 	if type(other) == int:
 		# Classical-quantum OR
-		# CQ_or expects: [0:bits] = output, [bits:2*bits] = quantum operand
 		if _controlled:
 			raise NotImplementedError("Controlled classical-quantum OR not yet supported")
 		else:
@@ -240,12 +247,9 @@ def __or__(self, other):
 		other_offset = 64 - (<qint>other).bits
 		qubit_array[2*result_bits:2*result_bits + (<qint>other).bits] = (<qint>other).qubits[other_offset:64]
 		# Zero-extend other if narrower
-		if (<qint>other).bits < result_bits:
+		if _other_pad_qint is not None:
 			_other_pad = result_bits - (<qint>other).bits
-			_other_pad_qint = qint(width=_other_pad)
 			qubit_array[2*result_bits + (<qint>other).bits:3*result_bits] = _other_pad_qint.qubits[64 - _other_pad:64]
-		else:
-			_other_pad_qint = None
 
 		if _controlled:
 			raise NotImplementedError("Controlled quantum-quantum OR not yet supported")
@@ -351,19 +355,13 @@ def __xor__(self, other):
 		result.add_dependency(other)
 	result.operation_type = 'XOR'
 
-	# Q_xor expects: [0:bits] = target, [bits:2*bits] = source
-	# XOR modifies target in-place: target ^= source
-	# So we need to first copy self to result, then XOR other into result
-
 	# Copy self qubits to result using CNOT pattern
-	# For now, we do out-of-place: result = self, then result ^= other
 	self_offset = 64 - self.bits
 	result_offset = 64 - result_bits
 
 	# First, copy self to result by XORing self into result (result starts at 0)
-	# Copy self qubits into result: result ^= self (where result is 0, so result = self)
-	qubit_array[:result_bits] = result.qubits[result_offset:64]
-	qubit_array[result_bits:result_bits + self.bits] = self.qubits[self_offset:64]
+	qubit_array[:self.bits] = result.qubits[result_offset:result_offset + self.bits]
+	qubit_array[self.bits:2*self.bits] = self.qubits[self_offset:64]
 	arr = qubit_array
 	seq = Q_xor(self.bits)  # XOR self into result (copying self to result)
 	run_instruction(seq, &arr[0], False, _circuit)
@@ -371,29 +369,17 @@ def __xor__(self, other):
 	# Now XOR other into result
 	if type(other) == int:
 		# Classical XOR: apply X gates where classical bits are 1
-		# We don't have CQ_xor, so we'll apply X gates manually
-		# Actually, Q_xor with a classical value is just applying X where bit=1
-		# For now, we use a simple loop pattern via existing NOT functionality
-		# This is a limitation - we don't have CQ_xor exposed
-		# We can simulate: for each bit i where (other >> i) & 1, apply X to result[i]
 		if _controlled:
 			raise NotImplementedError("Controlled classical-quantum XOR not yet supported")
 		else:
-			# Apply X gates for each 1 bit in the classical value
-			# Qubit storage is LSB-first: qubits[64-width] = bit 0 (LSB),
-			# qubits[63] = bit (width-1) (MSB)
 			for i in range(result_bits):
 				if (other >> i) & 1:
-					# Apply X to result bit i (from LSB)
-					# result.qubits[64 - result_bits + i] is the i-th bit from LSB
 					qubit_array[0] = result.qubits[64 - result_bits + i]
 					arr = qubit_array
 					seq = Q_not(1)
 					run_instruction(seq, &arr[0], False, _circuit)
 	else:
 		# Quantum-quantum XOR: result ^= other
-		# Q_xor(n) expects: [0:n]=target, [n:2n]=source
-		# We only need to XOR the other.bits LSBs of result
 		other_offset = 64 - (<qint>other).bits
 		qubit_array[:(<qint>other).bits] = result.qubits[result_offset:result_offset + (<qint>other).bits]
 		qubit_array[(<qint>other).bits:2*(<qint>other).bits] = (<qint>other).qubits[other_offset:64]
@@ -449,8 +435,6 @@ def __ixor__(self, other):
 		else:
 			for i in range(self.bits):
 				if (other >> i) & 1:
-					# Apply X to self bit i (from LSB)
-					# qubits[64 - width + i] is bit i (LSB-first storage)
 					qubit_array[0] = self.qubits[64 - self.bits + i]
 					arr = qubit_array
 					seq = Q_not(1)
