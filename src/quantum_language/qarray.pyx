@@ -940,6 +940,19 @@ cdef class qarray:
         """In-place element-wise multiplication."""
         return self._inplace_binary_op(other, "__imul__")
 
+    def __floordiv__(self, other):
+        """Element-wise floor division."""
+        return self._elementwise_binary_op(other, lambda a, b: a // b)
+
+    def __mod__(self, other):
+        """Element-wise modulo."""
+        return self._elementwise_binary_op(other, lambda a, b: a % b)
+
+    def __neg__(self):
+        """Element-wise negation."""
+        result_elements = [-elem for elem in self._elements]
+        return self._create_view(result_elements, self._shape)
+
     # ============ Bitwise Operators ============
 
     def __and__(self, other):
@@ -977,6 +990,19 @@ cdef class qarray:
     def __ixor__(self, other):
         """In-place element-wise bitwise XOR."""
         return self._inplace_binary_op(other, "__ixor__")
+
+    def __invert__(self):
+        """Element-wise bitwise NOT."""
+        result_elements = [~elem for elem in self._elements]
+        return self._create_view(result_elements, self._shape)
+
+    def __lshift__(self, other):
+        """Element-wise left shift."""
+        return self._elementwise_binary_op(other, lambda a, b: a << b)
+
+    def __rshift__(self, other):
+        """Element-wise right shift."""
+        return self._elementwise_binary_op(other, lambda a, b: a >> b)
 
     # ============ Comparison Operators ============
 

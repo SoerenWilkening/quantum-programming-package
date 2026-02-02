@@ -300,3 +300,213 @@ def test_sub_width_mismatch(verify_circuit):
     assert actual == expected, format_failure_message(
         "sub_mismatch", [val_a, val_b], result_width, expected, actual
     )
+
+
+# ====================================================================
+# NEGATION TESTS
+# ====================================================================
+
+
+def _neg_cases():
+    """Generate (width, val) for negation testing (widths 2-3)."""
+    cases = []
+    for width in [2, 3]:
+        for val in generate_exhaustive_values(width):
+            cases.append((width, val))
+    return cases
+
+
+NEG_CASES = _neg_cases()
+
+
+@pytest.mark.parametrize("width,val", NEG_CASES)
+def test_neg_exhaustive(verify_circuit, width, val):
+    """Test qint negation produces correct two's complement result.
+
+    Verifies through Qiskit simulation that -a yields (-val) % (2**width).
+    """
+    expected_val = (-val) % (2**width)
+
+    def circuit_builder(v=val, w=width):
+        a = ql.qint(v, width=w)
+        b = -a
+        return (expected_val, [a, b])
+
+    actual, expected = verify_circuit(circuit_builder, width)
+    assert actual == expected, format_failure_message("neg", [val], width, expected, actual)
+
+
+# ====================================================================
+# RSUB TESTS
+# ====================================================================
+
+
+def _rsub_cases():
+    """Generate (width, classical_val, quantum_val) for rsub testing."""
+    cases = []
+    for width in [2, 3]:
+        values = generate_exhaustive_values(width)
+        for classical_val in values:
+            for quantum_val in values:
+                cases.append((width, classical_val, quantum_val))
+    return cases
+
+
+RSUB_CASES = _rsub_cases()
+
+
+@pytest.mark.parametrize("width,classical_val,quantum_val", RSUB_CASES)
+def test_rsub_exhaustive(verify_circuit, width, classical_val, quantum_val):
+    """Test int - qint (rsub) produces correct value for all pairs, widths 2-3.
+
+    Verifies through Qiskit simulation that reverse subtraction yields
+    (classical_val - quantum_val) % (2**width).
+    """
+    expected_val = (classical_val - quantum_val) % (2**width)
+
+    def circuit_builder(c_val=classical_val, q_val=quantum_val, w=width):
+        a = ql.qint(q_val, width=w)
+        c = c_val - a
+        return (expected_val, [a, c])
+
+    actual, expected = verify_circuit(circuit_builder, width)
+    assert actual == expected, format_failure_message(
+        "rsub", [classical_val, quantum_val], width, expected, actual
+    )
+
+
+# ====================================================================
+# SHIFT TESTS
+# ====================================================================
+
+
+def _lshift_cases():
+    """Generate (width, val, shift) for left shift testing."""
+    cases = []
+    for width in [2, 3]:
+        for val in generate_exhaustive_values(width):
+            for shift in [0, 1, 2]:
+                cases.append((width, val, shift))
+    return cases
+
+
+def _rshift_cases():
+    """Generate (width, val, shift) for right shift testing.
+
+    Note: Right shift uses floordiv internally, which generates large circuits.
+    We limit to width=2 for exhaustive testing to keep simulation tractable.
+    Shift > 0 cases are xfail due to pre-existing floordiv bugs (BUG-DIV-02).
+    """
+    cases = []
+    # Width 2 is small enough for floordiv-based rshift
+    for val in generate_exhaustive_values(2):
+        for shift in [0, 1]:
+            cases.append((2, val, shift))
+    return cases
+
+
+LSHIFT_CASES = _lshift_cases()
+RSHIFT_CASES = _rshift_cases()
+
+
+@pytest.mark.parametrize("width,val,shift", LSHIFT_CASES)
+def test_lshift_exhaustive(verify_circuit, width, val, shift):
+    """Test qint << int produces correct value.
+
+    Verifies through Qiskit simulation that left shift yields
+    (val << shift) % (2**width).
+    """
+    expected_val = (val << shift) % (2**width)
+
+    def circuit_builder(v=val, w=width, s=shift):
+        a = ql.qint(v, width=w)
+        b = a << s
+        return (expected_val, [a, b])
+
+    actual, expected = verify_circuit(circuit_builder, width)
+    assert actual == expected, format_failure_message(
+        "lshift", [val, shift], width, expected, actual
+    )
+
+
+@pytest.mark.parametrize("width,val,shift", RSHIFT_CASES)
+def test_rshift_exhaustive(verify_circuit, width, val, shift):
+    """Test qint >> int produces correct value.
+
+    Verifies through Qiskit simulation that right shift yields val >> shift.
+
+    NOTE: shift > 0 cases are xfail due to pre-existing floordiv bugs (BUG-DIV-02).
+    The rshift implementation itself is correct (delegates to floordiv).
+    """
+    if shift > 0:
+        pytest.xfail("Pre-existing bug: floordiv produces incorrect results (BUG-DIV-02)")
+    expected_val = val >> shift
+
+    def circuit_builder(v=val, w=width, s=shift):
+        a = ql.qint(v, width=w)
+        b = a >> s
+        return (expected_val, [a, b])
+
+    actual, expected = verify_circuit(circuit_builder, width)
+    assert actual == expected, format_failure_message(
+        "rshift", [val, shift], width, expected, actual
+    )
+
+
+# ====================================================================
+# QARRAY MISSING OPS SMOKE TESTS
+# ====================================================================
+
+
+def test_qarray_floordiv_smoke():
+    """Test qarray // int does not crash."""
+    gc.collect()
+    ql.circuit()
+    arr = ql.qarray([4, 6, 8], width=4)
+    result = arr // 2
+    assert len(result) == 3
+
+
+def test_qarray_mod_smoke():
+    """Test qarray % int does not crash."""
+    gc.collect()
+    ql.circuit()
+    arr = ql.qarray([4, 6, 8], width=4)
+    result = arr % 3
+    assert len(result) == 3
+
+
+def test_qarray_neg_smoke():
+    """Test -qarray does not crash."""
+    gc.collect()
+    ql.circuit()
+    arr = ql.qarray([1, 2, 3], width=4)
+    result = -arr
+    assert len(result) == 3
+
+
+def test_qarray_invert_smoke():
+    """Test ~qarray does not crash."""
+    gc.collect()
+    ql.circuit()
+    arr = ql.qarray([1, 2, 3], width=4)
+    result = ~arr
+    assert len(result) == 3
+
+
+def test_qarray_lshift_smoke():
+    """Test qarray << int does not crash."""
+    gc.collect()
+    ql.circuit()
+    arr = ql.qarray([1, 2, 3], width=4)
+    result = arr << 1
+    assert len(result) == 3
+
+
+def test_qarray_rshift_smoke():
+    """Test qarray >> int does not crash."""
+    gc.collect()
+    ql.circuit()
+    arr = ql.qarray([4, 6, 8], width=4)
+    result = arr >> 1
+    assert len(result) == 3

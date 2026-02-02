@@ -1051,7 +1051,8 @@ cdef class qint(circuit):
 
 		result = qint(width=self.bits)
 		result ^= self  # quantum copy
-		result *= (1 << other)
+		if other > 0:
+			result *= (1 << other)
 
 		result._start_layer = start_layer
 		result._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
@@ -1094,7 +1095,8 @@ cdef class qint(circuit):
 
 		result = qint(width=self.bits)
 		result ^= self  # quantum copy
-		result //= (1 << other)
+		if other > 0:
+			result //= (1 << other)
 
 		result._start_layer = start_layer
 		result._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
