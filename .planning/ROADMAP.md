@@ -69,7 +69,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 40-01-PLAN.md — Remove temporary qint allocation for classical operands in array in-place operations
+- [x] 40-01-PLAN.md — Remove temporary qint allocation for classical operands in array in-place operations
 
 ### Phase 41: Verification & Regression
 
@@ -94,7 +94,7 @@ Plans:
 | 37. Division Overflow Fix | 1/1 | ✓ Complete | 2026-02-02 |
 | 38. Modular Reduction Fix | 0/TBD | Not started | - |
 | 39. Controlled Multiplication Fix | 0/TBD | Not started | - |
-| 40. Array Classical Optimization | 0/TBD | Not started | - |
+| 40. Array Classical Optimization | 1/1 | ✓ Complete | 2026-02-02 |
 | 41. Verification & Regression | 0/TBD | Not started | - |
 
 ---

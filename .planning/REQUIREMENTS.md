@@ -13,8 +13,8 @@
 
 ### Array Classical Optimization
 
-- [ ] **OPT-01**: Array element-wise arithmetic with classical values (int/list) uses CQ_add/CQ_sub/CQ_mul directly instead of creating temporary qint objects
-- [ ] **OPT-02**: Array element-wise bitwise ops with classical values (int/list) uses CQ_and/CQ_or/CQ_xor directly instead of creating temporary qint objects
+- [x] **OPT-01**: Array element-wise arithmetic with classical values (int/list) uses CQ_add/CQ_sub/CQ_mul directly instead of creating temporary qint objects
+- [x] **OPT-02**: Array element-wise bitwise ops with classical values (int/list) uses CQ_and/CQ_or/CQ_xor directly instead of creating temporary qint objects
 
 ## Future Requirements
 
@@ -35,8 +35,8 @@ None currently identified.
 | FIX-01 | Phase 37 | Complete |
 | FIX-02 | Phase 38 | Pending |
 | FIX-03 | Phase 39 | Pending |
-| OPT-01 | Phase 40 | Pending |
-| OPT-02 | Phase 40 | Pending |
+| OPT-01 | Phase 40 | Complete |
+| OPT-02 | Phase 40 | Complete |
 
 **Coverage:**
 - v1.7 requirements: 5 total
