@@ -8,10 +8,6 @@ Exhaustive at widths 1-3, sampled at width 4. Modulo by zero is skipped per desi
 Result extraction: Modulo allocates input(w) + remainder(w) + ancillae.
 The remainder register occupies qubits w..2w-1. In the Qiskit MSB-first bitstring of
 length n, this maps to bs[n-2w : n-w].
-
-Known issue: The restoring division algorithm (shared with floor division) has
-correctness bugs when divisor << bit_pos overflows the register width, and when
-values >= 2^(w-1) interact with the comparison operator. Affected cases are marked xfail.
 """
 
 import random
@@ -27,32 +23,17 @@ import quantum_language as ql
 warnings.filterwarnings("ignore", message="Value .* exceeds")
 
 # ---------------------------------------------------------------------------
-# Known-failing (width, a, divisor) triples -- same root cause as division bugs
+# Known-failing (width, a, divisor) triples -- MSB comparison leak (BUG-DIV-02)
+# These are NOT overflow bugs. They occur when a >= 2^(w-1) and the >=
+# comparison operator corrupts ancilla state for values touching the MSB.
+# Separate from BUG-DIV-01 (overflow), which is fixed.
 # ---------------------------------------------------------------------------
-KNOWN_MOD_FAILURES = {
-    # Width 2: overflow when divisor<<1 >= 4
-    (2, 0, 3),
-    # Width 3: overflow cases (divisor<<bit_pos >= 8)
-    (3, 0, 3),
-    (3, 0, 5),
-    (3, 0, 6),
-    (3, 0, 7),
-    (3, 1, 3),
-    (3, 1, 6),
-    (3, 1, 7),
-    (3, 2, 7),
-    # Width 3: comparison leak for values >= 4 with divisor=1
+KNOWN_MOD_MSB_LEAK = {
+    # Width 3: comparison leak for values >= 4 with small divisors
     (3, 4, 1),
     (3, 5, 1),
     (3, 6, 1),
     (3, 7, 1),
-    # Width 4: overflow cases
-    (4, 0, 9),
-    (4, 0, 13),
-    (4, 0, 14),
-    (4, 0, 15),
-    (4, 1, 14),
-    (4, 1, 15),
     # Width 4: comparison leak for large values
     (4, 13, 1),
     (4, 14, 1),
@@ -76,7 +57,7 @@ def _run_mod(width, a_val, divisor):
     if not circuit.cregs:
         circuit.measure_all()
 
-    sim = AerSimulator(method="statevector")
+    sim = AerSimulator(method="matrix_product_state")
     job = sim.run(circuit, shots=1)
     counts = job.result().get_counts()
     bitstring = list(counts.keys())[0]
@@ -123,18 +104,18 @@ SAMPLED_MOD = _sampled_mod_cases()
 
 
 # ---------------------------------------------------------------------------
-# Helper to apply xfail marker
+# Helper to apply xfail marker for MSB leak cases only
 # ---------------------------------------------------------------------------
-def _mark_mod_cases(cases):
-    """Wrap known-failing cases with pytest.param(..., marks=xfail)."""
+def _mark_msb_leak_cases(cases):
+    """Wrap known MSB-leak cases with pytest.param(..., marks=xfail)."""
     marked = []
     for triple in cases:
-        if triple in KNOWN_MOD_FAILURES:
+        if triple in KNOWN_MOD_MSB_LEAK:
             marked.append(
                 pytest.param(
                     *triple,
                     marks=pytest.mark.xfail(
-                        reason="Modulo algorithm bug: comparison overflow or MSB leak",
+                        reason="BUG-DIV-02: MSB comparison leak (not overflow)",
                         strict=True,
                     ),
                 )
@@ -147,7 +128,9 @@ def _mark_mod_cases(cases):
 # ---------------------------------------------------------------------------
 # Parametrized tests
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("width,a,divisor", _mark_mod_cases(EXHAUSTIVE_MOD), ids=lambda *args: None)
+@pytest.mark.parametrize(
+    "width,a,divisor", _mark_msb_leak_cases(EXHAUSTIVE_MOD), ids=lambda *args: None
+)
 def test_mod_exhaustive(width, a, divisor):
     """Modulo: qint(a) % divisor at widths 1-3 (exhaustive)."""
     expected = a % divisor
@@ -155,7 +138,9 @@ def test_mod_exhaustive(width, a, divisor):
     assert actual == expected, format_failure_message("mod", [a, divisor], width, expected, actual)
 
 
-@pytest.mark.parametrize("width,a,divisor", _mark_mod_cases(SAMPLED_MOD), ids=lambda *args: None)
+@pytest.mark.parametrize(
+    "width,a,divisor", _mark_msb_leak_cases(SAMPLED_MOD), ids=lambda *args: None
+)
 def test_mod_sampled(width, a, divisor):
     """Modulo: qint(a) % divisor at width 4 (sampled)."""
     expected = a % divisor
