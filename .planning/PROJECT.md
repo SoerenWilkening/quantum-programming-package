@@ -69,11 +69,15 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ### Active
 
-#### Deferred (future milestone)
+#### Current Milestone: v1.7 Bug Fixes & Efficient Array Init
 
-- [ ] Fix division comparison overflow (BUG-DIV-01)
-- [ ] Fix _reduce_mod result corruption (BUG-MOD-REDUCE)
-- [ ] Fix controlled multiplication corruption (BUG-COND-MUL-01)
+**Goal:** Fix remaining deferred bugs and optimize array initialization to use CQ_add-style circuits instead of allocating extra qubits.
+
+**Target features:**
+- Fix division overflow for divisor >= 2^(w-1) (BUG-DIV-01)
+- Fix _reduce_mod result corruption (BUG-MOD-REDUCE)
+- Fix controlled multiplication corruption (BUG-COND-MUL-01)
+- Efficient classical array initialization via CQ_add pattern (no extra qubit allocation)
 
 ### Out of Scope
 
@@ -156,4 +160,4 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Target index formula: 64 - comp_width + i_bit | Correct LSB alignment for mixed-width operations | ✓ Good — all ordering tests pass |
 
 ---
-*Last updated: 2026-02-02 after v1.6 milestone*
+*Last updated: 2026-02-02 after v1.7 milestone started*

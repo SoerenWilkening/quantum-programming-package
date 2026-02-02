@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-02)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Planning next milestone
+**Current focus:** v1.7 Bug Fixes & Efficient Array Init
 
 ## Current Position
 
-Phase: Milestone v1.6 complete
-Plan: N/A
-Status: Ready for next milestone
-Last activity: 2026-02-02 — v1.6 milestone archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-02 — Milestone v1.7 started
 
-Progress: [██████████] 100% (v1.6 complete)
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -34,6 +34,7 @@ Progress: [██████████] 100% (v1.6 complete)
 | v1.4 OpenQASM Export | 25-27 | 6 | Complete (2026-01-30) |
 | v1.5 Bug Fixes & Verification | 28-33 | 33 | Complete (2026-02-01) |
 | v1.6 Array & Comparison Fixes | 34-36 | 5 | Complete (2026-02-02) |
+| v1.7 Bug Fixes & Efficient Array Init | 37+ | — | In Progress |
 
 ## Accumulated Context
 
@@ -43,7 +44,7 @@ See PROJECT.md Key Decisions table for full history.
 
 ### Blockers/Concerns
 
-**Deferred to future milestone:**
+**Targeted for v1.7:**
 - BUG-DIV-01: Division overflow for divisor >= 2^(w-1)
 - BUG-MOD-REDUCE: _reduce_mod result corruption
 - BUG-COND-MUL-01: Controlled multiplication corruption
@@ -52,9 +53,9 @@ See PROJECT.md Key Decisions table for full history.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: v1.6 milestone archived
+Stopped at: Defining v1.7 requirements
 Resume file: None
-Resume action: Start next milestone with `/gsd:new-milestone`
+Resume action: Continue milestone setup
 
 ---
-*State updated: 2026-02-02 after v1.6 milestone completion*
+*State updated: 2026-02-02 after v1.7 milestone start*
