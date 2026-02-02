@@ -60,11 +60,11 @@ Plans:
   2. `qarray + qarray` (and `-`, `*`, etc.) returns a new array whose elements are quantum-copied from the source before the operation
   3. The original qint/qarray operands are unmodified after the binary operation
   4. Generated circuits contain CNOT gates for the copy step, not classical reinitialization
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 43-01: Integrate quantum copy into qint binary ops
-- [ ] 43-02: Integrate quantum copy into qarray elementwise binary ops
+- [ ] 43-01-PLAN.md — Fix __add__, __radd__, __sub__ to use XOR-copy instead of classical init + tests
+- [ ] 43-02-PLAN.md — Add missing qint ops (neg, rsub, lshift, rshift) + missing qarray ops + tests
 
 ### Phase 44: Array Mutability
 **Goal**: Users can modify qarray elements in-place using augmented assignment operators
