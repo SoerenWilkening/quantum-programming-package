@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-02)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Planning next milestone
+**Current focus:** v1.8 Quantum Copy, Array Mutability & Uncomputation Fix
 
 ## Current Position
 
-Phase: N/A — between milestones
-Plan: N/A
-Status: v1.7 complete, ready for next milestone
-Last activity: 2026-02-02 — v1.7 milestone complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-02 — Milestone v1.8 started
 
-Progress: Milestone complete
+Progress: Defining requirements
 
 ## Performance Metrics
 
@@ -64,9 +64,9 @@ See PROJECT.md Key Decisions table for full history.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: v1.7 milestone completion
+Stopped at: v1.8 milestone definition
 Resume file: None
-Resume action: `/gsd:new-milestone` to start next milestone
+Resume action: Define requirements and roadmap for v1.8
 
 ---
-*State updated: 2026-02-02 — v1.7 milestone complete*
+*State updated: 2026-02-02 — v1.8 milestone started*

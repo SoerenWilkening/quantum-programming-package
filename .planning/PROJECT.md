@@ -73,7 +73,14 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ### Active
 
-#### Next Milestone: TBD
+#### Current Milestone: v1.8 Quantum Copy, Array Mutability & Uncomputation Fix
+
+**Goal:** Enable proper quantum state copying for qint/qarray operations, allow in-place element modification on qarrays, and fix uncomputation regression.
+
+- [ ] CNOT-based quantum copy for qint (allocate new qubits, CNOT each bit from source)
+- [ ] qarray binary ops (`qarray + int`, etc.) use quantum copy instead of classical-value initialization
+- [ ] In-place element assignment on qarray (`qarray[i] += x` modifies existing qubits directly)
+- [ ] Fix automatic uncomputation regression (expressions not uncomputing properly)
 
 **Deferred from v1.7:**
 - Fix _reduce_mod result corruption (BUG-MOD-REDUCE) — needs fundamentally different circuit structure
@@ -93,7 +100,7 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 **Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) -> Cython bindings -> Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
 
-**Current state:** v1.7 shipped. Division overflow bug fixed (BUG-DIV-01). Array element-wise operations with classical values optimized to use CQ_* directly (no temporary qint allocation). Exhaustive verification suite with 8,365+ tests covering every operation category through the full pipeline (Python -> C circuit -> OpenQASM 3.0 -> Qiskit simulate -> result check). 1529 comparison tests pass cleanly. Remaining xfail tests document 2 deferred bugs (BUG-MOD-REDUCE, BUG-COND-MUL-01) plus BUG-DIV-02 (MSB comparison leak, 9 cases per div/mod test file). Clean modular C backend with types.h, circuit.h, arithmetic_ops.h, comparison_ops.h, bitwise_ops.h, circuit_output.h. Centralized qubit allocator with ownership tracking. Variable-width quantum integers (1-64 bits) with complete arithmetic, comparison, and initialization operations. Automatic uncomputation with dependency tracking, mode control (lazy/eager), and user override methods. Proper package structure with ql.array supporting multi-dimensional arrays, reductions, and element-wise operations optimized for classical operands. Memory-safe Python-to-C bridge with Cython try-finally cleanup.
+**Current state:** v1.8 in progress. Division overflow bug fixed (BUG-DIV-01). Array element-wise operations with classical values optimized to use CQ_* directly (no temporary qint allocation). Exhaustive verification suite with 8,365+ tests covering every operation category through the full pipeline (Python -> C circuit -> OpenQASM 3.0 -> Qiskit simulate -> result check). 1529 comparison tests pass cleanly. Remaining xfail tests document 2 deferred bugs (BUG-MOD-REDUCE, BUG-COND-MUL-01) plus BUG-DIV-02 (MSB comparison leak, 9 cases per div/mod test file). Clean modular C backend with types.h, circuit.h, arithmetic_ops.h, comparison_ops.h, bitwise_ops.h, circuit_output.h. Centralized qubit allocator with ownership tracking. Variable-width quantum integers (1-64 bits) with complete arithmetic, comparison, and initialization operations. Automatic uncomputation with dependency tracking, mode control (lazy/eager), and user override methods. Proper package structure with ql.array supporting multi-dimensional arrays, reductions, and element-wise operations optimized for classical operands. Memory-safe Python-to-C bridge with Cython try-finally cleanup.
 
 **Codebase:**
 - ~257,678 lines of code (Python, Cython, C)
@@ -164,4 +171,4 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Defer BUG-MOD-REDUCE (scaling issues) | Beauregard approach hits duplicate qubit and memory issues | — Pending — needs different approach |
 
 ---
-*Last updated: 2026-02-02 after v1.7 milestone*
+*Last updated: 2026-02-02 after v1.8 milestone start*
