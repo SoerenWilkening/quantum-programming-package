@@ -3,15 +3,17 @@
 Converts a draw_data dict (from _core.draw_data()) into a PIL Image
 using NumPy bulk array operations for efficient rendering.
 
-Two rendering modes:
+Three entry points:
 - render()        : Overview mode (3px cells, pixel-art, scales to 200+ qubits)
 - render_detail() : Detail mode (12px cells, text labels, for <= 30 qubits)
+- draw_circuit()  : Public API with auto-zoom, mode override, and save parameter
 
 Usage
 -----
->>> from quantum_language.draw import render, render_detail
+>>> from quantum_language.draw import render, render_detail, draw_circuit
 >>> img = render(draw_data_dict)          # overview
 >>> img = render_detail(draw_data_dict)   # detail with labels
+>>> img = draw_circuit(circuit_obj)       # auto-zoom with smart defaults
 >>> img.save("circuit.png")
 """
 
@@ -21,6 +23,10 @@ from PIL import Image, ImageDraw, ImageFont
 # Layout constants (pixels per cell: 2px gate + 1px gap)
 CELL_W = 3
 CELL_H = 3
+
+# Auto-zoom thresholds: overview only when BOTH exceeded
+AUTO_DETAIL_MAX_QUBITS = 30
+AUTO_DETAIL_MAX_LAYERS = 200
 
 # Colors (RGB tuples)
 BG_COLOR = (20, 20, 30)
@@ -276,5 +282,72 @@ def render_detail(draw_data):
                 ],
                 fill=CTRL_COLOR,
             )
+
+    return img
+
+
+# ---------------------------------------------------------------------------
+# Public API: draw_circuit() with auto-zoom
+# ---------------------------------------------------------------------------
+
+
+def draw_circuit(circuit, *, mode=None, save=None):
+    """Visualize a quantum circuit as a pixel-art image.
+
+    Automatically selects detail or overview mode based on circuit size,
+    or allows explicit mode override.
+
+    Parameters
+    ----------
+    circuit : circuit
+        A built quantum circuit object (must have .draw_data() method).
+    mode : str, optional
+        Zoom mode: ``"overview"`` (compact), ``"detail"`` (readable labels),
+        or ``None`` for auto-selection based on circuit size.
+    save : str, optional
+        If provided, save the image to this file path.
+
+    Returns
+    -------
+    PIL.Image.Image
+        Rendered circuit image.
+
+    Raises
+    ------
+    ValueError
+        If *mode* is not ``"overview"``, ``"detail"``, or ``None``.
+    """
+    draw_data = circuit.draw_data()
+    num_qubits = draw_data.get("num_qubits", 0)
+    num_layers = draw_data.get("num_layers", 0)
+
+    if mode is not None:
+        # Validate mode
+        if mode not in ("overview", "detail"):
+            raise ValueError(f"mode must be 'overview' or 'detail', got '{mode}'")
+        use_detail = mode == "detail"
+        if use_detail and (
+            num_qubits > AUTO_DETAIL_MAX_QUBITS or num_layers > AUTO_DETAIL_MAX_LAYERS
+        ):
+            print(
+                f"Warning: detail mode requested for large circuit "
+                f"({num_qubits} qubits, {num_layers} layers). "
+                f"Rendering may be slow."
+            )
+    else:
+        # Auto-zoom: detail when circuit is small enough on BOTH axes
+        use_detail = num_qubits <= AUTO_DETAIL_MAX_QUBITS and num_layers <= AUTO_DETAIL_MAX_LAYERS
+        if use_detail:
+            print(f"Auto-selected detail mode ({num_qubits} qubits, {num_layers} layers)")
+        else:
+            print(f"Auto-selected overview mode ({num_qubits} qubits, {num_layers} layers)")
+
+    if use_detail:
+        img = render_detail(draw_data)
+    else:
+        img = render(draw_data)
+
+    if save is not None:
+        img.save(save)
 
     return img

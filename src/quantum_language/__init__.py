@@ -133,6 +133,38 @@ def parity(arr):
     return arr.parity()
 
 
+def draw_circuit(circuit, *, mode=None, save=None):
+    """Visualize a quantum circuit as a pixel-art image.
+
+    Parameters
+    ----------
+    circuit : circuit
+        A built quantum circuit object.
+    mode : str, optional
+        Zoom mode: "overview" (compact), "detail" (readable labels),
+        or None for auto-selection based on circuit size.
+    save : str, optional
+        If provided, save the image to this file path.
+
+    Returns
+    -------
+    PIL.Image.Image
+        Rendered circuit image.
+
+    Raises
+    ------
+    ImportError
+        If Pillow is not installed.
+    """
+    try:
+        from .draw import draw_circuit as _draw_circuit
+    except ImportError as err:
+        raise ImportError(
+            "Pillow is required for circuit visualization. Install with: pip install Pillow"
+        ) from err
+    return _draw_circuit(circuit, mode=mode, save=save)
+
+
 # Explicit public API
 __all__ = [
     # Types
@@ -145,6 +177,7 @@ __all__ = [
     # Utilities
     "array",
     "option",
+    "draw_circuit",
     "all",
     "any",
     "parity",
