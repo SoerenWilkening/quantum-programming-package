@@ -1,461 +1,279 @@
-# Feature Landscape: OpenQASM Export & Circuit Verification
+# Feature Landscape: Pixel-Art Circuit Visualization
 
-**Domain:** Quantum circuit compilation and verification
-**Researched:** 2026-01-30
+**Domain:** Quantum circuit visualization (compact pixel-art rendering)
+**Researched:** 2026-02-03
 **Confidence:** MEDIUM-HIGH
 
 ## Executive Summary
 
-OpenQASM 3.0 export and circuit verification are table stakes for quantum frameworks in 2026. The feature landscape has matured significantly with OpenQASM 3.0 bringing classical control flow, mid-circuit measurements, and robust gate modifiers. Modern verification relies on statevector or shot-based simulation with deterministic test patterns for arithmetic, comparison, and conditional operations.
+Quantum circuit visualization is a solved problem for small circuits (under 20 qubits) -- Qiskit's matplotlib drawer, Cirq's SVG renderer, and PennyLane's text drawer all handle this well. However, **visualization breaks down at scale**: Qiskit's `mpl` drawer becomes unreadable above ~40 qubits and unusable above ~60. The existing ASCII `circuit_visualize` in this framework caps display at 60 layers and skips rendering entirely above 2000 gates. Pixel-art rendering fills a genuine gap -- compact, scalable visualization of circuits with 100-200+ qubits and thousands of gates, where each gate occupies only 2-3 pixels and the full circuit structure remains visible.
 
-**Key insight:** The Quantum Assembly framework's deterministic circuit design (all outcomes predictable from classical initialization) is a significant advantage for verification testing—tests can use simple equality assertions rather than statistical confidence intervals.
+The key insight from Quantivine (IEEE TVCG 2023) is that large-circuit visualization requires **semantic abstraction** -- not just shrinking the same diagram. For a pixel-art approach, this translates to two zoom levels: an overview mode showing circuit structure/density and a detail mode showing individual gates. This is the project's core differentiator.
 
 ## Table Stakes
 
-Features users expect from any quantum framework with export/verification capabilities. Missing = product feels incomplete.
+Features users expect from any graphical circuit visualization. Missing any of these makes the output confusing or incomplete.
 
 | Feature | Why Expected | Complexity | Dependencies | Notes |
 |---------|--------------|------------|--------------|-------|
-| **Core OpenQASM 3.0 export** | Industry standard interchange format | **Medium** | Existing `circuit_to_opanqasm` | QASM 3.0 is standard as of 2026 |
-| Single-qubit gate export (X, H, Z, Y, P) | Basic quantum operations | **Low** | Existing gate types | Already partially implemented |
-| Multi-controlled gate export (CX, CCX, C^n X) | Standard controlled operations | **Medium** | `large_control` array handling | OpenQASM 3.0 supports `ctrl(n) @` modifier |
-| Qubit register declaration | Required for all QASM files | **Low** | Circuit qubit count | Already implemented |
-| Comment/metadata in QASM | Circuit documentation, debugging | **Low** | None | Standard practice for readability |
-| Rotation gate export (Rx, Ry, Rz) | Parameterized gates | **Low** | Existing gate types | Currently missing in export |
-| **Statevector simulation verification** | Standard verification method | **Medium** | Qiskit/Cirq as dependency | Primary verification approach |
-| Classical initialization test pattern | Verify circuit correctness | **Low** | X-gate initialization | Already implemented (`qint(value)`) |
-| Measurement-based verification | Check computational outcomes | **Medium** | Simulation + outcome comparison | Standard for all quantum tests |
-| Pass/fail reporting | Clear test results | **Low** | Test harness | Essential for CI/CD |
-| Arithmetic verification test cases | Verify add/sub/mul operations | **Medium** | Classical init + simulate | Core use case for framework |
-| Comparison verification test cases | Verify <, <=, ==, >=, >, != | **Medium** | Classical init + simulate | Core use case for framework |
-| Python `ql.to_openqasm()` API | User-facing export function | **Low** | Cython bindings to C export | Expected Python API pattern |
+| **Horizontal qubit wires** | Universal convention -- qubits are horizontal lines, time flows left-to-right | **Low** | PIL ImageDraw lines | Every circuit diagram ever uses this layout |
+| **Distinct gate symbols per type** | Users must tell X from H from P at a glance | **Medium** | Pixel icon design (2-3px shapes) | Color + shape combination needed at small scale |
+| **Control-target connections** | Multi-qubit gates shown with vertical lines connecting control dot to target | **Medium** | Vertical line drawing between qubit rows | CNOT = filled dot + target circle/plus, connected by vertical line |
+| **Qubit labels** | Users need to know which wire is which qubit | **Low** | Text rendering at left margin | `q0`, `q1`, ... at start of each wire |
+| **Save to PNG** | Standard image output format | **Low** | `PIL.Image.save()` | Trivial with Pillow |
+| **Return PIL Image object** | Programmatic access for Jupyter display, embedding, further processing | **Low** | Return `Image` from render function | `_repr_png_` enables Jupyter inline display |
+| **Measurement gates** | Measurement is a distinct operation users must see | **Low** | Distinct icon (meter symbol or M box) | Standard circuit element |
+| **Layer/time axis indication** | Users need to understand temporal ordering | **Low** | Optional column numbers or tick marks | Can be subtle at pixel scale |
+| **Wire continuity** | Qubit wires must be continuous lines even when no gate is present | **Low** | Draw wire segments between gates | Empty columns get plain horizontal line |
+| **Color legend** | At 2-3px per gate, color is the primary distinguishing feature -- legend is essential | **Medium** | Separate legend region or optional overlay | Without legend, pixel art is meaningless to new users |
 
 ## Differentiators
 
-Features that set product apart. Not expected by all frameworks, but add significant value.
+Features that make pixel-art visualization uniquely valuable compared to Qiskit/Cirq/text approaches. These justify building a new renderer rather than wrapping an existing one.
 
 | Feature | Value Proposition | Complexity | Dependencies | Notes |
 |---------|-------------------|------------|--------------|-------|
-| **In-memory QASM export** (no file I/O) | Cleaner API, better testability | **Low** | String buffer instead of file | Most frameworks force file writes |
-| **Deterministic verification** (no statistical noise) | Simpler tests, faster CI | **Low** | Framework's classical init design | Classical inputs → deterministic outputs |
-| **Built-in verification script** | Works out of the box | **Medium** | Qiskit integration, test cases | Most users need to write their own |
-| **Self-contained test suite** | No external test files needed | **Medium** | Embedded test cases in script | Reduces friction for validation |
-| **Large control array QASM export** | Efficient n-controlled gates | **Medium** | `large_control` to `ctrl(n) @` mapping | Rare for frameworks to optimize this |
-| Barrier export for circuit segmentation | Debugging, optimization boundaries | **Low** | Barrier concept in circuit | Useful for complex circuits |
-| Conditional operation test cases | Verify quantum if/then logic | **High** | `with` statement verification | Tests framework's core abstraction |
-| Bitwise operation verification | Verify AND, OR, XOR, NOT | **Medium** | Classical init + simulate | Framework-specific feature |
-| Automatic test case generation | Reduce manual test writing | **High** | Property-based testing approach | Advanced QA capability |
-| Detailed failure diagnostics | Pinpoint exact mismatch | **Medium** | State comparison, circuit diff | Better DX than pass/fail |
+| **Overview zoom level** (2-3px gates) | See the ENTIRE circuit structure at once for 100+ qubit circuits -- no other tool does this | **Medium** | NumPy array for fast pixel placement, PIL Image.fromarray() | Core differentiator. Qiskit folds at 25 layers; this shows all layers |
+| **Detail zoom level** (8-12px gates) | Readable gate labels for smaller circuits or selected regions | **Medium** | Larger icons with text labels | Matches what Qiskit/Cirq provide but in PIL format |
+| **Scalability to 200+ qubits** | No existing open-source tool renders 200-qubit circuits legibly | **High** | Efficient layout algorithm, NumPy array rendering | Quantivine handles 100 qubits; this targets 200+ |
+| **Color-coded gate categories** | Instant visual pattern recognition -- "where are all the phase gates?" | **Low** | Color palette definition per gate type | Qiskit supports this via style dict; pixel art makes it the PRIMARY identifier |
+| **Circuit density heatmap** (overview) | Show where the circuit is "busy" vs "sparse" -- reveals optimization opportunities | **Medium** | Gate count per region, color intensity mapping | Novel feature -- no existing tool does this as a built-in |
+| **Idle wire suppression** | Skip rendering unused qubit wires to compress vertical space | **Low** | Check `used_occupation_indices_per_qubit` from C backend | Already available: `circuit_visualize` skips unused qubits |
+| **Fast rendering** (NumPy backend) | Render 10,000+ gate circuits in under 1 second | **Medium** | NumPy array manipulation instead of PIL pixel-by-pixel | PIL putpixel is slow; NumPy array + Image.fromarray() is 10-100x faster |
+| **No matplotlib dependency** | Lighter weight than Qiskit's mpl drawer; PIL/Pillow only | **Low** | Pillow is the only dependency | Simpler install, no matplotlib/LaTeX |
 
 ## Anti-Features
 
-Features to explicitly NOT build. Common mistakes or scope creep in this domain.
+Features to explicitly NOT build. Common mistakes in circuit visualization tools.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| **OpenQASM 2.0 export** | Deprecated format, limited capabilities | OpenQASM 3.0 only—industry moved on |
-| **Custom gate definitions in QASM** | Complicates parsing, hardware compatibility | Decompose to standard gates in export |
-| **Classical register tracking** | Framework is quantum-only for computation | Export measurements only when present |
-| **Subroutine/def statements** | Qiskit has limited parse support (2026) | Flatten to gate sequence |
-| **QASM file I/O in Python API** | Messy, requires path management | Return string, let user handle I/O |
-| **Noise model simulation** | Out of scope, use Qiskit Aer for that | Focus on exact simulation for correctness |
-| **Hardware backend execution** | Not a verification concern | OpenQASM export enables hardware access |
-| **Statistical verification with shots** | Unnecessary for deterministic circuits | Use statevector for correctness tests |
-| **Dynamic circuit features** (mid-circuit measurement, reset) | Not supported by framework yet | Defer to future work |
-| **While/for loop export** | Framework doesn't generate loops | Circuit is fully unrolled |
-| **GUI for verification** | Overkill, command-line sufficient | Standalone script with clear output |
-| **Real-time verification** | Unrealistic for simulation | Batch verification is fine |
+| **Interactive zoom/pan** | Requires GUI framework (tkinter/Qt), massive scope increase, out-of-scope per PROJECT.md | Generate static images at chosen zoom level; user can open in any image viewer |
+| **LaTeX rendering** | Requires LaTeX installation, slow, fragile; Qiskit already does this well | PIL-only rendering; recommend Qiskit for publication-quality output |
+| **SVG output** | Adds complexity for little benefit in the pixel-art paradigm; SVG is for vector graphics | PNG output only; pixel art is inherently raster |
+| **Animated circuits** | GIF/video of circuit execution is a different product entirely | Static circuit diagram is the deliverable |
+| **Gate parameter text at overview zoom** | At 2-3px per gate, text is illegible; forcing it creates visual noise | Use color/shape only at overview; show parameters only at detail zoom |
+| **Classical register / measurement outcome wires** | The framework has no classical registers; adding fake ones misleads | Show measurement gate (M icon) on qubit wire; no double-line classical wire |
+| **Custom gate definitions** | Framework decomposes everything to standard gates; custom boxes add confusion | Render only the standard gate types (X, Y, Z, H, P, Rx, Ry, Rz, M) |
+| **Matplotlib backend option** | Duplicates Qiskit's functionality; stick to PIL for uniqueness and simplicity | PIL/NumPy only; this IS the alternative to matplotlib |
+| **Real-time circuit building visualization** | Requires live rendering during `add_gate`; performance and architecture nightmare | Render complete circuit after construction; this is a snapshot tool |
+| **Folding/wrapping** (Qiskit-style) | Folding at N layers loses the "see entire circuit" advantage that is the core value proposition | Use horizontal scrolling (wide images) or overview zoom instead |
 
 ## Feature Dependencies
 
-### OpenQASM Export Dependencies
+### Core Rendering Pipeline
 
 ```
-Basic QASM structure (DONE in v1.0)
-    ├── Single-qubit gates (DONE: X, H, Z, partially P)
-    │   └── Rotation gates (TODO: Rx, Ry, Rz, proper P format)
-    ├── Multi-controlled gates (PARTIAL: Control[2] works)
-    │   └── Large control array (TODO: large_control → ctrl(n) @)
-    ├── Qubit register (DONE)
-    └── Proper error handling (TODO: NULL checks, file errors)
-
-In-memory QASM export (v1.4 target)
-    ├── String buffer allocation
-    ├── Dynamic memory management
-    └── NULL termination, return to Python
-
-Python API (v1.4 target)
-    ├── Cython wrapper for C function
-    ├── String conversion to Python str
-    └── Error propagation to Python exceptions
+Circuit data access (from C backend via Cython)
+    |-- Already available: gate_count, depth, qubit_count, gate_counts
+    |-- Already available: used_occupation_indices_per_qubit (skip unused)
+    |-- NEEDED: layer-by-layer gate iteration from Python
+    |       |-- Option A: Expose circuit_t fields via Cython (preferred)
+    |       |-- Option B: Parse OpenQASM string (wasteful but works)
+    |       |-- Option C: New C function returning structured gate list
+    |
+    v
+Layout computation (Pure Python)
+    |-- Map each gate to (x, y) pixel coordinates
+    |-- Handle multi-qubit gate vertical spans
+    |-- Compute image dimensions
+    |
+    v
+Pixel rendering (NumPy + PIL)
+    |-- Create NumPy array of correct size
+    |-- Draw qubit wires (horizontal lines)
+    |-- Draw gate icons at computed positions
+    |-- Draw control lines (vertical segments)
+    |-- Convert to PIL Image via Image.fromarray()
+    |
+    v
+Output
+    |-- Return PIL Image object
+    |-- Optional: save to file path
+    |-- Optional: display in Jupyter via _repr_png_
 ```
 
-### Verification Dependencies
+### Gate Icon Design Dependencies
 
 ```
-Classical initialization (DONE in v1.1)
-    └── X-gate placement on specific qubits
+Overview icons (2-3px) -- color is primary identifier
+    |-- Single-qubit: colored square (2x2 or 3x3)
+    |-- CNOT target: small plus or circle
+    |-- Control dot: single dark pixel
+    |-- Measurement: distinct color (e.g., gray)
 
-QASM export (v1.4 target)
-    ├── Valid OpenQASM 3.0 syntax
-    └── All gate types represented
-
-Qiskit integration (v1.4 target)
-    ├── Parse QASM string
-    ├── Create QuantumCircuit
-    ├── Run statevector simulation
-    └── Extract measurement outcomes or final state
-
-Test case library (v1.4 target)
-    ├── Arithmetic: add, subtract, multiply (multiple bit widths)
-    ├── Comparison: <, <=, ==, >=, >, !=
-    ├── Bitwise: AND, OR, XOR, NOT
-    ├── Conditionals: with statement behavior
-    └── Edge cases: 0, max value, overflow behavior
-
-Result comparison (v1.4 target)
-    ├── Expected vs actual state
-    ├── Tolerance for floating point (phase)
-    └── Clear error messages
+Detail icons (8-12px) -- shape + text label
+    |-- Single-qubit: colored box with 1-2 char label
+    |-- CNOT target: circle with plus inside
+    |-- Control dot: filled circle
+    |-- Measurement: meter symbol or "M" box
+    |-- Phase/rotation: box with angle indicator
 ```
 
-## MVP Recommendation (v1.4 Scope)
+### Zoom Level Dependencies
 
-### Must Have (Priority 1)
+```
+Overview mode (default for circuits > threshold)
+    |-- Requires: gate icon set at 2-3px
+    |-- Requires: color palette for gate categories
+    |-- Requires: wire drawing at 1px height
+    |-- Optional: density heatmap overlay
+    |
+Detail mode (default for circuits <= threshold)
+    |-- Requires: gate icon set at 8-12px
+    |-- Requires: text rendering for gate labels
+    |-- Requires: wire drawing at 1-2px height
+    |-- Threshold suggestion: 30 qubits / 100 layers
+```
 
-1. **Production-quality OpenQASM 3.0 export** (C function)
-   - All gate types: X, Y, Z, H, P(theta), Rx, Ry, Rz
-   - Multi-controlled gates: Control[2] and large_control array
-   - Proper format: `ctrl(n) @ gate q[c0], q[c1], ..., q[target];`
-   - Error handling: NULL circuit, invalid gates, file errors
-   - In-memory string buffer (no forced file I/O)
+## Gate Type Color Palette Recommendation
 
-2. **Python API `ql.to_openqasm()`**
-   - Takes optional circuit object (default: current circuit)
-   - Returns QASM string
-   - Raises Python exceptions on error
+Based on quantum computing conventions (Qiskit textbook style, Qniverse color categories).
 
-3. **Standalone verification script**
-   - Classical init → QASM export → Qiskit simulate → check outcomes
-   - Built-in test cases for arithmetic and comparison
-   - Clear pass/fail output with failure details
+| Gate Category | Gates | Recommended Color | Hex | Rationale |
+|---------------|-------|-------------------|-----|-----------|
+| Pauli gates | X, Y, Z | Blue | `#4488CC` | Standard "basic operation" color |
+| Hadamard | H | Green | `#44AA66` | Distinct from Pauli, common gate deserves own color |
+| Phase/rotation | P, Rx, Ry, Rz | Orange | `#CC8844` | Parameterized gates grouped visually |
+| Control dot | (control qubit) | Black | `#222222` | Universal convention: filled circle = control |
+| CNOT target | (target of controlled-X) | Blue | `#4488CC` | Same as X gate (it IS an X gate) |
+| Measurement | M | Gray | `#888888` | Non-unitary, visually distinct from gates |
+| Wire | (qubit line) | Light gray | `#CCCCCC` | Background element, should not compete with gates |
+| Background | | White | `#FFFFFF` | Clean, maximizes contrast |
 
-### Should Have (Priority 2)
+Confidence: MEDIUM -- color choices are subjective; these follow established conventions from Qiskit's textbook theme and general UX principles for categorical color coding.
 
-4. **Comprehensive test case library**
-   - Arithmetic: addition (4-bit, 8-bit), subtraction, multiplication
-   - Comparison: all six operators (<, <=, ==, >=, >, !=)
-   - Bitwise: AND, OR, XOR, NOT
-   - Edge cases: 0, 1, max value
+## MVP Recommendation
 
-5. **Detailed failure diagnostics**
-   - Show expected vs actual values
-   - Display QASM snippet for failing operation
-   - Circuit statistics (gates, depth) for context
+### Must Have (Phase 1: Core Renderer)
 
-### Nice to Have (Priority 3)
+1. **Circuit data extraction from C backend to Python**
+   - Iterate layers and gates from Python code
+   - Get gate type, target qubit, control qubits, gate value for each gate
+   - This is the critical dependency -- everything else is pure Python
 
-6. **Barrier export** (circuit segmentation)
-7. **Comment annotations** (operation descriptions in QASM)
-8. **Conditional operation tests** (quantum if/then verification)
+2. **Overview mode rendering** (2-3px gates)
+   - NumPy array-based rendering for performance
+   - Horizontal qubit wires, colored gate pixels, vertical control lines
+   - Color-coded by gate category
+   - Handles circuits up to 200 qubits, 10,000+ gates
+
+3. **Python API `ql.draw_circuit()`**
+   - Returns PIL Image
+   - Optional `filename` parameter for direct save
+   - Optional `zoom` parameter (`"overview"` or `"detail"`)
+
+4. **Color legend**
+   - Rendered as part of the image (bottom or side panel)
+   - Maps colors to gate type names
+
+### Should Have (Phase 2: Detail + Polish)
+
+5. **Detail mode rendering** (8-12px gates)
+   - Gate label text inside boxes
+   - Better for circuits under 30 qubits / 100 layers
+
+6. **Auto zoom selection**
+   - Automatically choose overview vs detail based on circuit size
+   - Threshold: ~30 qubits or ~200 layers switches to overview
+
+7. **Qubit labels** at left margin
+
+### Nice to Have (Phase 3: Advanced)
+
+8. **Circuit density heatmap** in overview mode
+9. **Region-of-interest rendering** (render subset of qubits/layers at detail zoom)
+10. **Jupyter `_repr_png_` integration** on circuit object
 
 ### Explicitly Deferred
 
-- OpenQASM 2.0 support (obsolete)
-- Noise model simulation (use Qiskit Aer separately)
-- Hardware execution (QASM export enables this separately)
-- Dynamic circuits (mid-circuit measurement, reset)
-- Statistical verification (deterministic circuits don't need shots)
+- Interactive visualization (out of scope per PROJECT.md)
+- SVG or LaTeX output (not pixel-art's strength)
+- Animation or step-by-step rendering
+- Folding/wrapping (contradicts the "see everything" value proposition)
+- Custom color themes (hardcode a good default first)
 
-## Standard Verification Patterns (2026)
+## Comparison With Existing Tools
 
-Based on research of Qiskit, Cirq, and academic literature.
-
-### Pattern 1: Statevector Equality
-
-**Use case:** Verify deterministic circuits with classical inputs
-
-```python
-# Quantum Assembly pattern
-x = qint(5, width=4)  # Classical init
-y = qint(3, width=4)
-z = x + y
-qasm = ql.to_openqasm()
-
-# Qiskit verification
-from qiskit import QuantumCircuit
-from qiskit.quantum_info import Statevector
-
-circuit = QuantumCircuit.from_qasm_str(qasm)
-state = Statevector.from_instruction(circuit)
-
-# Check: z should be 8
-expected_state = computational_basis_state("1000")  # Binary for 8
-assert state == expected_state  # Exact equality for deterministic circuits
-```
-
-**Why it works:** Classical initialization produces deterministic superposition. Arithmetic operations are reversible. Final state is unique.
-
-**Confidence:** HIGH (verified with Qiskit documentation)
-
-### Pattern 2: Measurement-Based
-
-**Use case:** Verify operations that include measurement
-
-```python
-# Quantum Assembly
-a = qint(7, width=4)
-b = qint(2, width=4)
-result = (a > b)  # Returns qbool
-# Measure result implicitly
-
-qasm = ql.to_openqasm()
-
-# Qiskit verification
-from qiskit_aer import AerSimulator
-
-circuit = QuantumCircuit.from_qasm_str(qasm)
-simulator = AerSimulator()
-result = simulator.run(circuit, shots=1).result()  # Deterministic → 1 shot sufficient
-counts = result.get_counts()
-
-# Check: should measure 1 (True) 100% of the time
-assert counts == {'1': 1}  # 7 > 2 is True
-```
-
-**Why it works:** Deterministic circuits collapse to single outcome. No statistical noise for classical inputs.
-
-**Confidence:** HIGH (standard Qiskit pattern)
-
-### Pattern 3: Unitary Matrix Comparison
-
-**Use case:** Verify circuit transformations preserve correctness
-
-```python
-# Used in Qiskit Algorithms testing (2025 study)
-from qiskit.quantum_info import Operator
-
-original = QuantumCircuit.from_qasm_str(qasm_v1)
-optimized = QuantumCircuit.from_qasm_str(qasm_v2)
-
-U1 = Operator(original)
-U2 = Operator(optimized)
-
-# Global phase doesn't matter
-assert U1.equiv(U2)
-```
-
-**Why it works:** Optimization should preserve unitary transformation (up to global phase).
-
-**Use for:** Verifying that optimization passes don't break circuits.
-
-**Confidence:** HIGH (documented in Giallar, Qiskit testing research)
-
-### Pattern 4: Property-Based Testing
-
-**Use case:** Generate many test cases automatically
-
-```python
-# Hypothesis-style (not quantum-specific, but applicable)
-from hypothesis import given, strategies as st
-
-@given(st.integers(min_value=0, max_value=15),
-       st.integers(min_value=0, max_value=15))
-def test_addition_correctness(a, b):
-    # Build circuit: x = qint(a), y = qint(b), z = x + y
-    qasm = build_addition_circuit(a, b, width=4)
-    result = simulate_and_extract(qasm)
-    expected = (a + b) % 16  # 4-bit overflow
-    assert result == expected
-```
-
-**Why it works:** Tests many input combinations, catches edge cases.
-
-**Use for:** Comprehensive verification across input space.
-
-**Confidence:** MEDIUM (not quantum-specific, but valid approach)
-
-## Implementation Recommendations
-
-### OpenQASM 3.0 Export Quality Checklist
-
-Based on Cirq, Qiskit, and OpenQASM spec (2026).
-
-- [ ] **Version header:** `OPENQASM 3.0;`
-- [ ] **Include statement:** `include "stdgates.inc";`
-- [ ] **Qubit register:** `qubit[N] q;`
-- [ ] **Single-qubit gates:** `h q[0];`, `x q[1];`, `z q[2];`
-- [ ] **Rotation gates:** `rx(0.5) q[0];`, `ry(1.57) q[1];`, `rz(3.14) q[2];`
-- [ ] **Phase gate:** `p(1.5708) q[0];` (not `P4.0` as in current code)
-- [ ] **Controlled gates (n=1):** `cx q[0], q[1];` or `ctrl @ x q[0], q[1];`
-- [ ] **Multi-controlled (n=2):** `ccx q[0], q[1], q[2];` or `ctrl(2) @ x q[0], q[1], q[2];`
-- [ ] **Large control (n>2):** `ctrl(5) @ x q[0], q[1], q[2], q[3], q[4], q[5];`
-- [ ] **Measurement:** `m q[0];` or `bit c0; c0 = measure q[0];` (if classical register)
-- [ ] **Barriers (optional):** `barrier q[0], q[1], q[2];`
-- [ ] **Comments:** `// Operation: x + y`
-- [ ] **No custom gates:** Decompose to standard gates
-- [ ] **No subroutines:** Flatten all operations
-- [ ] **Error handling:** Validate circuit before export
-
-**Current gaps in `circuit_to_opanqasm` (lines 274-326):**
-1. Writes to file—should support in-memory string buffer
-2. Missing Rx, Ry, Rz export (lines 314-319: empty cases)
-3. Y gate export missing (line 311: empty case)
-4. Phase gate uses wrong format: `p(value)` not `P4.0` (line 296)
-5. Large control array not exported (line 322: only uses `g.Control[i]`)
-6. No barrier support
-7. No comments
-8. No error handling (NULL circuit, invalid gates)
-
-### Verification Script Architecture
-
-```
-verify_circuits.py
-├── Built-in test cases
-│   ├── test_arithmetic()
-│   │   ├── Addition: (5 + 3 = 8), (15 + 1 = 0 overflow)
-│   │   ├── Subtraction: (8 - 3 = 5), (0 - 1 = 15 underflow)
-│   │   └── Multiplication: (3 * 4 = 12), (5 * 5 = 9 overflow)
-│   ├── test_comparison()
-│   │   ├── Less than: 5 < 7 = True, 7 < 5 = False
-│   │   ├── Equal: 5 == 5 = True, 5 == 3 = False
-│   │   └── Greater: 7 > 5 = True, 5 > 7 = False
-│   ├── test_bitwise()
-│   │   ├── AND: 0b1100 & 0b1010 = 0b1000
-│   │   ├── OR: 0b1100 | 0b1010 = 0b1110
-│   │   └── XOR: 0b1100 ^ 0b1010 = 0b0110
-│   └── test_conditionals()
-│       └── with statement: if (x > y) then z = x else z = y
-├── Qiskit integration
-│   ├── parse_qasm(qasm_str) → QuantumCircuit
-│   ├── simulate_statevector(circuit) → Statevector
-│   ├── simulate_measurement(circuit) → counts
-│   └── extract_value(state, qubits) → int
-├── Comparison logic
-│   ├── compare_states(expected, actual, tolerance)
-│   ├── compare_measurements(expected, actual)
-│   └── format_failure(test_name, expected, actual, qasm)
-└── Reporting
-    ├── print_summary(passed, failed, total)
-    ├── print_failures(failure_list)
-    └── exit_code(0 if all pass, 1 if any fail)
-```
-
-**Best practice:** Standalone script, no framework import needed. User runs `python verify_circuits.py` and sees results.
-
-### Test Case Specifications
-
-#### Arithmetic Tests
-
-| Operation | Width | Input A | Input B | Expected | Notes |
-|-----------|-------|---------|---------|----------|-------|
-| Addition | 4 | 5 | 3 | 8 | Basic |
-| Addition | 4 | 15 | 1 | 0 | Overflow |
-| Subtraction | 4 | 8 | 3 | 5 | Basic |
-| Subtraction | 4 | 0 | 1 | 15 | Underflow |
-| Multiplication | 4 | 3 | 4 | 12 | Basic |
-| Multiplication | 4 | 5 | 5 | 9 | Overflow (25 mod 16) |
-| Addition | 8 | 100 | 28 | 128 | Larger width |
-| Subtraction | 8 | 200 | 50 | 150 | Larger width |
-
-#### Comparison Tests
-
-| Operation | Width | Input A | Input B | Expected | Notes |
-|-----------|-------|---------|---------|----------|-------|
-| Less than | 4 | 5 | 7 | True | Basic |
-| Less than | 4 | 7 | 5 | False | Basic |
-| Less than | 4 | 5 | 5 | False | Boundary |
-| Equal | 4 | 5 | 5 | True | Basic |
-| Equal | 4 | 5 | 3 | False | Basic |
-| Greater | 4 | 7 | 5 | True | Basic |
-| Greater | 4 | 5 | 7 | False | Basic |
-| Less/equal | 4 | 5 | 5 | True | Boundary |
-| Greater/equal | 4 | 5 | 5 | True | Boundary |
-
-#### Bitwise Tests
-
-| Operation | Width | Input A | Input B | Expected | Binary Check |
-|-----------|-------|---------|---------|----------|--------------|
-| AND | 4 | 12 | 10 | 8 | 1100 & 1010 = 1000 |
-| OR | 4 | 12 | 10 | 14 | 1100 \| 1010 = 1110 |
-| XOR | 4 | 12 | 10 | 6 | 1100 ^ 1010 = 0110 |
-| NOT | 4 | 5 | - | 10 | ~0101 = 1010 (4-bit) |
-| AND | 4 | 15 | 0 | 0 | Edge: zero |
-| OR | 4 | 0 | 0 | 0 | Edge: zero |
+| Capability | Qiskit `mpl` | Cirq SVG | ASCII (current) | Pixel-Art (proposed) |
+|------------|-------------|----------|-----------------|---------------------|
+| Max practical qubits | ~40 | ~30 | ~20 (60 layers cap) | 200+ |
+| Max practical gates | ~500 | ~200 | ~2000 (skips rendering) | 10,000+ |
+| Output format | matplotlib Figure | SVG/HTML | stdout text | PIL Image (PNG) |
+| Dependencies | matplotlib, LaTeX (optional) | None (built-in) | None (C printf) | Pillow, NumPy |
+| Gate labeling | Full text + parameters | Text labels | 1-char symbols | Color + shape (overview), text (detail) |
+| Customization | Extensive (style dict) | Limited | None | Color palette only |
+| Rendering speed | Slow (>5s for large) | Fast | Fast | Fast (NumPy) |
+| Jupyter integration | Yes (inline) | Yes (SVG) | No (text only) | Yes (PIL _repr_png_) |
 
 ## Complexity Assessment
 
-| Feature Category | Effort | Risk | Priority |
-|------------------|--------|------|----------|
-| **OpenQASM export (C)** | 2-3 days | Low | P0 (must have) |
-| String buffer allocation | - | Medium | Implementation detail |
-| All gate types | - | Low | Straightforward |
-| Large control export | - | Medium | Format parsing |
-| Error handling | - | Low | Standard C patterns |
-| **Python API** | 1 day | Low | P0 (must have) |
-| Cython wrapper | - | Low | Existing pattern |
-| String conversion | - | Low | Standard Cython |
-| **Verification script** | 3-4 days | Medium | P0 (must have) |
-| Qiskit integration | - | Medium | External dependency |
-| Test case library | - | Low | Straightforward |
-| Result comparison | - | Low | Standard testing |
-| Failure diagnostics | - | Medium | UI/formatting |
-| **Total v1.4 effort** | **6-8 days** | **Low-Medium** | - |
+| Feature | Effort | Risk | Priority |
+|---------|--------|------|----------|
+| **Circuit data extraction (Cython bridge)** | 2-3 days | Medium | P0 -- everything depends on this |
+| **Overview renderer (NumPy + PIL)** | 3-4 days | Low | P0 -- core feature |
+| **Gate icon design (2-3px)** | 1 day | Low | P0 -- simple pixel patterns |
+| **Color palette + legend** | 1 day | Low | P0 -- essential for readability |
+| **Python API (`ql.draw_circuit()`)** | 1 day | Low | P0 -- user-facing interface |
+| **Detail renderer (8-12px)** | 2-3 days | Low | P1 -- nice to have |
+| **Auto zoom selection** | 0.5 day | Low | P1 -- convenience |
+| **Qubit labels** | 0.5 day | Low | P1 -- expected |
+| **Density heatmap** | 2 days | Medium | P2 -- differentiator |
+| **Region-of-interest rendering** | 2-3 days | Medium | P2 -- advanced |
+| **Total MVP (P0)** | **8-10 days** | **Low-Medium** | -- |
+| **Total with P1** | **11-14 days** | **Low** | -- |
 
 **Risk factors:**
-- Qiskit API changes (MEDIUM): Mitigation—pin Qiskit version, test on 1.0+
-- QASM parsing errors (LOW): Mitigation—validate against OpenQASM spec
-- Simulation performance (LOW): Mitigation—limit test case circuit size
-- Memory leaks in C export (MEDIUM): Mitigation—valgrind testing
+- Circuit data extraction is the main risk -- need to expose C struct fields through Cython without breaking existing API
+- Very large images (200 qubits x 10,000 layers = 2M+ pixels) need memory management
+- PIL rendering performance for large images -- mitigated by NumPy array approach
 
 ## Open Questions
 
-1. **Should QASM export include circuit metadata?** (Gate count, depth, optimization level)
-   - Leans NO: Keep QASM pure, metadata in separate function
+1. **How should circuit data be exposed to Python for rendering?**
+   - Option A: New Cython function returning list of dicts (cleanest API)
+   - Option B: Expose `circuit_t` fields directly (fastest, most fragile)
+   - Option C: Parse the existing OpenQASM export (wasteful but zero C changes)
+   - Recommendation: Option A -- new `circuit_to_gate_list()` Cython function
    - Confidence: MEDIUM
 
-2. **Should verification script support custom test cases?** (User provides input/expected pairs)
-   - Leans YES: Increases utility, not much complexity
-   - Implementation: Command-line flag `--custom tests.json`
-   - Confidence: LOW (need user feedback)
+2. **What is the gate-width threshold for switching zoom levels?**
+   - Suggestion: overview when `qubit_count > 30 OR depth > 200`
+   - Needs experimentation with real circuits
+   - Confidence: LOW
 
-3. **Should in-memory QASM use fixed buffer or dynamic allocation?**
-   - Leans DYNAMIC: Circuits vary widely in size
-   - Concern: Memory management complexity
+3. **Should the image have a fixed width or scale with circuit depth?**
+   - Recommendation: Scale with circuit depth (proportional), cap at reasonable maximum (e.g., 16000px width)
+   - Very wide images are fine -- users can scroll/zoom in image viewers
    - Confidence: MEDIUM
 
-4. **Should verification report include circuit visualizations?**
-   - Leans NO for v1.4: Text output sufficient, add later if requested
-   - Alternative: `--verbose` flag for circuit diagrams
-   - Confidence: MEDIUM
+4. **Should unused qubits be rendered?**
+   - Recommendation: No -- follow existing `circuit_visualize` pattern which skips unused qubits
+   - The C backend already tracks `used_occupation_indices_per_qubit`
+   - Confidence: HIGH
 
 ## Sources
 
 ### High Confidence (Official Documentation)
 
-- [OpenQASM 3 feature table | IBM Quantum Documentation](https://quantum.cloud.ibm.com/docs/en/guides/qasm-feature-table) - Qiskit OpenQASM 3.0 support matrix
-- [Gates — OpenQASM Live Specification](https://openqasm.com/language/gates.html) - Multi-controlled gate syntax
-- [Exact simulation with Qiskit SDK primitives | IBM Quantum Documentation](https://quantum.cloud.ibm.com/docs/guides/simulate-with-qiskit-sdk-primitives) - Statevector and shot-based simulation
-- [Built-in quantum instructions — OpenQASM Specification](https://openqasm.com/language/insts.html) - Classical register initialization
+- [Qiskit circuit_drawer API](https://quantum.cloud.ibm.com/docs/en/api/qiskit/qiskit.visualization.circuit_drawer) -- Parameters, output formats, style customization
+- [Qiskit Visualize Circuits Guide](https://quantum.cloud.ibm.com/docs/en/guides/visualize-circuits) -- fold, scale, interactive, themes
+- [Pillow PixelAccess Documentation](https://pillow.readthedocs.io/en/stable/reference/PixelAccess.html) -- Performance characteristics of pixel-level access
+- [Pillow Image Module](https://pillow.readthedocs.io/en/stable/reference/Image.html) -- Image.fromarray(), save(), modes
+- [Azure Quantum Circuit Diagram Conventions](https://learn.microsoft.com/en-us/azure/quantum/concepts-circuits) -- Standard visual conventions
 
-### Medium Confidence (Research Papers, 2025-2026)
+### Medium Confidence (Research / Multiple Sources)
 
-- [Optimizing Gate Decomposition for High-Level Quantum Programming – Quantum (March 2025)](https://quantum-journal.org/papers/q-2025-03-12-1659/) - Linear-time multi-controlled gate decomposition
-- [Quantum Testing in the Wild: A Case Study with Qiskit Algorithms (January 2025)](https://arxiv.org/html/2501.06443v1) - Seven testing patterns in Qiskit
-- [AutoQ 2.0: Verification of Quantum Programs (2025)](https://link.springer.com/chapter/10.1007/978-3-031-90660-2_5) - Conditional operation verification
-- [Low-depth Quantum Circuit Decomposition of Multi-controlled Gates (2024)](https://arxiv.org/abs/2407.05162) - Multi-controlled gate depth optimization
+- [Quantivine: Large-scale Quantum Circuit Visualization (IEEE TVCG 2023)](https://arxiv.org/abs/2307.08969) -- Semantic abstraction for 100-qubit circuits
+- [Cirq SVG Rendering (GitHub)](https://github.com/quantumlib/Cirq/issues/4499) -- SVG circuit drawing features and limitations
+- [Qiskit Circuit Style Customization (Medium)](https://medium.com/qiskit/learn-how-to-customize-the-appearance-of-your-qiskit-circuits-with-accessibility-in-mind-b9b59fc039f3) -- Color, font, displaytext options
+- [Pillow ImageDraw.point Performance Issue #2450](https://github.com/python-pillow/Pillow/issues/2450) -- Why NumPy is preferred over putpixel for bulk operations
 
-### Medium Confidence (Web Search, Multiple Sources)
+### Low Confidence (Single Source)
 
-- [The Power of OpenQASM 3 for Real-Time Quantum-Classical Control](https://www.quantum-machines.co/blog/why-openqasm3-will-transform-the-quantum-dev-world/) - OpenQASM 3.0 capabilities
-- [Import/export circuits | Cirq | Google Quantum AI](https://quantumai.google/cirq/build/interop) - Cirq OpenQASM 2.0/3.0 export
-- [Advent of Code Day 1 on a Quantum Computer with Qiskit (2025)](https://aqora.io/blog/advent-of-code-quantum-edition-day-1) - Full adder verification example
-- [DraperQFTAdder | IBM Quantum Documentation](https://quantum.cloud.ibm.com/docs/en/api/qiskit/qiskit.circuit.library.DraperQFTAdder) - Qiskit arithmetic circuit library
-
-### Low Confidence (Single Source, Unverified)
-
-- [Efficient Quantum Comparator Circuit – Egretta Thula (2023)](https://egrettathula.wordpress.com/2023/04/18/efficient-quantum-comparator-circuit/) - Comparator verification patterns (dated)
+- [Reso Pixel-Art Circuit Simulator](https://lynndotpy.dev/posts/reso-intro/) -- Pixel-art approach to boolean circuits (not quantum, but related aesthetic)
+- [Pixel-Oriented Data Visualization (FasterCapital)](https://fastercapital.com/content/Visualization-Techniques--Pixel-oriented-Techniques--Pixel-perfect--The-Art-of-Pixel-oriented-Data-Visualization.html) -- General pixel-oriented visualization principles
 
 ---
 
-**Research complete.** This feature landscape provides clear prioritization for v1.4 milestone requirements. Table stakes cover 80% of scope, differentiators add competitive advantage, anti-features prevent scope creep.
+**Research complete.** This feature landscape provides clear prioritization for the v1.9 pixel-art circuit visualization milestone. The core value proposition is scalability: rendering circuits that are too large for any existing tool. NumPy-based pixel rendering keeps it fast, and two zoom levels bridge the gap between "see the whole circuit" and "read individual gates."

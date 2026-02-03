@@ -1,430 +1,393 @@
-# Domain Pitfalls: Automatic Uncomputation
+# Domain Pitfalls: Pixel-Art Circuit Visualization
 
-**Domain:** Adding automatic uncomputation to existing quantum circuit framework
-**Researched:** 2026-01-28
-**Confidence:** HIGH (based on recent academic research 2024-2025 and existing codebase analysis)
+**Domain:** PIL/Pillow-based compact pixel-art quantum circuit renderer
+**Researched:** 2026-02-03
+**Confidence:** HIGH (Pillow docs verified, circuit data structures inspected, domain patterns from quantum viz literature)
 
 ## Executive Summary
 
-Implementing automatic uncomputation in quantum programming frameworks is deceptively complex. While the concept is simple — automatically reverse intermediate computations to free qubits — the implementation requires solving several hard problems: finding correct uncomputation positions in circuit flow, managing complex dependency graphs, integrating with existing circuit constructs (especially conditional operations), and avoiding exponential cost blowups. The existing framework's stateless C backend, `with` statement conditionals, and circuit-building architecture create specific integration challenges that must be addressed carefully.
+Building a pixel-art circuit renderer for quantum circuits up to 200+ qubits and thousands of layers involves pitfalls in three categories: (1) PIL/Pillow performance and memory constraints that silently degrade or crash at scale, (2) circuit data extraction challenges specific to this project's C backend `circuit_s` structure, and (3) visual design mistakes that make large circuits unreadable despite being technically rendered. The most dangerous pitfalls are those that work fine during development with small test circuits (5-10 qubits) but fail catastrophically at production scale (100+ qubits, 1000+ layers).
+
+---
 
 ## Critical Pitfalls
 
-These mistakes cause rewrites, incorrect quantum states, or exponential resource usage.
+Mistakes that cause crashes, unusable output, or require architecture rewrites.
 
-### Pitfall 1: Incorrect Uncomputation Position in Circuit Flow
+### Pitfall 1: Pillow Decompression Bomb Limits on Generated Images
 
-**What goes wrong:** Placing uncomputation (inverse gates) at the wrong circuit position produces incorrect quantum states. An intermediate qubit cannot be uncomputed if:
-- Its computed value is still needed downstream for other operations
-- The qubits needed for its uncomputation have been modified or deallocated
-- It would interfere with entangled qubits still in use
+**What goes wrong:** Pillow has a built-in `MAX_IMAGE_PIXELS` limit (default ~178 million pixels) that raises `DecompressionBombError` when exceeded. A 200-qubit, 2000-layer circuit with even 3px-per-gate spacing easily produces images of 6000x600+ pixels at detail zoom -- this is fine. But at overview zoom with labels, margins, and legends, or if the spacing math is slightly wrong, the pixel count can exceed the threshold. More critically, if someone accidentally creates an image at the wrong zoom level (e.g., detail zoom on a massive circuit), the image dimensions can balloon to 200,000+ pixels wide.
 
-**Why it happens:**
-- Dependency analysis misses indirect dependencies (value used in control of conditional)
-- Graph traversal doesn't respect layer ordering in the existing circuit structure
-- Interaction between lifetime-based uncomputation and layer-based circuit building
-- `with` statement conditional contexts create nested scopes where dependency analysis breaks down
+**Why it happens:** The limit is designed to prevent loading malicious images, not to constrain generation. Developers test with small circuits during development and never hit the limit. The first time a user visualizes their 150-qubit QFT circuit, it crashes.
 
 **Consequences:**
-- Silent quantum state corruption (ancilla not returned to |0⟩)
-- Downstream operations receive wrong quantum state
-- Circuit violates reversibility requirements
-- Results appear random due to garbage amplification
-- **This is the #1 source of incorrect circuits in automatic uncomputation implementations**
+- `PIL.Image.DecompressionBombError` or `DecompressionBombWarning` at runtime
+- Users see a cryptic error unrelated to their quantum code
+- If bypassed naively with `Image.MAX_IMAGE_PIXELS = None`, memory exhaustion becomes possible
+
+**Warning signs:**
+- No explicit image size calculation before `Image.new()`
+- No maximum dimension capping logic
+- Tests only use circuits under 20 qubits
 
 **Prevention:**
-1. **Build dependency graph BEFORE inserting uncomputation gates** — analyze the complete circuit to understand what depends on what
-2. **Layer-aware scheduling:** Uncomputation must respect existing circuit layer structure; insert inverse gates only after the layer containing the last use
-3. **Validate uncomputation availability:** Before uncomputing qubit q using qubits {a, b, c}, verify that {a, b, c} still hold the required quantum state (haven't been modified since q was computed)
-4. **Explicit scope tracking:** Track `with` statement boundaries and prevent uncomputation from crossing conditional scope boundaries inappropriately
-5. **Add validation pass:** After generating uncomputation, verify that each uncomputed qubit ends in |0⟩ state (requires symbolic state tracking or test verification)
+- Calculate image dimensions BEFORE creating the `Image` object: `width = num_layers * px_per_layer + margins`, `height = num_qubits * px_per_qubit + margins`
+- If dimensions exceed a configurable cap (e.g., 32000x32000), automatically switch to overview mode or tile
+- Set `Image.MAX_IMAGE_PIXELS` explicitly to a known safe value rather than disabling it
+- Add a pre-check: `if width * height > MAX_SAFE_PIXELS: raise ValueError("Circuit too large for detail mode, use overview")`
 
-**Detection (warning signs):**
-- Test circuits produce inconsistent results across runs
-- Qubits show unexpected entanglement after uncomputation
-- Circuit simulation shows ancilla in non-zero states
-- allocator_get_stats() shows qubit count not decreasing despite uncomputation
+**Phase:** Address in the very first rendering phase (core renderer). Dimension calculation must be the first thing the renderer does.
 
-**Which phase:** Phase 1 (Dependency Graph) must get this architecture right; Phase 2 (Basic Uncomputation) validates with tests
-
-**Sources:**
-- [Unqomp: Synthesizing Uncomputation in Quantum Circuits](https://files.sri.inf.ethz.ch/website/papers/pldi21-unqomp.pdf)
-- [Modular Synthesis of Efficient Quantum Uncomputation](https://www.researchgate.net/publication/381580072_Modular_Synthesis_of_Efficient_Quantum_Uncomputation)
+**Confidence:** HIGH -- verified from [Pillow limits documentation](https://pillow.readthedocs.io/en/stable/reference/limits.html) and [GitHub issue #5218](https://github.com/python-pillow/Pillow/issues/5218).
 
 ---
 
-### Pitfall 2: Circular Dependencies and Memory Leaks in Dependency Tracking
+### Pitfall 2: ImageDraw Per-Call Overhead at Scale
 
-**What goes wrong:** Dependency tracking creates reference cycles that prevent cleanup:
-- Qubit A depends on qubits {B, C}
-- Qubit B depends on qubits {A, D}
-- Both A and B maintain references to each other
-- Python/Cython reference counting never reaches zero
-- Memory leak grows with circuit size
+**What goes wrong:** Each `ImageDraw.rectangle()`, `ImageDraw.line()`, or `ImageDraw.point()` call incurs Python-to-C boundary crossing overhead. For a 100-qubit, 1000-layer circuit, you need approximately: 100 horizontal wire lines + 100,000 gate icons (rectangles/points) + 50,000 control lines = 150,000+ individual draw calls. At ~10-50 microseconds per call, this takes 1.5-7.5 seconds just for drawing -- unacceptable for an API that should feel instant for small-to-medium circuits.
 
-**Why it happens:**
-- Each qbool/intermediate tracks what created it (parent references)
-- Parents may track children for reverse traversal (child references)
-- Bidirectional references create cycles that garbage collection doesn't handle
-- C backend has no built-in cycle detection (manual memory management)
-- Cython wrapper between Python and C complicates ownership
+**Why it happens:** The natural approach is a nested loop: `for layer in layers: for qubit in qubits: draw.rectangle(...)`. This is clean code but slow code. Developers benchmark with 5-qubit circuits where 50 draw calls take <1ms, and never notice the O(qubits * layers) scaling problem.
 
 **Consequences:**
-- Memory usage grows unbounded for large circuits
-- Segfaults when freeing circuit (double-free or use-after-free)
-- Dependency graph becomes unreachable but not freed
-- Performance degradation as memory fills
-- **This is especially dangerous because it only manifests at scale**
+- `ql.draw_circuit()` takes 5-30 seconds for large circuits
+- Users perceive the framework as slow
+- Temptation to "optimize later" but the architecture locks in per-call patterns
+
+**Warning signs:**
+- Individual `draw.rectangle()` calls inside nested loops
+- No batching strategy in the design
+- No performance test with circuits >50 qubits
 
 **Prevention:**
-1. **Single ownership model:** Each dependency node owned by exactly one parent (circuit or parent node)
-2. **Weak references for parent pointers:** Use indices or weak pointers to avoid cycles
-3. **Graph stored in circuit structure:** Centralize dependency graph in circuit_t, not distributed across qbool objects
-4. **Explicit cleanup protocol:** Walk dependency graph in topological order to free nodes (similar to qubit_allocator cleanup)
-5. **Reference counting audit:** Track all alloc/free pairs in C backend; use valgrind to detect leaks
+- Use NumPy array operations for bulk pixel manipulation: create a NumPy array, use slice assignment (`arr[y1:y2, x1:x2] = color`) for filled rectangles, then convert to PIL Image with `Image.fromarray(arr)`
+- For horizontal wire lines: `arr[y, x1:x2] = wire_color` (single array slice per qubit)
+- For gate icons at 2-3px: pre-define gate patterns as small NumPy arrays and stamp them with slice assignment
+- Reserve `ImageDraw` only for operations that genuinely need it (e.g., anti-aliased text for labels, if any)
+- Benchmark target: <100ms for a 100-qubit, 1000-layer circuit
 
-**Detection (warning signs):**
-- Memory usage grows faster than circuit size would suggest
-- valgrind reports "definitely lost" memory blocks
-- Segfaults in free_circuit() or when Python objects are garbage collected
-- RSS memory never decreases even after circuit operations complete
+**Phase:** Must be decided in architecture phase. Switching from ImageDraw to NumPy after the renderer is built requires rewriting all drawing code.
 
-**Which phase:** Phase 1 (Dependency Graph) must design ownership model carefully; Phase 3 (Integration Testing) validates with memory profiling
-
-**Sources:**
-- [Rust reference cycles](https://doc.rust-lang.org/book/ch15-06-reference-cycles.html) (similar ownership challenges)
-- Codebase: qubit_allocator.h demonstrates successful single-ownership pattern
+**Confidence:** HIGH -- per-call overhead is a well-documented Pillow performance issue, confirmed by [Pillow issue #2450](https://github.com/python-pillow/Pillow/issues/2450) and the [Pillow performance page](https://python-pillow.github.io/pillow-perf/).
 
 ---
 
-### Pitfall 3: Exponential Cost Blowup with Recursive/Nested Uncomputation
+### Pitfall 3: No Python API to Iterate Circuit Gates from C Backend
 
-**What goes wrong:** Naive uncomputation in nested contexts causes exponential recomputation:
-- Function A calls function B which computes intermediate X
-- A's uncomputation reverses B, which includes reversing X
-- But B's logic already included uncomputing X
-- Result: X is recomputed at every nesting level
-- For ℓ levels of nesting, cost multiplies by 2^ℓ
+**What goes wrong:** The existing `circuit` class in `_core.pyx` exposes aggregate statistics (`gate_count`, `depth`, `gate_counts`) and text output (`visualize()`, OpenQASM export), but does NOT expose a Python-accessible API to iterate over individual gates at specific layers and positions. The `circuit_s.sequence[layer][gate_index]` data is only accessible from C/Cython code. Building a pure-Python renderer requires either: (a) adding a new Cython function to extract gate data into Python objects, or (b) building the renderer in Cython.
 
-**Why it happens:**
-- Delayed uncomputation: intermediate values kept alive through entire operation scope
-- Nested operations (qint comparison inside qbool expression inside `with` statement)
-- Each scope uncomputes its intermediates, but those intermediates themselves had intermediates
-- Hierarchical recomputation cascades down the call stack
-- **The existing framework's operator overloading creates implicit nesting that's invisible to users**
+**Why it happens:** The existing text-based `circuit_visualize()` and `circuit_to_qasm_string()` functions are implemented entirely in C, so they never needed to expose per-gate data to Python. A Python-based PIL renderer is the first consumer that needs gate-by-gate access from Python.
 
 **Consequences:**
-- Gate count explodes exponentially with expression complexity
-- O(n) algorithm becomes O(2^n) in gate count
-- Circuit generation becomes impossibly slow for moderate complexity
-- Quantum advantage lost due to excessive gate overhead
-- Users cannot understand why simple expressions produce huge circuits
+- If not addressed upfront, the renderer cannot access the data it needs to render
+- Bolt-on solutions (parsing the text output of `visualize()`, parsing OpenQASM) are fragile and slow
+- Scope creep: what was "just a renderer" becomes "renderer + Cython bindings refactor"
+
+**Warning signs:**
+- Renderer design assumes gate data is available as Python lists/dicts
+- No Cython binding task in the plan
+- Design doc references `circuit.gates` or similar API that doesn't exist
 
 **Prevention:**
-1. **Immediate uncomputation mode (qubit-saving):** Uncompute intermediates as soon as possible, not at scope exit
-2. **Memoization:** Track what's already been uncomputed; don't uncompute twice
-3. **Flatten dependency graph:** Identify shared intermediate values and uncompute at highest common ancestor
-4. **Cost model:** Estimate gate count impact before applying uncomputation; refuse if cost exceeds threshold
-5. **Explicit vs implicit scope:** Distinguish between explicit `with` blocks (user-controlled scope) and implicit intermediate creation (operator overloading)
+- First task must be creating a Cython function like `get_circuit_data()` that returns a Python-friendly structure:
+  ```python
+  # Returns list of layers, each layer is list of gate dicts
+  [
+    [{"type": "H", "target": 0, "controls": [], "value": 0.0}, ...],  # layer 0
+    [{"type": "CX", "target": 3, "controls": [1], "value": 0.0}, ...],  # layer 1
+    ...
+  ]
+  ```
+- This function walks `circuit_s.sequence` and `circuit_s.used_gates_per_layer` in Cython, converting `gate_t` structs to Python dicts
+- The `Standardgate_t` enum (`X, Y, Z, R, H, Rx, Ry, Rz, P, M`) maps to string names
+- Must handle `large_control` (when `NumControls > 2`) by reading the dynamically allocated control array
+- Keep the Cython binding minimal and stable; all rendering logic stays in pure Python
 
-**Detection (warning signs):**
-- Gate count grows much faster than expected for expression complexity
-- circuit_gate_count() shows 2x, 4x, 8x jumps between similar operations
-- Circuit generation time increases exponentially (not linearly) with nested operations
-- Profiling shows repeated inverse gate sequences for same qubit patterns
+**Phase:** This is a prerequisite -- must be the very first implementation task before any rendering code.
 
-**Which phase:** Phase 2 (Basic Uncomputation) must detect this in tests; Phase 4 (Qubit-Saving Mode) implements mitigation strategy
-
-**Sources:**
-- [Modular Synthesis of Efficient Quantum Uncomputation](https://www.researchgate.net/publication/381580072_Modular_Synthesis_of_Efficient_Quantum_Uncomputation) - documents exponential blowup
-- [SQUARE: Strategic Quantum Ancilla Reuse](https://arxiv.org/abs/2004.08539) - recursive recomputation challenges
+**Confidence:** HIGH -- verified by reading `_core.pxd` (line 62-93), `_core.pyx` (line 302-344), `types.h` (line 64-82), and `circuit.h` (line 54-79). No per-gate Python API exists.
 
 ---
 
-### Pitfall 4: Incorrect Reversal of Multi-Controlled and Conditional Gates
+### Pitfall 4: Zoom Level Produces Unreadable Output at Wrong Scale
 
-**What goes wrong:** Reversing complex gates incorrectly:
-- Multi-controlled gates (large_control with n controls) have subtle inverse rules
-- Conditional gates (inside `with` statement) may have different controls when reversed
-- Parametrized gates (phase rotations) require negating parameters, not just reordering
-- Composite gates built from primitives need careful decomposition reversal
-- **Control and target qubit roles confused during reversal**
+**What goes wrong:** Two zoom levels (overview and detail) sounds simple, but choosing the wrong one for a given circuit size makes the output useless. Detail mode on a 200-qubit circuit produces an image so wide/tall it's impractical. Overview mode on a 5-qubit circuit wastes the visual space and makes gates indistinguishable. Worse, if there's no automatic selection, users must manually pick -- and most won't know which to use.
 
-**Why it happens:**
-- Inverse of multi-controlled X(q0, q1, q2 → target) is same gate, but logic assumes gate sequence reversal
-- Phase gates P(θ) reverse to P(-θ), not just reversed position
-- `with condition:` blocks add implicit controls; reversing these requires understanding condition lifetime
-- Existing `_controlled` and `_list_of_controls` global state (quantum_language.pyx) creates hidden dependencies
-- Gate representation (gate_t) may not preserve all metadata needed for correct inversion
+**Why it happens:** Developers implement both modes and test each with appropriate circuits. They never test detail mode on huge circuits or overview mode on tiny ones, because they know which to use. Users don't.
 
 **Consequences:**
-- Uncomputation fails silently — circuit runs but produces wrong results
-- Controlled operations apply to wrong qubits
-- Phase accumulation errors in algorithms using phase gates
-- Conditional uncomputation inside `with` blocks corrupts state
-- **Especially dangerous because basic tests may pass (single gate) but complex circuits fail**
+- Users get a 50,000px wide image they can't view
+- Users get a 100x50px overview where everything is a dot
+- Complaints about "broken" visualization that's technically correct but practically useless
+
+**Warning signs:**
+- No automatic mode selection logic
+- No maximum image dimension constraints
+- Tests don't verify mode switching behavior at boundary sizes
 
 **Prevention:**
-1. **Gate-type-specific inversion:** Switch on gate type; implement custom inverse logic for each (X, CNOT, CCX, P, CP, custom multi-control)
-2. **Test inverse correctness:** For every gate type, verify Gate(args) followed by Inverse(args) produces identity
-3. **Preserve gate metadata:** Extend gate_t structure to store inversion hints (e.g., rotation angle, control pattern)
-4. **Adjoint operator validation:** Verify U†U = I for all generated uncomputation sequences
-5. **Interaction with `with` statement:** Explicitly track conditional scope; uncomputation inside `with` must respect that the condition might not hold when reversing
+- Implement automatic mode selection based on circuit dimensions:
+  - Detail mode: `num_qubits <= 30 AND num_layers <= 200` (approximately)
+  - Overview mode: everything else
+  - Allow user override: `ql.draw_circuit(mode="overview")` / `ql.draw_circuit(mode="detail")`
+- Cap maximum image dimensions (e.g., 8192px in any direction for default output)
+- If the circuit exceeds even overview capacity, provide a clear error message with the circuit dimensions
+- Return image dimensions in the API response so users can make informed decisions
 
-**Detection (warning signs):**
-- Test circuits with controlled operations fail after uncomputation
-- Circuit produces correct results for simple cases but fails with conditionals
-- Phase-based algorithms (QFT, phase estimation) show incorrect phase accumulation
-- Statevector simulation shows non-unitary evolution (norm not preserved)
-
-**Which phase:** Phase 1 (Dependency Graph) must represent gate types richly; Phase 2 (Basic Uncomputation) must implement type-specific inversion; Phase 3 (Integration) tests interaction with `with` statement
-
-**Sources:**
-- [Quantum logic gates](https://en.wikipedia.org/wiki/Quantum_logic_gate) - fundamental inversion rules
-- [A Metamodel-Based Approach for Describing Quantum Gates](https://onlinelibrary.wiley.com/doi/10.1002/spe.70023) - gate representation challenges (2025)
-
----
-
-### Pitfall 5: Integration with `with` Statement Conditional Scoping
-
-**What goes wrong:** The existing `with` statement creates quantum conditionals by setting global `_controlled` flag and `_control_bool`:
-```python
-with condition_qbool:
-    result = a + b  # All gates get condition as control
-```
-When automatic uncomputation is added:
-- Intermediate qbools created inside `with` block are controlled by condition
-- Uncomputation happens outside `with` block (at scope exit)
-- Uncomputation gates lack the original control, or have wrong control
-- Qubit state left entangled with condition in ways user didn't expect
-
-**Why it happens:**
-- `with` statement uses global state (`_controlled`, `_list_of_controls` in quantum_language.pyx)
-- Uncomputation may run after `with` block exits (global state reset)
-- Dependency graph doesn't capture that intermediate was created in conditional scope
-- Lifetime-based uncomputation (Python scope exit) doesn't align with quantum conditional scope
-
-**Consequences:**
-- Qubits that should be uncomputed inside conditional are leaked outside
-- Uncomputation applied without control creates incorrect state superposition
-- User expects intermediate cleanup but qubits remain allocated
-- Conditional + uncomputation interaction produces exponential ancilla growth
-
-**Prevention:**
-1. **Scope-aware dependency tracking:** Tag each dependency node with its conditional scope (which `with` block it was created in)
-2. **Uncomputation inherits control:** If intermediate was created under control C, its uncomputation must also be under control C
-3. **Explicit conditional boundaries:** Modify `with` statement exit handler to trigger uncomputation of intermediates created in that scope
-4. **Test: conditional + uncomputation:** Create comprehensive tests with nested `with` blocks and verify qubit cleanup
-5. **Document interaction:** Make it clear in docs/examples how automatic uncomputation interacts with conditionals
-
-**Detection (warning signs):**
-- Qubit count grows inside `with` blocks and doesn't decrease after block exit
-- allocator_stats show ancilla_allocations increasing without corresponding deallocations
-- Tests pass for unconditional code but fail when same operation is inside `with` block
-- Users report "memory leaks" specifically when using conditionals
-
-**Which phase:** Phase 3 (Integration Testing) must address this; may require changes to `with` statement implementation from Phase 2
-
-**Sources:**
-- Codebase analysis: quantum_language.pyx lines 26-29 show global conditional state
-- [Silq: Safe Uncomputation](https://files.sri.inf.ethz.ch/website/papers/pldi20-silq.pdf) - discusses scope-aware uncomputation
+**Phase:** Design phase -- the mode selection thresholds affect all rendering code.
 
 ---
 
 ## Moderate Pitfalls
 
-These cause delays, technical debt, or user confusion but are fixable without major rewrites.
+Mistakes that cause visual bugs, performance issues, or technical debt.
 
-### Pitfall 6: Partial Uncomputation Correctness
+### Pitfall 5: Resampling Filter Destroys Pixel Art on Zoom
 
-**What goes wrong:** Only some intermediates get uncomputed:
-- Dependency graph analysis identifies 5 intermediates
-- Only 3 can be safely uncomputed (others still in use)
-- Partial uncomputation leaves system in mixed state
-- User assumes all intermediates are cleaned up but qubit count doesn't decrease as expected
+**What goes wrong:** When scaling the rendered image (for overview mode or for display), using PIL's default `Resampling.BICUBIC` or `Resampling.LANCZOS` filter blurs the pixel-art gate icons into unrecognizable smudges. A carefully crafted 3px "H" gate icon becomes a blurry gray blob after downscaling with interpolation.
 
-**Why it happens:**
-- Conservative dependency analysis: when unsure, skip uncomputation
-- Some code paths share intermediates, others don't (branching ambiguity)
-- Qubit reuse: same physical qubit used for value A then value B; uncomputing A would corrupt B
+**Why it happens:** PIL's `Image.resize()` defaults to `Resampling.BICUBIC`. The developer calls `.resize()` without specifying the filter, or uses `LANCZOS` because it's "higher quality." For photographs, that's correct. For pixel art, it destroys the visual information.
+
+**Consequences:**
+- Gate icons become indistinguishable colored blobs
+- Control dots blur into wire lines
+- The "pixel art" aesthetic is lost entirely
+- Particularly bad at non-integer scale factors
+
+**Warning signs:**
+- Any `.resize()` call without explicit `resample=Image.Resampling.NEAREST`
+- Any `.thumbnail()` call (defaults to BICUBIC)
+- Scale factors that aren't integers
 
 **Prevention:**
-1. **All-or-nothing for expression:** Either uncompute all intermediates of an expression or none
-2. **Explicit user control:** Let user mark expressions with `uncompute=True/False` flag
-3. **Warning messages:** When partial uncomputation occurs, warn user which qubits couldn't be cleaned
-4. **Documentation:** Explain under what conditions uncomputation can/cannot occur
+- ALWAYS use `Image.Resampling.NEAREST` for any scaling operation
+- Use only integer scale factors (2x, 3x, 4x) for upscaling -- never fractional
+- For downscaling in overview mode, render at the target resolution directly rather than rendering large and shrinking
+- Add a utility function that wraps resize with the correct filter to prevent mistakes:
+  ```python
+  def pixel_scale(img, factor):
+      return img.resize((img.width * factor, img.height * factor),
+                        resample=Image.Resampling.NEAREST)
+  ```
 
-**Detection (warning signs):**
-- Qubit count decreases less than expected
-- Some test cases show full cleanup, others don't (inconsistent behavior)
-- Users confused about when uncomputation happens
+**Phase:** Implement in the core renderer alongside any zoom/scale logic.
 
-**Which phase:** Phase 2 (Basic Uncomputation) should define policy; Phase 5 (User Control) adds explicit flags
-
-**Sources:**
-- [Reqomp: Space-constrained Uncomputation](https://quantum-journal.org/papers/q-2024-02-19-1258/) - discusses partial uncomputation strategies
+**Confidence:** HIGH -- verified from [Pillow resampling documentation](https://pillow.readthedocs.io/en/stable/handbook/concepts.html) and [Pillow issue #6200](https://github.com/python-pillow/Pillow/issues/6200). Default is BICUBIC since Pillow 2.7.0.
 
 ---
 
-### Pitfall 7: Performance Overhead of Dependency Tracking
+### Pitfall 6: PNG Save Latency for Large Circuit Images
 
-**What goes wrong:** Dependency tracking adds runtime cost to every operation:
-- Every qbool creation allocates dependency node
-- Every gate added requires updating dependency graph
-- Graph traversal for uncomputation analysis takes O(V+E) time
-- For large circuits, overhead dominates actual gate generation time
+**What goes wrong:** Pillow's PNG encoder uses zlib compression with a default compress level that prioritizes file size over speed. For a large circuit image (e.g., 8000x2000 RGB), saving to PNG can take 2-10 seconds. This is surprising when the rendering itself took <100ms.
 
-**Why it happens:**
-- Dependency tracking runs for ALL operations, even when uncomputation isn't used
-- Python/Cython call overhead for each dependency node creation
-- Graph stored in Python objects (slower than C structures)
+**Why it happens:** PNG compression is the bottleneck, not rendering. Pillow's default PNG compression is more aggressive than OpenCV's (benchmarks show PIL is 4x slower than cv2.imwrite for PNG). Developers measure rendering time but not save time.
+
+**Consequences:**
+- `ql.draw_circuit()` followed by `.save("circuit.png")` takes 5+ seconds
+- Users blame the renderer when the bottleneck is file I/O
+- In Jupyter notebooks, displaying the PIL Image is fast (no PNG encode), but saving is slow
+
+**Warning signs:**
+- No `compress_level` parameter passed to `Image.save()`
+- Performance benchmarks that measure rendering but not saving
+- No guidance in docs about save performance
 
 **Prevention:**
-1. **Lazy dependency tracking:** Only build graph when user enables uncomputation feature
-2. **C-level graph storage:** Store dependency graph in C (circuit_t extension) not Python objects
-3. **Batch updates:** Update dependency graph in batches, not per-gate
-4. **Profiling:** Measure overhead and set performance budget (e.g., <5% overhead when disabled)
+- Return the PIL Image object from `ql.draw_circuit()` (don't auto-save)
+- When saving, use `compress_level=1` for speed: `img.save("circuit.png", compress_level=1)`
+- Document that Jupyter display is instant but PNG save may be slow for large circuits
+- For the `Image.save()` convenience wrapper, default to `compress_level=1` with an option for `compress_level=6` (smaller file)
+- Consider offering BMP output for maximum speed (no compression) during development/iteration
 
-**Detection (warning signs):**
-- Circuit generation significantly slower after adding dependency tracking
-- Profiling shows dependency_node_create() as hot path
-- Users complain about performance regression
+**Phase:** Address when implementing the save/export functionality.
 
-**Which phase:** Phase 1 (Dependency Graph) must be performance-conscious; Phase 6 (Testing & Documentation) validates benchmarks
-
-**Sources:**
-- Codebase: existing performance benchmarks in circuit-gen-results/ provide baseline
+**Confidence:** HIGH -- verified from [Pillow issue #5986](https://github.com/python-pillow/Pillow/issues/5986) and [Pillow issue #1211](https://github.com/python-pillow/Pillow/issues/1211).
 
 ---
 
-### Pitfall 8: Edge Case: Qubit Reuse During Uncomputation
+### Pitfall 7: Multi-Qubit Gate Control Lines Overlap and Obscure Each Other
 
-**What goes wrong:** Qubit reuse pattern corrupts uncomputation:
-```c
-temp = allocator_alloc(alloc, 1, True)  // Qubit 10
-// ... compute something using qubit 10
-allocator_free(alloc, 10, 1)
-temp2 = allocator_alloc(alloc, 1, True)  // Reuses qubit 10!
-// Now uncomputation tries to reverse operations on qubit 10
-// But qubit 10 is being used for temp2, not temp anymore
-```
+**What goes wrong:** Controlled gates (CX, CCX, MCX) require vertical lines connecting control qubits to target qubits. When multiple controlled gates in the same layer have overlapping qubit ranges (e.g., CX from qubit 3 to 7, and CX from qubit 5 to 10), their control lines cross and become indistinguishable. At 2-3px icon size, there's no room for visual disambiguation.
 
-**Why it happens:**
-- qubit_allocator reuses freed qubits (by design, for memory efficiency)
-- Dependency graph records qubit indices, not qubit identities
-- Uncomputation happens later when qubit has been reallocated
-- Temporal qubit reuse not visible to dependency analysis
+**Why it happens:** In the `circuit_s` structure, a single layer can contain multiple gates that operate on overlapping qubit ranges (the optimizer packs gates into layers). The text-based `circuit_visualize()` handles this with multiple columns per layer, but a pixel renderer with fixed column width can't show overlapping lines clearly.
+
+**Consequences:**
+- Users can't tell which control connects to which target
+- Multi-controlled gates (MCX with 5+ controls) become a vertical line indistinguishable from a wire
+- The visualization is technically correct but practically misleading
+
+**Warning signs:**
+- No logic to detect overlapping gate ranges within a layer
+- Single pixel column per layer with no sub-column support
+- Tests only use circuits with non-overlapping gates per layer
 
 **Prevention:**
-1. **Qubit generation counter:** Assign each qubit a unique ID (not just index); dependency graph uses ID
-2. **Deferred reuse:** Don't reuse qubit until its uncomputation is complete
-3. **Uncomputation-aware allocator:** Allocator checks if qubit has pending uncomputation before reuse
-4. **Test case:** Explicitly test allocate → free → reallocate → uncompute pattern
+- Detect overlapping gates within a layer (gate A's qubit range overlaps gate B's qubit range)
+- When overlap detected, use sub-columns within the layer (widen that layer's column)
+- Use distinct colors per gate type so overlapping lines are at least color-coded
+- For overview mode, accept that individual control lines are unreadable and render gates as colored dots only (no control lines)
+- For MCX gates with large_control (>2 controls), render as a colored vertical bar spanning the control range
 
-**Detection (warning signs):**
-- Uncomputation corrupts state in ways that seem random
-- Tests pass individually but fail when run in sequence (state pollution)
-- Qubit reuse pattern in allocator_get_stats() correlates with test failures
+**Phase:** Address during multi-qubit gate rendering (not in initial single-qubit rendering).
 
-**Which phase:** Phase 2 (Basic Uncomputation) must consider this; may require Phase 1 (Dependency Graph) redesign if caught late
-
-**Sources:**
-- [Scalable Memory Recycling for Large Quantum Programs](https://ar5iv.labs.arxiv.org/html/2503.00822) - qubit reuse challenges (2025)
-- [CaQR: Compiler-Assisted Approach for Qubit Reuse](https://people.cs.rutgers.edu/zz124/assets/pdf/asplos23.pdf)
+**Confidence:** HIGH -- verified from `types.h` lines 66-75 showing `gate_t` has `Control[MAXCONTROLS]`, `large_control`, and `NumControls` fields. The C `circuit_visualize()` code (circuit_output.c lines 104-120) already handles this complexity for text output.
 
 ---
 
-### Pitfall 9: Type System Mismatch (qbool vs qint Comparison Results)
+### Pitfall 8: Gate Type Enum Mapping Incomplete or Incorrect
 
-**What goes wrong:** qint comparisons return qbool:
-```python
-a = qint(5)
-b = qint(3)
-result = a > b  # Returns qbool (intermediate ancilla)
-```
-Automatic uncomputation must handle:
-- qbool created by qint operations (involves multiple qubits)
-- Different uncomputation strategy than qbool logic operations
-- Comparison uses in-place subtraction/addition pattern (from v1.1)
-- Dependency graph must represent qint → qbool edge
+**What goes wrong:** The C backend defines gate types as `enum { X, Y, Z, R, H, Rx, Ry, Rz, P, M }` (10 types in `Standardgate_t`). The renderer must map each to a distinct visual representation. If the mapping is incomplete (e.g., missing `Ry` or `M`), those gates render as blank space or crash. If gates are added to the C backend later, the renderer silently breaks.
 
-**Why it happens:**
-- Type boundary: dependency tracking designed for qbool operations
-- Comparison implementation uses temporary qint, then reduces to qbool result
-- Width-varying qint makes dependency tracking complex (different qubits per instance)
+**Why it happens:** The renderer developer maps the "common" gates (X, H, CX, P) and forgets the less common ones (Y, Ry, Rz, M). Or the enum values shift if a gate type is added to the C enum.
+
+**Consequences:**
+- Gates render as invisible (blank) or as the wrong icon
+- KeyError/IndexError at runtime for unmapped gate types
+- Silent incorrect visualization that looks plausible
+
+**Warning signs:**
+- Gate type mapping uses string matching instead of enum values
+- No exhaustive test that renders every gate type
+- No fallback rendering for unknown gate types
 
 **Prevention:**
-1. **Unified intermediate representation:** Represent both qbool and qint intermediates in same graph structure
-2. **Type-aware uncomputation:** Different uncomputation logic for qbool-from-logic vs qbool-from-comparison
-3. **Test across type boundary:** Extensively test `(a > b) AND (c < d)` patterns
-4. **Review comparison_ops.h:** Understand exact qubit usage in existing comparison implementation
+- Map ALL 10 gate types explicitly: X, Y, Z, R, H, Rx, Ry, Rz, P, M
+- Add a fallback renderer for unknown types (render as "?" or generic colored square)
+- Write a test that creates a circuit with every gate type and verifies the image is non-empty at each gate position
+- Use the existing `gate_counts` property to verify: total rendered gates == sum of all gate type counts
+- Consider controlled variants: CX (1 control + X), CCX (2 controls + X), MCX (n controls + X), CP (1 control + P), etc. These aren't separate enum values -- they're X/P/etc. with NumControls > 0
 
-**Detection (warning signs):**
-- Uncomputation works for `a AND b` but fails for `(x > y) AND (a > b)`
-- Type-related segfaults when freeing qint-derived qbool
-- Qubit count doesn't decrease for comparison intermediates
+**Phase:** Core renderer -- gate icon definitions should be one of the first things implemented.
 
-**Which phase:** Phase 2 (Basic Uncomputation) must handle both types; Phase 3 (Integration) validates cross-type cases
+**Confidence:** HIGH -- verified from `types.h` line 64: `typedef enum { X, Y, Z, R, H, Rx, Ry, Rz, P, M } Standardgate_t;`
 
-**Sources:**
-- Codebase: comparison_ops.h implements qint → qbool conversions
-- [Qurts: Affine Types with Lifetime](https://arxiv.org/abs/2411.10835) - type system challenges
+---
+
+### Pitfall 9: Memory Explosion from Intermediate Python Objects
+
+**What goes wrong:** Converting the entire C circuit into Python dicts/lists before rendering can consume excessive memory. A 200-qubit, 5000-layer circuit with 10 gates per layer = 50,000 gate dicts. Each dict has ~5 keys with string/list values. In CPython, a dict with 5 keys uses ~300-400 bytes. Total: ~15-20MB just for the intermediate representation. This is manageable, but if the conversion creates unnecessary copies or nested structures, it can balloon.
+
+**Why it happens:** The natural Cython binding approach (`get_circuit_data()` returning nested lists of dicts) creates all objects at once. For very large circuits, this is wasteful because the renderer processes gates layer-by-layer and doesn't need all data simultaneously.
+
+**Consequences:**
+- Unnecessary memory spike during rendering
+- GC pressure from millions of small Python objects
+- For extremely large circuits (10,000+ layers), may cause memory issues
+
+**Warning signs:**
+- `get_circuit_data()` returns the entire circuit as a single Python object
+- No streaming/iterator-based access pattern
+- Memory profiling shows spike during data extraction
+
+**Prevention:**
+- For v1 (simplicity): accept the full-extraction approach, it works for circuits up to ~10,000 layers
+- Provide a `get_layer_data(layer_index)` function that extracts one layer at a time for future optimization
+- Use tuples instead of dicts for gate data (less memory overhead): `(gate_type, target, controls_tuple, value)`
+- Avoid string allocation for gate types -- use integer enum values and map to strings only at render time
+- Pre-calculate image dimensions from `circuit.depth` and `circuit.qubit_count` (already available) before extracting gate data
+
+**Phase:** Cython binding phase -- design the data extraction API with future streaming in mind even if v1 is bulk extraction.
+
+---
+
+### Pitfall 10: Qubit Index Gaps Waste Vertical Space
+
+**What goes wrong:** The `circuit_s` structure uses qubit indices that may have gaps (not all indices from 0 to `used_qubits` are actually used). If the renderer naively allocates one pixel row per qubit index from 0 to max, unused qubits waste vertical space. For a circuit using qubits [0, 1, 2, 64, 65, 66] (common with the 64-bit right-aligned layout), the image would be 67 rows tall with 61 empty rows.
+
+**Why it happens:** The `quantum_int_t` structure uses right-aligned layout in a 64-element array: `q_address[64-width]` through `q_address[63]`. Qubit allocation via `allocator_alloc()` is sequential but integer widths vary. After allocation and deallocation of ancilla qubits, the active qubit indices may be sparse.
+
+**Consequences:**
+- Images are much taller than necessary
+- Most of the image is empty wire lines for unused qubits
+- Overview mode wastes resolution on empty rows
+
+**Warning signs:**
+- Renderer uses `circuit.qubit_count` as image height without checking occupancy
+- No qubit compaction/remapping logic
+- Tests use contiguous qubit indices (which hides the problem)
+
+**Prevention:**
+- Extract the set of actually-used qubit indices from the circuit data
+- The C structure has `used_occupation_indices_per_qubit[qubit]` -- qubits with 0 occupation indices are unused
+- Create a qubit index remapping: map sparse indices to dense row indices
+- Show the original qubit index as a label but render only occupied rows
+- Alternatively, use `circuit_s.used_qubits` as a hint but still check per-qubit occupancy
+
+**Phase:** Core renderer layout phase -- qubit compaction affects all coordinate calculations.
+
+**Confidence:** HIGH -- verified from `circuit.h` lines 64-66 (`occupied_layers_of_qubit`, `used_occupation_indices_per_qubit`) and the right-aligned layout documented in `quantum_int_t`.
 
 ---
 
 ## Minor Pitfalls
 
-These cause annoyance, user confusion, or minor inefficiencies but are easily fixed.
+Mistakes that cause annoyance but are fixable without architecture changes.
 
-### Pitfall 10: Uncomputation Order Ambiguity
+### Pitfall 11: Color Palette Indistinguishable for Color-Blind Users
 
-**What goes wrong:** Multiple valid uncomputation orders exist; chosen order affects performance:
-- Intermediates {A, B, C} all can be uncomputed
-- Order ABC vs CBA produces different gate counts (due to layer packing)
-- User cannot predict or control order
+**What goes wrong:** Using red/green color pairs (common in "stoplight" palettes) makes gates indistinguishable for the ~8% of males with red-green color blindness. If the only way to distinguish H gates from X gates is color, those users can't read the circuit.
 
 **Prevention:**
-1. **Deterministic ordering:** Always use topological sort with tiebreaker (e.g., creation order)
-2. **Document order:** Explain in docs what order is used
-3. **Optimization pass:** Choose order that minimizes gate count (NP-hard, use heuristic)
+- Use shape AND color as redundant encodings (X = square + red, H = diamond + blue)
+- Choose a colorblind-safe palette (blue/orange, blue/yellow)
+- At 2-3px, shapes are more important than colors anyway
+- Test with a colorblindness simulator
 
-**Which phase:** Phase 2 (Basic Uncomputation) chooses policy; Phase 4 (Qubit-Saving Mode) may optimize
+**Phase:** Gate icon design phase.
 
 ---
 
-### Pitfall 11: Debugging Difficulty When Uncomputation Breaks
+### Pitfall 12: No Legend Makes Gates Unidentifiable
 
-**What goes wrong:** When uncomputation produces wrong circuit:
-- User doesn't see dependency graph (internal representation)
-- Error manifests as wrong quantum state (hard to diagnose)
-- No visibility into what got uncomputed when
-- Existing circuit_visualize() doesn't mark uncomputation gates
+**What goes wrong:** A pixel-art circuit with 2-3px gate icons is inherently cryptic. Without a color/shape legend, users can't identify gate types at all. The visualization becomes a pretty but useless abstract image.
 
 **Prevention:**
-1. **Visualization enhancement:** Mark uncomputation gates in circuit_visualize() (e.g., with ^ symbol)
-2. **Debug mode:** `ql.option("debug_uncomputation")` prints dependency graph and uncomputation decisions
-3. **Explicit uncomputation gates:** Tag gates with is_uncomputation flag for easier debugging
-4. **Test utilities:** Provide validate_uncomputation() function that checks circuit correctness
+- Always include a legend region (right side or bottom) mapping gate icons to names
+- Legend should use the same pixel-art style as the circuit
+- For programmatic use, also provide a `gate_legend()` method that returns the mapping as a dict
 
-**Which phase:** Phase 6 (Testing & Documentation) adds debug tooling
+**Phase:** Legend should be designed with the core renderer, implemented as a separate compositing step.
 
 ---
 
-### Pitfall 12: Documentation of Uncomputation Semantics
+### Pitfall 13: Wire Lines Vanish at Overview Zoom
 
-**What goes wrong:** User expectations mismatch implementation:
-- User expects immediate cleanup (like C++ RAII destructors)
-- Implementation does deferred cleanup (at scope exit)
-- User doesn't understand when qubit-saving mode should be used
-- Interaction with `with` statement not explained
+**What goes wrong:** In overview mode where each qubit row is 1px tall, the horizontal wire line IS the row. If gate icons are also 1px, the wire line, gate icon, and background all compete for the same pixel. The wire becomes invisible.
 
 **Prevention:**
-1. **Comprehensive examples:** Show when uncomputation happens (with qubit count output)
-2. **Mode comparison:** Document default vs qubit-saving with performance trade-offs
-3. **Conditional interaction:** Dedicated section on `with` + automatic uncomputation
-4. **API reference:** Clearly document lifetime/scope rules
+- In overview mode, skip wire rendering entirely -- just render gate positions as colored pixels on a dark background
+- The wire is implied by the row; don't try to draw it separately
+- Use a dark background (black or dark gray) with bright gate colors for maximum contrast at 1px scale
 
-**Which phase:** Phase 6 (Testing & Documentation)
+**Phase:** Overview mode implementation.
+
+---
+
+### Pitfall 14: Phase/Rotation Gate Values Lost in Pixel Art
+
+**What goes wrong:** Phase gates (P) and rotation gates (Rx, Ry, Rz) have a continuous `GateValue` parameter (angle). In text/QASM output, this is rendered as a number. In 2-3px pixel art, there's no room for text. Users see a "P" gate but can't tell if it's P(pi/4) or P(pi/2).
+
+**Prevention:**
+- Accept this limitation in the pixel-art renderer -- it's a visual overview, not a detailed schematic
+- Use color intensity or hue variation to encode angle magnitude (e.g., brighter = larger angle)
+- For the few common angles (pi, pi/2, pi/4), use distinct icon variants
+- Document that for angle details, users should use `circuit.visualize()` (text) or OpenQASM export
+- In detail mode, consider adding tiny 1px text labels for common angles if font rendering works at that scale (it probably won't -- test first)
+
+**Phase:** Gate icon refinement, after basic rendering works.
+
+---
+
+### Pitfall 15: Pillow Not Installed as Required Dependency
+
+**What goes wrong:** Pillow is an optional dependency for this project (the core quantum framework doesn't need it). If `ql.draw_circuit()` is called without Pillow installed, the user gets `ModuleNotFoundError: No module named 'PIL'` -- an unhelpful error from inside the rendering code.
+
+**Prevention:**
+- Use a lazy import: `try: from PIL import Image; except ImportError: raise ImportError("Pillow is required for circuit visualization. Install with: pip install Pillow")`
+- List Pillow as an optional dependency in setup.py: `extras_require={"viz": ["Pillow>=9.0"]}`
+- Don't import Pillow at module level in `__init__.py` -- only when `draw_circuit()` is called
+- Test the error message by running without Pillow installed
+
+**Phase:** API integration phase (when `ql.draw_circuit()` is wired up).
 
 ---
 
@@ -432,94 +395,31 @@ These cause annoyance, user confusion, or minor inefficiencies but are easily fi
 
 | Phase Topic | Likely Pitfall | Mitigation |
 |-------------|---------------|------------|
-| Dependency Graph Design | Circular references (Pitfall 2) | Single ownership model in circuit_t; use indices not pointers |
-| Dependency Graph Design | Incorrect position analysis (Pitfall 1) | Layer-aware graph; validate against circuit structure |
-| Basic Uncomputation | Incorrect gate reversal (Pitfall 4) | Gate-type-specific inversion; comprehensive test suite |
-| Basic Uncomputation | Type boundary issues (Pitfall 9) | Unified intermediate representation for qbool and qint |
-| Integration with `with` | Conditional scope leakage (Pitfall 5) | Scope-aware dependency tracking; test nested conditionals |
-| Integration Testing | Qubit reuse corruption (Pitfall 8) | Qubit generation counter; deferred reuse |
-| Qubit-Saving Mode | Exponential cost blowup (Pitfall 3) | Cost model with threshold; memoization; warn user |
-| User Control & Options | Documentation mismatch (Pitfall 12) | Examples-first documentation; visual qubit count demos |
-| Testing & Documentation | Debugging difficulty (Pitfall 11) | Debug mode with graph visualization; uncomputation markers |
-
----
-
-## Integration with Existing Codebase
-
-Specific risks given the current architecture:
-
-### Stateless C Backend Interaction
-**Challenge:** C backend has no global state (v1.1 design). Dependency tracking adds state.
-**Risk:** Mixing stateful dependency graph with stateless gate operations.
-**Mitigation:** Store dependency graph in circuit_t structure (not global). Pass circuit pointer to all dependency functions.
-
-### Qubit Allocator Interaction
-**Challenge:** qubit_allocator.h manages qubit lifecycle; dependency tracking must coordinate.
-**Risk:** Allocator frees qubit while dependency graph still references it (use-after-free).
-**Mitigation:**
-- Allocator queries dependency graph before allowing reuse
-- Dependency graph uses qubit generation ID not index
-- Uncomputation triggers allocator_free() only after inverse gates applied
-
-### Global State in Cython Layer
-**Challenge:** `_controlled`, `_control_bool`, `_list_of_controls` are global in quantum_language.pyx.
-**Risk:** Dependency tracking misses conditional context when these globals change.
-**Mitigation:**
-- Capture control state when creating dependency node (snapshot at creation time)
-- Consider refactoring globals to circuit-level state (larger change)
-- Test with rapidly changing control state (nested `with` blocks)
-
-### Circuit Layer Structure
-**Challenge:** Circuit uses layer-based scheduling (gate_index_of_layer_and_qubits).
-**Risk:** Uncomputation gate insertion invalidates layer indices; O(n²) reindexing.
-**Mitigation:**
-- Build uncomputation gates in separate buffer, append to circuit in one batch
-- Use add_gate() API (already handles layer scheduling) rather than direct manipulation
-- Test performance with large circuits (>10K gates)
-
----
-
-## Research Confidence Assessment
-
-| Category | Confidence | Rationale |
-|----------|-----------|-----------|
-| General uncomputation theory | HIGH | Multiple 2024-2025 academic papers (Qurts, Unqomp, Reqomp, SQUARE) document pitfalls |
-| Gate reversal correctness | HIGH | Quantum computing fundamentals; well-understood (U†U = I) |
-| Exponential cost blowup | HIGH | Documented in Modular Synthesis paper; known issue in recursive contexts |
-| Integration with existing code | MEDIUM-HIGH | Based on codebase reading; actual integration may reveal more issues |
-| `with` statement interaction | MEDIUM | Identified from codebase structure; needs validation with actual implementation |
-| Performance overhead | MEDIUM | Estimated from similar systems; actual overhead TBD |
-| Qubit reuse edge cases | MEDIUM | Logical inference from allocator design; needs testing |
+| Cython data extraction binding | Pitfall 3: No gate iteration API exists | Build `get_circuit_data()` first, before any rendering code |
+| Core renderer architecture | Pitfall 2: ImageDraw per-call overhead | Design for NumPy array operations from the start |
+| Image sizing / layout | Pitfall 1: Decompression bomb limits | Calculate dimensions first, cap maximums, auto-select mode |
+| Gate icon design | Pitfall 8: Incomplete gate type mapping | Map all 10 Standardgate_t values explicitly |
+| Multi-qubit gates | Pitfall 7: Overlapping control lines | Detect overlaps, use sub-columns or color coding |
+| Qubit layout | Pitfall 10: Sparse qubit index gaps | Compact/remap qubit indices before rendering |
+| Zoom / overview mode | Pitfall 4: Wrong zoom auto-selection | Threshold-based auto mode with user override |
+| Zoom / scaling | Pitfall 5: Wrong resampling filter | Always use NEAREST, integer scale factors only |
+| PNG export | Pitfall 6: Slow PNG save | Default to compress_level=1, return Image object |
+| API integration | Pitfall 15: Pillow not installed | Lazy import with helpful error message |
 
 ---
 
 ## Sources
 
-### Academic Research (HIGH confidence)
-- [Qurts: Automatic Quantum Uncomputation by Affine Types with Lifetime](https://arxiv.org/abs/2411.10835) - Lifetime management, type system challenges (2025)
-- [Unqomp: Synthesizing Uncomputation in Quantum Circuits](https://files.sri.inf.ethz.ch/website/papers/pldi21-unqomp.pdf) - Dependency analysis, positioning challenges (2021, still relevant)
-- [Reqomp: Space-constrained Uncomputation for Quantum Circuits](https://quantum-journal.org/papers/q-2024-02-19-1258/) - Time-space trade-offs (2024)
-- [Modular Synthesis of Efficient Quantum Uncomputation](https://www.researchgate.net/publication/381580072_Modular_Synthesis_of_Efficient_Quantum_Uncomputation) - Recursion, exponential cost (2024)
-- [Uncomputation in the Qrisp High-Level Quantum Programming Framework](https://arxiv.org/abs/2307.11417) - Implementation in high-level framework (2023)
-- [Silq: A High-Level Quantum Language with Safe Uncomputation](https://files.sri.inf.ethz.ch/website/papers/pldi20-silq.pdf) - Qfree requirements, safety constraints (2020, foundational)
-
-### Quantum Circuit Implementation (HIGH confidence)
-- [Scalable Memory Recycling for Large Quantum Programs](https://ar5iv.labs.arxiv.org/html/2503.00822) - Memory management, qubit reuse (2025)
-- [SQUARE: Strategic Quantum Ancilla Reuse](https://arxiv.org/abs/2004.08539) - Qubit reuse strategies (2020)
-- [Rise of conditionally clean ancillae](https://quantum-journal.org/papers/q-2025-05-21-1752/pdf/) - Conditional uncomputation (2025)
-- [CaQR: A Compiler-Assisted Approach for Qubit Reuse](https://people.cs.rutgers.edu/zz124/assets/pdf/asplos23.pdf) - Dynamic circuit qubit reuse
-
-### General Quantum Computing (MEDIUM confidence for specific pitfalls)
-- [Quantum Error Correction Update 2024](https://www.oreilly.com/radar/quantum-error-correction-update-2024/) - Error propagation context
-- [A Metamodel-Based Approach for Describing Quantum Gates](https://onlinelibrary.wiley.com/doi/10.1002/spe.70023) - Gate representation challenges (2025)
-
-### Codebase-Specific (HIGH confidence for this project)
-- PROJECT.md - Framework architecture and constraints
-- circuit.h, qubit_allocator.h - Existing qubit management
-- quantum_language.pyx - Cython layer, global state management
-- comparison_ops.h - qint → qbool conversion patterns
-
----
-
-*Automatic uncomputation pitfalls research completed: 2026-01-28*
-*This document focuses specifically on v1.2 milestone challenges and complements the general PITFALLS.md*
+- [Pillow Limits Documentation](https://pillow.readthedocs.io/en/stable/reference/limits.html) -- MAX_IMAGE_PIXELS, memory limits
+- [Pillow DecompressionBombError Issue #5218](https://github.com/python-pillow/Pillow/issues/5218) -- pixel count limits
+- [Pillow ImageDraw Performance Issue #2450](https://github.com/python-pillow/Pillow/issues/2450) -- per-call overhead
+- [Pillow PNG Save Performance Issue #5986](https://github.com/python-pillow/Pillow/issues/5986) -- 4x slower than OpenCV
+- [Pillow PNG Save Slow Issue #1211](https://github.com/python-pillow/Pillow/issues/1211) -- compress_level settings
+- [Pillow Resampling Concepts](https://pillow.readthedocs.io/en/stable/handbook/concepts.html) -- NEAREST vs BICUBIC
+- [Pillow ANTIALIAS Deprecation Issue #6200](https://github.com/python-pillow/Pillow/issues/6200) -- filter selection
+- [Quantivine: Large-Scale Quantum Circuit Visualization (arXiv:2307.08969)](https://arxiv.org/abs/2307.08969) -- semantic abstraction for 100+ qubit circuits
+- [IBM Quantum Circuit Visualization Guide](https://quantum.cloud.ibm.com/docs/en/guides/visualize-circuits) -- practical rendering challenges
+- Project source: `types.h` lines 64-82 (gate_t, Standardgate_t enum)
+- Project source: `circuit.h` lines 54-79 (circuit_s structure, layer/gate storage)
+- Project source: `_core.pxd` lines 62-148 (Cython declarations, no per-gate Python API)
+- Project source: `circuit_output.c` lines 35-120 (existing text visualization approach)

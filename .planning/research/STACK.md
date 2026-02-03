@@ -1,471 +1,432 @@
 # Technology Stack
 
-**Project:** Quantum Assembly - OpenQASM Export & Qiskit Verification
-**Researched:** 2026-01-30
+**Project:** Quantum Assembly - Pixel-Art Circuit Visualization
+**Researched:** 2026-02-03
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This stack addition enables production-quality OpenQASM 3.0 export and Qiskit-based circuit verification for the existing Quantum Assembly framework. The additions are minimal and surgical: two Python packages for testing/verification only, with no changes to core dependencies. The C backend requires no new dependencies, only implementation of existing gate types and proper multi-control handling.
+Pixel-art circuit visualization requires exactly one new dependency: Pillow (PIL). The existing project has no image dependencies. Pillow 12.1.0 provides everything needed for pixel-level rendering, text labeling, palette-mode PNG export, and nearest-neighbor upscaling. No other libraries are needed. NumPy (already a project dependency) accelerates bulk pixel operations when Pillow's per-pixel methods are too slow.
 
-## New Dependencies (Test/Verification Layer Only)
+The approach: build a compact pixel-art renderer entirely in Python, consuming circuit data exposed through existing Cython bindings. Each gate becomes a 2-3px colored block on qubit wire lines, with control connections as vertical pixel lines. Output is a small PNG (palette mode, lossless) that can be optionally upscaled with nearest-neighbor interpolation for display.
 
-### Qiskit Ecosystem
+## New Dependencies
 
-| Package | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| qiskit | >=2.3.0 | Core quantum SDK for circuit verification | Required for all verification tasks |
-| qiskit-aer | >=0.17.1 | High-performance quantum circuit simulator | Required for measurement-based verification |
-| qiskit[qasm3-import] | >=2.3.0 | OpenQASM 3.0 string import capability | Required for loading exported QASM |
+### Required: Pillow
 
-**Rationale:** These are TEST dependencies only, not runtime requirements. The framework generates OpenQASM 3.0 strings that can be consumed by any QASM 3.0 compliant tool. Qiskit provides the gold standard for verification during development and testing.
-
-**Version justification:**
-- Qiskit 2.3.0 (released Jan 8, 2026) is the latest stable version with mature QASM3 support
-- qiskit-aer 0.17.1+ includes Python 3.13 support, GPU acceleration, and stable simulation APIs
-- qiskit[qasm3-import] pulls in qiskit-qasm3-import >=0.6.0, which supports the stable `loads()` API
+| Package | Version | Purpose | Why This Version |
+|---------|---------|---------|------------------|
+| Pillow | >=12.1.0 | Image creation, pixel drawing, PNG export | Latest stable (Jan 2, 2026). Python 3.10-3.14 support. Mature (status 6). MIT-CMU license. |
 
 **Installation:**
 ```bash
-# Test/verification dependencies (add to dev dependencies)
-pip install qiskit>=2.3.0 qiskit-aer>=0.17.1
-pip install "qiskit[qasm3-import]>=2.3.0"
+pip install "Pillow>=12.1.0"
 ```
 
-## Existing Stack (No Changes Required)
+**Add to pyproject.toml:**
+```toml
+[project.optional-dependencies]
+viz = ["Pillow>=12.1.0"]
+# Or add to main dependencies if visualization is a core feature:
+# dependencies = [..., "Pillow>=12.1.0"]
+```
 
-| Technology | Current Version | Purpose | Status |
-|------------|----------------|---------|--------|
-| Python | >=3.11 | Frontend language | Maintained |
-| Cython | >=3.0.11,<4.0 | C/Python bridge | Maintained |
-| numpy | >=1.24 | Array operations | Maintained |
-| C (gcc/clang) | - | Backend implementation | Maintained |
+**Rationale:** Pillow is the de facto standard for image manipulation in Python. It is a direct dependency (not test-only) because visualization is a user-facing feature. It has zero compiled sub-dependencies beyond its own C extensions (which are bundled in wheels).
 
-**No changes needed** to the core stack. The OpenQASM export is pure C string generation, and verification is test-only.
+### Already Present: NumPy
+
+| Package | Current Spec | Purpose for Visualization |
+|---------|-------------|---------------------------|
+| numpy | >=1.24 | Fast bulk pixel array construction via `Image.fromarray()` |
+
+NumPy is already a project dependency. For pixel-art rendering, it provides a critical performance path: instead of calling `putpixel()` in loops (slow), construct a NumPy array of the full image and convert with `Image.fromarray(arr)`. This is 10-100x faster for images with thousands of pixels.
+
+## Pillow API Recommendations for Pixel-Art Rendering
+
+### Image Creation
+
+```python
+from PIL import Image, ImageDraw
+
+# For small pixel-art (direct rendering at 1:1 scale)
+# Use "P" (palette) mode for smallest file size with known color set
+img = Image.new("P", (width, height), 0)  # 0 = background palette index
+
+# For rendering with transparency support
+img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+```
+
+**Recommendation:** Use **RGB mode** during construction, then convert to **P (palette) mode** before saving. This gives full color flexibility during drawing while producing the smallest possible PNG output.
+
+```python
+# Construction phase
+img = Image.new("RGB", (width, height), (255, 255, 255))
+draw = ImageDraw.Draw(img)
+# ... draw circuit ...
+
+# Save phase - convert to palette for compact output
+img_p = img.quantize(colors=32)  # Our palette has ~15-20 colors max
+img_p.save("circuit.png", optimize=True)
+```
+
+### Drawing Methods (Ranked by Usefulness)
+
+| Method | Use Case in Circuit Rendering | Performance |
+|--------|-------------------------------|-------------|
+| `draw.rectangle(xy, fill)` | Gate blocks (2-3px squares) | Fast |
+| `draw.line(xy, fill, width)` | Qubit wires (horizontal lines), control connections (vertical lines) | Fast |
+| `draw.point(xy, fill)` | Individual control dots, single-pixel markers | Fast for few points |
+| `draw.text(xy, text, fill, font)` | Qubit labels (q0, q1...), gate labels if upscaled | Moderate |
+| `Image.fromarray(arr)` | Bulk construction of entire image from NumPy | Fastest for full image |
+
+**Performance hierarchy (fastest to slowest):**
+1. `Image.fromarray(numpy_array)` - construct entire image at once
+2. `Image.paste(color, box)` - fill rectangular regions
+3. `ImageDraw.rectangle()` / `ImageDraw.line()` - draw primitives
+4. `Image.putpixel(xy, color)` - individual pixels (AVOID in loops)
+
+### Recommended Approach: NumPy Array Construction
+
+For a compact pixel-art renderer where every pixel is deliberate, the fastest approach is:
+
+```python
+import numpy as np
+from PIL import Image
+
+def render_circuit(circuit_data, num_qubits, num_layers):
+    # Calculate dimensions
+    # Each gate cell: 3px wide x 3px tall
+    # Qubit wire spacing: 5px (3px gate + 2px gap)
+    # Layer spacing: 4px (3px gate + 1px gap)
+    CELL_W, CELL_H = 3, 3
+    WIRE_SPACING = 5
+    LAYER_SPACING = 4
+    MARGIN = 2
+
+    width = MARGIN + num_layers * LAYER_SPACING + MARGIN
+    height = MARGIN + num_qubits * WIRE_SPACING + MARGIN
+
+    # Create pixel array (RGB)
+    pixels = np.full((height, width, 3), 255, dtype=np.uint8)  # white bg
+
+    # Draw qubit wires (horizontal gray lines)
+    for q in range(num_qubits):
+        y = MARGIN + q * WIRE_SPACING + CELL_H // 2
+        pixels[y, MARGIN:width-MARGIN] = [180, 180, 180]  # gray wire
+
+    # Draw gates as colored blocks
+    for layer_idx, layer in enumerate(circuit_data):
+        for gate in layer:
+            x = MARGIN + layer_idx * LAYER_SPACING
+            y = MARGIN + gate.target * WIRE_SPACING
+            color = GATE_COLORS[gate.type]
+            pixels[y:y+CELL_H, x:x+CELL_W] = color
+
+    return Image.fromarray(pixels)
+```
+
+### Upscaling for Display
+
+Pixel art at 1:1 is tiny. Use **nearest-neighbor** resampling to upscale without blurring:
+
+```python
+# Scale up 4x for display (each pixel becomes 4x4 block)
+SCALE = 4
+display_img = img.resize(
+    (img.width * SCALE, img.height * SCALE),
+    resample=Image.Resampling.NEAREST  # Critical: preserves hard edges
+)
+display_img.save("circuit_display.png")
+```
+
+**Resampling options and when to use:**
+| Resampling | Effect | Use For |
+|------------|--------|---------|
+| `NEAREST` | Sharp pixel edges, no interpolation | Pixel art upscaling (USE THIS) |
+| `BILINEAR` | Smooth blending | Photos (DO NOT use for pixel art) |
+| `BICUBIC` | Smoother blending (default) | Photos (DO NOT use for pixel art) |
+| `LANCZOS` | Sharpest smooth scaling | High-quality photo downscaling |
+
+### Text Rendering for Labels
+
+For qubit labels and gate annotations at small sizes:
+
+```python
+from PIL import ImageFont
+
+# Option 1: Default bitmap font (always available, no file needed)
+font = ImageFont.load_default()  # ~11px, monospaced-ish
+
+# Option 2: Small TrueType font (if available)
+try:
+    font = ImageFont.truetype("DejaVuSansMono.ttf", size=8)
+except OSError:
+    font = ImageFont.load_default()
+
+# Anti-aliasing control for pixel art
+draw = ImageDraw.Draw(img)
+draw.fontmode = "1"  # Disable anti-aliasing (crisp pixel text)
+draw.text((x, y), "q0", fill=(0, 0, 0), font=font)
+```
+
+**Recommendation:** Use `ImageFont.load_default()` for the base pixel-art view. It requires no external font files and works everywhere. For upscaled views (4x+), consider a small monospace TrueType font at 8-10px for crisper labels.
+
+**Critical setting:** Set `draw.fontmode = "1"` to disable anti-aliasing. Anti-aliased text on a palette-mode image creates unwanted intermediate colors.
+
+## Image Format Recommendations
+
+### PNG (Primary Output)
+
+| Setting | Value | Why |
+|---------|-------|-----|
+| Format | PNG | Lossless, perfect for pixel art, universal support |
+| Mode | P (palette) | 1 byte/pixel instead of 3 (RGB), smallest files |
+| `optimize` | `True` | Enables maximum ZLIB compression |
+| `compress_level` | N/A (auto 9 with optimize) | optimize=True overrides to 9 |
+| Colors | 16-32 via `quantize()` | Our palette is small; fewer colors = smaller file |
+| `bits` | Auto (experimental if set) | Let Pillow choose based on palette size |
+
+**Typical file sizes for circuit images:**
+- 20 qubits x 50 layers, palette PNG: ~500 bytes to 2KB
+- 100 qubits x 200 layers, palette PNG: ~5-15KB
+- Same circuits upscaled 4x: ~2-8KB and ~20-60KB (PNG compresses repeated blocks well)
+
+### Save Implementation
+
+```python
+def save_circuit_image(img, path, scale=1):
+    """Save circuit image as optimized PNG."""
+    if scale > 1:
+        img = img.resize(
+            (img.width * scale, img.height * scale),
+            resample=Image.Resampling.NEAREST
+        )
+
+    # Convert to palette mode for smallest file
+    if img.mode != "P":
+        img = img.quantize(colors=32)
+
+    img.save(path, format="PNG", optimize=True)
+```
+
+### SVG (Do NOT Implement)
+
+**Why not SVG:**
+- The entire point is pixel-art aesthetic, not scalable vector graphics
+- SVG would be larger than PNG for pixel-level content
+- SVG rendering varies across viewers for sub-pixel content
+- Adds XML generation complexity with no benefit
+- If users want SVG, they want a different visualization style entirely (not this milestone)
+
+### JPEG (Do NOT Use)
+
+**Why not JPEG:**
+- Lossy compression destroys pixel-perfect rendering
+- Creates artifacts around sharp color boundaries (every gate edge)
+- Larger than palette PNG for this type of content
+- No transparency support
+
+### WebP (Optional Future Enhancement)
+
+WebP lossless can be smaller than PNG. Not worth adding now but note for future:
+```python
+img.save("circuit.webp", lossless=True)  # Pillow supports WebP natively
+```
+
+## Color Palette Design
+
+### Gate Color Scheme
+
+Design a compact palette where each gate type has a distinct, recognizable color. Use bold, saturated colors against white/light background for pixel-art readability.
+
+| Gate | RGB Color | Hex | Rationale |
+|------|-----------|-----|-----------|
+| H (Hadamard) | (66, 133, 244) | #4285F4 | Blue - most common single-qubit gate |
+| X (Pauli-X) | (234, 67, 53) | #EA4335 | Red - NOT gate, action/change |
+| Y (Pauli-Y) | (251, 188, 4) | #FBBC04 | Yellow - Pauli family, distinct from X/Z |
+| Z (Pauli-Z) | (52, 168, 83) | #34A853 | Green - Pauli family, distinct from X/Y |
+| P (Phase) | (171, 71, 188) | #AB47BC | Purple - phase rotation |
+| Rx | (255, 112, 67) | #FF7043 | Orange-red - rotation variant of X |
+| Ry | (255, 202, 40) | #FFCA28 | Gold - rotation variant of Y |
+| Rz | (102, 187, 106) | #66BB6A | Light green - rotation variant of Z |
+| M (Measure) | (69, 69, 69) | #454545 | Dark gray - terminal operation |
+| Control dot | (0, 0, 0) | #000000 | Black - control qubit marker |
+| Wire | (189, 189, 189) | #BDBDBD | Light gray - qubit wires |
+| Background | (255, 255, 255) | #FFFFFF | White - clean background |
+| CNOT target | (234, 67, 53) | #EA4335 | Red circle/cross - matches X |
+| CCX target | (234, 67, 53) | #EA4335 | Red - matches X family |
+
+**Total unique colors: 14** (fits comfortably in palette mode with 16-32 color slots)
+
+**Design principles:**
+1. Pauli gates (X, Y, Z) use primary colors (red, yellow, green)
+2. Rotation gates use lighter/warmer variants of their Pauli counterpart
+3. H is blue (most common, needs to stand out)
+4. Phase is purple (distinct from all Pauli colors)
+5. Measurement is gray (terminal, non-unitary)
+6. Control elements are black (maximum contrast)
+
+### Palette as Python Constant
+
+```python
+# Gate color palette - RGB tuples
+GATE_COLORS = {
+    "H":       (66, 133, 244),   # Blue
+    "X":       (234, 67, 53),    # Red
+    "Y":       (251, 188, 4),    # Yellow
+    "Z":       (52, 168, 83),    # Green
+    "P":       (171, 71, 188),   # Purple
+    "Rx":      (255, 112, 67),   # Orange-red
+    "Ry":      (255, 202, 40),   # Gold
+    "Rz":      (102, 187, 106),  # Light green
+    "M":       (69, 69, 69),     # Dark gray
+    "control": (0, 0, 0),        # Black
+    "wire":    (189, 189, 189),  # Light gray
+    "bg":      (255, 255, 255),  # White
+}
+
+# Map from C enum Standardgate_t values to color keys
+GATE_TYPE_MAP = {
+    0: "X",   # X = 0 in enum
+    1: "Y",   # Y = 1
+    2: "Z",   # Z = 2
+    3: "Rx",  # R = 3 (generic rotation, map to Rx)
+    4: "H",   # H = 4
+    5: "Rx",  # Rx = 5
+    6: "Ry",  # Ry = 6
+    7: "Rz",  # Rz = 7
+    8: "P",   # P = 8
+    9: "M",   # M = 9
+}
+```
+
+## What NOT to Add
+
+### 1. Do NOT add matplotlib
+
+**Why not:**
+- Massive dependency tree (50+ MB)
+- Designed for plots and charts, not pixel-art
+- Antialiases everything by default (opposite of what we want)
+- Pillow is 10x lighter and gives pixel-level control
+- matplotlib circuit drawing exists in Qiskit but produces a completely different aesthetic
+
+### 2. Do NOT add cairo / pycairo / cairocffi
+
+**Why not:**
+- Vector graphics library (we want raster pixel art)
+- Complex system dependency (requires libcairo C library)
+- Overkill for 3px gate blocks
+- Cross-platform installation headaches
+
+### 3. Do NOT add Pygame or arcade
+
+**Why not:**
+- Game engines, not image generation libraries
+- Require display server / windowing system
+- Cannot run headless (server/CI environments)
+- Pillow is headless-compatible
+
+### 4. Do NOT add imageio or scikit-image
+
+**Why not:**
+- Scientific image processing libraries
+- Add heavy dependencies (scipy, etc.)
+- No drawing primitives (they process existing images)
+- We need to CREATE images, not process them
+
+### 5. Do NOT add wand (ImageMagick binding)
+
+**Why not:**
+- Requires ImageMagick system installation
+- Heavier than Pillow for simple drawing
+- No advantage for pixel-art use case
+
+### 6. Do NOT add any pixel-art-specific libraries (pixelart, pyxel, etc.)
+
+**Why not:**
+- Niche libraries with uncertain maintenance
+- Pillow + NumPy provides everything needed
+- Adding niche dependencies creates supply-chain risk
+- Our use case is simple enough for core Pillow
+
+### 7. Do NOT render in C backend
+
+**Why not:**
+- C has no standard image library (would need libpng, zlib)
+- Adds complex build dependencies
+- Python/Pillow is fast enough (we're generating tiny images)
+- Keep C backend focused on quantum operations
+- Python layer has easier color/font/format handling
 
 ## Integration Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Python Test Suite (NEW)                                    │
-│  ├─ Qiskit imports (qiskit, qiskit_aer, qiskit.qasm3)      │
-│  └─ Verification workflow                                   │
-└──────────────────┬──────────────────────────────────────────┘
-                   │ calls
-┌──────────────────▼──────────────────────────────────────────┐
-│  Quantum Assembly Python Frontend (EXISTING)                │
-│  ├─ qint/qbool/qarray classes                              │
-│  └─ Operator overloading                                    │
-└──────────────────┬──────────────────────────────────────────┘
-                   │ calls via Cython
-┌──────────────────▼──────────────────────────────────────────┐
-│  C Backend (EXISTING + ENHANCEMENTS)                        │
-│  ├─ circuit_to_openqasm3_string() [NEW FUNCTION]           │
-│  ├─ circuit_to_opanqasm() [EXISTING - ENHANCE]             │
-│  └─ Gate implementations (Y, R, Rx, Ry, Rz) [ENHANCE]      │
-└─────────────────────────────────────────────────────────────┘
-                   │ outputs
-┌──────────────────▼──────────────────────────────────────────┐
-│  OpenQASM 3.0 String                                        │
-│  ├─ Consumed by Qiskit (verification)                       │
-│  └─ Consumed by any QASM 3.0 tool (portability)            │
-└─────────────────────────────────────────────────────────────┘
+Existing C Backend                    New Python Visualization Layer
+========================             ==============================
+
+circuit_t                            circuit_to_pixel_art()
+  |-- used_layer                       |
+  |-- used_qubits                      |-- reads circuit data via Cython
+  |-- sequence[layer][gate]            |-- constructs NumPy pixel array
+       |-- Gate (enum)                 |-- converts to PIL Image
+       |-- Target (qubit_t)            |-- applies palette optimization
+       |-- Control[] (qubit_t)         |-- saves as PNG
+       |-- NumControls                 |
+       |-- GateValue (double)          |-- optional: upscale with NEAREST
+                                       |-- optional: add text labels
+
+Data Flow:
+  circuit_t (C) --> Cython exposure --> Python dict/list --> NumPy array --> PIL Image --> PNG file
 ```
 
-## API Usage Patterns
+### Cython Data Extraction
 
-### 1. OpenQASM 3.0 Export (C Backend Enhancement)
+The visualization layer needs read access to circuit data. The existing Cython bindings expose `circuit_visualize()` (which prints to stdout), but for image rendering we need structured data. Options:
 
-**New function signature:**
-```c
-// Returns malloc'd string - caller must free()
-char* circuit_to_openqasm3_string(circuit_t *circ);
-```
-
-**Enhancement to existing:**
-```c
-// Existing - writes to file, needs fix for file handle closure
-void circuit_to_opanqasm(circuit_t *circ, char *path);
-```
-
-**Implementation requirements:**
-- Use `sprintf()` or `snprintf()` with dynamic buffer for string generation
-- Handle all gate types: X, Y, Z, H, P, R, Rx, Ry, Rz, M
-- Handle multi-controlled gates via Control[0..1] and large_control array
-- Use OpenQASM 3.0 `ctrl(n) @` modifier for n>2 controls
-
-### 2. Qiskit QASM Import (CURRENT API - Qiskit 2.3.0)
-
-**Recommended API (Stable):**
+**Option A (Recommended): Add Cython method returning Python data**
 ```python
-from qiskit import qasm3
-
-# Load from string (production use)
-qasm_string = """
-OPENQASM 3.0;
-include "stdgates.inc";
-qubit[3] q;
-h q[0];
-cx q[0], q[1];
-"""
-circuit = qasm3.loads(qasm_string)
-
-# Load from file (legacy/testing)
-circuit = qasm3.load("circuit.qasm")
+# In _core.pyx, add to circuit class:
+def get_circuit_data(self):
+    """Return circuit structure as Python dict for visualization."""
+    cdef circuit_t* circ = <circuit_t*>_circuit
+    layers = []
+    for layer_idx in range(circ.used_layer):
+        gates = []
+        for gate_idx in range(circ.used_gates_per_layer[layer_idx]):
+            g = circ.sequence[layer_idx][gate_idx]
+            gates.append({
+                'type': g.Gate,
+                'target': g.Target,
+                'controls': [g.Control[i] for i in range(g.NumControls)],
+                'value': g.GateValue,
+            })
+        layers.append(gates)
+    return {'layers': layers, 'num_qubits': circ.used_qubits + 1}
 ```
 
-**Status:** STABLE (but marked "exploratory release period")
-- Requires `qiskit[qasm3-import]` extra to be installed
-- `qiskit_qasm3_import` package must be >=0.6.0
-- Issues no deprecation warnings (as of Qiskit 2.3.0)
-
-**Experimental alternative (NOT RECOMMENDED):**
-```python
-# Faster Rust-based parser, but experimental and incomplete feature support
-circuit = qasm3.loads_experimental(qasm_string)  # Issues ExperimentalWarning
-```
-
-**Rationale:** Use `loads()` over `loads_experimental()` because:
-- Stable API surface (no breaking changes expected in Qiskit 2.x)
-- Complete OpenQASM 3.0 feature support
-- Experimental version lacks features we may need later
-
-### 3. Qiskit Aer Simulation (CURRENT API - Qiskit Aer 0.17.1)
-
-**DEPRECATED pattern (found in tests/run_qisk.py):**
-```python
-from qiskit import Aer, execute, transpile  # OLD - DO NOT USE
-
-simulator = Aer.get_backend("aer_simulator")  # Removed in Qiskit 1.0
-job = execute(circuit, backend=simulator)     # Deprecated in 0.46, removed in 1.0
-```
-
-**CURRENT pattern (Qiskit 2.3.0 + Aer 0.17.1):**
-```python
-from qiskit_aer import AerSimulator
-from qiskit import transpile
-
-# Create simulator instance
-simulator = AerSimulator()
-
-# Transpile circuit for simulator
-transpiled = transpile(circuit, backend=simulator)
-
-# Run simulation
-job = simulator.run(transpiled, shots=1024)
-result = job.result()
-counts = result.get_counts()
-```
-
-**Key changes from old API:**
-- Import from `qiskit_aer`, not `qiskit.Aer` (namespace changed in Qiskit 1.0)
-- Use `AerSimulator()` constructor, not `Aer.get_backend()` (removed in 1.0)
-- Use `transpile()` + `backend.run()`, not `execute()` (removed in 1.0)
-- Explicit transpilation gives better control and visibility
-
-**Simulation methods:**
-The simulator auto-selects method based on circuit, but can be explicit:
-```python
-# Auto-select (recommended)
-sim = AerSimulator()
-
-# Or specify method explicitly
-sim = AerSimulator(method='statevector')  # Dense statevector
-sim = AerSimulator(method='density_matrix')  # With noise
-sim = AerSimulator(method='matrix_product_state')  # For certain circuits
-```
-
-**Rationale:** Use automatic method selection. AerSimulator intelligently chooses based on circuit structure and noise model.
-
-### 4. Verification Workflow Pattern
-
-**Complete workflow for measurement-based verification:**
-```python
-from qiskit import qasm3, transpile
-from qiskit_aer import AerSimulator
-
-# 1. Export from Quantum Assembly (via Cython binding)
-qasm_string = quantum_assembly_circuit.to_openqasm3()  # NEW method
-
-# 2. Load into Qiskit
-circuit = qasm3.loads(qasm_string)
-
-# 3. Add measurements (if not already present)
-if not circuit.num_clbits:
-    circuit.measure_all()
-
-# 4. Transpile for simulator
-simulator = AerSimulator()
-transpiled = transpile(circuit, backend=simulator)
-
-# 5. Execute
-job = simulator.run(transpiled, shots=1024)
-result = job.result()
-counts = result.get_counts()
-
-# 6. Verify expected distribution
-assert '000' in counts or '111' in counts  # Bell state example
-```
-
-## OpenQASM 3.0 Specification Compliance
-
-### Multi-Controlled Gate Syntax
-
-**Standard gates in stdgates.inc:**
-- Single-qubit: `p, x, y, z, h, s, sdg, t, tdg, sx, rx, ry, rz`
-- Two-qubit: `cx, cy, cz, cp, crx, cry, crz, ch, cu, swap`
-- Three-qubit: `ccx, cswap`
-
-**Multi-control handling:**
-
-For ≤2 controls, use explicit gate names:
-```openqasm
-// 0 controls
-x q[0];
-
-// 1 control (CNOT)
-cx q[0], q[1];
-
-// 2 controls (Toffoli)
-ccx q[0], q[1], q[2];
-```
-
-For >2 controls, use `ctrl(n) @` modifier:
-```openqasm
-// 3 controls
-ctrl(3) @ x q[0], q[1], q[2], q[3];
-
-// 4 controls
-ctrl(4) @ x q[0], q[1], q[2], q[3], q[4];
-```
-
-**Implementation mapping:**
-```c
-gate_t g;  // From circuit
-
-if (g.NumControls == 0) {
-    fprintf(f, "x q[%d];\n", g.Target);
-} else if (g.NumControls == 1) {
-    fprintf(f, "cx q[%d], q[%d];\n", g.Control[0], g.Target);
-} else if (g.NumControls == 2) {
-    fprintf(f, "ccx q[%d], q[%d], q[%d];\n",
-            g.Control[0], g.Control[1], g.Target);
-} else {
-    // >2 controls: use large_control array and ctrl modifier
-    fprintf(f, "ctrl(%d) @ x ", g.NumControls);
-    for (int i = 0; i < g.NumControls; i++) {
-        fprintf(f, "q[%d]", g.large_control[i]);
-        if (i < g.NumControls - 1) fprintf(f, ", ");
-    }
-    fprintf(f, ", q[%d];\n", g.Target);
-}
-```
-
-**Why this approach:**
-- Explicit gates (cx, ccx) are more widely supported than ctrl modifier
-- ctrl modifier is required for >2 controls (c3x, c4x not in standard library)
-- Qiskit's qasm3.loads() handles both syntaxes correctly
-
-### Rotation Gate Syntax
-
-**Parameterized gates:**
-```openqasm
-// Phase gate
-p(0.785398163) q[0];  // π/4 rotation
-
-// Pauli rotations
-rx(1.57079633) q[0];  // π/2 X rotation
-ry(3.14159265) q[0];  // π Y rotation
-rz(0.785398163) q[0]; // π/4 Z rotation
-
-// Generic rotation (if implemented)
-r(1.57, 0.0) q[0];  // r(θ, φ) - NOT in stdgates.inc
-```
-
-**Current C backend status:**
-```c
-// In circuit_output.c, lines 310-319:
-case Y:   // break; (no-op)
-case R:   // break; (no-op)
-case Rx:  // break; (no-op)
-case Ry:  // break; (no-op)
-case Rz:  // break; (no-op)
-```
-
-**Required implementation:**
-```c
-case Y:
-    fprintf(oq_file, "y ");
-    break;
-case Rx:
-    fprintf(oq_file, "rx(%.20f) ", g.GateValue);
-    break;
-case Ry:
-    fprintf(oq_file, "ry(%.20f) ", g.GateValue);
-    break;
-case Rz:
-    fprintf(oq_file, "rz(%.20f) ", g.GateValue);
-    break;
-case R:
-    // R gate may require decomposition or custom handling
-    // OpenQASM 3.0 stdgates.inc doesn't have generic r(θ,φ)
-    // May need: fprintf(oq_file, "// R gate not in stdgates.inc\n");
-    break;
-```
-
-**Note on R gate:** The generic rotation gate R(θ, φ) is NOT in OpenQASM 3.0 stdgates.inc. If the C backend uses this, it needs either:
-1. Decomposition to rx, ry, rz sequence
-2. Custom gate definition in QASM output header
-3. Mark as unsupported in export
-
-### Measurement Syntax
-
-**Standard measurement:**
-```openqasm
-OPENQASM 3.0;
-include "stdgates.inc";
-qubit[2] q;
-bit[2] c;
-
-h q[0];
-cx q[0], q[1];
-c[0] = measure q[0];
-c[1] = measure q[1];
-```
-
-**Current C backend (line 308):**
-```c
-case M:
-    fprintf(oq_file, "m ");
-    break;
-```
-
-**Problem:** `m` is not a valid OpenQASM gate. Correct syntax is `measure`.
-
-**Required fix:**
-```c
-case M:
-    // OpenQASM 3.0 measurement requires classical bit declaration
-    // For now, use measure keyword (Qiskit will auto-add classical register)
-    fprintf(oq_file, "measure ");
-    break;
-```
-
-**Alternative:** Have Qiskit add measurements via `circuit.measure_all()` after import.
-
-## What NOT to Add
-
-### 1. Do NOT add PyQASM or openqasm3 parser packages
-
-**Reasoning:**
-- PyQASM is for validating QASM we didn't write (external sources)
-- openqasm3 (reference parser) is for building compilers
-- We only need to GENERATE valid QASM, not parse/validate it
-- Qiskit's qasm3.loads() provides sufficient validation (will error on invalid QASM)
-
-**If validation is needed later:** Add to test suite, not production dependencies.
-
-### 2. Do NOT add qiskit-transpiler-service
-
-**Reasoning:**
-- Cloud-based transpilation service for IBM Quantum hardware
-- We're doing local simulation only
-- Local AerSimulator handles transpilation efficiently
-
-### 3. Do NOT add Qiskit Runtime (qiskit-ibm-runtime)
-
-**Reasoning:**
-- For running on real IBM quantum hardware
-- Milestone is verification via simulation only
-- Adds cloud dependencies we don't need
-
-### 4. Do NOT add Qiskit Primitives (Sampler/Estimator)
-
-**Reasoning:**
-- Higher-level abstraction for quantum applications
-- We need low-level circuit verification
-- AerSimulator provides direct circuit execution we need
-
-### 5. Do NOT change build system
-
-**Reasoning:**
-- OpenQASM export is pure C string generation
-- Qiskit verification is Python test code
-- No new compiled dependencies
-- Keep existing setuptools + Cython build
-
-## Implementation Checklist
-
-### C Backend Enhancements
-
-- [ ] Implement `circuit_to_openqasm3_string()` returning malloc'd string
-- [ ] Fix `circuit_to_opanqasm()` to close file handle (line 326 - no fclose)
-- [ ] Add Y gate export: `fprintf(oq_file, "y ");`
-- [ ] Add Rx gate export: `fprintf(oq_file, "rx(%.20f) ", g.GateValue);`
-- [ ] Add Ry gate export: `fprintf(oq_file, "ry(%.20f) ", g.GateValue);`
-- [ ] Add Rz gate export: `fprintf(oq_file, "rz(%.20f) ", g.GateValue);`
-- [ ] Fix M gate export: change "m" to "measure"
-- [ ] Handle large_control array for NumControls > 2
-- [ ] Add classical bit declaration for measurements (optional - Qiskit can infer)
-
-### Cython Bindings
-
-- [ ] Add Python method `to_openqasm3() -> str` to circuit wrapper
-- [ ] Ensure proper memory management (free C string after Python string created)
-
-### Python Test Suite
-
-- [ ] Update tests/run_qisk.py to use current API:
-  - [ ] Replace `from qiskit import Aer` with `from qiskit_aer import AerSimulator`
-  - [ ] Replace `Aer.get_backend()` with `AerSimulator()`
-  - [ ] Replace `execute()` with `transpile()` + `backend.run()`
-  - [ ] Use `qasm3.loads()` for string import
-- [ ] Add measurement-based verification tests
-- [ ] Add multi-controlled gate tests (3, 4, 5+ controls)
-
-### Dependencies
-
-- [ ] Add to pyproject.toml `[project.optional-dependencies]` section:
-  ```toml
-  [project.optional-dependencies]
-  test = [
-      "qiskit>=2.3.0",
-      "qiskit-aer>=0.17.1",
-      "qiskit[qasm3-import]>=2.3.0",
-  ]
-  ```
-- [ ] Document that test dependencies are optional (not required for core functionality)
+**Option B: Parse text output of circuit_visualize()**
+Not recommended. Fragile, lossy (loses gate values), harder to maintain.
 
 ## Confidence Assessment
 
 | Area | Confidence | Source | Notes |
 |------|-----------|--------|-------|
-| Qiskit version | HIGH | Official docs, PyPI | 2.3.0 released Jan 8, 2026 |
-| Qiskit Aer API | HIGH | Official docs, release notes | 0.17.1 stable, clear migration path |
-| qasm3.loads() API | HIGH | Official IBM Quantum docs | Stable, requires qasm3-import extra |
-| OpenQASM 3.0 syntax | HIGH | Official spec at openqasm.com | ctrl(n) modifier for multi-control |
-| Integration approach | HIGH | Existing codebase analysis | Clear separation: C export, Python verify |
-| No new core deps | HIGH | Architecture analysis | QASM is strings, verification is test-only |
+| Pillow version (12.1.0) | HIGH | [PyPI](https://pypi.org/project/pillow/), [Official docs](https://pillow.readthedocs.io/en/stable/) | Released Jan 2, 2026 |
+| Pillow drawing API | HIGH | [ImageDraw docs](https://pillow.readthedocs.io/en/stable/reference/ImageDraw.html) | Stable API, extensively documented |
+| NEAREST resampling | HIGH | [Image.resize docs](https://pillow.readthedocs.io/en/stable/reference/Image.html) | Core feature, always available |
+| PNG palette optimization | HIGH | [Image formats docs](https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html) | Well-documented save options |
+| NumPy integration | HIGH | [Image.fromarray docs](https://pillow.readthedocs.io/en/stable/reference/Image.html) | Standard NumPy interop |
+| Font rendering | HIGH | [ImageFont docs](https://pillow.readthedocs.io/en/stable/reference/ImageFont.html) | load_default() always available |
+| Color palette design | MEDIUM | Design decision, not verified externally | Based on accessibility best practices |
+| Gate enum mapping | HIGH | Codebase analysis of types.h line 64 | `enum { X, Y, Z, R, H, Rx, Ry, Rz, P, M }` |
 
 ## Sources
 
-**Qiskit API Documentation:**
-- [qasm3 module - IBM Quantum Documentation](https://quantum.cloud.ibm.com/docs/api/qiskit/qasm3)
-- [Qiskit releases - GitHub](https://github.com/Qiskit/qiskit/releases)
-- [Qiskit on PyPI](https://pypi.org/project/qiskit/)
-
-**Qiskit Aer:**
-- [AerSimulator documentation](https://qiskit.github.io/qiskit-aer/stubs/qiskit_aer.AerSimulator.html)
-- [Qiskit Aer releases](https://github.com/Qiskit/qiskit-aer/releases)
-- [qiskit-aer on PyPI](https://pypi.org/project/qiskit-aer/)
-
-**QASM3 Import:**
-- [qiskit-qasm3-import GitHub](https://github.com/Qiskit/qiskit-qasm3-import)
-- [qiskit-qasm3-import on PyPI](https://pypi.org/project/qiskit-qasm3-import/)
-
-**OpenQASM 3.0 Specification:**
-- [Gates - OpenQASM 3.0 Specification](https://openqasm.com/versions/3.0/language/gates.html)
-- [Standard library - OpenQASM Live Specification](https://openqasm.com/language/standard_library.html)
-
-**Migration Guides:**
-- [Qiskit 1.0 feature migration guide](https://docs.quantum.ibm.com/migration-guides/qiskit-1.0-features)
+- [Pillow 12.1.0 on PyPI](https://pypi.org/project/pillow/) - version and compatibility
+- [Pillow ImageDraw Documentation](https://pillow.readthedocs.io/en/stable/reference/ImageDraw.html) - drawing API
+- [Pillow Image Documentation](https://pillow.readthedocs.io/en/stable/reference/Image.html) - resize, fromarray, putpixel
+- [Pillow ImageFont Documentation](https://pillow.readthedocs.io/en/stable/reference/ImageFont.html) - font loading and text
+- [Pillow Image File Formats](https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html) - PNG save options
+- [Pillow GitHub Releases](https://github.com/python-pillow/Pillow/releases) - release history
+- [Pillow Concepts - Modes](https://pillow.readthedocs.io/en/stable/handbook/concepts.html) - image modes (P, RGB, RGBA)
