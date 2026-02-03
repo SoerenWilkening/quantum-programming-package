@@ -64,27 +64,27 @@ Deferred to later milestones.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DATA-01 | TBD | Pending |
-| DATA-02 | TBD | Pending |
-| REND-01 | TBD | Pending |
-| REND-02 | TBD | Pending |
-| REND-03 | TBD | Pending |
-| REND-04 | TBD | Pending |
-| REND-05 | TBD | Pending |
-| REND-06 | TBD | Pending |
-| ZOOM-01 | TBD | Pending |
-| ZOOM-02 | TBD | Pending |
-| ZOOM-03 | TBD | Pending |
-| ZOOM-04 | TBD | Pending |
-| OUT-01 | TBD | Pending |
-| OUT-02 | TBD | Pending |
-| OUT-03 | TBD | Pending |
+| DATA-01 | Phase 45 | Pending |
+| DATA-02 | Phase 45 | Pending |
+| REND-01 | Phase 46 | Pending |
+| REND-02 | Phase 46 | Pending |
+| REND-03 | Phase 46 | Pending |
+| REND-04 | Phase 46 | Pending |
+| REND-05 | Phase 46 | Pending |
+| REND-06 | Phase 46 | Pending |
+| ZOOM-01 | Phase 46 | Pending |
+| ZOOM-02 | Phase 47 | Pending |
+| ZOOM-03 | Phase 47 | Pending |
+| ZOOM-04 | Phase 47 | Pending |
+| OUT-01 | Phase 47 | Pending |
+| OUT-02 | Phase 47 | Pending |
+| OUT-03 | Phase 47 | Pending |
 
 **Coverage:**
 - v1.9 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-03*
-*Last updated: 2026-02-03 after initial definition*
+*Last updated: 2026-02-03 after roadmap creation*
