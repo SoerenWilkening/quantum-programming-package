@@ -59,9 +59,9 @@ See PROJECT.md Key Decisions table for full history.
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: v1.9 milestone archived
+Stopped at: Completed quick-010 (split qarray helpers into module)
 Resume file: None
 Resume action: Start next milestone with `/gsd:new-milestone`
 
 ---
-*State updated: 2026-02-03 -- v1.9 milestone archived*
+*State updated: 2026-02-03 -- quick-010 complete*
