@@ -17,6 +17,9 @@ build/
 *.egg-info/
 __pycache__/
 
+# Preprocessed .pyx files (build artifacts from build_preprocessor.py)
+src/quantum_language/*_preprocessed.pyx
+
 # Cython-generated files (NOT hand-written C code in Backend/ or Execution/)
 src/quantum_language/*.c
 src/quantum_language/**/*.c
