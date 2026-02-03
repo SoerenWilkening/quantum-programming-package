@@ -17,6 +17,7 @@ from quantum_language.draw import (
     CELL_H,
     CELL_W,
     CTRL_COLOR,
+    CTRL_DOT_COLOR,
     DETAIL_CELL,
     GATE_COLORS,
     LABEL_MARGIN,
@@ -193,30 +194,32 @@ class TestCnotControlLine:
         gx = 0
 
         # Every pixel in the vertical line from y_ctrl to y_tgt at x=gx
+        ctrl_dot_color = np.array(CTRL_DOT_COLOR, dtype=np.uint8)
         for y in range(y_ctrl, y_tgt + 1):
-            # Some pixels may be overwritten by gate block, but the column
-            # should have control color or gate color (not just wire/bg)
+            # Some pixels may be overwritten by gate block or control dot,
+            # but the column should have control/dot/gate color (not just wire/bg)
             pixel = arr[y, gx]
             is_ctrl = np.array_equal(pixel, ctrl_color)
+            is_dot = np.array_equal(pixel, ctrl_dot_color)
             is_gate = np.array_equal(pixel, np.array(GATE_COLORS[0], dtype=np.uint8))
-            assert is_ctrl or is_gate, (
-                f"Pixel at y={y} x={gx} is {tuple(pixel)}, expected CTRL or GATE color"
+            assert is_ctrl or is_dot or is_gate, (
+                f"Pixel at y={y} x={gx} is {tuple(pixel)}, expected CTRL, DOT or GATE color"
             )
 
 
 class TestCnotControlDot:
     def test_cnot_control_dot(self):
-        """CNOT: control dot at control qubit position has CTRL_COLOR."""
+        """CNOT: control dot at control qubit position has CTRL_DOT_COLOR."""
         gate = make_gate(layer=0, target=2, gate_type=0, controls=[0])
         dd = make_draw_data(1, 3, [gate])
         img = render(dd)
         arr = np.array(img)
-        ctrl_color = np.array(CTRL_COLOR, dtype=np.uint8)
+        ctrl_dot_color = np.array(CTRL_DOT_COLOR, dtype=np.uint8)
 
         # Control dot at qubit 0 wire center
         cy = 0 * CELL_H + CELL_H // 2  # 1
         cx = 0
-        np.testing.assert_array_equal(arr[cy, cx], ctrl_color)
+        np.testing.assert_array_equal(arr[cy, cx], ctrl_dot_color)
 
         # Target qubit should have gate color, not control dot
         ty = 2 * CELL_H  # gate block top-left
@@ -232,21 +235,23 @@ class TestCcxTwoControls:
         dd = make_draw_data(1, 3, [gate])
         img = render(dd)
         arr = np.array(img)
-        ctrl_color = np.array(CTRL_COLOR, dtype=np.uint8)
+        ctrl_dot_color = np.array(CTRL_DOT_COLOR, dtype=np.uint8)
 
         # Control dots at qubit 0 and qubit 1
         for q in [0, 1]:
             cy = q * CELL_H + CELL_H // 2
-            np.testing.assert_array_equal(arr[cy, 0], ctrl_color)
+            np.testing.assert_array_equal(arr[cy, 0], ctrl_dot_color)
 
         # Control line spans from qubit 0 (y=1) to qubit 2 (y=7)
+        ctrl_color = np.array(CTRL_COLOR, dtype=np.uint8)
         y_min = 0 * CELL_H + CELL_H // 2
         # Check an intermediate pixel (between qubit 0 and 1 wire centers)
         mid_y = y_min + 1
         pixel = arr[mid_y, 0]
         is_ctrl = np.array_equal(pixel, ctrl_color)
+        is_dot = np.array_equal(pixel, ctrl_dot_color)
         is_gate = np.array_equal(pixel, np.array(GATE_COLORS[0], dtype=np.uint8))
-        assert is_ctrl or is_gate, f"Mid-line pixel at y={mid_y} is {tuple(pixel)}"
+        assert is_ctrl or is_dot or is_gate, f"Mid-line pixel at y={mid_y} is {tuple(pixel)}"
 
 
 class TestControlLineColorDistinct:
@@ -282,11 +287,11 @@ class TestRenderingOrderDotOverGate:
         dd = make_draw_data(1, 2, [gate])
         img = render(dd)
         arr = np.array(img)
-        ctrl_color = np.array(CTRL_COLOR, dtype=np.uint8)
+        ctrl_dot_color = np.array(CTRL_DOT_COLOR, dtype=np.uint8)
 
         # Control dot at qubit 0 wire center
         cy = 0 * CELL_H + CELL_H // 2  # 1
-        np.testing.assert_array_equal(arr[cy, 0], ctrl_color)
+        np.testing.assert_array_equal(arr[cy, 0], ctrl_dot_color)
 
 
 class TestMcxMultipleControls:
@@ -296,26 +301,28 @@ class TestMcxMultipleControls:
         dd = make_draw_data(1, 5, [gate])
         img = render(dd)
         arr = np.array(img)
-        ctrl_color = np.array(CTRL_COLOR, dtype=np.uint8)
+        ctrl_dot_color = np.array(CTRL_DOT_COLOR, dtype=np.uint8)
 
         # Control dots at qubits 0, 1, 3
         for q in [0, 1, 3]:
             cy = q * CELL_H + CELL_H // 2
             np.testing.assert_array_equal(
                 arr[cy, 0],
-                ctrl_color,
+                ctrl_dot_color,
                 err_msg=f"Control dot missing at qubit {q}",
             )
 
         # Verify the control line spans the full range
+        ctrl_color = np.array(CTRL_COLOR, dtype=np.uint8)
         y_min = 0 * CELL_H + CELL_H // 2
         y_max = 4 * CELL_H + CELL_H // 2
         for y in range(y_min, y_max + 1):
             pixel = arr[y, 0]
             is_ctrl = np.array_equal(pixel, ctrl_color)
+            is_dot = np.array_equal(pixel, ctrl_dot_color)
             is_gate = np.array_equal(pixel, np.array(GATE_COLORS[0], dtype=np.uint8))
-            assert is_ctrl or is_gate, (
-                f"Pixel at y={y} should be CTRL or GATE color, got {tuple(pixel)}"
+            assert is_ctrl or is_dot or is_gate, (
+                f"Pixel at y={y} should be CTRL, DOT or GATE color, got {tuple(pixel)}"
             )
 
 
@@ -497,7 +504,7 @@ class TestDetailMeasurementNotText:
 
 class TestDetailControlDotCircle:
     def test_detail_control_dot_circle(self):
-        """CNOT control dot at control qubit wire center is CTRL_COLOR."""
+        """CNOT control dot at control qubit wire center is CTRL_DOT_COLOR."""
         gate = make_gate(layer=1, target=2, gate_type=0, controls=[0])
         dd = make_draw_data(3, 3, [gate])
         img = render_detail(dd)
@@ -506,7 +513,7 @@ class TestDetailControlDotCircle:
         cx = LABEL_MARGIN + 1 * DETAIL_CELL + DETAIL_CELL // 2
         cy = 0 * DETAIL_CELL + DETAIL_CELL // 2
         pixel = img.getpixel((cx, cy))
-        assert pixel == CTRL_COLOR, f"Control dot pixel is {pixel}, expected {CTRL_COLOR}"
+        assert pixel == CTRL_DOT_COLOR, f"Control dot pixel is {pixel}, expected {CTRL_DOT_COLOR}"
 
 
 class TestDetailQubitLabels:

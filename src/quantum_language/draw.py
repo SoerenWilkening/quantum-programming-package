@@ -32,6 +32,7 @@ AUTO_DETAIL_MAX_LAYERS = 200
 BG_COLOR = (20, 20, 30)
 WIRE_COLOR = (60, 60, 80)
 CTRL_COLOR = (255, 255, 100)  # Used in plan 02 for control lines
+CTRL_DOT_COLOR = (255, 255, 255)  # Bright white: visually distinct control dots
 
 # Gate type -> RGB color mapping
 # 0=X, 1=Y, 2=Z, 3=R, 4=H, 5=Rx, 6=Ry, 7=Rz, 8=P, 9=M
@@ -52,7 +53,95 @@ GATE_COLORS = {
 _DEFAULT_GATE_COLOR = (150, 150, 150)
 
 
-def render(draw_data, cell_size=3):
+def expand_overlapping_layers(draw_data):
+    """Return a new draw_data dict with overlapping gates split into separate visual columns.
+
+    Gates in the same layer whose qubit spans intersect are spread into
+    consecutive sub-columns so that no two gates visually overlap.
+
+    Parameters
+    ----------
+    draw_data : dict
+        Original draw_data dict (not mutated).
+
+    Returns
+    -------
+    dict
+        A new draw_data dict with potentially more layers and updated gate layer indices.
+    """
+    from collections import defaultdict
+
+    gates = draw_data.get("gates", [])
+    num_qubits = draw_data.get("num_qubits", 0)
+    orig_num_layers = draw_data.get("num_layers", 0)
+
+    # Group gate indices by their layer
+    layer_gate_indices = defaultdict(list)
+    for idx, gate in enumerate(gates):
+        layer_gate_indices[gate["layer"]].append(idx)
+
+    def _span(g):
+        all_q = [g["target"]] + list(g.get("controls", []))
+        return (min(all_q), max(all_q))
+
+    # For each gate, compute its sub-column assignment
+    gate_sub_col = {}  # gate index -> sub-column within its layer
+    new_layer_offset = {}  # original layer -> new starting layer index
+
+    current_new_layer = 0
+    for orig_layer in range(orig_num_layers):
+        new_layer_offset[orig_layer] = current_new_layer
+        indices = layer_gate_indices.get(orig_layer, [])
+        if not indices:
+            current_new_layer += 1
+            continue
+
+        # Sort by min qubit for greedy assignment
+        sorted_indices = sorted(indices, key=lambda i: _span(gates[i])[0])
+
+        # Greedy sub-column assignment
+        sub_columns = []  # list of lists of (min_q, max_q) spans
+
+        for gi in sorted_indices:
+            sp = _span(gates[gi])
+            placed = False
+            for sc_idx, sc_spans in enumerate(sub_columns):
+                overlaps = False
+                for existing_span in sc_spans:
+                    if not (sp[1] < existing_span[0] or existing_span[1] < sp[0]):
+                        overlaps = True
+                        break
+                if not overlaps:
+                    sc_spans.append(sp)
+                    gate_sub_col[gi] = sc_idx
+                    placed = True
+                    break
+            if not placed:
+                sub_columns.append([sp])
+                gate_sub_col[gi] = len(sub_columns) - 1
+
+        current_new_layer += max(len(sub_columns), 1)
+
+    new_num_layers = current_new_layer
+
+    # Build new gates list with remapped layer indices
+    new_gates = []
+    for idx, gate in enumerate(gates):
+        new_gate = dict(gate)
+        orig_layer = gate["layer"]
+        sub_col = gate_sub_col.get(idx, 0)
+        new_gate["layer"] = new_layer_offset[orig_layer] + sub_col
+        new_gates.append(new_gate)
+
+    return {
+        "num_layers": new_num_layers,
+        "num_qubits": num_qubits,
+        "gates": new_gates,
+        "qubit_map": draw_data.get("qubit_map", {}),
+    }
+
+
+def render(draw_data, cell_size=3, overlap=True):
     """Render a draw_data dict into a PIL Image.
 
     Parameters
@@ -66,12 +155,17 @@ def render(draw_data, cell_size=3):
     cell_size : int, optional
         Pixels per cell dimension (default 3). Both width and height
         use this value.
+    overlap : bool, optional
+        If True (default), gates in the same layer may visually overlap.
+        If False, overlapping gates are spread into separate visual columns.
 
     Returns
     -------
     PIL.Image.Image
         RGB image of the rendered circuit.
     """
+    if not overlap:
+        draw_data = expand_overlapping_layers(draw_data)
     num_layers = draw_data.get("num_layers", 0)
     num_qubits = draw_data.get("num_qubits", 0)
 
@@ -127,7 +221,7 @@ def render(draw_data, cell_size=3):
         gx = gate["layer"] * cell_w
         for ctrl in controls:
             cy = ctrl * cell_h + cell_h // 2
-            canvas[cy, gx] = CTRL_COLOR
+            canvas[cy, gx] = CTRL_DOT_COLOR
 
     return Image.fromarray(canvas, "RGB")
 
@@ -155,7 +249,7 @@ GATE_LABELS = {
 BORDER_COLOR = (80, 80, 100)
 
 
-def render_detail(draw_data):
+def render_detail(draw_data, overlap=True):
     """Render a draw_data dict into a PIL Image at detail zoom level.
 
     Detail mode uses 12px cells with readable text labels for gate types,
@@ -167,12 +261,17 @@ def render_detail(draw_data):
     ----------
     draw_data : dict
         Dictionary with keys: num_layers, num_qubits, gates, qubit_map.
+    overlap : bool, optional
+        If True (default), gates in the same layer may visually overlap.
+        If False, overlapping gates are spread into separate visual columns.
 
     Returns
     -------
     PIL.Image.Image
         RGB image of the rendered circuit at detail scale.
     """
+    if not overlap:
+        draw_data = expand_overlapping_layers(draw_data)
     num_layers = draw_data.get("num_layers", 0)
     num_qubits = draw_data.get("num_qubits", 0)
 
@@ -280,7 +379,7 @@ def render_detail(draw_data):
                     x_center + radius,
                     cy + radius,
                 ],
-                fill=CTRL_COLOR,
+                fill=CTRL_DOT_COLOR,
             )
 
     return img
@@ -291,7 +390,7 @@ def render_detail(draw_data):
 # ---------------------------------------------------------------------------
 
 
-def draw_circuit(circuit, *, mode=None, save=None):
+def draw_circuit(circuit, *, mode=None, save=None, overlap=True):
     """Visualize a quantum circuit as a pixel-art image.
 
     Automatically selects detail or overview mode based on circuit size,
@@ -306,6 +405,9 @@ def draw_circuit(circuit, *, mode=None, save=None):
         or ``None`` for auto-selection based on circuit size.
     save : str, optional
         If provided, save the image to this file path.
+    overlap : bool, optional
+        If True (default), gates in the same layer may visually overlap.
+        If False, overlapping gates are spread into separate visual columns.
 
     Returns
     -------
@@ -343,9 +445,9 @@ def draw_circuit(circuit, *, mode=None, save=None):
             print(f"Auto-selected overview mode ({num_qubits} qubits, {num_layers} layers)")
 
     if use_detail:
-        img = render_detail(draw_data)
+        img = render_detail(draw_data, overlap=overlap)
     else:
-        img = render(draw_data)
+        img = render(draw_data, overlap=overlap)
 
     if save is not None:
         img.save(save)
