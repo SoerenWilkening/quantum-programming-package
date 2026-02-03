@@ -3,7 +3,12 @@
 Uses synthetic draw_data dicts to avoid Cython build dependency.
 """
 
+import os
+import random
+import time
+
 import numpy as np
+import pytest
 
 from quantum_language.draw import (
     BG_COLOR,
@@ -306,3 +311,132 @@ class TestMcxMultipleControls:
             assert is_ctrl or is_gate, (
                 f"Pixel at y={y} should be CTRL or GATE color, got {tuple(pixel)}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Plan 03: Scale tests and integration test
+# ---------------------------------------------------------------------------
+
+
+def _make_scale_draw_data(
+    num_qubits=200,
+    num_layers=10000,
+    num_gates=10000,
+    include_controls=False,
+    num_controlled=0,
+    seed=42,
+):
+    """Build a large synthetic draw_data dict for scale testing."""
+    random.seed(seed)
+    gates = []
+    for i in range(num_gates):
+        layer = random.randint(0, num_layers - 1)
+        target = random.randint(0, num_qubits - 1)
+        gate_type = random.randint(0, 9)
+        controls = []
+        if include_controls and i < num_controlled:
+            # Pick a control qubit different from target
+            ctrl = random.randint(0, num_qubits - 2)
+            if ctrl >= target:
+                ctrl += 1
+            controls = [ctrl]
+        gates.append(make_gate(layer=layer, target=target, gate_type=gate_type, controls=controls))
+    return make_draw_data(num_layers, num_qubits, gates)
+
+
+class TestScale200Qubits10kGates:
+    def test_scale_200_qubits_10k_gates(self):
+        """200 qubits x 10,000 gates renders successfully with correct dimensions."""
+        data = _make_scale_draw_data()
+        img = render(data)
+        assert img is not None
+        expected_w = 10000 * CELL_W  # 30000
+        expected_h = 200 * CELL_H  # 600
+        assert img.size == (expected_w, expected_h)
+        assert img.mode == "RGB"
+
+
+class TestScale200QubitsWithControls:
+    def test_scale_200_qubits_with_controls(self):
+        """200 qubits x 10,000 gates with 1000 CNOTs renders correctly."""
+        data = _make_scale_draw_data(include_controls=True, num_controlled=1000)
+        img = render(data)
+        assert img is not None
+        expected_w = 10000 * CELL_W
+        expected_h = 200 * CELL_H
+        assert img.size == (expected_w, expected_h)
+        assert img.mode == "RGB"
+
+
+class TestScaleMemoryReasonable:
+    def test_scale_memory_reasonable(self):
+        """Rendered image memory is ~54 MB (no bloat from temporaries)."""
+        data = _make_scale_draw_data()
+        img = render(data)
+        arr = np.array(img)
+        actual_bytes = arr.nbytes
+        expected_bytes = 30000 * 600 * 3  # 54,000,000
+        # Allow 10% tolerance
+        assert abs(actual_bytes - expected_bytes) < expected_bytes * 0.10, (
+            f"Memory {actual_bytes} bytes deviates >10% from expected {expected_bytes}"
+        )
+
+
+class TestScaleRenderingTime:
+    def test_scale_rendering_time(self):
+        """200 qubits x 10,000 gates renders in under 30 seconds."""
+        data = _make_scale_draw_data()
+        start = time.time()
+        img = render(data)
+        elapsed = time.time() - start
+        assert img is not None
+        assert elapsed < 30.0, f"Rendering took {elapsed:.1f}s, expected < 30s"
+
+
+class TestScalePngSave:
+    def test_scale_png_save(self):
+        """Large rendered image saves to PNG file with non-zero size."""
+        tmp_path = "/tmp/test_scale_circuit.png"
+        try:
+            data = _make_scale_draw_data()
+            img = render(data)
+            img.save(tmp_path)
+            assert os.path.exists(tmp_path)
+            assert os.path.getsize(tmp_path) > 0
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+
+class TestIntegrationRealCircuit:
+    @pytest.mark.integration
+    def test_integration_real_circuit(self):
+        """Real circuit via draw_data() integration produces valid image."""
+        try:
+            import quantum_language as ql
+        except ImportError:
+            pytest.skip("quantum_language package not available")
+        try:
+            # Verify Cython extension is available
+            from quantum_language import _core  # noqa: F401
+        except ImportError:
+            pytest.skip("Cython _core extension not built")
+
+        tmp_path = "/tmp/test_integration_circuit.png"
+        try:
+            c = ql.circuit()
+            a = ql.qint(0, width=3)
+            b = ql.qint(0, width=3)
+            a += b
+            data = c.draw_data()
+            img = render(data)
+            assert img is not None
+            assert img.size[0] > 0
+            assert img.size[1] > 0
+            assert img.mode == "RGB"
+            img.save(tmp_path)
+            assert os.path.exists(tmp_path)
+            assert os.path.getsize(tmp_path) > 0
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
