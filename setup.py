@@ -92,6 +92,9 @@ setup(
         "quantum_language": ["*.pxd", "*.py"],
         "quantum_language.state": ["*.pxd", "*.py"],
     },
+    install_requires=[
+        "Pillow>=9.0",
+    ],
     extras_require={
         "verification": ["qiskit>=1.0"],
     },
