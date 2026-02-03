@@ -358,14 +358,47 @@ cdef class qarray:
 
     def __setitem__(self, key, value):
         """
-        Prevent mutation - arrays are immutable.
+        Set element by index. Supports augmented assignment (e.g., arr[i] += x).
 
-        Raises
-        ------
-        TypeError
-            Always (arrays cannot be modified after creation).
+        Args:
+            key: int, slice, or tuple of ints
+            value: qint, qbool, or compatible value
+
+        Raises:
+            IndexError: If index is out of bounds
+            TypeError: If key type is unsupported
         """
-        raise TypeError("'qarray' object does not support item assignment")
+        if isinstance(key, int):
+            if len(self._shape) > 1:
+                raise NotImplementedError("Row assignment for multi-dimensional arrays not yet supported")
+            if key < 0:
+                key += len(self._elements)
+            if not 0 <= key < len(self._elements):
+                raise IndexError(f"Index {key} out of bounds for array with {len(self._elements)} elements")
+            self._elements[key] = value
+
+        elif isinstance(key, tuple):
+            if all(isinstance(k, int) for k in key):
+                flat_idx = self._multi_to_flat(key)
+                self._elements[flat_idx] = value
+            else:
+                raise NotImplementedError("Slice-based multi-dim setitem not yet supported")
+
+        elif isinstance(key, slice):
+            start, stop, step = key.indices(len(self._elements))
+            indices = list(range(start, stop, step))
+            if isinstance(value, qarray):
+                if len(value) != len(indices):
+                    raise ValueError(f"Cannot assign {len(value)} elements to slice of length {len(indices)}")
+                for i, idx in enumerate(indices):
+                    self._elements[idx] = value._elements[i]
+            else:
+                # Broadcast scalar to all slice positions
+                for idx in indices:
+                    self._elements[idx] = value
+
+        else:
+            raise TypeError(f"Unsupported index type: {type(key).__name__}")
 
     def __delitem__(self, key):
         """
@@ -990,6 +1023,18 @@ cdef class qarray:
     def __ixor__(self, other):
         """In-place element-wise bitwise XOR."""
         return self._inplace_binary_op(other, "__ixor__")
+
+    def __ilshift__(self, other):
+        """In-place element-wise left shift."""
+        return self._inplace_binary_op(other, "__ilshift__")
+
+    def __irshift__(self, other):
+        """In-place element-wise right shift."""
+        return self._inplace_binary_op(other, "__irshift__")
+
+    def __ifloordiv__(self, other):
+        """In-place element-wise floor division."""
+        return self._inplace_binary_op(other, "__ifloordiv__")
 
     def __invert__(self):
         """Element-wise bitwise NOT."""

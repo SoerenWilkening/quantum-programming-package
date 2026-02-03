@@ -143,12 +143,19 @@ class TestQarrayPythonIntegration:
 class TestQarrayImmutability:
     """Test immutability enforcement."""
 
-    def test_setitem_raises(self):
-        """Arrays are immutable - setitem raises TypeError."""
+    def test_setitem_works(self):
+        """setitem supports element assignment for augmented assignment patterns."""
         _c = ql.circuit()
         arr = ql.array([1, 2, 3])
-        with pytest.raises(TypeError, match="does not support item assignment"):
-            arr[0] = 5
+        arr[0] = ql.qint(5, width=8)
+        # Verify assignment did not raise
+
+    def test_setitem_out_of_bounds(self):
+        """setitem raises IndexError for out-of-bounds index."""
+        _c = ql.circuit()
+        arr = ql.array([1, 2, 3])
+        with pytest.raises(IndexError):
+            arr[5] = ql.qint(5, width=8)
 
     def test_delitem_raises(self):
         """Arrays are immutable - delitem raises TypeError."""
