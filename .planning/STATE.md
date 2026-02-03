@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Phase 46 - Core Renderer (v1.9)
+**Current focus:** Phase 47 - Detail Mode & Public API (v1.9)
 
 ## Current Position
 
 Phase: 47 of 47 (Detail Mode & Public API)
-Plan: 0 of 2 in current phase
-Status: Phase 46 complete, Phase 47 not started
-Last activity: 2026-02-03 -- Completed 46-03-PLAN.md (Scale Testing & Integration)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-03 -- Completed 47-01-PLAN.md (Detail Mode Renderer)
 
-Progress: [██████████████████████████████████░░░░░░░] 71% (5/7 plans)
+Progress: [████████████████████████████████████░░░░░] 86% (6/7 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 140 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 5)
+- Total plans completed: 141 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 6)
 - Average duration: ~13 min/plan
 - Total execution time: ~23.4 hours
 
@@ -55,6 +55,9 @@ Recent decisions for v1.9:
 - Wires drawn before gates; measurement checkerboard may overlap wire pixels
 - Rendering order: wires -> control lines -> gate blocks -> control dots (VIZ-CTRL-ORDER)
 - Synthetic draw_data dicts for scale tests to avoid Cython build dependency (VIZ-SCALE-SYNTH)
+- 12px cell size with size-8 default font for detail mode gate labels (VIZ-DETAIL-CELL)
+- 40px left margin for qubit labels in detail mode (VIZ-DETAIL-MARGIN)
+- Measurement uses 2x2-block checkerboard at detail scale, not M text (VIZ-MEAS-CHECKER-DETAIL)
 
 ### Blockers/Concerns
 
@@ -71,9 +74,9 @@ Recent decisions for v1.9:
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Completed 46-03-PLAN.md (Scale Testing & Integration) -- Phase 46 complete
+Stopped at: Completed 47-01-PLAN.md (Detail Mode Renderer)
 Resume file: None
-Resume action: Execute Phase 47 plans
+Resume action: Execute 47-02 (Public API)
 
 ---
-*State updated: 2026-02-03 -- Completed 46-03 Scale Testing & Integration (Phase 46 complete)*
+*State updated: 2026-02-03 -- Completed 47-01 Detail Mode Renderer*
