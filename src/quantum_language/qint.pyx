@@ -1060,6 +1060,15 @@ cdef class qint(circuit):
 		result.add_dependency(self)
 		return result
 
+	def __ilshift__(self, int other):
+		"""In-place left shift: self <<= other"""
+		result = self << other
+		cdef qint result_qint = <qint>result
+		self.qubits, result_qint.qubits = result_qint.qubits, self.qubits
+		self.allocated_start, result_qint.allocated_start = result_qint.allocated_start, self.allocated_start
+		self.bits = result_qint.bits
+		return self
+
 	def __rshift__(self, int other):
 		"""Right shift: self >> other (other must be classical int).
 
@@ -1103,6 +1112,15 @@ cdef class qint(circuit):
 		result.operation_type = 'RSHIFT'
 		result.add_dependency(self)
 		return result
+
+	def __irshift__(self, int other):
+		"""In-place right shift: self >>= other"""
+		result = self >> other
+		cdef qint result_qint = <qint>result
+		self.qubits, result_qint.qubits = result_qint.qubits, self.qubits
+		self.allocated_start, result_qint.allocated_start = result_qint.allocated_start, self.allocated_start
+		self.bits = result_qint.bits
+		return self
 
 
 	cdef multiplication_inplace(self, other, qint ret):
@@ -2532,6 +2550,15 @@ cdef class qint(circuit):
 			return result
 		else:
 			raise TypeError("Divisor must be int or qint")
+
+	def __ifloordiv__(self, other):
+		"""In-place floor division: self //= other"""
+		result = self // other
+		cdef qint result_qint = <qint>result
+		self.qubits, result_qint.qubits = result_qint.qubits, self.qubits
+		self.allocated_start, result_qint.allocated_start = result_qint.allocated_start, self.allocated_start
+		self.bits = result_qint.bits
+		return self
 
 	def _floordiv_quantum(self, divisor: qint):
 		"""Floor division with quantum divisor: self // divisor"""
