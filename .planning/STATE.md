@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-02)
+See: .planning/PROJECT.md (updated 2026-02-03)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v1.8 milestone complete — all phases verified
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 44 of 44 (Array Mutability — COMPLETE)
-Plan: 2 of 2 in current phase
-Status: Phase complete, verified ✓ — Milestone v1.8 complete
-Last activity: 2026-02-03 - Phase 44 verified (5/5 must-haves passed)
+Phase: 44 of 44 (last phase of v1.8)
+Plan: N/A — milestone complete
+Status: v1.8 shipped, ready for next milestone
+Last activity: 2026-02-03 — v1.8 milestone complete
 
-Progress: [########################################] 100% (4/4 phases in v1.8)
+Progress: [########################################] 100% (v1.8: 4/4 phases, 7/7 plans)
 
 ## Performance Metrics
 
@@ -43,42 +43,25 @@ Progress: [########################################] 100% (4/4 phases in v1.8)
 
 See PROJECT.md Key Decisions table for full history.
 
-**Phase 41 decisions:**
-- D41-01-1: Keep inline implementations in qint.pyx (Cython 3.0.11 disallows include inside cdef class)
-- D41-01-2: Use strict < for LAZY scope comparison (prevents scope-0 auto-uncompute)
-- D41-01-3: **REVISED by 41-02** -- Layer tracking IS now set on lt/gt results (no double-reversal risk since widened temps have no layer tracking)
-- D41-02-1: Revise D41-01-3: layer tracking set on lt/gt results
-- D41-02-2: Keep 4 pre-existing failures as-is (root cause is architectural: layer counter vs instruction counter)
-
-**Phase 42 decisions:**
-- D42-01-1: Place copy methods after __invert__ in qint.pyx (grouped with bitwise ops)
-- D42-01-2: copy_onto does not set layer tracking or dependencies on target (raw CNOT op)
-- D42-01-3: qbool.copy() uses cdef cast to access qubits from qint.copy() result
-
-**Phase 43 decisions:**
-- D43-01-1: Mark mixed-width add/sub tests as xfail (pre-existing QFT off-by-one bug, not caused by copy changes)
-- D43-02-1: Mark rshift shift>0 tests as xfail (pre-existing BUG-DIV-02: floordiv incorrect results)
-- D43-02-2: Add shift=0 short-circuit in lshift/rshift to avoid unnecessary mul/div circuits
-
 ### Blockers/Concerns
 
-**Deferred from v1.7 (carry forward to future milestone):**
+**Carry forward to future milestone:**
 - BUG-DIV-02: MSB comparison leak in division
 - BUG-MOD-REDUCE: _reduce_mod result corruption (needs different circuit structure)
 - BUG-COND-MUL-01: Controlled multiplication corruption (not yet investigated)
+- BUG-WIDTH-ADD: Mixed-width QFT addition off-by-one (discovered in v1.8)
 
 **Known limitations (not bugs):**
-- Dirty ancilla in gt/le comparisons (by design, 2 xfail preserved)
-- 4 pre-existing uncomputation test failures (lt/ge ancilla, compound and/or OOM) -- root cause: circuit optimizer parallelizes gates into shared layers, making used_layer unreliable for gate boundary tracking
+- Dirty ancilla in gt/le comparisons (by design)
+- 4 pre-existing uncomputation test failures (architectural: layer counter vs instruction counter)
 - Future improvement: replace layer-based tracking with instruction-counter-based tracking
-- BUG-WIDTH-ADD: Mixed-width QFT addition/subtraction off-by-one (discovered in Phase 43, pre-existing)
 
 ## Session Continuity
 
 Last session: 2026-02-03
-Stopped at: Phase 44 complete and verified. v1.8 milestone complete.
+Stopped at: v1.8 milestone archived and shipped
 Resume file: None
-Resume action: Audit milestone v1.8 (/gsd:audit-milestone)
+Resume action: Start next milestone (/gsd:new-milestone)
 
 ---
-*State updated: 2026-02-03 -- Phase 44 verified ✓ (5/5 must-haves, AMUT-01/AMUT-02/AMUT-03 complete). Milestone v1.8 complete.*
+*State updated: 2026-02-03 -- v1.8 milestone complete and archived*

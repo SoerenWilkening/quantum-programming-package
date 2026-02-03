@@ -1,5 +1,33 @@
 # Project Milestones: Quantum Assembly
 
+## v1.8 Quantum Copy, Array Mutability & Uncomputation Fix (Shipped: 2026-02-03)
+
+**Delivered:** Fixed uncomputation regression, implemented CNOT-based quantum state copying for qint/qarray binary operations, and enabled in-place element mutation on qarrays via all augmented assignment operators.
+
+**Phases completed:** 41-44 (7 plans total)
+
+**Key accomplishments:**
+
+- Fixed uncomputation regression by adding layer tracking to all qint operations
+- Implemented CNOT-based quantum state copy (qint.copy()/copy_onto()) verified by 70 Qiskit tests
+- Replaced classical value reinitialization with quantum copy in all binary operations
+- Added 10 missing qint operations (neg, rsub, lshift, rshift, ilshift, irshift, ifloordiv + copy/copy_onto)
+- Added 9 missing qarray operations (floordiv, mod, invert, neg, lshift, rshift, ilshift, irshift, ifloordiv)
+- Enabled in-place qarray element mutation via __setitem__ and all 9 augmented assignment operators
+
+**Stats:**
+
+- 37 files created/modified (+5,488 / -2,131 lines)
+- ~219,921 total LOC (Python, Cython, C)
+- 4 phases, 7 plans, ~15 tasks
+- 2 days (2026-02-02 → 2026-02-03)
+
+**Git range:** `feat(41-01) 3551193` → `docs(44) 83914dd`
+
+**What's next:** TBD — next milestone planning via `/gsd:new-milestone`
+
+---
+
 ## v1.7 Bug Fixes & Array Optimization (Shipped: 2026-02-02)
 
 **Delivered:** Fixed division overflow bug (BUG-DIV-01) and eliminated temporary qint allocations in qarray classical element-wise operations, with two bug fixes (modular reduction, controlled multiplication) deferred due to scaling issues.

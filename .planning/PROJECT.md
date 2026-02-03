@@ -71,20 +71,22 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - ✓ Array element-wise arithmetic with classical values uses CQ_* directly (no temp qint) — v1.7
 - ✓ Array element-wise bitwise ops with classical values uses CQ_* directly (no temp qint) — v1.7
 
+- ✓ Fix automatic uncomputation regression (layer tracking on all operations) — v1.8
+- ✓ CNOT-based quantum state copy for qint (copy()/copy_onto()) — v1.8
+- ✓ Binary operations use quantum copy instead of classical value reinitialization — v1.8
+- ✓ qarray binary ops produce quantum-copied elements — v1.8
+- ✓ In-place qarray element mutation via augmented assignment (all 9 operators) — v1.8
+- ✓ Multi-dimensional qarray indexing for in-place ops — v1.8
+- ✓ New qint operations: neg, rsub, lshift, rshift, ilshift, irshift, ifloordiv — v1.8
+- ✓ New qarray operations: floordiv, mod, invert, neg, lshift, rshift, ilshift, irshift, ifloordiv — v1.8
+
 ### Active
 
-#### Current Milestone: v1.8 Quantum Copy, Array Mutability & Uncomputation Fix
-
-**Goal:** Enable proper quantum state copying for qint/qarray operations, allow in-place element modification on qarrays, and fix uncomputation regression.
-
-- [ ] CNOT-based quantum copy for qint (allocate new qubits, CNOT each bit from source)
-- [ ] qarray binary ops (`qarray + int`, etc.) use quantum copy instead of classical-value initialization
-- [ ] In-place element assignment on qarray (`qarray[i] += x` modifies existing qubits directly)
-- [ ] Fix automatic uncomputation regression (expressions not uncomputing properly)
-
-**Deferred from v1.7:**
+**Deferred from v1.7/v1.8 (carry forward to next milestone):**
 - Fix _reduce_mod result corruption (BUG-MOD-REDUCE) — needs fundamentally different circuit structure
 - Fix controlled multiplication corruption (BUG-COND-MUL-01) — not yet investigated
+- Fix MSB comparison leak in division (BUG-DIV-02) — 9 cases per div/mod test file
+- Fix mixed-width QFT addition off-by-one (BUG-WIDTH-ADD) — discovered in Phase 43
 
 ### Out of Scope
 
@@ -100,10 +102,10 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 **Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) -> Cython bindings -> Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
 
-**Current state:** v1.8 in progress. Division overflow bug fixed (BUG-DIV-01). Array element-wise operations with classical values optimized to use CQ_* directly (no temporary qint allocation). Exhaustive verification suite with 8,365+ tests covering every operation category through the full pipeline (Python -> C circuit -> OpenQASM 3.0 -> Qiskit simulate -> result check). 1529 comparison tests pass cleanly. Remaining xfail tests document 2 deferred bugs (BUG-MOD-REDUCE, BUG-COND-MUL-01) plus BUG-DIV-02 (MSB comparison leak, 9 cases per div/mod test file). Clean modular C backend with types.h, circuit.h, arithmetic_ops.h, comparison_ops.h, bitwise_ops.h, circuit_output.h. Centralized qubit allocator with ownership tracking. Variable-width quantum integers (1-64 bits) with complete arithmetic, comparison, and initialization operations. Automatic uncomputation with dependency tracking, mode control (lazy/eager), and user override methods. Proper package structure with ql.array supporting multi-dimensional arrays, reductions, and element-wise operations optimized for classical operands. Memory-safe Python-to-C bridge with Cython try-finally cleanup.
+**Current state:** v1.8 shipped. Uncomputation regression fixed via layer tracking on all operations. CNOT-based quantum state copy implemented (qint.copy()/copy_onto()). All binary operations now use quantum copy instead of classical value reinitialization, preserving superposition and entanglement. qarray elements support in-place mutation via all 9 augmented assignment operators. 10 new qint operations and 9 new qarray operations added. 659 new tests with zero regressions. Exhaustive verification suite with 8,365+ tests covering every operation category through the full pipeline (Python -> C circuit -> OpenQASM 3.0 -> Qiskit simulate -> result check). Clean modular C backend with types.h, circuit.h, arithmetic_ops.h, comparison_ops.h, bitwise_ops.h, circuit_output.h. Centralized qubit allocator with ownership tracking. Variable-width quantum integers (1-64 bits) with complete arithmetic, comparison, and initialization operations. Automatic uncomputation with dependency tracking, mode control (lazy/eager), and user override methods. Proper package structure with ql.array supporting multi-dimensional arrays, reductions, element-wise operations, and in-place element mutation. Memory-safe Python-to-C bridge with Cython try-finally cleanup.
 
 **Codebase:**
-- ~257,678 lines of code (Python, Cython, C)
+- ~219,921 lines of code (Python, Cython, C)
 - Version 0.1.0
 - Tech stack: Python 3.11+, Cython, C backend, Qiskit (optional verification)
 
@@ -125,6 +127,8 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - Controlled multiplication corrupts result register (BUG-COND-MUL-01) — not yet investigated
 - MSB comparison leak in division (BUG-DIV-02) — 9 cases per div/mod test file
 - Dirty ancilla from widened comparisons (gt/le) — known limitation, not a correctness bug
+- Mixed-width QFT addition off-by-one (BUG-WIDTH-ADD) — discovered in v1.8
+- Layer-based uncomputation tracking unreliable when optimizer parallelizes gates — future: use instruction counter
 
 ## Constraints
 
@@ -169,6 +173,12 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | matrix_product_state simulator for division tests | Statevector needs 137GB+ for 33+ qubit circuits | ✓ Good — handles 44+ qubits |
 | Remove qint wrapping in qarray _inplace_binary_op | All 6 qint in-place operators handle int natively via CQ_* | ✓ Good — eliminates temp allocations |
 | Defer BUG-MOD-REDUCE (scaling issues) | Beauregard approach hits duplicate qubit and memory issues | — Pending — needs different approach |
+| Layer tracking on all qint operations | Required for correct scope-based uncomputation | ✓ Good — fixes uncomputation regression |
+| Strict < for LAZY scope comparison | Prevents scope-0 top-level qints from auto-uncomputing | ✓ Good — fixes 975+ test failures |
+| CNOT-based quantum copy via Q_xor | Faithful quantum state duplication preserving superposition | ✓ Good — 70 tests pass |
+| XOR-into-zero copy pattern for binary ops | Replaces classical value init in add/sub/radd | ✓ Good — preserves quantum state |
+| Shift=0 short-circuit in lshift/rshift | Avoids unnecessary mul/div circuits | ✓ Good — prevents memory explosion |
+| qarray __setitem__ enables element mutation | Replaces TypeError with working assignment | ✓ Good — all 9 augmented operators work |
 
 ---
-*Last updated: 2026-02-02 after v1.8 milestone start*
+*Last updated: 2026-02-03 after v1.8 milestone*
