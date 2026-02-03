@@ -72,8 +72,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 47-01: Detail mode rendering with gate labels
-- [ ] 47-02: Auto-zoom selection and public API (ql.draw_circuit)
+- [ ] 47-01-PLAN.md -- Detail mode rendering with gate labels (render_detail function + tests)
+- [ ] 47-02-PLAN.md -- Auto-zoom selection and public API (ql.draw_circuit, lazy Pillow import)
 
 ## Progress
 
