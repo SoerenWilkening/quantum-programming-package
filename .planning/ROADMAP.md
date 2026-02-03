@@ -76,11 +76,11 @@ Plans:
   3. Multi-dimensional indexing supports in-place ops (`qarray[i, j] += x`)
   4. Reading the element after in-place modification reflects the updated value
   5. The qarray's structure (length, element bit widths) is unchanged after in-place modification
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 44-01: Implement qarray __setitem__ for augmented assignment
-- [ ] 44-02: Multi-dimensional in-place operations
+- [ ] 44-01-PLAN.md — Add missing qint in-place ops + qarray __setitem__ + qarray in-place wrappers
+- [ ] 44-02-PLAN.md — Comprehensive mutability tests (all operators, multi-dim, operand types)
 
 ## Progress
 
@@ -92,7 +92,7 @@ Phases execute in numeric order: 41 -> 42 -> 43 -> 44
 | 41. Uncomputation Fix | 2/2 | ✓ Complete | 2026-02-02 |
 | 42. Quantum Copy Foundation | 1/1 | ✓ Complete | 2026-02-02 |
 | 43. Copy-Aware Binary Ops | 2/2 | ✓ Complete | 2026-02-02 |
-| 44. Array Mutability | 0/TBD | Not started | - |
+| 44. Array Mutability | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-02*
