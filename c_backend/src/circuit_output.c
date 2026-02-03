@@ -583,6 +583,136 @@ char *circuit_to_qasm_string(circuit_t *circ) {
     return buffer;
 }
 
+// ======================================================
+// Draw Data Extraction (Phase 45)
+// ======================================================
+
+draw_data_t *circuit_to_draw_data(circuit_t *circ) {
+    if (circ == NULL) {
+        return NULL;
+    }
+
+    draw_data_t *data = calloc(1, sizeof(draw_data_t));
+    if (data == NULL) {
+        return NULL;
+    }
+
+    // Build qubit compaction: sparse -> dense mapping
+    // used_qubits is the max qubit INDEX, iterate 0..used_qubits inclusive
+    unsigned int max_qubit_idx = circ->used_qubits;
+    unsigned int *remap = calloc(max_qubit_idx + 1, sizeof(unsigned int));
+    if (remap == NULL && max_qubit_idx > 0) {
+        free(data);
+        return NULL;
+    }
+
+    // First pass: count used qubits and build remap
+    unsigned int dense_count = 0;
+    for (unsigned int q = 0; q <= max_qubit_idx; q++) {
+        if (circ->used_occupation_indices_per_qubit[q] != 0) {
+            remap[q] = dense_count;
+            dense_count++;
+        }
+    }
+
+    data->num_qubits = dense_count;
+    data->num_layers = circ->used_layer;
+
+    // Build reverse map: qubit_map[dense] = sparse
+    if (dense_count > 0) {
+        data->qubit_map = malloc(dense_count * sizeof(unsigned int));
+        if (data->qubit_map == NULL) {
+            free(remap);
+            free(data);
+            return NULL;
+        }
+        unsigned int di = 0;
+        for (unsigned int q = 0; q <= max_qubit_idx; q++) {
+            if (circ->used_occupation_indices_per_qubit[q] != 0) {
+                data->qubit_map[di++] = q;
+            }
+        }
+    }
+
+    // Handle empty circuit (no gates)
+    if (circ->used == 0) {
+        data->num_gates = 0;
+        free(remap);
+        return data;
+    }
+
+    // Count total gates and total controls in one pass
+    unsigned int total_gates = 0;
+    unsigned int total_controls = 0;
+    for (unsigned int layer = 0; layer < circ->used_layer; layer++) {
+        for (unsigned int gi = 0; gi < circ->used_gates_per_layer[layer]; gi++) {
+            gate_t *g = &circ->sequence[layer][gi];
+            total_gates++;
+            total_controls += g->NumControls;
+        }
+    }
+
+    data->num_gates = total_gates;
+
+    // Allocate parallel arrays
+    data->gate_layer = malloc(total_gates * sizeof(unsigned int));
+    data->gate_target = malloc(total_gates * sizeof(unsigned int));
+    data->gate_type = malloc(total_gates * sizeof(unsigned int));
+    data->gate_angle = malloc(total_gates * sizeof(double));
+    data->gate_num_ctrl = malloc(total_gates * sizeof(unsigned int));
+    data->ctrl_offsets = malloc(total_gates * sizeof(unsigned int));
+    data->ctrl_qubits = (total_controls > 0) ? malloc(total_controls * sizeof(unsigned int)) : NULL;
+
+    // Check allocations
+    if (data->gate_layer == NULL || data->gate_target == NULL || data->gate_type == NULL ||
+        data->gate_angle == NULL || data->gate_num_ctrl == NULL || data->ctrl_offsets == NULL ||
+        (total_controls > 0 && data->ctrl_qubits == NULL)) {
+        free(remap);
+        free_draw_data(data);
+        return NULL;
+    }
+
+    // Fill arrays
+    unsigned int gate_idx = 0;
+    unsigned int ctrl_idx = 0;
+    for (unsigned int layer = 0; layer < circ->used_layer; layer++) {
+        for (unsigned int gi = 0; gi < circ->used_gates_per_layer[layer]; gi++) {
+            gate_t *g = &circ->sequence[layer][gi];
+
+            data->gate_layer[gate_idx] = layer;
+            data->gate_target[gate_idx] = remap[g->Target];
+            data->gate_type[gate_idx] = (unsigned int)g->Gate;
+            data->gate_angle[gate_idx] = g->GateValue;
+            data->gate_num_ctrl[gate_idx] = g->NumControls;
+            data->ctrl_offsets[gate_idx] = ctrl_idx;
+
+            for (unsigned int c = 0; c < g->NumControls; c++) {
+                data->ctrl_qubits[ctrl_idx++] = remap[_get_control_qubit(g, c)];
+            }
+
+            gate_idx++;
+        }
+    }
+
+    free(remap);
+    return data;
+}
+
+void free_draw_data(draw_data_t *data) {
+    if (data == NULL) {
+        return;
+    }
+    free(data->gate_layer);
+    free(data->gate_target);
+    free(data->gate_type);
+    free(data->gate_angle);
+    free(data->gate_num_ctrl);
+    free(data->ctrl_qubits);
+    free(data->ctrl_offsets);
+    free(data->qubit_map);
+    free(data);
+}
+
 // Export circuit to OpenQASM 3.0 file (fixed version)
 int circuit_to_openqasm(circuit_t *circ, const char *path) {
     if (circ == NULL || path == NULL) {

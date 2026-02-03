@@ -43,4 +43,31 @@ char *circuit_to_qasm_string(circuit_t *circ);
 // Returns 0 on success, -1 on error
 int circuit_to_openqasm(circuit_t *circ, const char *path);
 
+// ======================================================
+// Draw Data Extraction (Phase 45)
+// ======================================================
+
+// Structured gate data for rendering (parallel arrays)
+typedef struct {
+    unsigned int num_layers;
+    unsigned int num_qubits; // Dense count after compaction
+    unsigned int num_gates;
+    unsigned int *gate_layer;    // Layer index per gate
+    unsigned int *gate_target;   // Target qubit (compacted index)
+    unsigned int *gate_type;     // Standardgate_t as unsigned int
+    double *gate_angle;          // GateValue (P, Rx, Ry, Rz)
+    unsigned int *gate_num_ctrl; // Control count per gate
+    unsigned int *ctrl_qubits;   // All control qubits concatenated (compacted)
+    unsigned int *ctrl_offsets;  // Offset into ctrl_qubits for each gate
+    unsigned int *qubit_map;     // qubit_map[dense] = original sparse index
+} draw_data_t;
+
+// Extract structured gate data from circuit for rendering
+// Returns heap-allocated draw_data_t, caller must call free_draw_data()
+// Returns NULL if circ is NULL or on allocation failure
+draw_data_t *circuit_to_draw_data(circuit_t *circ);
+
+// Free draw_data_t and all its arrays (safe with NULL)
+void free_draw_data(draw_data_t *data);
+
 #endif // QUANTUM_CIRCUIT_OUTPUT_H
