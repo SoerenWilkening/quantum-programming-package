@@ -14,7 +14,11 @@ Plus Phase 49 optimization criteria:
   OPT4: Stats properties report correct values
 """
 
+import io
+import sys
 import warnings
+
+import pytest
 
 import quantum_language as ql
 from quantum_language._core import extract_gate_range, get_current_layer
@@ -22,10 +26,19 @@ from quantum_language.compile import (
     _H,
     _M,
     _P,
+    _R,
     _X,
+    _Y,
+    _Z,
     CompiledFunc,
+    _adjoint_gate,
     _gates_cancel,
+    _inverse_gate_list,
+    _InverseCompiledFunc,
     _optimize_gate_list,
+    _Rx,
+    _Ry,
+    _Rz,
 )
 
 # Suppress cosmetic width warnings
@@ -1332,3 +1345,249 @@ def test_compile_controlled_first_call_inside_with():
                 f"Replayed controlled gate should use ctrl2's qubit {ctrl2_qubit}, "
                 f"got controls={gate['controls']}"
             )
+
+
+# ---------------------------------------------------------------------------
+# INV: Inverse generation tests (Phase 51)
+# ---------------------------------------------------------------------------
+
+
+def test_inverse_reverses_gate_order():
+    """INV-01: _inverse_gate_list reverses gate order and adjoints each gate."""
+    gates = [
+        _gate(_X, 0),
+        _gate(_H, 1),
+        _gate(_P, 0, angle=0.5),
+    ]
+    inverted = _inverse_gate_list(gates)
+    assert len(inverted) == 3
+
+    # First gate should be adjoint of last original: P with angle=-0.5 on target 0
+    assert inverted[0]["type"] == _P
+    assert inverted[0]["target"] == 0
+    assert abs(inverted[0]["angle"] - (-0.5)) < 1e-12
+
+    # Second gate: H on target 1 (self-adjoint, unchanged)
+    assert inverted[1]["type"] == _H
+    assert inverted[1]["target"] == 1
+
+    # Third gate: X on target 0 (self-adjoint, unchanged)
+    assert inverted[2]["type"] == _X
+    assert inverted[2]["target"] == 0
+
+
+def test_inverse_negates_rotation_angles():
+    """INV-02: Rotation gates have their angles negated by _adjoint_gate."""
+    for gate_type in (_P, _Rx, _Ry, _Rz, _R):
+        g = _gate(gate_type, 0, angle=1.23)
+        adj = _adjoint_gate(g)
+        assert abs(adj["angle"] - (-1.23)) < 1e-12, (
+            f"Gate type {gate_type}: expected angle -1.23, got {adj['angle']}"
+        )
+        assert adj["type"] == gate_type
+
+
+def test_inverse_self_adjoint_unchanged():
+    """INV-03: Self-adjoint gates (X, Y, Z, H) are unchanged by _adjoint_gate."""
+    for gate_type in (_X, _Y, _Z, _H):
+        g = _gate(gate_type, 0)
+        adj = _adjoint_gate(g)
+        assert adj["type"] == gate_type
+        assert abs(adj["angle"]) < 1e-12
+
+
+def test_inverse_measurement_raises():
+    """INV-04: _adjoint_gate raises ValueError for measurement gates."""
+    g = _gate(_M, 0)
+    with pytest.raises(ValueError, match="(?i)measurement"):
+        _adjoint_gate(g)
+
+
+def test_inverse_empty_function():
+    """INV-05: Inverse of a no-op compiled function works correctly."""
+    ql.circuit()
+
+    @ql.compile
+    def noop(x):
+        return x
+
+    a = ql.qint(0, width=4)
+    noop(a)
+
+    inv = noop.inverse()
+    assert isinstance(inv, _InverseCompiledFunc)
+
+    b = ql.qint(0, width=4)
+    result = inv(b)
+    assert result is b  # In-place return
+
+
+def test_inverse_round_trip():
+    """INV-06: fn.inverse().inverse() is the original fn (identity round-trip)."""
+    ql.circuit()
+
+    @ql.compile
+    def add_one(x):
+        x += 1
+        return x
+
+    a = ql.qint(3, width=4)
+    add_one(a)
+
+    inv = add_one.inverse()
+    assert isinstance(inv, _InverseCompiledFunc)
+    assert inv.inverse() is add_one
+
+
+def test_inverse_replays_adjoint_gates():
+    """INV-07: Inverse callable replays adjoint gates with correct count."""
+    ql.circuit()
+
+    @ql.compile
+    def add_one(x):
+        x += 1
+        return x
+
+    # Capture
+    a = ql.qint(3, width=4)
+    start_cap = get_current_layer()
+    add_one(a)
+    end_cap = get_current_layer()
+    _capture_gates = extract_gate_range(start_cap, end_cap)  # noqa: F841
+
+    inv = add_one.inverse()
+
+    # Call inverse
+    b = ql.qint(5, width=4)
+    start_inv = get_current_layer()
+    inv(b)
+    end_inv = get_current_layer()
+    inv_gates = extract_gate_range(start_inv, end_inv)
+
+    assert len(inv_gates) > 0, "Inverse should produce gates"
+    # Inverse replays from cached (possibly optimized) block, so compare
+    # against the cached uncontrolled block gate count
+    unctrl_key = ((), (4,), 0)
+    cached_count = len(add_one._cache[unctrl_key].gates)
+    assert len(inv_gates) == cached_count, (
+        f"Inverse gate count {len(inv_gates)} should match cached count {cached_count}"
+    )
+
+
+def test_inverse_preserves_controls():
+    """INV-08: _adjoint_gate preserves control qubits."""
+    g = _gate(_P, 0, angle=0.5, controls=[1, 2])
+    adj = _adjoint_gate(g)
+    assert adj["controls"] == [1, 2]
+    assert adj["num_controls"] == 2
+    assert abs(adj["angle"] - (-0.5)) < 1e-12
+
+
+# ---------------------------------------------------------------------------
+# DBG: Debug mode tests (Phase 51)
+# ---------------------------------------------------------------------------
+
+
+def test_debug_prints_to_stderr():
+    """DBG-01: debug=True prints to stderr on function call."""
+    ql.circuit()
+
+    @ql.compile(debug=True)
+    def add_one(x):
+        x += 1
+        return x
+
+    a = ql.qint(3, width=4)
+    old_stderr = sys.stderr
+    sys.stderr = captured = io.StringIO()
+    try:
+        add_one(a)
+    finally:
+        sys.stderr = old_stderr
+
+    output = captured.getvalue()
+    assert "add_one" in output, f"Should contain function name, got: {output}"
+    assert "MISS" in output, f"First call should report MISS, got: {output}"
+
+
+def test_debug_reports_cache_hit():
+    """DBG-02: debug=True reports HIT on second call with same args."""
+    ql.circuit()
+
+    @ql.compile(debug=True)
+    def add_one(x):
+        x += 1
+        return x
+
+    a = ql.qint(3, width=4)
+    add_one(a)  # First call (MISS)
+
+    b = ql.qint(5, width=4)
+    old_stderr = sys.stderr
+    sys.stderr = captured = io.StringIO()
+    try:
+        add_one(b)  # Second call (HIT)
+    finally:
+        sys.stderr = old_stderr
+
+    output = captured.getvalue()
+    assert "HIT" in output, f"Second call should report HIT, got: {output}"
+
+
+def test_debug_stats_populated():
+    """DBG-03: .stats is populated after debug=True call."""
+    ql.circuit()
+
+    @ql.compile(debug=True)
+    def add_one(x):
+        x += 1
+        return x
+
+    a = ql.qint(3, width=4)
+    add_one(a)
+
+    assert add_one.stats is not None
+    assert isinstance(add_one.stats, dict)
+    assert add_one.stats["cache_hit"] is False
+    assert add_one.stats["original_gate_count"] > 0
+    assert add_one.stats["optimized_gate_count"] >= 0
+    assert add_one.stats["cache_size"] >= 1
+
+
+def test_debug_stats_none_when_disabled():
+    """DBG-04: .stats is None when debug=False (default)."""
+    ql.circuit()
+
+    @ql.compile
+    def add_one(x):
+        x += 1
+        return x
+
+    a = ql.qint(3, width=4)
+    add_one(a)
+    assert add_one.stats is None
+
+
+def test_debug_stats_tracks_totals():
+    """DBG-05: .stats tracks cumulative total_hits and total_misses."""
+    ql.circuit()
+
+    @ql.compile(debug=True)
+    def add_one(x):
+        x += 1
+        return x
+
+    # First call width=4 (miss)
+    a = ql.qint(3, width=4)
+    add_one(a)
+
+    # Second call width=4 (hit)
+    b = ql.qint(5, width=4)
+    add_one(b)
+
+    # Third call width=8 (miss)
+    c = ql.qint(5, width=8)
+    add_one(c)
+
+    assert add_one.stats["total_hits"] == 1
+    assert add_one.stats["total_misses"] == 2
