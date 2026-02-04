@@ -826,6 +826,25 @@ def _allocate_qubit():
 	return <int>qubit_idx
 
 
+def _deallocate_qubits(unsigned int start, unsigned int count):
+	"""Deallocate qubits, returning them to the allocator pool.
+
+	Parameters
+	----------
+	start : int
+		Starting qubit index.
+	count : int
+		Number of contiguous qubits to free.
+	"""
+	cdef qubit_allocator_t *alloc
+	if not _circuit_initialized:
+		raise RuntimeError("Circuit not initialized")
+	alloc = circuit_get_allocator(<circuit_s*>_circuit)
+	if alloc == NULL:
+		raise RuntimeError("No allocator available")
+	allocator_free(alloc, start, count)
+
+
 # Module-level compile cache clear infrastructure
 _compile_cache_clear_hooks = []
 

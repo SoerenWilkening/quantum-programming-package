@@ -286,6 +286,21 @@ class CompiledBlock:
 
 
 # ---------------------------------------------------------------------------
+# Ancilla tracking record
+# ---------------------------------------------------------------------------
+class AncillaRecord:
+    """Record of a single forward call's ancilla allocations."""
+
+    __slots__ = ("ancilla_qubits", "virtual_to_real", "block", "return_qint")
+
+    def __init__(self, ancilla_qubits, virtual_to_real, block, return_qint):
+        self.ancilla_qubits = ancilla_qubits
+        self.virtual_to_real = virtual_to_real
+        self.block = block
+        self.return_qint = return_qint
+
+
+# ---------------------------------------------------------------------------
 # Virtual qubit mapping helpers
 # ---------------------------------------------------------------------------
 def _build_virtual_mapping(gates, param_qubit_indices):
@@ -342,6 +357,14 @@ def _remap_gates(gates, mapping):
 def _get_qint_qubit_indices(q):
     """Extract real qubit indices from a qint, ordered LSB to MSB."""
     return [int(q.qubits[64 - q.width + i]) for i in range(q.width)]
+
+
+def _input_qubit_key(quantum_args):
+    """Build a hashable key from physical qubits of all quantum arguments."""
+    key_parts = []
+    for qa in quantum_args:
+        key_parts.extend(_get_qint_qubit_indices(qa))
+    return tuple(key_parts)
 
 
 # ---------------------------------------------------------------------------
@@ -415,6 +438,9 @@ class CompiledFunc:
         self._inverse_eager = inverse
         self._inverse_func = None
         self._debug = debug
+        self._forward_calls = {}
+        self._inverse_proxy = None
+        self._adjoint_func = None
         self._stats = None
         self._total_hits = 0
         self._total_misses = 0
@@ -771,6 +797,7 @@ class CompiledFunc:
     def clear_cache(self):
         """Clear this function's compilation cache."""
         self._cache.clear()
+        self._forward_calls.clear()
         if self._inverse_func is not None:
             self._inverse_func.clear_cache()
 
