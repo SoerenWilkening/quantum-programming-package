@@ -260,6 +260,8 @@ class CompiledBlock:
         "original_gate_count",
         "control_virtual_idx",
         "_first_call_result",
+        "_capture_ancilla_qubits",
+        "_capture_virtual_to_real",
     )
 
     def __init__(
@@ -283,6 +285,8 @@ class CompiledBlock:
         )
         self.control_virtual_idx = None
         self._first_call_result = None
+        self._capture_ancilla_qubits = None
+        self._capture_virtual_to_real = None
 
 
 # ---------------------------------------------------------------------------
@@ -614,6 +618,15 @@ class CompiledFunc:
             except Exception:
                 pass  # Fall back to unoptimised on any error
 
+        # Identify ancilla physical qubits (those not in param sets)
+        param_real_set = set()
+        for qubit_list in param_qubit_indices:
+            param_real_set.update(qubit_list)
+        capture_ancilla_qubits = [r for r in real_to_virtual if r not in param_real_set]
+
+        # Build virtual-to-real mapping for capture (inverse of real_to_virtual)
+        capture_vtr = {v: r for r, v in real_to_virtual.items()}
+
         block = CompiledBlock(
             gates=virtual_gates,
             total_virtual_qubits=total_virtual,
@@ -624,6 +637,8 @@ class CompiledFunc:
             original_gate_count=original_count,
         )
         block._first_call_result = result
+        block._capture_ancilla_qubits = capture_ancilla_qubits
+        block._capture_virtual_to_real = capture_vtr
         return block
 
     def _capture_and_cache_both(
@@ -685,7 +700,21 @@ class CompiledFunc:
         while len(self._cache) > self._max_cache:
             self._cache.popitem(last=False)
 
-        return block._first_call_result
+        # Record forward call for inverse support (first call / capture path)
+        result = block._first_call_result
+        capture_ancillas = block._capture_ancilla_qubits or []
+        if capture_ancillas:
+            input_key = _input_qubit_key(quantum_args)
+            self._forward_calls[input_key] = AncillaRecord(
+                ancilla_qubits=capture_ancillas,
+                virtual_to_real=block._capture_virtual_to_real or {},
+                block=block,
+                return_qint=result
+                if (block.return_qubit_range is not None and block.return_is_param_index is None)
+                else None,
+            )
+
+        return result
 
     def _derive_controlled_block(self, uncontrolled_block):
         """Create a controlled ``CompiledBlock`` from an uncontrolled one.
@@ -713,7 +742,7 @@ class CompiledFunc:
         controlled_block.control_virtual_idx = control_virt_idx
         return controlled_block
 
-    def _replay(self, block, quantum_args):
+    def _replay(self, block, quantum_args, track_forward=True):
         """Replay cached gates with qubit remapping."""
         # Build virtual-to-real mapping from caller's qints
         virtual_to_real = {}
@@ -726,13 +755,16 @@ class CompiledFunc:
 
         # Allocate fresh ancillas for internal qubits, with control
         # qubit remapping for controlled variants
+        ancilla_qubits = []
         for v in range(vidx, block.total_virtual_qubits):
             if block.control_virtual_idx is not None and v == block.control_virtual_idx:
                 # Map control placeholder to actual control qubit
                 control_bool = _get_control_bool()
                 virtual_to_real[v] = int(control_bool.qubits[63])
             else:
-                virtual_to_real[v] = _allocate_qubit()
+                real_q = _allocate_qubit()
+                virtual_to_real[v] = real_q
+                ancilla_qubits.append(real_q)
 
         # Save layer_floor, set to current layer to prevent gate reordering
         saved_floor = _get_layer_floor()
@@ -747,13 +779,32 @@ class CompiledFunc:
         _set_layer_floor(saved_floor)
 
         # Build return value
+        result = None
         if block.return_qubit_range is not None:
             if block.return_is_param_index is not None:
                 # Return value IS one of the input params -- return caller's qint
-                return quantum_args[block.return_is_param_index]
+                result = quantum_args[block.return_is_param_index]
             else:
-                return _build_return_qint(block, virtual_to_real, start_layer, end_layer)
-        return None
+                result = _build_return_qint(block, virtual_to_real, start_layer, end_layer)
+
+        # Record forward call for inverse support (only when ancillas were allocated)
+        if track_forward and ancilla_qubits:
+            input_key = _input_qubit_key(quantum_args)
+            if input_key in self._forward_calls:
+                raise ValueError(
+                    f"Compiled function '{self._func.__name__}' already has an uninverted "
+                    f"forward call with these input qubits. Call {self._func.__name__}.inverse() first."
+                )
+            self._forward_calls[input_key] = AncillaRecord(
+                ancilla_qubits=ancilla_qubits,
+                virtual_to_real=dict(virtual_to_real),
+                block=block,
+                return_qint=result
+                if (block.return_qubit_range is not None and block.return_is_param_index is None)
+                else None,
+            )
+
+        return result
 
     # ------------------------------------------------------------------
     # Debug introspection
@@ -784,15 +835,28 @@ class CompiledFunc:
             return 0.0
         return 100.0 * (1.0 - self.optimized_gates / orig)
 
+    @property
     def inverse(self):
-        """Return an ``_InverseCompiledFunc`` that replays the adjoint gate sequence.
+        """Return an ``_AncillaInverseProxy`` for uncomputing a prior forward call.
 
-        The inverse wrapper is lazily created and cached.  Calling
-        ``.inverse()`` on the inverse returns the original ``CompiledFunc``.
+        Usage: f.inverse(x) -- looks up the forward call where x was the input,
+        replays adjoint gates on the original ancilla qubits, deallocates them.
+        Returns None.
         """
-        if self._inverse_func is None:
-            self._inverse_func = _InverseCompiledFunc(self)
-        return self._inverse_func
+        if self._inverse_proxy is None:
+            self._inverse_proxy = _AncillaInverseProxy(self)
+        return self._inverse_proxy
+
+    @property
+    def adjoint(self):
+        """Return an ``_InverseCompiledFunc`` for standalone adjoint replay.
+
+        Usage: f.adjoint(x) -- runs the adjoint gate sequence with fresh
+        ancillas. No prior forward call needed. Does NOT track ancillas.
+        """
+        if self._adjoint_func is None:
+            self._adjoint_func = _InverseCompiledFunc(self)
+        return self._adjoint_func
 
     def clear_cache(self):
         """Clear this function's compilation cache."""
@@ -800,6 +864,8 @@ class CompiledFunc:
         self._forward_calls.clear()
         if self._inverse_func is not None:
             self._inverse_func.clear_cache()
+        if self._adjoint_func is not None:
+            self._adjoint_func.clear_cache()
 
     def __repr__(self):
         return f"<CompiledFunc {self._func.__name__}>"
@@ -839,8 +905,12 @@ class _InverseCompiledFunc:
         if cache_key not in self._inv_cache:
             # Ensure original has the block cached
             if cache_key not in self._original._cache:
-                # Trigger capture by calling the original
+                # Trigger capture by calling the original (side-effect: may
+                # record a forward call -- clean it up since adjoint is stateless)
                 self._original(*args, **kwargs)
+                # Remove any forward call record created as side-effect
+                input_key = _input_qubit_key(quantum_args)
+                self._original._forward_calls.pop(input_key, None)
 
             block = self._original._cache[cache_key]
             # Invert the gates
@@ -857,7 +927,7 @@ class _InverseCompiledFunc:
             inverted_block.control_virtual_idx = block.control_virtual_idx
             self._inv_cache[cache_key] = inverted_block
 
-        return self._original._replay(self._inv_cache[cache_key], quantum_args)
+        return self._original._replay(self._inv_cache[cache_key], quantum_args, track_forward=False)
 
     def inverse(self):
         """Return the original ``CompiledFunc`` (round-trip)."""
@@ -869,6 +939,73 @@ class _InverseCompiledFunc:
 
     def __repr__(self):
         return f"<InverseCompiledFunc {self._original._func.__name__}>"
+
+
+# ---------------------------------------------------------------------------
+# _AncillaInverseProxy -- uncomputes a prior forward call's ancillas
+# ---------------------------------------------------------------------------
+class _AncillaInverseProxy:
+    """Callable proxy that uncomputes a prior forward call's ancillas.
+
+    Returned by CompiledFunc.inverse (as a property). When called as
+    f.inverse(x), looks up the forward call record by input qubit identity,
+    replays adjoint gates on the original physical ancilla qubits, deallocates
+    them, and invalidates the return qint.
+    """
+
+    def __init__(self, compiled_func):
+        self._cf = compiled_func
+
+    def __call__(self, *args, **kwargs):
+        from ._core import _deallocate_qubits
+
+        quantum_args, _, _ = self._cf._classify_args(args, kwargs)
+        input_key = _input_qubit_key(quantum_args)
+
+        record = self._cf._forward_calls.get(input_key)
+        if record is None:
+            raise ValueError(
+                f"No prior forward call of '{self._cf._func.__name__}' found "
+                f"for these input qubits. Call the function forward first."
+            )
+
+        # Generate adjoint gates
+        adjoint_gates = _inverse_gate_list(record.block.gates)
+
+        # Handle controlled context
+        is_controlled = _get_controlled()
+        if is_controlled:
+            control_bool = _get_control_bool()
+            ctrl_qubit = int(control_bool.qubits[63])
+            ctrl_virt_idx = record.block.total_virtual_qubits
+            adjoint_gates = _derive_controlled_gates(adjoint_gates, ctrl_virt_idx)
+            vtr = dict(record.virtual_to_real)
+            vtr[ctrl_virt_idx] = ctrl_qubit
+        else:
+            vtr = record.virtual_to_real
+
+        # Inject adjoint gates with original qubit mapping
+        saved_floor = _get_layer_floor()
+        _set_layer_floor(get_current_layer())
+        inject_remapped_gates(adjoint_gates, vtr)
+        _set_layer_floor(saved_floor)
+
+        # Deallocate ancilla qubits (one at a time, may be non-contiguous)
+        for qubit_idx in record.ancilla_qubits:
+            _deallocate_qubits(qubit_idx, 1)
+
+        # Invalidate return qint
+        if record.return_qint is not None:
+            record.return_qint._is_uncomputed = True
+            record.return_qint.allocated_qubits = False
+
+        # Remove forward call record
+        del self._cf._forward_calls[input_key]
+
+        return None
+
+    def __repr__(self):
+        return f"<AncillaInverseProxy {self._cf._func.__name__}>"
 
 
 # ---------------------------------------------------------------------------

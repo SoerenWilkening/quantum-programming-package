@@ -1404,7 +1404,7 @@ def test_inverse_measurement_raises():
 
 
 def test_inverse_empty_function():
-    """INV-05: Inverse of a no-op compiled function works correctly."""
+    """INV-05: Adjoint of a no-op compiled function works correctly."""
     ql.circuit()
 
     @ql.compile
@@ -1414,7 +1414,7 @@ def test_inverse_empty_function():
     a = ql.qint(0, width=4)
     noop(a)
 
-    inv = noop.inverse()
+    inv = noop.adjoint
     assert isinstance(inv, _InverseCompiledFunc)
 
     b = ql.qint(0, width=4)
@@ -1423,7 +1423,7 @@ def test_inverse_empty_function():
 
 
 def test_inverse_round_trip():
-    """INV-06: fn.inverse().inverse() is the original fn (identity round-trip)."""
+    """INV-06: fn.adjoint.inverse() is the original fn (identity round-trip)."""
     ql.circuit()
 
     @ql.compile
@@ -1434,7 +1434,7 @@ def test_inverse_round_trip():
     a = ql.qint(3, width=4)
     add_one(a)
 
-    inv = add_one.inverse()
+    inv = add_one.adjoint
     assert isinstance(inv, _InverseCompiledFunc)
     assert inv.inverse() is add_one
 
@@ -1455,22 +1455,22 @@ def test_inverse_replays_adjoint_gates():
     end_cap = get_current_layer()
     _capture_gates = extract_gate_range(start_cap, end_cap)  # noqa: F841
 
-    inv = add_one.inverse()
+    inv = add_one.adjoint
 
-    # Call inverse
+    # Call adjoint (standalone inverse with fresh ancillas)
     b = ql.qint(5, width=4)
     start_inv = get_current_layer()
     inv(b)
     end_inv = get_current_layer()
     inv_gates = extract_gate_range(start_inv, end_inv)
 
-    assert len(inv_gates) > 0, "Inverse should produce gates"
-    # Inverse replays from cached (possibly optimized) block, so compare
+    assert len(inv_gates) > 0, "Adjoint should produce gates"
+    # Adjoint replays from cached (possibly optimized) block, so compare
     # against the cached uncontrolled block gate count
     unctrl_key = ((), (4,), 0)
     cached_count = len(add_one._cache[unctrl_key].gates)
     assert len(inv_gates) == cached_count, (
-        f"Inverse gate count {len(inv_gates)} should match cached count {cached_count}"
+        f"Adjoint gate count {len(inv_gates)} should match cached count {cached_count}"
     )
 
 
@@ -1728,7 +1728,7 @@ def test_nesting_replay_uses_outer_cache():
 
 
 def test_composition_inverse_with_controlled():
-    """COMP-01: Inverse callable works inside controlled context."""
+    """COMP-01: Adjoint callable works inside controlled context."""
     ql.circuit()
 
     @ql.compile
@@ -1740,10 +1740,10 @@ def test_composition_inverse_with_controlled():
     a = ql.qint(3, width=4)
     add_one(a)
 
-    inv = add_one.inverse()
+    inv = add_one.adjoint
     qbool = ql.qbool(True)
 
-    # Call inverse inside controlled context
+    # Call adjoint inside controlled context
     b = ql.qint(5, width=4)
     start = get_current_layer()
     with qbool:
@@ -1759,7 +1759,7 @@ def test_composition_inverse_with_controlled():
 
 
 def test_composition_nested_inverse():
-    """COMP-02: Outer compiled function can call inner's inverse."""
+    """COMP-02: Outer compiled function can call inner's adjoint."""
     ql.circuit()
     inner_count = [0]
     outer_count = [0]
@@ -1778,9 +1778,9 @@ def test_composition_nested_inverse():
     @ql.compile
     def undo_add(x):
         outer_count[0] += 1
-        return add_one.inverse()(x)
+        return add_one.adjoint(x)
 
-    # Call outer (captures outer, which calls inner's inverse)
+    # Call outer (captures outer, which calls inner's adjoint)
     b = ql.qint(5, width=4)
     start = get_current_layer()
     undo_add(b)
