@@ -43,7 +43,7 @@
 
 **Milestone Goal:** Make `@ql.compile` inverse reuse physical ancilla qubits from forward call (uncompute + deallocate), and support `ql.qarray` as compiled function arguments.
 
-- [ ] **Phase 52: Ancilla Tracking & Inverse Qubit Reuse** - Compiled functions track ancillas and inverse targets same physical qubits
+- [x] **Phase 52: Ancilla Tracking & Inverse Qubit Reuse** (2/2 plans) -- completed 2026-02-04
 - [ ] **Phase 53: Qubit-Saving Auto-Uncompute** - Compiled functions auto-uncompute ancillas in qubit-saving mode
 - [ ] **Phase 54: qarray Support in @ql.compile** - Pass ql.qarray as arguments to compiled functions
 
@@ -62,8 +62,8 @@
   6. Inverse works when called at any later point in the program (not just immediately after forward call)
 **Plans:** 2 plans
 Plans:
-- [ ] 52-01-PLAN.md — Infrastructure + f.inverse(x) + f.adjoint(x) implementation
-- [ ] 52-02-PLAN.md — Comprehensive tests for INV-01 through INV-06
+- [x] 52-01-PLAN.md — Infrastructure + f.inverse(x) + f.adjoint(x) implementation
+- [x] 52-02-PLAN.md — Comprehensive tests for INV-01 through INV-06
 
 ### Phase 53: Qubit-Saving Auto-Uncompute
 **Goal**: When qubit-saving mode is active, compiled functions that return a qint automatically uncompute all ancillas except the return value's qubits after the forward call
@@ -103,7 +103,7 @@ Plans:
 | 49. Optimization & Uncomputation | v2.0 | 2/2 | Complete | 2026-02-04 |
 | 50. Controlled Context | v2.0 | 2/2 | Complete | 2026-02-04 |
 | 51. Differentiators & Polish | v2.0 | 2/2 | Complete | 2026-02-04 |
-| 52. Ancilla Tracking & Inverse Qubit Reuse | v2.1 | 0/TBD | Not started | - |
+| 52. Ancilla Tracking & Inverse Qubit Reuse | v2.1 | 2/2 | Complete | 2026-02-04 |
 | 53. Qubit-Saving Auto-Uncompute | v2.1 | 0/TBD | Not started | - |
 | 54. qarray Support in @ql.compile | v2.1 | 0/TBD | Not started | - |
 

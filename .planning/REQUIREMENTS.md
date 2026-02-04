@@ -7,12 +7,12 @@
 
 ### Inverse Qubit Reuse
 
-- [ ] **INV-01**: Compiled function tracks all qubits allocated during execution as ancillas (including `ql.qint()`)
-- [ ] **INV-02**: `f(x).inverse()` uncomputes ancillas from that specific forward call (return value carries compiled-origin metadata)
-- [ ] **INV-03**: `f.inverse(x)` targets ancillas from a prior `f(x)` call with matching inputs
-- [ ] **INV-04**: Inverse runs adjoint gates on original ancillas, uncomputing them to |0⟩
-- [ ] **INV-05**: Ancilla qubits are deallocated after inverse completes (returned to allocator)
-- [ ] **INV-06**: Inverse works when called at any point after forward call (not just immediately after)
+- [x] **INV-01**: Compiled function tracks all qubits allocated during execution as ancillas (including `ql.qint()`)
+- [x] **INV-02**: `f(x).inverse()` uncomputes ancillas from that specific forward call (return value carries compiled-origin metadata)
+- [x] **INV-03**: `f.inverse(x)` targets ancillas from a prior `f(x)` call with matching inputs
+- [x] **INV-04**: Inverse runs adjoint gates on original ancillas, uncomputing them to |0⟩
+- [x] **INV-05**: Ancilla qubits are deallocated after inverse completes (returned to allocator)
+- [x] **INV-06**: Inverse works when called at any point after forward call (not just immediately after)
 - [ ] **INV-07**: When qubit-saving is active and function returns a qint, auto-uncompute all ancillas except the return value's qubits after forward call
 
 ### qarray Support in @ql.compile
@@ -45,12 +45,12 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INV-01 | Phase 52 | Pending |
-| INV-02 | Phase 52 | Pending |
-| INV-03 | Phase 52 | Pending |
-| INV-04 | Phase 52 | Pending |
-| INV-05 | Phase 52 | Pending |
-| INV-06 | Phase 52 | Pending |
+| INV-01 | Phase 52 | Complete |
+| INV-02 | Phase 52 | Complete |
+| INV-03 | Phase 52 | Complete |
+| INV-04 | Phase 52 | Complete |
+| INV-05 | Phase 52 | Complete |
+| INV-06 | Phase 52 | Complete |
 | INV-07 | Phase 53 | Pending |
 | ARR-01 | Phase 54 | Pending |
 | ARR-02 | Phase 54 | Pending |
