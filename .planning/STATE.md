@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v2.1 Compile Enhancements
+**Current focus:** v2.1 Compile Enhancements — Phase 52 (Ancilla Tracking & Inverse Qubit Reuse)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 52 of 54 (Ancilla Tracking & Inverse Qubit Reuse)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-02-04 — Milestone v2.1 started
+Status: Ready to plan
+Last activity: 2026-02-04 — Roadmap created for v2.1
 
 Progress: ░░░░░░░░░░ 0% (v2.1)
 
@@ -38,6 +38,7 @@ Progress: ░░░░░░░░░░ 0% (v2.1)
 | v1.8 Copy, Mutability & Uncomp Fix | 41-44 | 7 | Complete (2026-02-03) |
 | v1.9 Pixel-Art Circuit Visualization | 45-47 | 7 | Complete (2026-02-03) |
 | v2.0 Function Compilation | 48-51 | 8 | Complete (2026-02-04) |
+| v2.1 Compile Enhancements | 52-54 | TBD | In progress |
 
 ## Accumulated Context
 
@@ -53,20 +54,12 @@ See PROJECT.md Key Decisions table for full history.
 - BUG-COND-MUL-01: Controlled multiplication corruption (not yet investigated)
 - BUG-WIDTH-ADD: Mixed-width QFT addition off-by-one (discovered in v1.8)
 
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 010 | Split qint.pyx and qarray.pyx into smaller modules | 2026-02-03 | 4364090 | [010-split-qint-qarray-into-modules](./quick/010-split-qint-qarray-into-modules/) |
-| 011 | Split qint.pyx via build preprocessor (701 lines + 4 .pxi) | 2026-02-03 | fb9bdb8 | [011-verify-qint-pyx-split-feasibility](./quick/011-verify-qint-pyx-split-feasibility/) |
-| 012 | Circuit viz: distinct control dots + non-overlapping mode | 2026-02-03 | 6f98a98 | [012-circuit-viz-control-dots-nonoverlap](./quick/012-circuit-viz-control-dots-nonoverlap/) |
-
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: v2.1 milestone — defining requirements
+Stopped at: v2.1 roadmap created — ready to plan Phase 52
 Resume file: None
-Resume action: Continue with requirements → roadmap
+Resume action: `/gsd:plan-phase 52`
 
 ---
-*State updated: 2026-02-04 -- v2.1 milestone started*
+*State updated: 2026-02-04 -- v2.1 roadmap created*
