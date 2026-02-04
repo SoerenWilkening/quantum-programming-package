@@ -1,5 +1,5 @@
 ---
-status: complete
+status: diagnosed
 phase: 51-differentiators-polish
 source: 51-01-SUMMARY.md, 51-02-SUMMARY.md
 started: 2026-02-04T12:00:00Z
@@ -59,11 +59,18 @@ skipped: 6
 ## Gaps
 
 - truth: "Calling .inverse() on a compiled function returns an inverse wrapper that replays gates in reversed order with adjoint transformations"
-  status: failed
+  status: fixed
   reason: "User reported: OverflowError: can't convert negative value to unsigned int in _set_smallest_allocated_qubit during qint.__del__ when using .inverse()"
   severity: blocker
   test: 1
-  root_cause: ""
-  artifacts: []
-  missing: []
-  debug_session: ""
+  root_cause: "Legacy backward-compatibility tracking in qint.__del__ and _decrement_ancilla performed unsigned int arithmetic without underflow guards. Inverse replay deallocates ancillas in different order, causing negative values passed to unsigned int parameters."
+  artifacts:
+    - path: "src/quantum_language/qint.pyx"
+      issue: "Line 568: _set_smallest_allocated_qubit called without checking for negative result"
+    - path: "src/quantum_language/_core.pyx"
+      issue: "Line 159: ancilla decrement without underflow guard"
+  missing:
+    - "Guard condition before _set_smallest_allocated_qubit in qint.__del__"
+    - "Guard condition before ancilla decrement in _decrement_ancilla"
+  debug_session: ".planning/debug/resolved/51-inverse-overflow.md"
+  fix_commit: "f4786c3"
