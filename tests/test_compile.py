@@ -2287,3 +2287,349 @@ def test_replay_tracks_forward_call():
     assert len(op._forward_calls) == 1
     op.inverse(a)
     assert len(op._forward_calls) == 0
+
+
+# ---------------------------------------------------------------------------
+# AUTOUNCOMP: Auto-uncompute tests (Phase 53, INV-07)
+# ---------------------------------------------------------------------------
+
+
+def test_auto_uncompute_basic():
+    """INV-07: Auto-uncompute fires and temp ancillas are deallocated.
+
+    Uses a function that allocates both temp AND return qubits so that
+    auto-uncompute has actual temp qubits to deallocate.
+    """
+    ql.circuit()
+    ql.option("qubit_saving", True)
+
+    @ql.compile
+    def complex_fn(x):
+        temp = ql.qint(0, width=x.width)
+        temp += x
+        result = ql.qint(0, width=x.width)
+        result += temp
+        return result
+
+    a = ql.qint(3, width=4)
+    stats_before = ql.circuit_stats()
+    result = complex_fn(a)
+    stats_after = ql.circuit_stats()
+
+    # Result should be a new qint (not the input)
+    assert result is not a
+    assert result.width == 4
+
+    # Auto-uncompute should have deallocated temp ancillas.
+    # Deallocations should have increased from before.
+    assert stats_after["total_deallocations"] > stats_before["total_deallocations"], (
+        "Auto-uncompute should trigger deallocation of temp ancilla qubits"
+    )
+
+    # Forward call record should exist and be marked as auto-uncomputed
+    assert len(complex_fn._forward_calls) == 1
+    record = list(complex_fn._forward_calls.values())[0]
+    assert record._auto_uncomputed is True, "Record should be marked as auto-uncomputed"
+
+
+def test_auto_uncompute_preserves_return_value():
+    """INV-07: Return value qubits hold correct result after auto-uncompute.
+
+    After auto-uncompute fires on temp qubits, the return qint should still
+    be live and usable in subsequent operations.
+    """
+    ql.circuit()
+    ql.option("qubit_saving", True)
+
+    @ql.compile
+    def complex_fn(x):
+        temp = ql.qint(0, width=x.width)
+        temp += x
+        result = ql.qint(0, width=x.width)
+        result += temp
+        return result
+
+    a = ql.qint(5, width=4)
+    result = complex_fn(a)
+
+    # Return value should exist and be usable
+    assert result is not a
+    assert result.width == 4
+    assert not result._is_uncomputed, "Return qint should still be live after auto-uncompute"
+    assert result.allocated_qubits is True, "Return qubits should still be allocated"
+
+    # Can still do quantum operations on the return value (use another qint
+    # for a non-trivial operation that always emits gates)
+    layer_before = get_current_layer()
+    b = ql.qint(1, width=4)
+    result += b
+    layer_after = get_current_layer()
+    assert layer_after > layer_before, "Should be able to operate on return value"
+
+
+def test_auto_uncompute_qubit_reuse():
+    """INV-07: Deallocated temp qubits are reusable by subsequent allocations."""
+    ql.circuit()
+    ql.option("qubit_saving", True)
+
+    @ql.compile
+    def complex_fn(x):
+        temp = ql.qint(0, width=x.width)
+        temp += x
+        result = ql.qint(0, width=x.width)
+        result += temp
+        return result
+
+    a = ql.qint(1, width=4)
+    _result = complex_fn(a)
+    stats_after_call = ql.circuit_stats()
+    peak_after_call = stats_after_call["peak_allocated"]
+
+    # Allocate a new qint -- should reuse freed temp qubit slots
+    b = ql.qint(2, width=4)
+    stats_after_realloc = ql.circuit_stats()
+
+    assert b.width == 4
+    # Peak should NOT grow if freed slots are reused
+    assert stats_after_realloc["peak_allocated"] == peak_after_call, (
+        "New allocation should reuse freed temp qubit slots (peak unchanged)"
+    )
+
+
+def test_auto_uncompute_inverse_after():
+    """INV-07: f.inverse(x) after auto-uncompute undoes return qubit effects.
+
+    When auto-uncompute fires, the AncillaRecord is updated with only
+    return-value ancilla qubits. A subsequent f.inverse(x) should use
+    the reduced gate set to undo return effects and deallocate return qubits.
+    """
+    ql.circuit()
+    ql.option("qubit_saving", True)
+
+    @ql.compile
+    def complex_fn(x):
+        temp = ql.qint(0, width=x.width)
+        temp += x
+        result = ql.qint(0, width=x.width)
+        result += temp
+        return result
+
+    a = ql.qint(3, width=4)
+    result = complex_fn(a)
+
+    # Forward call record should exist and be auto-uncomputed
+    assert len(complex_fn._forward_calls) == 1
+    record = list(complex_fn._forward_calls.values())[0]
+    assert record._auto_uncomputed is True, "Record should be marked as auto-uncomputed"
+    assert record._return_only_gates is not None, "Should have return-only gates cached"
+
+    # Call f.inverse(x) -- should undo return qubit effects and deallocate
+    complex_fn.inverse(a)
+
+    # Return qint should be invalidated
+    assert result._is_uncomputed is True, "Return qint should be uncomputed after inverse"
+    assert result.allocated_qubits is False, "Return qubits should be deallocated after inverse"
+    assert len(complex_fn._forward_calls) == 0, "Forward call record should be removed"
+
+
+def test_auto_uncompute_none_return():
+    """INV-07: Functions returning None auto-uncompute all ancillas."""
+    ql.circuit()
+    ql.option("qubit_saving", True)
+
+    @ql.compile
+    def side_effect_fn(x):
+        temp = ql.qint(0, width=x.width)
+        temp += x
+        # No return -- returns None
+
+    a = ql.qint(3, width=4)
+    stats_before = ql.circuit_stats()
+    result = side_effect_fn(a)
+    stats_after = ql.circuit_stats()
+
+    assert result is None, "Function returning None should return None"
+
+    # All ancillas should be auto-uncomputed and deallocated
+    assert stats_after["total_deallocations"] > stats_before["total_deallocations"], (
+        "All temp ancillas should be deallocated for None-returning function"
+    )
+
+    # No forward call record should remain
+    assert len(side_effect_fn._forward_calls) == 0, (
+        "No forward call record should remain after full auto-uncompute"
+    )
+
+    # f.inverse(x) should raise because no forward call record exists
+    with pytest.raises(ValueError, match="No prior forward call"):
+        side_effect_fn.inverse(a)
+
+
+def test_auto_uncompute_inplace_skips():
+    """INV-07: In-place functions skip auto-uncompute."""
+    ql.circuit()
+    ql.option("qubit_saving", True)
+
+    @ql.compile
+    def add_inplace(x):
+        x += 1
+        return x
+
+    a = ql.qint(3, width=4)
+    result = add_inplace(a)
+
+    # In-place: result is the same object as input
+    assert result is a, "In-place return should be the same object"
+
+    # No forward call tracking (in-place functions without ancillas)
+    assert len(add_inplace._forward_calls) == 0, (
+        "In-place function should not have forward call records"
+    )
+
+
+def test_auto_uncompute_off_no_effect():
+    """INV-07: Without qubit_saving, ancillas are NOT auto-uncomputed."""
+    ql.circuit()
+    # qubit_saving defaults to False -- do NOT enable it
+
+    @ql.compile
+    def make_result(x):
+        temp = ql.qint(0, width=x.width)
+        temp += x
+        return temp
+
+    a = ql.qint(3, width=4)
+    stats_before = ql.circuit_stats()
+    _result = make_result(a)
+    stats_after = ql.circuit_stats()
+
+    # Forward call record should exist with ALL ancillas (no auto-uncompute)
+    assert len(make_result._forward_calls) == 1
+    record = list(make_result._forward_calls.values())[0]
+    assert record._auto_uncomputed is False, (
+        "Without qubit_saving, record should NOT be auto-uncomputed"
+    )
+
+    # All ancillas should still be allocated (no deallocation occurred)
+    ancilla_count = len(record.ancilla_qubits)
+    assert ancilla_count > 0, "Should have ancilla qubits tracked"
+    assert stats_after["total_deallocations"] == stats_before["total_deallocations"], (
+        "Without auto-uncompute, no qubits should be deallocated"
+    )
+
+
+def test_auto_uncompute_cache_key_includes_qubit_saving():
+    """INV-07: Cache key includes qubit_saving mode, forcing re-capture on change."""
+    ql.circuit()
+    call_count = [0]
+
+    @ql.compile
+    def make_result(x):
+        call_count[0] += 1
+        temp = ql.qint(0, width=x.width)
+        temp += x
+        return temp
+
+    # Call without qubit_saving
+    a = ql.qint(3, width=4)
+    make_result(a)
+    assert call_count[0] == 1
+
+    # Enable qubit_saving and call with same width -- should re-capture (cache miss)
+    ql.circuit()
+    ql.option("qubit_saving", True)
+
+    b = ql.qint(5, width=4)
+    make_result(b)
+    assert call_count[0] == 2, (
+        "Enabling qubit_saving should trigger re-capture (different cache key)"
+    )
+
+    # Third call with qubit_saving on and same width -- should replay (cache hit)
+    c = ql.qint(7, width=4)
+    make_result(c)
+    assert call_count[0] == 2, "Same qubit_saving mode and width should be cache hit"
+
+
+def test_auto_uncompute_replay_path():
+    """INV-07: Auto-uncompute fires on both capture and replay paths.
+
+    The second call with same widths uses the replay path; auto-uncompute
+    should fire on replay as well (not just capture).
+    """
+    ql.circuit()
+    ql.option("qubit_saving", True)
+
+    @ql.compile
+    def complex_fn(x):
+        temp = ql.qint(0, width=x.width)
+        temp += x
+        result = ql.qint(0, width=x.width)
+        result += temp
+        return result
+
+    # First call (capture path)
+    a = ql.qint(3, width=4)
+    _result1 = complex_fn(a)
+
+    # Record should be auto-uncomputed after capture
+    assert len(complex_fn._forward_calls) == 1
+    record1 = list(complex_fn._forward_calls.values())[0]
+    assert record1._auto_uncomputed is True, "Capture path should auto-uncompute"
+
+    # Second call (replay path) with different qubits
+    b = ql.qint(5, width=4)
+    dealloc_before = ql.circuit_stats()["total_deallocations"]
+    _result2 = complex_fn(b)
+    dealloc_after = ql.circuit_stats()["total_deallocations"]
+
+    # Auto-uncompute should also fire on replay path
+    assert dealloc_after > dealloc_before, (
+        "Replay path should also trigger auto-uncompute deallocation"
+    )
+    assert len(complex_fn._forward_calls) == 2, "Both forward calls should be tracked"
+    records = list(complex_fn._forward_calls.values())
+    assert all(r._auto_uncomputed for r in records), (
+        "Both capture and replay records should be auto-uncomputed"
+    )
+
+
+def test_auto_uncompute_controlled_context():
+    """INV-07: Auto-uncompute fires inside controlled context.
+
+    When a compiled function is called inside a `with ctrl:` block with
+    qubit_saving on, auto-uncompute should still fire and the uncompute
+    gates should be appropriately controlled.
+    """
+    ql.circuit()
+    ql.option("qubit_saving", True)
+
+    @ql.compile
+    def complex_fn(x):
+        temp = ql.qint(0, width=x.width)
+        temp += x
+        result = ql.qint(0, width=x.width)
+        result += temp
+        return result
+
+    # First call outside with block to populate cache
+    a = ql.qint(3, width=4)
+    _r1 = complex_fn(a)
+
+    # Call inside controlled context (replay path)
+    b = ql.qint(5, width=4)
+    ctrl = ql.qbool(True)
+
+    dealloc_before = ql.circuit_stats()["total_deallocations"]
+    with ctrl:
+        result = complex_fn(b)
+    dealloc_after = ql.circuit_stats()["total_deallocations"]
+
+    # Return value should be usable
+    assert result is not b
+    assert result.width == 4
+
+    # Auto-uncompute should have fired (temp ancillas deallocated)
+    assert dealloc_after > dealloc_before, (
+        "Controlled context should still trigger auto-uncompute deallocation"
+    )
