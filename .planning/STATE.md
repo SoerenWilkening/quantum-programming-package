@@ -2,19 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-03)
+See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Planning next milestone
+**Current focus:** v2.0 — Function Compilation (@ql.compile decorator)
 
 ## Current Position
 
-Phase: 47 of 47 (all milestones through v1.9 complete)
-Plan: N/A
-Status: Milestone v1.9 shipped
-Last activity: 2026-02-03 -- Completed quick task 012: Circuit viz control dots + non-overlapping mode
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements for v2.0
+Last activity: 2026-02-04 — Milestone v2.0 started
 
-Progress: [████████████████████████████████████████] 100% (all v1.9 plans complete)
+Progress: [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
@@ -66,10 +66,10 @@ See PROJECT.md Key Decisions table for full history.
 
 ## Session Continuity
 
-Last session: 2026-02-03
-Stopped at: Completed quick-012 (circuit viz control dots + non-overlapping mode)
+Last session: 2026-02-04
+Stopped at: Milestone v2.0 initialization — defining requirements
 Resume file: None
-Resume action: Start next milestone with `/gsd:new-milestone`
+Resume action: Continue with requirements definition and roadmap creation
 
 ---
-*State updated: 2026-02-03 -- quick-012 complete*
+*State updated: 2026-02-04 — Milestone v2.0 started*

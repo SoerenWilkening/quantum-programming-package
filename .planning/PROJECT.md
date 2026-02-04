@@ -88,6 +88,15 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ### Active
 
+**Current Milestone: v2.0 — Function Compilation**
+
+- [ ] `@ql.compile` decorator captures all gate sequences within a decorated function
+- [ ] Merged sequences are optimized (gate merging, inverse cancellation) as a single unit
+- [ ] Compiled functions execute the pre-optimized sequence on subsequent calls
+- [ ] Classical parameters are parametric (compile once, not per-value)
+- [ ] Compiled functions work inside `with` blocks (controlled execution)
+- [ ] Compiled functions return quantum values (qint/qbool) usable in further operations
+
 **Deferred bugs (carry forward):**
 - Fix _reduce_mod result corruption (BUG-MOD-REDUCE) — needs fundamentally different circuit structure
 - Fix controlled multiplication corruption (BUG-COND-MUL-01) — not yet investigated
@@ -195,4 +204,4 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Auto-zoom with AND logic (both thresholds) | Keep detail for circuits large in only one dimension | ✓ Good — sensible default behavior |
 
 ---
-*Last updated: 2026-02-03 after v1.9 milestone completion*
+*Last updated: 2026-02-04 after v2.0 milestone start*
