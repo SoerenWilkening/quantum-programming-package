@@ -72,6 +72,8 @@ typedef struct circuit_s {
 
     qubit_allocator_t *allocator; // Centralized qubit allocation
 
+    num_t layer_floor; // Minimum layer for gate placement (set by Python before run_instruction)
+
     // Legacy fields (deprecated, kept for backward compatibility)
     qubit_t qubit_indices[MAXQUBITS];
     qubit_t used_qubit_indices;

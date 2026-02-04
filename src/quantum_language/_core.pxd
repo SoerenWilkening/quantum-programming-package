@@ -101,6 +101,7 @@ cdef extern from "qubit_allocator.h":
 	cdef struct circuit_s:
 		unsigned int used_layer
 		unsigned int used_qubits
+		unsigned int layer_floor
 
 	ctypedef struct allocator_stats_t:
 		unsigned int peak_allocated

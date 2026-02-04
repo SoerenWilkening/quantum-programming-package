@@ -38,7 +38,7 @@ layer_t smallest_layer_below_comp(circuit_t *circ, qubit_t qubit, layer_t compar
 }
 
 layer_t minimum_layer(circuit_t *circ, gate_t *g, layer_t compared_layer) {
-    layer_t min_possible_layer = 0;
+    layer_t min_possible_layer = circ->layer_floor;
     // Determine the minimal possible layer where gate can be applied
     for (int j = 0; j < (int)g->NumControls; ++j) {
         layer_t qubit = get_control(g, j);

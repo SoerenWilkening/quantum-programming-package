@@ -50,10 +50,17 @@
 		# Phase 41: Capture start layer for uncomputation
 		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+		# Quick-013: Save and set layer floor to prevent optimizer from placing gates before start_layer
+		cdef unsigned int _saved_floor = (<circuit_s*>_circuit).layer_floor if _circuit_initialized else 0
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = start_layer
+
 		# Handle qint == qint case first (must come before int check)
 		if type(other) == qint:
 			# Self-comparison optimization: a == a is always True
 			if self is other:
+				if _circuit_initialized:
+					(<circuit_s*>_circuit).layer_floor = _saved_floor
 				return qbool(True)
 
 			# Subtract-add-back pattern: (a - b) == 0, then restore a
@@ -77,6 +84,8 @@
 			result._start_layer = start_layer
 			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+			if _circuit_initialized:
+				(<circuit_s*>_circuit).layer_floor = _saved_floor
 			return result
 
 		# Handle qint == int case using C-level CQ_equal_width
@@ -87,6 +96,8 @@
 			if other < 0 or other > max_val:
 				# Overflow: value outside range - definitely not equal
 				# Return qbool initialized to |0> (False)
+				if _circuit_initialized:
+					(<circuit_s*>_circuit).layer_floor = _saved_floor
 				return qbool(False)
 
 			# Get comparison sequence from C
@@ -101,6 +112,8 @@
 			# Check for overflow (empty sequence returned by C)
 			if seq.num_layer == 0:
 				# Overflow detected by C layer - definitely not equal
+				if _circuit_initialized:
+					(<circuit_s*>_circuit).layer_floor = _saved_floor
 				return qbool(False)
 
 			# Allocate result qbool
@@ -133,8 +146,12 @@
 			result._start_layer = start_layer
 			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+			if _circuit_initialized:
+				(<circuit_s*>_circuit).layer_floor = _saved_floor
 			return result
 
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = _saved_floor
 		raise TypeError("Comparison requires qint or int")
 
 	def __ne__(self, other):
@@ -205,8 +222,15 @@
 		# Capture start layer for uncomputation tracking
 		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+		# Quick-013: Save and set layer floor
+		cdef unsigned int _saved_floor_lt = (<circuit_s*>_circuit).layer_floor if _circuit_initialized else 0
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = start_layer
+
 		# Self-comparison optimization
 		if self is other:
+			if _circuit_initialized:
+				(<circuit_s*>_circuit).layer_floor = _saved_floor_lt
 			return qbool(False)  # x < x is always false
 
 		# Handle qint operand
@@ -256,6 +280,8 @@
 			# no layer tracking, so there is no double-reversal risk.
 			result._start_layer = start_layer
 			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+			if _circuit_initialized:
+				(<circuit_s*>_circuit).layer_floor = _saved_floor_lt
 			return result
 
 		# Handle int operand
@@ -263,14 +289,23 @@
 			# Classical overflow checks
 			max_val = (1 << self.bits) - 1 if self.bits < 64 else (1 << 63) - 1
 			if other < 0:
+				if _circuit_initialized:
+					(<circuit_s*>_circuit).layer_floor = _saved_floor_lt
 				return qbool(False)  # qint always >= 0, so qint < negative is false
 			if other > max_val:
+				if _circuit_initialized:
+					(<circuit_s*>_circuit).layer_floor = _saved_floor_lt
 				return qbool(True)  # qint always < large value that doesn't fit
 
 			# Create temp qint to use the qint-qint __lt__ path
 			temp = qint(other, width=self.bits)
-			return self < temp
+			_result = self < temp
+			if _circuit_initialized:
+				(<circuit_s*>_circuit).layer_floor = _saved_floor_lt
+			return _result
 
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = _saved_floor_lt
 		raise TypeError("Comparison requires qint or int")
 
 	def __gt__(self, other):
@@ -312,8 +347,15 @@
 		# Capture start layer for uncomputation tracking
 		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+		# Quick-013: Save and set layer floor
+		cdef unsigned int _saved_floor_gt = (<circuit_s*>_circuit).layer_floor if _circuit_initialized else 0
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = start_layer
+
 		# Self-comparison optimization
 		if self is other:
+			if _circuit_initialized:
+				(<circuit_s*>_circuit).layer_floor = _saved_floor_gt
 			return qbool(False)  # x > x is always false
 
 		# Handle qint operand
@@ -358,6 +400,8 @@
 			# no layer tracking, so there is no double-reversal risk.
 			result._start_layer = start_layer
 			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+			if _circuit_initialized:
+				(<circuit_s*>_circuit).layer_floor = _saved_floor_gt
 			return result
 
 		# Handle int operand
@@ -365,14 +409,23 @@
 			# Classical overflow checks
 			max_val = (1 << self.bits) - 1 if self.bits < 64 else (1 << 63) - 1
 			if other < 0:
+				if _circuit_initialized:
+					(<circuit_s*>_circuit).layer_floor = _saved_floor_gt
 				return qbool(True)  # qint always >= 0, so qint > negative is true
 			if other > max_val:
+				if _circuit_initialized:
+					(<circuit_s*>_circuit).layer_floor = _saved_floor_gt
 				return qbool(False)  # qint always < large value, so not >
 
 			# Create temp qint to use the qint-qint __gt__ path
 			temp = qint(other, width=self.bits)
-			return self > temp
+			_result = self > temp
+			if _circuit_initialized:
+				(<circuit_s*>_circuit).layer_floor = _saved_floor_gt
+			return _result
 
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = _saved_floor_gt
 		raise TypeError("Comparison requires qint or int")
 
 	def __le__(self, other):

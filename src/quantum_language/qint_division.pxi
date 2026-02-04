@@ -44,11 +44,20 @@
 		# Phase 41: Capture start layer
 		start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
 
+		# Quick-013: Save and set layer floor
+		cdef unsigned int _saved_floor_div = (<circuit_s*>_circ).layer_floor if _circ_init else 0
+		if _circ_init:
+			(<circuit_s*>_circ).layer_floor = start_layer
+
 		# Classical divisor case
 		if type(divisor) == int:
 			if divisor == 0:
+				if _circ_init:
+					(<circuit_s*>_circ).layer_floor = _saved_floor_div
 				raise ZeroDivisionError("Division by zero")
 			if divisor < 0:
+				if _circ_init:
+					(<circuit_s*>_circ).layer_floor = _saved_floor_div
 				raise NotImplementedError("Negative divisor not yet supported")
 
 			# Allocate quotient and remainder
@@ -77,6 +86,8 @@
 			quotient.operation_type = 'DIV'
 			quotient.add_dependency(self)
 
+			if _circ_init:
+				(<circuit_s*>_circ).layer_floor = _saved_floor_div
 			return quotient
 
 		elif type(divisor) == qint:
@@ -88,8 +99,13 @@
 			result.operation_type = 'DIV'
 			result.add_dependency(self)
 			result.add_dependency(divisor)
+
+			if _circ_init:
+				(<circuit_s*>_circ).layer_floor = _saved_floor_div
 			return result
 		else:
+			if _circ_init:
+				(<circuit_s*>_circ).layer_floor = _saved_floor_div
 			raise TypeError("Divisor must be int or qint")
 
 	def __ifloordiv__(self, other):
@@ -154,11 +170,20 @@
 		# Phase 41: Capture start layer
 		start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
 
+		# Quick-013: Save and set layer floor
+		cdef unsigned int _saved_floor_mod = (<circuit_s*>_circ).layer_floor if _circ_init else 0
+		if _circ_init:
+			(<circuit_s*>_circ).layer_floor = start_layer
+
 		# Classical divisor case
 		if type(divisor) == int:
 			if divisor == 0:
+				if _circ_init:
+					(<circuit_s*>_circ).layer_floor = _saved_floor_mod
 				raise ZeroDivisionError("Modulo by zero")
 			if divisor < 0:
+				if _circ_init:
+					(<circuit_s*>_circ).layer_floor = _saved_floor_mod
 				raise NotImplementedError("Negative divisor not yet supported")
 
 			remainder = qint(0, width=self.bits)
@@ -176,6 +201,8 @@
 			remainder.operation_type = 'MOD'
 			remainder.add_dependency(self)
 
+			if _circ_init:
+				(<circuit_s*>_circ).layer_floor = _saved_floor_mod
 			return remainder
 
 		elif type(divisor) == qint:
@@ -186,8 +213,13 @@
 			result.operation_type = 'MOD'
 			result.add_dependency(self)
 			result.add_dependency(divisor)
+
+			if _circ_init:
+				(<circuit_s*>_circ).layer_floor = _saved_floor_mod
 			return result
 		else:
+			if _circ_init:
+				(<circuit_s*>_circ).layer_floor = _saved_floor_mod
 			raise TypeError("Divisor must be int or qint")
 
 	def _mod_quantum(self, divisor: qint):
@@ -241,11 +273,20 @@
 		# Phase 41: Capture start layer
 		start_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
 
+		# Quick-013: Save and set layer floor
+		cdef unsigned int _saved_floor_dm = (<circuit_s*>_circ).layer_floor if _circ_init else 0
+		if _circ_init:
+			(<circuit_s*>_circ).layer_floor = start_layer
+
 		# Classical divisor case
 		if type(divisor) == int:
 			if divisor == 0:
+				if _circ_init:
+					(<circuit_s*>_circ).layer_floor = _saved_floor_dm
 				raise ZeroDivisionError("Divmod by zero")
 			if divisor < 0:
+				if _circ_init:
+					(<circuit_s*>_circ).layer_floor = _saved_floor_dm
 				raise NotImplementedError("Negative divisor not yet supported")
 
 			quotient = qint(0, width=self.bits)
@@ -270,6 +311,8 @@
 			remainder.operation_type = 'DIVMOD'
 			remainder.add_dependency(self)
 
+			if _circ_init:
+				(<circuit_s*>_circ).layer_floor = _saved_floor_dm
 			return (quotient, remainder)
 
 		elif type(divisor) == qint:
@@ -286,8 +329,13 @@
 			r.operation_type = 'DIVMOD'
 			r.add_dependency(self)
 			r.add_dependency(divisor)
+
+			if _circ_init:
+				(<circuit_s*>_circ).layer_floor = _saved_floor_dm
 			return (q, r)
 		else:
+			if _circ_init:
+				(<circuit_s*>_circ).layer_floor = _saved_floor_dm
 			raise TypeError("Divisor must be int or qint")
 
 	def _divmod_quantum(self, divisor: qint):

@@ -42,6 +42,11 @@
 		# Capture start layer
 		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+		# Quick-013: Save and set layer floor to prevent optimizer from placing gates before start_layer
+		cdef unsigned int _saved_floor_and = (<circuit_s*>_circuit).layer_floor if _circuit_initialized else 0
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = start_layer
+
 		# Determine result width
 		if type(other) == int:
 			classical_width = other.bit_length() if other > 0 else 1
@@ -49,6 +54,8 @@
 		elif isinstance(other, qint):
 			result_bits = max(self.bits, (<qint>other).bits)
 		else:
+			if _circuit_initialized:
+				(<circuit_s*>_circuit).layer_floor = _saved_floor_and
 			raise TypeError("Operand must be qint or int")
 
 		# Allocate padding ancilla BEFORE result so result gets highest qubit indices
@@ -113,6 +120,8 @@
 		result._start_layer = start_layer
 		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = _saved_floor_and
 		return result
 
 	def __iand__(self, other):
@@ -187,6 +196,11 @@
 		# Capture start layer
 		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+		# Quick-013: Save and set layer floor
+		cdef unsigned int _saved_floor_or = (<circuit_s*>_circuit).layer_floor if _circuit_initialized else 0
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = start_layer
+
 		# Determine result width
 		if type(other) == int:
 			classical_width = other.bit_length() if other > 0 else 1
@@ -194,6 +208,8 @@
 		elif isinstance(other, qint):
 			result_bits = max(self.bits, (<qint>other).bits)
 		else:
+			if _circuit_initialized:
+				(<circuit_s*>_circuit).layer_floor = _saved_floor_or
 			raise TypeError("Operand must be qint or int")
 
 		# Allocate padding ancilla BEFORE result so result gets highest qubit indices
@@ -257,6 +273,8 @@
 		result._start_layer = start_layer
 		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = _saved_floor_or
 		return result
 
 	def __ior__(self, other):
@@ -331,6 +349,11 @@
 		# Capture start layer
 		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+		# Quick-013: Save and set layer floor
+		cdef unsigned int _saved_floor_xor = (<circuit_s*>_circuit).layer_floor if _circuit_initialized else 0
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = start_layer
+
 		# Determine result width
 		if type(other) == int:
 			classical_width = other.bit_length() if other > 0 else 1
@@ -338,6 +361,8 @@
 		elif isinstance(other, qint):
 			result_bits = max(self.bits, (<qint>other).bits)
 		else:
+			if _circuit_initialized:
+				(<circuit_s*>_circuit).layer_floor = _saved_floor_xor
 			raise TypeError("Operand must be qint or int")
 
 		# Allocate result (ancilla qubits)
@@ -392,6 +417,8 @@
 		result._start_layer = start_layer
 		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = _saved_floor_xor
 		return result
 
 	def __ixor__(self, other):
@@ -550,6 +577,11 @@
 		# Capture start layer before any gates
 		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+		# Quick-013: Save and set layer floor
+		cdef unsigned int _saved_floor_copy = (<circuit_s*>_circuit).layer_floor if _circuit_initialized else 0
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = start_layer
+
 		# Allocate fresh result qint with |0> qubits
 		result = qint(width=self.bits)
 
@@ -568,6 +600,8 @@
 		result.operation_type = 'COPY'
 		result.add_dependency(self)
 
+		if _circuit_initialized:
+			(<circuit_s*>_circuit).layer_floor = _saved_floor_copy
 		return result
 
 	def copy_onto(self, target):
