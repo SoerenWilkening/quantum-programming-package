@@ -298,13 +298,22 @@ class CompiledBlock:
 class AncillaRecord:
     """Record of a single forward call's ancilla allocations."""
 
-    __slots__ = ("ancilla_qubits", "virtual_to_real", "block", "return_qint")
+    __slots__ = (
+        "ancilla_qubits",
+        "virtual_to_real",
+        "block",
+        "return_qint",
+        "_auto_uncomputed",
+        "_return_only_gates",
+    )
 
     def __init__(self, ancilla_qubits, virtual_to_real, block, return_qint):
         self.ancilla_qubits = ancilla_qubits
         self.virtual_to_real = virtual_to_real
         self.block = block
         self.return_qint = return_qint
+        self._auto_uncomputed = False
+        self._return_only_gates = None
 
 
 # ---------------------------------------------------------------------------
@@ -323,6 +332,37 @@ def _function_modifies_inputs(block):
     result = any(g["target"] < param_count for g in block.gates)
     block._modifies_inputs = result
     return result
+
+
+# ---------------------------------------------------------------------------
+# Ancilla partitioning (return vs temp) for auto-uncompute
+# ---------------------------------------------------------------------------
+def _partition_ancillas(block, virtual_to_real, ancilla_qubits):
+    """Split ancilla physical qubits into return qubits and temp qubits.
+
+    Returns (return_physical, temp_physical) where each is a list of
+    physical qubit indices.
+    """
+    if block.return_qubit_range is None or block.return_is_param_index is not None:
+        # No ancilla-based return value -- all ancillas are temp
+        return [], list(ancilla_qubits)
+
+    ret_start, ret_width = block.return_qubit_range
+    return_virtual_set = set(range(ret_start, ret_start + ret_width))
+
+    # Build reverse mapping: real -> virtual
+    real_to_virt = {real: virt for virt, real in virtual_to_real.items()}
+
+    return_physical = []
+    temp_physical = []
+    for real_q in ancilla_qubits:
+        virt_q = real_to_virt.get(real_q)
+        if virt_q is not None and virt_q in return_virtual_set:
+            return_physical.append(real_q)
+        else:
+            temp_physical.append(real_q)
+
+    return return_physical, temp_physical
 
 
 # ---------------------------------------------------------------------------
@@ -507,6 +547,16 @@ class CompiledFunc:
                 is_controlled,
                 cache_key,
             )
+
+        # Auto-uncompute temp ancillas when qubit_saving mode is active
+        if qubit_saving:
+            cached_block = self._cache.get(cache_key)
+            if cached_block is not None and cached_block.internal_qubit_count > 0:
+                if not _function_modifies_inputs(cached_block):
+                    input_key = _input_qubit_key(quantum_args)
+                    record = self._forward_calls.get(input_key)
+                    if record is not None:
+                        self._auto_uncompute(record, quantum_args, is_controlled)
 
         if self._debug:
             block = self._cache.get(cache_key)
@@ -830,6 +880,91 @@ class CompiledFunc:
         return result
 
     # ------------------------------------------------------------------
+    # Auto-uncompute (qubit-saving mode)
+    # ------------------------------------------------------------------
+    def _auto_uncompute(self, record, quantum_args, is_controlled):
+        """Uncompute temp ancillas, preserving return qubits.
+
+        Called after forward call when qubit_saving mode is active.
+        Injects adjoint gates for temp-only ancillas, deallocates them,
+        and updates the AncillaRecord so f.inverse() operates on return
+        qubits only.
+        """
+        from ._core import _deallocate_qubits
+
+        block = record.block
+        return_physical, temp_physical = _partition_ancillas(
+            block, record.virtual_to_real, record.ancilla_qubits
+        )
+
+        if not temp_physical:
+            return  # Nothing to uncompute
+
+        # Build reverse mapping: real -> virtual
+        real_to_virt = {real: virt for virt, real in record.virtual_to_real.items()}
+
+        # Identify temp virtual indices
+        temp_virtual_set = set()
+        for real_q in temp_physical:
+            virt_q = real_to_virt.get(real_q)
+            if virt_q is not None:
+                temp_virtual_set.add(virt_q)
+
+        # Extract gates that target temp ancillas only
+        temp_gates = [g for g in block.gates if g["target"] in temp_virtual_set]
+
+        if not temp_gates:
+            # No gates on temp qubits -- just deallocate
+            for qubit_idx in temp_physical:
+                _deallocate_qubits(qubit_idx, 1)
+            if return_physical:
+                record.ancilla_qubits = return_physical
+                record._auto_uncomputed = True
+                record._return_only_gates = []
+            else:
+                # No return qubits either -- remove the forward call record
+                input_key = _input_qubit_key(quantum_args)
+                self._forward_calls.pop(input_key, None)
+            return
+
+        # Generate adjoint of temp-only gates
+        temp_adjoint = _inverse_gate_list(temp_gates)
+
+        # Handle controlled context
+        vtr = record.virtual_to_real
+        if is_controlled:
+            control_bool = _get_control_bool()
+            ctrl_qubit = int(control_bool.qubits[63])
+            ctrl_virt_idx = block.total_virtual_qubits
+            temp_adjoint = _derive_controlled_gates(temp_adjoint, ctrl_virt_idx)
+            vtr = dict(vtr)
+            vtr[ctrl_virt_idx] = ctrl_qubit
+
+        # Inject adjoint gates
+        saved_floor = _get_layer_floor()
+        _set_layer_floor(get_current_layer())
+        inject_remapped_gates(temp_adjoint, vtr)
+        _set_layer_floor(saved_floor)
+
+        # Deallocate temp qubits
+        for qubit_idx in temp_physical:
+            _deallocate_qubits(qubit_idx, 1)
+
+        # Update AncillaRecord
+        if return_physical:
+            # Compute return-only gates for future f.inverse() use
+            ret_start, ret_width = block.return_qubit_range
+            return_virtual_set = set(range(ret_start, ret_start + ret_width))
+            return_only_gates = [g for g in block.gates if g["target"] in return_virtual_set]
+            record.ancilla_qubits = return_physical
+            record._auto_uncomputed = True
+            record._return_only_gates = return_only_gates
+        else:
+            # No return qubits -- remove forward call record entirely
+            input_key = _input_qubit_key(quantum_args)
+            self._forward_calls.pop(input_key, None)
+
+    # ------------------------------------------------------------------
     # Debug introspection
     # ------------------------------------------------------------------
     @property
@@ -993,8 +1128,11 @@ class _AncillaInverseProxy:
                 f"for these input qubits. Call the function forward first."
             )
 
-        # Generate adjoint gates
-        adjoint_gates = _inverse_gate_list(record.block.gates)
+        # Generate adjoint gates -- use reduced gate set if auto-uncomputed
+        if record._auto_uncomputed and record._return_only_gates is not None:
+            adjoint_gates = _inverse_gate_list(record._return_only_gates)
+        else:
+            adjoint_gates = _inverse_gate_list(record.block.gates)
 
         # Handle controlled context
         is_controlled = _get_controlled()
