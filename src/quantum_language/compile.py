@@ -22,6 +22,7 @@ Usage
 
 import collections
 import functools
+import sys
 import weakref
 
 import numpy as np
@@ -194,6 +195,13 @@ def _derive_controlled_gates(gates, control_virtual_idx):
 
 
 # ---------------------------------------------------------------------------
+# Nesting depth limit for compiled function capture
+# ---------------------------------------------------------------------------
+_capture_depth = 0
+_MAX_CAPTURE_DEPTH = 16
+
+
+# ---------------------------------------------------------------------------
 # Global registry for cache invalidation on circuit reset
 # ---------------------------------------------------------------------------
 _compiled_funcs = []  # List of weakref.ref to CompiledFunc instances
@@ -205,6 +213,8 @@ def _clear_all_caches():
     Called automatically when a new circuit is created via ql.circuit().
     Dead weak references are pruned during iteration.
     """
+    global _capture_depth
+    _capture_depth = 0
     alive = []
     for ref in _compiled_funcs:
         obj = ref()
@@ -392,7 +402,9 @@ class CompiledFunc:
         If True, run both capture and replay and compare (dev mode).
     """
 
-    def __init__(self, func, max_cache=128, key=None, verify=False, optimize=True, inverse=False):
+    def __init__(
+        self, func, max_cache=128, key=None, verify=False, optimize=True, inverse=False, debug=False
+    ):
         functools.update_wrapper(self, func)
         self._func = func
         self._cache = collections.OrderedDict()
@@ -402,6 +414,10 @@ class CompiledFunc:
         self._optimize = optimize
         self._inverse_eager = inverse
         self._inverse_func = None
+        self._debug = debug
+        self._stats = None
+        self._total_hits = 0
+        self._total_misses = 0
         # Register for cache invalidation on circuit reset
         _compiled_funcs.append(weakref.ref(self))
         # Eagerly create inverse wrapper when inverse=True
@@ -423,12 +439,14 @@ class CompiledFunc:
         else:
             cache_key = (tuple(classical_args), tuple(widths), control_count)
 
-        if cache_key in self._cache:
+        is_hit = cache_key in self._cache
+
+        if is_hit:
             # Move to end (most recently used)
             self._cache.move_to_end(cache_key)
-            return self._replay(self._cache[cache_key], quantum_args)
+            result = self._replay(self._cache[cache_key], quantum_args)
         else:
-            return self._capture_and_cache_both(
+            result = self._capture_and_cache_both(
                 args,
                 kwargs,
                 quantum_args,
@@ -437,6 +455,32 @@ class CompiledFunc:
                 is_controlled,
                 cache_key,
             )
+
+        if self._debug:
+            block = self._cache.get(cache_key)
+            if block is not None:
+                if is_hit:
+                    self._total_hits += 1
+                else:
+                    self._total_misses += 1
+                print(
+                    f"[ql.compile] {self._func.__name__}: "
+                    f"{'HIT' if is_hit else 'MISS'} | "
+                    f"original={block.original_gate_count} -> "
+                    f"optimized={len(block.gates)} gates | "
+                    f"cache_entries={len(self._cache)}",
+                    file=sys.stderr,
+                )
+                self._stats = {
+                    "cache_hit": is_hit,
+                    "original_gate_count": block.original_gate_count,
+                    "optimized_gate_count": len(block.gates),
+                    "cache_size": len(self._cache),
+                    "total_hits": self._total_hits,
+                    "total_misses": self._total_misses,
+                }
+
+        return result
 
     def _classify_args(self, args, kwargs):
         """Separate quantum and classical arguments.
@@ -470,6 +514,20 @@ class CompiledFunc:
 
     def _capture(self, args, kwargs, quantum_args):
         """Capture gate sequence during first call."""
+        global _capture_depth
+        if _capture_depth >= _MAX_CAPTURE_DEPTH:
+            raise RecursionError(
+                f"Compiled function nesting depth exceeded {_MAX_CAPTURE_DEPTH}. "
+                "Possible circular compiled function calls."
+            )
+        _capture_depth += 1
+        try:
+            return self._capture_inner(args, kwargs, quantum_args)
+        finally:
+            _capture_depth -= 1
+
+    def _capture_inner(self, args, kwargs, quantum_args):
+        """Inner capture logic (separated for nesting depth tracking)."""
         # Record start layer
         start_layer = get_current_layer()
 
@@ -672,6 +730,14 @@ class CompiledFunc:
         return None
 
     # ------------------------------------------------------------------
+    # Debug introspection
+    # ------------------------------------------------------------------
+    @property
+    def stats(self):
+        """Return debug stats dict, or None when debug=False."""
+        return self._stats
+
+    # ------------------------------------------------------------------
     # Optimisation statistics
     # ------------------------------------------------------------------
     @property
@@ -830,13 +896,25 @@ def compile(
 
     def decorator(fn):
         return CompiledFunc(
-            fn, max_cache=max_cache, key=key, verify=verify, optimize=optimize, inverse=inverse
+            fn,
+            max_cache=max_cache,
+            key=key,
+            verify=verify,
+            optimize=optimize,
+            inverse=inverse,
+            debug=debug,
         )
 
     if func is not None:
         # Called as @ql.compile (bare) -- func is the decorated function
         return CompiledFunc(
-            func, max_cache=max_cache, key=key, verify=verify, optimize=optimize, inverse=inverse
+            func,
+            max_cache=max_cache,
+            key=key,
+            verify=verify,
+            optimize=optimize,
+            inverse=inverse,
+            debug=debug,
         )
     # Called as @ql.compile() or @ql.compile(max_cache=N)
     return decorator
