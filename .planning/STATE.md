@@ -9,17 +9,17 @@ See: .planning/PROJECT.md (updated 2026-02-04)
 
 ## Current Position
 
-Phase: 49 of 51 (Optimization & Uncomputation) -- COMPLETE
-Plan: 02 of 02 complete
-Status: Phase complete
-Last activity: 2026-02-04 -- Completed 49-02-PLAN.md (Uncomputation Integration)
+Phase: 50 of 51 (Controlled Context) -- In progress
+Plan: 01 of 02 complete
+Status: In progress
+Last activity: 2026-02-04 -- Completed 50-01-PLAN.md (Controlled Context Support)
 
-Progress: [████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] ~28%
+Progress: [█████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] ~29%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 146 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 4)
+- Total plans completed: 147 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 5)
 - Average duration: ~13 min/plan
 - Total execution time: ~23.5 hours
 
@@ -56,7 +56,7 @@ See PROJECT.md Key Decisions table for full history.
 **v2.0 research flags:**
 - Uncomputation integration (Phase 49) -- RESOLVED: existing _build_return_qint already correct, 5 integration tests added
 - 12+ global state variables need snapshot-restore during tracing (Phase 48) -- RESOLVED: first call is real execution, no snapshot needed
-- Controlled context requires re-capture, not post-hoc control addition (Phase 50)
+- Controlled context requires re-capture, not post-hoc control addition (Phase 50) -- RESOLVED: derive controlled variant from uncontrolled, cache both eagerly
 
 ### Quick Tasks Completed
 
@@ -69,9 +69,9 @@ See PROJECT.md Key Decisions table for full history.
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 49-02-PLAN.md (Uncomputation Integration) -- Phase 49 complete
+Stopped at: Completed 50-01-PLAN.md (Controlled Context Support)
 Resume file: None
-Resume action: `/gsd:execute-phase 50` (Controlled Context)
+Resume action: Continue with 50-02-PLAN.md
 
 ---
-*State updated: 2026-02-04 -- Completed 49-02 (uncomputation integration verified, 5 tests added, phase 49 complete)*
+*State updated: 2026-02-04 -- Completed 50-01 (controlled context detection, derivation, cache key extension, replay remapping)*
