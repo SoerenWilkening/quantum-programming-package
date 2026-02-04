@@ -23,9 +23,9 @@ Requirements for the function compilation milestone. Each maps to roadmap phases
 
 ### Controlled Execution
 
-- [ ] **CTL-01**: Compiled functions work inside `with` blocks (controlled execution)
-- [ ] **CTL-02**: Controlled context triggers re-capture (not post-hoc control addition)
-- [ ] **CTL-03**: Cache key includes controlled state to avoid incorrect replay
+- [x] **CTL-01**: Compiled functions work inside `with` blocks (controlled execution)
+- [x] **CTL-02**: Controlled context triggers re-capture (not post-hoc control addition)
+- [x] **CTL-03**: Cache key includes controlled state to avoid incorrect replay
 
 ### Inverse Generation
 
@@ -89,9 +89,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CAP-06 | Phase 48 | Complete |
 | OPT-01 | Phase 49 | Complete |
 | OPT-02 | Phase 49 | Complete |
-| CTL-01 | Phase 50 | Pending |
-| CTL-02 | Phase 50 | Pending |
-| CTL-03 | Phase 50 | Pending |
+| CTL-01 | Phase 50 | Complete |
+| CTL-02 | Phase 50 | Complete |
+| CTL-03 | Phase 50 | Complete |
 | INV-01 | Phase 51 | Pending |
 | INV-02 | Phase 51 | Pending |
 | DBG-01 | Phase 51 | Pending |

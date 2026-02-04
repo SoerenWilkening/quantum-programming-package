@@ -71,7 +71,7 @@ See PROJECT.md Key Decisions table for full history.
 Last session: 2026-02-04
 Stopped at: Completed 50-02-PLAN.md (Controlled Context Compile Tests)
 Resume file: None
-Resume action: Continue with Phase 51
+Resume action: `/gsd:plan-phase 51` (Differentiators & Polish)
 
 ---
 *State updated: 2026-02-04 -- Completed 50-02 (7 controlled context compile tests)*

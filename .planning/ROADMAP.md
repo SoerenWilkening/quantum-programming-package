@@ -34,7 +34,7 @@
 
 - [x] **Phase 48: Core Capture-Replay** - Cython infrastructure, decorator, gate capture/replay with qubit remapping and caching -- completed 2026-02-04
 - [x] **Phase 49: Optimization & Uncomputation** - Optimize captured sequences and integrate with uncomputation tracking -- completed 2026-02-04
-- [ ] **Phase 50: Controlled Context** - Compiled functions work inside `with` blocks via re-capture with controlled cache keys
+- [x] **Phase 50: Controlled Context** - Compiled functions work inside `with` blocks via re-capture with controlled cache keys -- completed 2026-02-04
 - [ ] **Phase 51: Differentiators & Polish** - Inverse generation, debug mode, nested compilation, and comprehensive test suite
 
 ## Phase Details
@@ -77,8 +77,8 @@ Plans:
   3. Nested `with` blocks around compiled function calls produce the correct multi-controlled gates
 **Plans**: 2 plans
 Plans:
-- [ ] 50-01-PLAN.md -- Core controlled context implementation (derivation, cache key, replay remapping)
-- [ ] 50-02-PLAN.md -- Controlled context tests (basic, cache separation, nested with, custom key)
+- [x] 50-01-PLAN.md -- Core controlled context implementation (derivation, cache key, replay remapping)
+- [x] 50-02-PLAN.md -- Controlled context tests (basic, cache separation, nested with, custom key)
 
 ### Phase 51: Differentiators & Polish
 **Goal**: Compiled functions support inverse generation, debug introspection, nesting, and the feature has comprehensive test coverage
@@ -107,7 +107,7 @@ Phases execute in numeric order: 48 -> 49 -> 50 -> 51
 | 47. Detail Mode & Public API | v1.9 | 2/2 | Complete | 2026-02-03 |
 | 48. Core Capture-Replay | v2.0 | 2/2 | Complete | 2026-02-04 |
 | 49. Optimization & Uncomputation | v2.0 | 2/2 | Complete | 2026-02-04 |
-| 50. Controlled Context | v2.0 | 0/2 | Not started | - |
+| 50. Controlled Context | v2.0 | 2/2 | Complete | 2026-02-04 |
 | 51. Differentiators & Polish | v2.0 | 0/TBD | Not started | - |
 
 ---
