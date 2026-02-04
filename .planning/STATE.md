@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v2.0 -- Function Compilation, Phase 49 (Optimization & Uncomputation)
+**Current focus:** v2.0 -- Function Compilation, Phase 50 (Controlled Context)
 
 ## Current Position
 
-Phase: 49 of 51 (Optimization & Uncomputation)
-Plan: 01 of 02 complete
-Status: In progress
-Last activity: 2026-02-04 -- Completed 49-01-PLAN.md (Gate List Optimization)
+Phase: 49 of 51 (Optimization & Uncomputation) -- COMPLETE
+Plan: 02 of 02 complete
+Status: Phase complete
+Last activity: 2026-02-04 -- Completed 49-02-PLAN.md (Uncomputation Integration)
 
-Progress: [███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] ~27%
+Progress: [████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] ~28%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 145 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 3)
+- Total plans completed: 146 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 4)
 - Average duration: ~13 min/plan
 - Total execution time: ~23.5 hours
 
@@ -54,7 +54,7 @@ See PROJECT.md Key Decisions table for full history.
 - BUG-WIDTH-ADD: Mixed-width QFT addition off-by-one (discovered in v1.8)
 
 **v2.0 research flags:**
-- Uncomputation integration (Phase 49) is the hardest challenge -- layer-based tracking has known fragility
+- Uncomputation integration (Phase 49) -- RESOLVED: existing _build_return_qint already correct, 5 integration tests added
 - 12+ global state variables need snapshot-restore during tracing (Phase 48) -- RESOLVED: first call is real execution, no snapshot needed
 - Controlled context requires re-capture, not post-hoc control addition (Phase 50)
 
@@ -69,9 +69,9 @@ See PROJECT.md Key Decisions table for full history.
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: Completed 49-01-PLAN.md (Gate List Optimization)
+Stopped at: Completed 49-02-PLAN.md (Uncomputation Integration) -- Phase 49 complete
 Resume file: None
-Resume action: `/gsd:execute-phase 49` (plan 02 remaining)
+Resume action: `/gsd:execute-phase 50` (Controlled Context)
 
 ---
-*State updated: 2026-02-04 -- Completed 49-01 (gate list optimiser with adjacent cancellation, rotation merge, stats API)*
+*State updated: 2026-02-04 -- Completed 49-02 (uncomputation integration verified, 5 tests added, phase 49 complete)*
