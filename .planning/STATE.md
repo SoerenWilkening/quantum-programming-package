@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-04)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v2.1 Compile Enhancements — Phase 52 (Ancilla Tracking & Inverse Qubit Reuse)
+**Current focus:** v2.1 Compile Enhancements -- Phase 52 (Ancilla Tracking & Inverse Qubit Reuse)
 
 ## Current Position
 
 Phase: 52 of 54 (Ancilla Tracking & Inverse Qubit Reuse)
-Plan: —
-Status: Ready to plan
-Last activity: 2026-02-04 — Roadmap created for v2.1
+Plan: 01 of TBD
+Status: In progress
+Last activity: 2026-02-04 -- Completed 52-01-PLAN.md
 
-Progress: ░░░░░░░░░░ 0% (v2.1)
+Progress: █░░░░░░░░░ ~10% (v2.1)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 150 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8)
+- Total plans completed: 151 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 1)
 - Average duration: ~13 min/plan
-- Total execution time: ~23.5 hours
+- Total execution time: ~23.7 hours
 
 **By Milestone:**
 
@@ -38,13 +38,19 @@ Progress: ░░░░░░░░░░ 0% (v2.1)
 | v1.8 Copy, Mutability & Uncomp Fix | 41-44 | 7 | Complete (2026-02-03) |
 | v1.9 Pixel-Art Circuit Visualization | 45-47 | 7 | Complete (2026-02-03) |
 | v2.0 Function Compilation | 48-51 | 8 | Complete (2026-02-04) |
-| v2.1 Compile Enhancements | 52-54 | TBD | In progress |
+| v2.1 Compile Enhancements | 52-54 | 1/TBD | In progress |
 
 ## Accumulated Context
 
 ### Decisions
 
 See PROJECT.md Key Decisions table for full history.
+
+| Phase | Decision | Rationale |
+|-------|----------|-----------|
+| 52-01 | Only track forward calls when ancillas allocated | In-place functions without ancillas don't need tracking; avoids false double-forward errors in nested compilation |
+| 52-01 | f.inverse is @property returning _AncillaInverseProxy | Enables f.inverse(x) call syntax without parentheses for getter |
+| 52-01 | f.adjoint is @property returning _InverseCompiledFunc | Standalone adjoint with fresh ancillas, no forward call tracking |
 
 ### Blockers/Concerns
 
@@ -57,9 +63,9 @@ See PROJECT.md Key Decisions table for full history.
 ## Session Continuity
 
 Last session: 2026-02-04
-Stopped at: v2.1 roadmap created — ready to plan Phase 52
+Stopped at: Completed 52-01-PLAN.md
 Resume file: None
-Resume action: `/gsd:plan-phase 52`
+Resume action: Next plan in Phase 52
 
 ---
-*State updated: 2026-02-04 -- v2.1 roadmap created*
+*State updated: 2026-02-04 -- Completed 52-01 (ancilla tracking infrastructure)*
