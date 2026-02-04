@@ -1,15 +1,27 @@
 from libc.stdlib cimport free, malloc, calloc
-from libc.string cimport memcpy
+from libc.string cimport memcpy, memset
 from libc.stdint cimport int64_t
 
-cdef extern from "arithmetic_ops.h":
+# Core types from types.h -- gate_t with full field access for capture-replay
+cdef extern from "types.h":
+	ctypedef unsigned int qubit_t
+	ctypedef enum Standardgate_t:
+		X, Y, Z, R, H, Rx, Ry, Rz, P, M
+
 	ctypedef struct gate_t:
-		pass
+		qubit_t Control[2]  # MAXCONTROLS = 2
+		qubit_t *large_control
+		unsigned int NumControls
+		Standardgate_t Gate
+		double GateValue
+		qubit_t Target
+		unsigned int NumBasisGates
 
 	ctypedef struct sequence_t:
 		unsigned int num_layer
 		unsigned int used_layer
 
+cdef extern from "arithmetic_ops.h":
 	# Addition operations
 	sequence_t *CC_add();
 	sequence_t *CQ_add(int bits, long long value);
@@ -98,8 +110,11 @@ cdef extern from "execution.h":
 
 cdef extern from "qubit_allocator.h":
 	# Forward declaration to match C header
+	# Expanded for capture-replay: sequence, used_gates_per_layer access
 	cdef struct circuit_s:
+		gate_t **sequence           # [layer][gate_index]
 		unsigned int used_layer
+		unsigned int *used_gates_per_layer  # [layer]
 		unsigned int used_qubits
 		unsigned int layer_floor
 
@@ -139,6 +154,10 @@ cdef extern from "circuit_stats.h":
 	unsigned int circuit_depth(circuit_s *circ)
 	unsigned int circuit_qubit_count(circuit_s *circ)
 	gate_counts_t circuit_gate_counts(circuit_s *circ)
+
+cdef extern from "optimizer.h":
+	# Gate injection for capture-replay
+	void add_gate(circuit_t *circ, gate_t *g)
 
 cdef extern from "circuit_optimizer.h":
 	ctypedef enum opt_pass_t:

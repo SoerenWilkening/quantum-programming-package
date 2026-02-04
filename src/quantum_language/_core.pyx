@@ -641,6 +641,57 @@ def get_current_layer():
 	return circ.used_layer
 
 
+def extract_gate_range(int start_layer, int end_layer):
+	"""Extract gates from circuit layers [start_layer, end_layer) as Python list of dicts.
+
+	Each gate dict contains: 'type' (int), 'target' (int), 'angle' (float),
+	'num_controls' (int), 'controls' (list of int).
+
+	Parameters
+	----------
+	start_layer : int
+		Starting layer index (inclusive).
+	end_layer : int
+		Ending layer index (exclusive).
+
+	Returns
+	-------
+	list of dict
+		Gate data suitable for caching and replay via inject_remapped_gates().
+
+	Examples
+	--------
+	>>> c = circuit()
+	>>> a = qint(5, width=4)
+	>>> start = get_current_layer()
+	>>> b = a + qint(3, width=4)
+	>>> end = get_current_layer()
+	>>> gates = extract_gate_range(start, end)
+	>>> len(gates) > 0
+	True
+	"""
+	cdef circuit_s *circ = <circuit_s*>_circuit
+	cdef gate_t *g
+	cdef int layer, gi
+	if not _circuit_initialized:
+		raise RuntimeError("Circuit not initialized")
+	gates = []
+	for layer in range(start_layer, end_layer):
+		for gi in range(circ.used_gates_per_layer[layer]):
+			g = &circ.sequence[layer][gi]
+			gate_dict = {
+				'type': <int>g.Gate,
+				'target': <int>g.Target,
+				'angle': g.GateValue,
+				'num_controls': <int>g.NumControls,
+				'controls': [<int>g.Control[i] for i in range(min(<int>g.NumControls, 2))]
+			}
+			if g.NumControls > 2 and g.large_control != NULL:
+				gate_dict['controls'] = [<int>g.large_control[i] for i in range(<int>g.NumControls)]
+			gates.append(gate_dict)
+	return gates
+
+
 def reverse_instruction_range(int start_layer, int end_layer):
 	"""Reverse gates in circuit from start_layer to end_layer (exclusive).
 
