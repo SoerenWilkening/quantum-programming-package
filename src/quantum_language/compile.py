@@ -28,9 +28,15 @@ import numpy as np
 
 from ._core import (
     _allocate_qubit,
+    _get_control_bool,
+    _get_controlled,
     _get_layer_floor,
+    _get_list_of_controls,
     _register_cache_clear_hook,
+    _set_control_bool,
+    _set_controlled,
     _set_layer_floor,
+    _set_list_of_controls,
     extract_gate_range,
     get_current_layer,
     inject_remapped_gates,
@@ -147,6 +153,24 @@ def _optimize_gate_list(gates):
 
 
 # ---------------------------------------------------------------------------
+# Controlled variant derivation
+# ---------------------------------------------------------------------------
+def _derive_controlled_gates(gates, control_virtual_idx):
+    """Add one control qubit to every gate in the list.
+
+    Each gate's ``num_controls`` is incremented by 1 and
+    *control_virtual_idx* is prepended to the ``controls`` list.
+    """
+    controlled = []
+    for g in gates:
+        cg = dict(g)
+        cg["num_controls"] = g["num_controls"] + 1
+        cg["controls"] = [control_virtual_idx] + list(g["controls"])
+        controlled.append(cg)
+    return controlled
+
+
+# ---------------------------------------------------------------------------
 # Global registry for cache invalidation on circuit reset
 # ---------------------------------------------------------------------------
 _compiled_funcs = []  # List of weakref.ref to CompiledFunc instances
@@ -201,6 +225,7 @@ class CompiledBlock:
         "return_qubit_range",
         "return_is_param_index",
         "original_gate_count",
+        "control_virtual_idx",
         "_first_call_result",
     )
 
@@ -223,6 +248,7 @@ class CompiledBlock:
         self.original_gate_count = (
             original_gate_count if original_gate_count is not None else len(gates)
         )
+        self.control_virtual_idx = None
         self._first_call_result = None
 
 
@@ -359,24 +385,30 @@ class CompiledFunc:
         # Classify args into quantum and classical
         quantum_args, classical_args, widths = self._classify_args(args, kwargs)
 
-        # Build cache key
+        # Detect controlled context
+        is_controlled = _get_controlled()
+        control_count = 1 if is_controlled else 0
+
+        # Build cache key (always includes control_count)
         if self._key_func:
-            cache_key = self._key_func(*args, **kwargs)
+            cache_key = (self._key_func(*args, **kwargs), control_count)
         else:
-            cache_key = (tuple(classical_args), tuple(widths))
+            cache_key = (tuple(classical_args), tuple(widths), control_count)
 
         if cache_key in self._cache:
             # Move to end (most recently used)
             self._cache.move_to_end(cache_key)
             return self._replay(self._cache[cache_key], quantum_args)
         else:
-            block = self._capture(args, kwargs, quantum_args)
-            # Store in cache with eviction
-            self._cache[cache_key] = block
-            if len(self._cache) > self._max_cache:
-                self._cache.popitem(last=False)  # Remove oldest
-            # First call: function already executed, return its result
-            return block._first_call_result
+            return self._capture_and_cache_both(
+                args,
+                kwargs,
+                quantum_args,
+                classical_args,
+                widths,
+                is_controlled,
+                cache_key,
+            )
 
     def _classify_args(self, args, kwargs):
         """Separate quantum and classical arguments.
@@ -482,6 +514,93 @@ class CompiledFunc:
         block._first_call_result = result
         return block
 
+    def _capture_and_cache_both(
+        self,
+        args,
+        kwargs,
+        quantum_args,
+        classical_args,
+        widths,
+        is_controlled,
+        cache_key,
+    ):
+        """Handle cache miss: capture uncontrolled, derive controlled, cache both.
+
+        First call of a compiled function inside a ``with`` block executes
+        the uncontrolled body; subsequent calls correctly replay controlled
+        gates.  This is an accepted trade-off -- the first-call circuit
+        contains uncontrolled gates because gates already emitted into the
+        circuit cannot be retroactively controlled.
+        """
+        # Always capture in uncontrolled mode
+        if is_controlled:
+            saved_controlled = _get_controlled()
+            saved_control_bool = _get_control_bool()
+            saved_list_of_controls = list(_get_list_of_controls())
+            _set_controlled(False)
+            _set_control_bool(None)
+            _set_list_of_controls([])
+            try:
+                block = self._capture(args, kwargs, quantum_args)
+            finally:
+                _set_controlled(saved_controlled)
+                _set_control_bool(saved_control_bool)
+                _set_list_of_controls(saved_list_of_controls)
+        else:
+            block = self._capture(args, kwargs, quantum_args)
+
+        # Cache uncontrolled variant
+        if self._key_func:
+            unctrl_key = (self._key_func(*args, **kwargs), 0)
+        else:
+            unctrl_key = (tuple(classical_args), tuple(widths), 0)
+        self._cache[unctrl_key] = block
+
+        # Derive and cache controlled variant
+        try:
+            controlled_block = self._derive_controlled_block(block)
+        except Exception:
+            # Fallback: re-capture in controlled mode (not expected with
+            # current gate set, but guards against future gate types)
+            controlled_block = self._capture(args, kwargs, quantum_args)
+        if self._key_func:
+            ctrl_key = (self._key_func(*args, **kwargs), 1)
+        else:
+            ctrl_key = (tuple(classical_args), tuple(widths), 1)
+        self._cache[ctrl_key] = controlled_block
+
+        # Evict oldest if over capacity (we added 2 entries)
+        while len(self._cache) > self._max_cache:
+            self._cache.popitem(last=False)
+
+        return block._first_call_result
+
+    def _derive_controlled_block(self, uncontrolled_block):
+        """Create a controlled ``CompiledBlock`` from an uncontrolled one.
+
+        The control qubit receives virtual index
+        ``uncontrolled_block.total_virtual_qubits`` (one beyond all
+        uncontrolled virtual qubits).
+        """
+        control_virt_idx = uncontrolled_block.total_virtual_qubits
+
+        controlled_gates = _derive_controlled_gates(
+            uncontrolled_block.gates,
+            control_virt_idx,
+        )
+
+        controlled_block = CompiledBlock(
+            gates=controlled_gates,
+            total_virtual_qubits=uncontrolled_block.total_virtual_qubits + 1,
+            param_qubit_ranges=list(uncontrolled_block.param_qubit_ranges),
+            internal_qubit_count=uncontrolled_block.internal_qubit_count,
+            return_qubit_range=uncontrolled_block.return_qubit_range,
+            return_is_param_index=uncontrolled_block.return_is_param_index,
+            original_gate_count=uncontrolled_block.original_gate_count,
+        )
+        controlled_block.control_virtual_idx = control_virt_idx
+        return controlled_block
+
     def _replay(self, block, quantum_args):
         """Replay cached gates with qubit remapping."""
         # Build virtual-to-real mapping from caller's qints
@@ -493,9 +612,15 @@ class CompiledFunc:
                 virtual_to_real[vidx] = real_q
                 vidx += 1
 
-        # Allocate fresh ancillas for internal qubits
+        # Allocate fresh ancillas for internal qubits, with control
+        # qubit remapping for controlled variants
         for v in range(vidx, block.total_virtual_qubits):
-            virtual_to_real[v] = _allocate_qubit()
+            if block.control_virtual_idx is not None and v == block.control_virtual_idx:
+                # Map control placeholder to actual control qubit
+                control_bool = _get_control_bool()
+                virtual_to_real[v] = int(control_bool.qubits[63])
+            else:
+                virtual_to_real[v] = _allocate_qubit()
 
         # Save layer_floor, set to current layer to prevent gate reordering
         saved_floor = _get_layer_floor()

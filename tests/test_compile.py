@@ -716,10 +716,15 @@ def test_replay_uses_optimized_gates():
     end2 = get_current_layer()
     replay_gates = extract_gate_range(start2, end2)
 
-    # Replay gate count must equal the optimised (cached) count
-    assert len(replay_gates) == add_one.optimized_gates, (
-        f"Replay gates ({len(replay_gates)}) should match optimized_gates "
-        f"({add_one.optimized_gates})"
+    # Replay gate count must equal the optimised (cached) count for the
+    # uncontrolled variant.  Since _capture_and_cache_both caches both
+    # uncontrolled and controlled variants, optimized_gates sums across
+    # all entries.  We check the specific uncontrolled block's gate count.
+    unctrl_key = ((), (4,), 0)
+    unctrl_block = add_one._cache[unctrl_key]
+    assert len(replay_gates) == len(unctrl_block.gates), (
+        f"Replay gates ({len(replay_gates)}) should match uncontrolled cached gates "
+        f"({len(unctrl_block.gates)})"
     )
 
 
@@ -954,7 +959,10 @@ def test_uncomputation_replay_uses_optimized_sequence():
     # Capture
     a = ql.qint(0, width=4)
     _r1 = make_new(a)
-    cached_gate_count = make_new.optimized_gates
+    # Get the uncontrolled block's gate count directly (optimized_gates
+    # sums across both uncontrolled and controlled cached variants)
+    unctrl_key = ((), (4,), 0)
+    cached_gate_count = len(make_new._cache[unctrl_key].gates)
 
     # Replay outside with block to measure forward gate count
     b = ql.qint(0, width=4)
@@ -964,7 +972,7 @@ def test_uncomputation_replay_uses_optimized_sequence():
     replay_gates = extract_gate_range(start, end)
     assert len(replay_gates) == cached_gate_count, (
         f"Replay gate count ({len(replay_gates)}) should match "
-        f"optimized_gates ({cached_gate_count})"
+        f"uncontrolled cached gates ({cached_gate_count})"
     )
 
     # Replay inside with block -- result gets uncomputed
