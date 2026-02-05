@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 55 - Profiling Infrastructure
-Plan: 02 of 03 complete
-Status: In progress
-Last activity: 2026-02-05 — Completed 55-02-PLAN.md (Profiling API & Benchmarks)
+Plan: 03 of 03 complete
+Status: Phase complete
+Last activity: 2026-02-05 — Completed 55-03-PLAN.md (Makefile Profiling Targets)
 
-Progress: [=.........] ~10% (v2.2: 2 plans complete)
+Progress: [==........] ~15% (v2.2: 3 plans complete, Phase 55 complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 158 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 2)
+- Total plans completed: 159 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 3)
 - Average duration: ~13 min/plan
 - Total execution time: ~24 hours
 
@@ -60,6 +60,9 @@ Recent decisions (v2.2):
 - Used cProfile + pstats directly for profiler (no external dependency)
 - Benchmarks skip gracefully when pytest-benchmark not installed
 - Benchmark fixtures create fresh circuit for state isolation
+- Use PYTHONPATH=src for profiling targets (in-place builds)
+- Process pyx files individually in profile-cython (include directive handling)
+- Use inline cProfile API instead of -c flag (better compatibility)
 
 ### v2.2 Research Findings
 
@@ -82,9 +85,9 @@ Key constraints and guidance from research:
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Completed 55-02-PLAN.md
-Resume file: .planning/phases/55-profiling-infrastructure/55-02-SUMMARY.md
-Resume action: Continue with 55-03-PLAN.md (Hotpath Identification)
+Stopped at: Completed 55-03-PLAN.md (Phase 55 complete)
+Resume file: .planning/phases/55-profiling-infrastructure/55-03-SUMMARY.md
+Resume action: Begin Phase 56 (Profiling Baseline) or Phase 57 (Circuit Depth Analysis)
 
 ---
-*State updated: 2026-02-05 -- Completed 55-02-PLAN.md (Profiling API & Benchmarks)*
+*State updated: 2026-02-05 -- Completed 55-03-PLAN.md (Makefile Profiling Targets) - Phase 55 complete*
