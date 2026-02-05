@@ -2842,3 +2842,133 @@ def test_qarray_replay_different_element_values():
     # Both should return valid qints
     assert isinstance(result1, ql.qint)
     assert isinstance(result2, ql.qint)
+
+
+def test_qarray_cache_key_includes_length():
+    """ARR-04: Different array lengths trigger re-capture."""
+    ql.circuit()
+    call_count = [0]
+
+    @ql.compile
+    def sum_all(arr):
+        call_count[0] += 1
+        total = ql.qint(0, width=8)
+        for elem in arr:
+            total += elem
+        return total
+
+    # First call with 2-element array
+    arr2 = ql.qarray([1, 2], width=4)
+    sum_all(arr2)
+    assert call_count[0] == 1, "First call should capture"
+
+    # Second call with 3-element array - should re-capture
+    arr3 = ql.qarray([1, 2, 3], width=4)
+    sum_all(arr3)
+    assert call_count[0] == 2, "Different length should trigger re-capture"
+
+    # Third call with same 3-element length - should replay
+    arr3b = ql.qarray([4, 5, 6], width=4)
+    sum_all(arr3b)
+    assert call_count[0] == 2, "Same length should replay, not re-capture"
+
+
+def test_qarray_cache_separate_for_different_shapes():
+    """ARR-04: Cache correctly separates different array shapes."""
+    ql.circuit()
+
+    @ql.compile(debug=True)
+    def identity(arr):
+        return arr
+
+    # Cache 2-element
+    arr2 = ql.qarray([0, 0], width=4)
+    identity(arr2)
+
+    # Cache 4-element
+    arr4 = ql.qarray([0, 0, 0, 0], width=4)
+    identity(arr4)
+
+    # Replay 2-element
+    arr2b = ql.qarray([1, 1], width=4)
+    identity(arr2b)
+
+    # Check cache has at least 2 entries (both controlled and uncontrolled)
+    # In minimal case, cache should have entries for both array lengths
+    assert len(identity._cache) >= 2, "Cache should have entries for different lengths"
+
+
+def test_qarray_empty_raises_error():
+    """Empty qarray should raise ValueError."""
+    ql.circuit()
+
+    @ql.compile
+    def process(arr):
+        return arr
+
+    empty_arr = ql.qarray([], width=4)
+
+    with pytest.raises(ValueError, match="[Ee]mpty"):
+        process(empty_arr)
+
+
+def test_qarray_return_value():
+    """Compiled function can return qarray."""
+    ql.circuit()
+
+    @ql.compile
+    def increment_array(arr):
+        for elem in arr:
+            elem += 1
+        return arr
+
+    arr = ql.qarray([0, 0], width=4)
+    result = increment_array(arr)
+
+    # Result should be qarray
+    from quantum_language.qarray import qarray
+
+    assert isinstance(result, qarray), "Result should be qarray"
+    assert len(result) == 2, "Result should have same length"
+
+
+def test_qarray_return_replay():
+    """qarray return works correctly on replay."""
+    ql.circuit()
+
+    @ql.compile
+    def copy_array(arr):
+        # Create new array with same values (effectively returns input)
+        return arr
+
+    # Capture
+    arr1 = ql.qarray([1, 2], width=4)
+    result1 = copy_array(arr1)
+
+    # Replay
+    arr2 = ql.qarray([3, 4], width=4)
+    result2 = copy_array(arr2)
+
+    from quantum_language.qarray import qarray
+
+    assert isinstance(result1, qarray), "First result should be qarray"
+    assert isinstance(result2, qarray), "Replay result should be qarray"
+    assert len(result2) == len(arr2), "Replay result should have correct length"
+
+
+def test_qarray_slice_as_argument():
+    """qarray slice (view) works as compiled function argument."""
+    ql.circuit()
+
+    @ql.compile
+    def sum_slice(arr):
+        total = ql.qint(0, width=8)
+        for elem in arr:
+            total += elem
+        return total
+
+    full_arr = ql.qarray([1, 2, 3], width=4)
+    slice_view = full_arr[0:2]  # First two elements
+
+    result = sum_slice(slice_view)
+    assert isinstance(result, ql.qint), "Result should be qint"
