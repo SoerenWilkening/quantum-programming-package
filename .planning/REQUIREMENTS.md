@@ -74,37 +74,37 @@ Deferred to later milestones.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROF-01 | TBD | Pending |
-| PROF-02 | TBD | Pending |
-| PROF-03 | TBD | Pending |
-| PROF-04 | TBD | Pending |
-| PROF-05 | TBD | Pending |
-| PROF-06 | TBD | Pending |
-| PROF-07 | TBD | Pending |
-| FIX-01 | TBD | Pending |
-| FIX-02 | TBD | Pending |
-| CYT-01 | TBD | Pending |
-| CYT-02 | TBD | Pending |
-| CYT-03 | TBD | Pending |
-| CYT-04 | TBD | Pending |
-| HCS-01 | TBD | Pending |
-| HCS-02 | TBD | Pending |
-| HCS-03 | TBD | Pending |
-| HCS-04 | TBD | Pending |
-| HCS-05 | TBD | Pending |
-| HCS-06 | TBD | Pending |
-| MIG-01 | TBD | Pending |
-| MIG-02 | TBD | Pending |
-| MIG-03 | TBD | Pending |
-| MEM-01 | TBD | Pending |
-| MEM-02 | TBD | Pending |
-| MEM-03 | TBD | Pending |
+| PROF-01 | Phase 55 | Pending |
+| PROF-02 | Phase 55 | Pending |
+| PROF-03 | Phase 55 | Pending |
+| PROF-04 | Phase 55 | Pending |
+| PROF-05 | Phase 55 | Pending |
+| PROF-06 | Phase 55 | Pending |
+| PROF-07 | Phase 55 | Pending |
+| FIX-01 | Phase 56 | Pending |
+| FIX-02 | Phase 56 | Pending |
+| CYT-01 | Phase 57 | Pending |
+| CYT-02 | Phase 57 | Pending |
+| CYT-03 | Phase 57 | Pending |
+| CYT-04 | Phase 57 | Pending |
+| HCS-01 | Phase 58 | Pending |
+| HCS-02 | Phase 58 | Pending |
+| HCS-03 | Phase 59 | Pending |
+| HCS-04 | Phase 59 | Pending |
+| HCS-05 | Phase 58 | Pending |
+| HCS-06 | Phase 58 | Pending |
+| MIG-01 | Phase 60 | Pending |
+| MIG-02 | Phase 60 | Pending |
+| MIG-03 | Phase 60 | Pending |
+| MEM-01 | Phase 61 | Pending |
+| MEM-02 | Phase 61 | Pending |
+| MEM-03 | Phase 61 | Pending |
 
 **Coverage:**
 - v2.2 requirements: 25 total
-- Mapped to phases: 0
-- Unmapped: 25
+- Mapped to phases: 25
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-05*
-*Last updated: 2026-02-05 after initial definition*
+*Last updated: 2026-02-05 after roadmap creation*

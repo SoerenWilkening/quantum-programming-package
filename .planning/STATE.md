@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-05 — Milestone v2.2 started
+Phase: 55 - Profiling Infrastructure
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-02-05 — Roadmap created for v2.2
 
-Progress: ░░░░░░░░░░ 0% (v2.2 starting)
+Progress: [..........] 0% (v2.2: 0/7 phases)
 
 ## Performance Metrics
 
@@ -39,6 +39,7 @@ Progress: ░░░░░░░░░░ 0% (v2.2 starting)
 | v1.9 Pixel-Art Circuit Visualization | 45-47 | 7 | Complete (2026-02-03) |
 | v2.0 Function Compilation | 48-51 | 8 | Complete (2026-02-04) |
 | v2.1 Compile Enhancements | 52-54 | 6 | Complete (2026-02-05) |
+| v2.2 Performance Optimization | 55-61 | TBD | Active |
 
 ## Accumulated Context
 
@@ -55,6 +56,16 @@ Recent decisions (v2.1):
 - Use iteration protocol for qarray cdef access
 - Cache key uses ('arr', length) tuple for qarray
 
+### v2.2 Research Findings
+
+Key constraints and guidance from research:
+- Python 3.11 mandatory for Cython profiling (PEP-669 breaks profiling in 3.12+)
+- Profile before optimizing (avoid premature optimization)
+- f()/f.inverse() depth discrepancy is a quick win
+- Move entire hot paths to C (not individual functions) to avoid boundary overhead
+- Hardcoded sequences split into 4 files (~400 LOC each per constraint)
+- MIG and MEM phases are conditional on profiling results
+
 ### Blockers/Concerns
 
 **Carry forward:**
@@ -66,9 +77,9 @@ Recent decisions (v2.1):
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Defining v2.2 requirements
-Resume file: None
-Resume action: Continue requirements definition
+Stopped at: Roadmap created for v2.2
+Resume file: .planning/ROADMAP.md
+Resume action: `/gsd:plan-phase 55` to begin profiling infrastructure
 
 ---
-*State updated: 2026-02-05 -- Milestone v2.2 started*
+*State updated: 2026-02-05 -- Roadmap created for v2.2 Performance Optimization*
