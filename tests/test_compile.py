@@ -2980,10 +2980,17 @@ def test_qarray_slice_as_argument():
 #
 # ROOT CAUSE ANALYSIS (Phase 56 FIX-01)
 # =====================================
-# Finding: Capture and replay paths produce different circuit depths due to
+# Finding: Capture and replay paths can produce different circuit depths due to
 #          layer_floor constraint during replay.
 #
 # Location: compile.py lines 984-994 (_replay method)
+#   Code:
+#     saved_floor = _get_layer_floor()       # line 985
+#     start_layer = get_current_layer()       # line 986
+#     _set_layer_floor(start_layer)           # line 987 <- KEY LINE
+#     inject_remapped_gates(block.gates, virtual_to_real)  # line 990
+#     end_layer = get_current_layer()         # line 992
+#     _set_layer_floor(saved_floor)           # line 994
 #
 # Mechanism:
 #   - During CAPTURE: layer_floor remains at 0 (or wherever it was), so gates
@@ -2995,10 +3002,26 @@ def test_qarray_slice_as_argument():
 #     qubits, captured gates can pack into earlier layers (lower depth).
 #     But replay always starts at current_layer (higher depth).
 #
-# Fix approach: The replay mechanism should preserve the RELATIVE gate
-#   scheduling from capture, not force all gates to start at current_layer.
-#   Alternatively, capture should also set layer_floor to prevent the
-#   inconsistency.
+# Test Results (verified 2026-02-05):
+#   - test_depth_capture_vs_replay: PASS - Equal depths when both start fresh
+#   - test_depth_forward_vs_adjoint: PASS - Forward/adjoint replays produce equal depth
+#   - test_depth_across_widths: PASS - Equal at widths 4, 8, 16
+#   - test_layer_floor_effect: PASS - Shows capture depth=0 vs replay depth=15
+#   - test_layer_floor_causes_depth_inflation: PASS - Proves mechanism
+#
+# KEY FINDING: Forward f(x) replay and f.adjoint(x) replay produce EQUAL depths
+#   when both use the cached block. The original concern about forward/inverse
+#   depth discrepancy is NOT present in the current implementation.
+#
+#   The discrepancy that DOES exist is between:
+#   - CAPTURE (when gates can pack into earlier layers)
+#   - REPLAY (when layer_floor forces gates to start at current_layer)
+#
+# Fix approach: Two possible fixes:
+#   1. During capture, also set layer_floor to current_layer (consistency)
+#   2. During replay, preserve relative gate scheduling from capture
+#   Option 1 is simpler but may reduce optimization opportunities.
+#   Option 2 preserves optimization but requires storing layer offsets.
 #
 # IMPORTANT: When both capture and replay start at layer 0 with no prior
 # circuit operations, they produce the SAME depth. The discrepancy only
