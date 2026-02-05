@@ -33,6 +33,7 @@ c_sources = [
     os.path.join(PROJECT_ROOT, "c_backend", "src", "IntegerMultiplication.c"),
     os.path.join(PROJECT_ROOT, "c_backend", "src", "LogicOperations.c"),
     os.path.join(PROJECT_ROOT, "c_backend", "src", "execution.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", "add_seq_1_4.c"),
 ]
 
 compiler_args = ["-O3", "-pthread"]  # Removed -flto due to GCC LTO bug
