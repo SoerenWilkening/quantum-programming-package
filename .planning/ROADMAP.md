@@ -84,6 +84,12 @@ Plans:
 
 **Requirements:** FIX-01, FIX-02
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 56-01-PLAN.md — Diagnose depth discrepancy between forward/adjoint paths
+- [ ] 56-02-PLAN.md — Implement fix and add regression tests
+
 **Success Criteria:**
 1. Profiling data shows where forward path diverges from inverse optimization
 2. `f(x)` produces circuit depth equal to `f.inverse(x)` for same operations
@@ -192,7 +198,7 @@ Plans:
 | 53. Qubit-Saving Auto-Uncompute | v2.1 | 2/2 | Complete | 2026-02-04 |
 | 54. qarray Support in @ql.compile | v2.1 | 2/2 | Complete | 2026-02-05 |
 | 55. Profiling Infrastructure | v2.2 | 3/3 | Complete | 2026-02-05 |
-| 56. Forward/Inverse Depth Fix | v2.2 | 0/? | Pending | - |
+| 56. Forward/Inverse Depth Fix | v2.2 | 0/2 | Pending | - |
 | 57. Cython Optimization | v2.2 | 0/? | Pending | - |
 | 58. Hardcoded Sequences (1-8 bit) | v2.2 | 0/? | Pending | - |
 | 59. Hardcoded Sequences (9-16 bit) | v2.2 | 0/? | Pending | - |
