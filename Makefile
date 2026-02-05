@@ -85,7 +85,23 @@ clean:
 profile-cython:
 	@echo "Generating Cython annotation HTML..."
 	@mkdir -p build/cython-annotate
-	cython -a src/quantum_language/*.pyx -o build/cython-annotate/
+	@echo "Processing files without include directives..."
+	@for f in src/quantum_language/_core.pyx src/quantum_language/openqasm.pyx src/quantum_language/qarray.pyx src/quantum_language/qbool.pyx src/quantum_language/qint_mod.pyx; do \
+		if [ -f "$$f" ]; then \
+			echo "  Annotating $$f"; \
+			cython -a -3 "$$f" -o build/cython-annotate/$$(basename $${f%.pyx}.c) 2>/dev/null || true; \
+		fi; \
+	done
+	@echo "Processing preprocessed files..."
+	@for f in src/quantum_language/*_preprocessed.pyx; do \
+		if [ -f "$$f" ]; then \
+			echo "  Annotating $$f"; \
+			cython -a -3 "$$f" -o build/cython-annotate/$$(basename $${f%.pyx}.c) 2>/dev/null || true; \
+		fi; \
+	done
+	@echo ""
+	@ls -la build/cython-annotate/*.html 2>/dev/null || echo "No HTML files generated"
+	@echo ""
 	@echo "Annotation files generated in build/cython-annotate/"
 	@echo "Open the .html files in a browser to see Python/C interaction points"
 	@echo "(Yellow lines = Python C-API calls = potential optimization targets)"
