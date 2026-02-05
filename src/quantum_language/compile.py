@@ -424,11 +424,39 @@ def _get_qint_qubit_indices(q):
     return [int(q.qubits[64 - q.width + i]) for i in range(q.width)]
 
 
+def _get_qarray_qubit_indices(arr):
+    """Extract all real qubit indices from a qarray, ordered by element then bit position."""
+    indices = []
+    for elem in arr:  # Use iteration protocol (qarray supports __iter__)
+        indices.extend(_get_qint_qubit_indices(elem))
+    return indices
+
+
+def _get_quantum_arg_qubit_indices(qa):
+    """Get qubit indices from a qint or qarray argument."""
+    from .qarray import qarray
+
+    if isinstance(qa, qarray):
+        return _get_qarray_qubit_indices(qa)
+    else:
+        return _get_qint_qubit_indices(qa)
+
+
+def _get_quantum_arg_width(qa):
+    """Get total qubit count from a qint or qarray argument."""
+    from .qarray import qarray
+
+    if isinstance(qa, qarray):
+        return sum(elem.width if hasattr(elem, "width") else 1 for elem in qa)
+    else:
+        return qa.width
+
+
 def _input_qubit_key(quantum_args):
     """Build a hashable key from physical qubits of all quantum arguments."""
     key_parts = []
     for qa in quantum_args:
-        key_parts.extend(_get_qint_qubit_indices(qa))
+        key_parts.extend(_get_quantum_arg_qubit_indices(qa))
     return tuple(key_parts)
 
 
@@ -588,16 +616,30 @@ class CompiledFunc:
         """Separate quantum and classical arguments.
 
         Returns (quantum_args, classical_args, widths).
-        quantum_args: list of qint/qbool in positional order.
+        quantum_args: list of qint/qbool/qarray in positional order.
         classical_args: list of non-quantum values.
-        widths: list of int widths for quantum args.
+        widths: list of int widths for qint, or ('arr', length) for qarray.
         """
+        from .qarray import qarray
+
         quantum_args = []
         classical_args = []
         widths = []
 
         for arg in args:
-            if isinstance(arg, qint):
+            if isinstance(arg, qarray):
+                # Validate: empty qarray not supported
+                if len(arg) == 0:
+                    raise ValueError("Empty qarray not supported as compiled function argument")
+                # Validate: stale qarray elements
+                for elem in arg:  # Use iteration protocol
+                    if getattr(elem, "_is_uncomputed", False) or not getattr(
+                        elem, "allocated_qubits", True
+                    ):
+                        raise ValueError("qarray contains deallocated qubits")
+                quantum_args.append(arg)
+                widths.append(("arr", len(arg)))
+            elif isinstance(arg, qint):
                 quantum_args.append(arg)
                 widths.append(arg.width)
             else:
@@ -606,7 +648,19 @@ class CompiledFunc:
         # Also classify kwargs (sorted by key for determinism)
         for k in sorted(kwargs):
             val = kwargs[k]
-            if isinstance(val, qint):
+            if isinstance(val, qarray):
+                # Validate: empty qarray not supported
+                if len(val) == 0:
+                    raise ValueError("Empty qarray not supported as compiled function argument")
+                # Validate: stale qarray elements
+                for elem in val:  # Use iteration protocol
+                    if getattr(elem, "_is_uncomputed", False) or not getattr(
+                        elem, "allocated_qubits", True
+                    ):
+                        raise ValueError("qarray contains deallocated qubits")
+                quantum_args.append(val)
+                widths.append(("arr", len(val)))
+            elif isinstance(val, qint):
                 quantum_args.append(val)
                 widths.append(val.width)
             else:
@@ -636,7 +690,7 @@ class CompiledFunc:
         # Collect parameter qubit indices BEFORE execution
         param_qubit_indices = []
         for qa in quantum_args:
-            param_qubit_indices.append(_get_qint_qubit_indices(qa))
+            param_qubit_indices.append(_get_quantum_arg_qubit_indices(qa))
 
         # Execute function normally (gates flow to circuit as usual)
         try:
