@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 ## Current Position
 
-Phase: 56 - Forward/Inverse Depth Fix
-Plan: 2/2 complete
-Status: Phase complete, verified (6/6 must-haves)
-Last activity: 2026-02-05 — Phase 56 verified, depth parity confirmed
+Phase: 57 - Cython Optimization
+Plan: 1/? complete
+Status: In progress
+Last activity: 2026-02-05 — Completed 57-01-PLAN.md (CYTHON_DEBUG and baseline benchmarks)
 
-Progress: [██........] ~29% (v2.2: 2/7 phases complete)
+Progress: [███.......] ~31% (v2.2: 3/7 phases in progress)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 161 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 5)
+- Total plans completed: 162 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 6)
 - Average duration: ~13 min/plan
-- Total execution time: ~24.1 hours
+- Total execution time: ~24.2 hours
 
 **By Milestone:**
 
@@ -68,6 +68,8 @@ Recent decisions (v2.2):
 - Root cause is layer_floor constraint in compile.py lines 984-994
 - ql.circuit() clears compilation cache - tests must warm cache before measuring
 - Phase 56 success criterion met: f(x) depth == f.adjoint(x) depth (verified)
+- Use benchmark.pedantic with setup for qubit-allocating operations
+- CYTHON_DEBUG enables boundscheck, wraparound, initializedcheck
 
 ### v2.2 Research Findings
 
@@ -79,19 +81,23 @@ Key constraints and guidance from research:
 - Hardcoded sequences split into 4 files (~400 LOC each per constraint)
 - MIG and MEM phases are conditional on profiling results
 
-### Phase 56 Findings (Plan 01)
+### Phase 57 Plan 01 Baseline Metrics
 
-**Key finding:** Forward/adjoint replays produce EQUAL depths. The original assumption of f(x)/f.inverse(x) depth discrepancy was incorrect.
+**Benchmark results (key operations):**
+| Operation | Mean (us) | OPS |
+|-----------|-----------|-----|
+| iadd_8bit | 25 | 40,040 |
+| xor_8bit | 30 | 33,546 |
+| add_8bit | 53 | 18,733 |
+| eq_8bit | 100 | 10,001 |
+| lt_8bit | 152 | 6,572 |
+| mul_8bit | 356 | 2,807 |
+| mul_classical | 31,256 | 32 |
 
-**Actual discrepancy:** Capture vs replay depths differ when:
-- Capture occurs after operations on non-overlapping qubits (gates pack into earlier layers)
-- Replay sets layer_floor=current_layer (forces gates to start at current position)
-
-**Root cause location:** compile.py lines 984-994 (_replay method)
-
-**Fix options:**
-1. Set layer_floor during capture too (consistency)
-2. Store relative layer offsets, apply during replay (preserves optimization)
+**Primary optimization targets:**
+1. mul_classical (100x slower than mul_8bit)
+2. qint_preprocessed.pyx (1.95 MB annotation file)
+3. qarray.pyx (1.21 MB annotation file)
 
 ### Blockers/Concerns
 
@@ -110,6 +116,7 @@ Profiling infrastructure now available:
 - `make profile-cython` — Generate Cython annotation HTML
 - `make benchmark` — Run pytest-benchmark tests
 - `QUANTUM_PROFILE=1 pip install -e .` — Build with Cython profiling
+- `CYTHON_DEBUG=1 pip install -e .` — Build with all safety checks enabled
 
 ### Phase 56 Complete (Plan 02)
 
@@ -126,9 +133,9 @@ Profiling infrastructure now available:
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Phase 56 complete and verified
-Resume file: .planning/ROADMAP.md
-Resume action: `/gsd:discuss-phase 57` to begin Cython optimization
+Stopped at: Completed 57-01-PLAN.md
+Resume file: .planning/phases/57-cython-optimization/57-02-PLAN.md
+Resume action: `/gsd:execute-plan 57-02` to apply Cython optimizations
 
 ---
-*State updated: 2026-02-05 — Phase 56 complete (Forward/Inverse Depth Fix)*
+*State updated: 2026-02-05 — Phase 57 Plan 01 complete (CYTHON_DEBUG and baseline benchmarks)*
