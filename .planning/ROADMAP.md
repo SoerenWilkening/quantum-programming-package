@@ -131,9 +131,9 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
-- [ ] 58-01-PLAN.md — Create sequences.h header and 1-4 bit hardcoded sequences
-- [ ] 58-02-PLAN.md — Implement 5-8 bit sequences and integrate routing
-- [ ] 58-03-PLAN.md — Validation tests and fallback verification
+- [x] 58-01-PLAN.md — Create sequences.h header and 1-4 bit hardcoded sequences
+- [x] 58-02-PLAN.md — Implement 5-8 bit sequences and integrate routing
+- [x] 58-03-PLAN.md — Validation tests and fallback verification
 
 **Success Criteria:**
 1. Addition operations for 1-4 bit widths use pre-computed gate sequences
@@ -214,7 +214,7 @@ Plans:
 | 55. Profiling Infrastructure | v2.2 | 3/3 | Complete | 2026-02-05 |
 | 56. Forward/Inverse Depth Fix | v2.2 | 2/2 | Complete | 2026-02-05 |
 | 57. Cython Optimization | v2.2 | 3/3 | Complete | 2026-02-05 |
-| 58. Hardcoded Sequences (1-8 bit) | v2.2 | 0/? | Pending | - |
+| 58. Hardcoded Sequences (1-8 bit) | v2.2 | 3/3 | Complete | 2026-02-05 |
 | 59. Hardcoded Sequences (9-16 bit) | v2.2 | 0/? | Pending | - |
 | 60. C Hot Path Migration | v2.2 | 0/? | Pending | - |
 | 61. Memory Optimization | v2.2 | 0/? | Pending | - |
