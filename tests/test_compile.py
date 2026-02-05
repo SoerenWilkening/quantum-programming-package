@@ -2739,3 +2739,106 @@ def test_qarray_first_call_matches_undecorated():
     assert len(compiled_gates) == len(plain_gates), (
         f"Gate count mismatch: compiled={len(compiled_gates)}, plain={len(plain_gates)}"
     )
+
+
+def test_qarray_replay_no_reexecution():
+    """ARR-03: Replay does not re-execute function body."""
+    ql.circuit()
+    call_count = [0]
+
+    @ql.compile
+    def count_and_sum(arr):
+        call_count[0] += 1
+        total = ql.qint(0, width=8)
+        for elem in arr:
+            total += elem
+        return total
+
+    # First call (capture)
+    arr1 = ql.qarray([1, 2], width=4)
+    count_and_sum(arr1)
+    assert call_count[0] == 1, "First call should execute body"
+
+    # Second call with same-shaped array (replay)
+    arr2 = ql.qarray([3, 4], width=4)
+    count_and_sum(arr2)
+    assert call_count[0] == 1, "Replay should NOT re-execute body"
+
+
+def test_qarray_replay_targets_new_qubits():
+    """ARR-03: Replayed gates target the new qarray's element qubits."""
+    ql.circuit()
+
+    @ql.compile
+    def increment_all(arr):
+        for elem in arr:
+            elem += 1
+        return arr
+
+    # First call
+    arr1 = ql.qarray([0, 0], width=4)
+    increment_all(arr1)
+
+    # Second call - collect new qarray's qubits
+    arr2 = ql.qarray([0, 0], width=4)
+    arr2_qubits = set()
+    for elem in arr2:
+        for i in range(elem.width):
+            arr2_qubits.add(int(elem.qubits[64 - elem.width + i]))
+
+    start = get_current_layer()
+    increment_all(arr2)
+    end = get_current_layer()
+
+    replay_gates = extract_gate_range(start, end)
+    replay_targets = {g["target"] for g in replay_gates}
+
+    # Replay should target arr2's qubits
+    assert arr2_qubits & replay_targets, "Replay should target arr2's qubits"
+
+
+def test_qarray_replay_same_gate_count():
+    """ARR-03: Replay produces same gate count as capture."""
+    ql.circuit()
+
+    @ql.compile
+    def process_array(arr):
+        for elem in arr:
+            elem += 1
+        return arr
+
+    arr1 = ql.qarray([0, 0], width=4)
+    start1 = get_current_layer()
+    process_array(arr1)
+    end1 = get_current_layer()
+    capture_gates = extract_gate_range(start1, end1)
+
+    arr2 = ql.qarray([0, 0], width=4)
+    start2 = get_current_layer()
+    process_array(arr2)
+    end2 = get_current_layer()
+    replay_gates = extract_gate_range(start2, end2)
+
+    assert len(replay_gates) == len(capture_gates), (
+        f"Replay gate count {len(replay_gates)} != capture {len(capture_gates)}"
+    )
+
+
+def test_qarray_replay_different_element_values():
+    """ARR-03: Replay works with different element values (same widths)."""
+    ql.circuit()
+
+    @ql.compile
+    def double_first(arr):
+        result = arr[0] + arr[0]
+        return result
+
+    arr1 = ql.qarray([5, 6], width=4)
+    result1 = double_first(arr1)
+
+    arr2 = ql.qarray([7, 3], width=4)
+    result2 = double_first(arr2)
+
+    # Both should return valid qints
+    assert isinstance(result1, ql.qint)
+    assert isinstance(result2, ql.qint)
