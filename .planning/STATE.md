@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 
 ## Current Position
 
-Phase: 57 - Cython Optimization
-Plan: 3/3 complete
-Status: Phase complete, verified (7/7 must-haves)
-Last activity: 2026-02-05 — Phase 57 complete, Cython optimizations verified
+Phase: 58 - Hardcoded Sequences (1-8 bit)
+Plan: 1/3 complete
+Status: In progress
+Last activity: 2026-02-05 — Completed 58-01-PLAN.md (1-4 bit sequences)
 
-Progress: [████......] ~43% (v2.2: 3/7 phases complete)
+Progress: [████......] ~46% (v2.2: 4/7 phases in progress)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 164 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 8)
+- Total plans completed: 165 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 9)
 - Average duration: ~13 min/plan
-- Total execution time: ~24.2 hours
+- Total execution time: ~24.3 hours
 
 **By Milestone:**
 
@@ -72,6 +72,11 @@ Recent decisions (v2.2):
 - CYTHON_DEBUG enables boundscheck, wraparound, initializedcheck
 - Apply CYT-01 (static typing), CYT-02 (directives), CYT-03 (memory views) to hot paths
 - Defer CYT-04 (nogil) to Phase 60 due to Python call dependencies in accessors
+
+**Phase 58 decisions:**
+- SEQ-01: Use SEQ_PI compile-time constant instead of M_PI (M_PI not constant expression)
+- SEQ-02: Separate 1-4 and 5-8 bit widths into different source files
+- SEQ-03: Use const gate_t arrays with designated initializers for compile-time allocation
 
 ### v2.2 Research Findings
 
@@ -132,43 +137,6 @@ Profiling infrastructure now available:
 - test_controlled_depth_parity (controlled variants)
 - test_depth_capture_vs_replay (capture/replay consistency)
 
-### Phase 57 Plan 02 Complete
-
-**Outcome:** Cython optimizations applied to 5 hot path functions.
-
-**Functions optimized:**
-- addition_inplace (qint_arithmetic.pxi)
-- multiplication_inplace (qint_arithmetic.pxi)
-- __and__ (qint_bitwise.pxi)
-- __xor__ (qint_bitwise.pxi)
-- __ixor__ (qint_bitwise.pxi)
-
-**Optimizations applied:**
-- @cython.boundscheck(False) and @cython.wraparound(False) decorators
-- cdef int typed loop variables
-- Typed memory view variables
-- Explicit loops instead of slice operations (CYT-03)
-
-### Phase 57 Plan 03 Complete
-
-**Outcome:** Annotation verification tests and bug fixes.
-
-**Delivered:**
-- test_cython_optimization.py with annotation score detection
-- verify-optimization Makefile target for full verification workflow
-- Fixed cimport placement bug (module level vs class body)
-- Fixed __getitem__ dtype mismatch (float64 vs uint32)
-
-**Bug fixes resolved:**
-- Plan 02 code now compiles and runs correctly
-- All 18 benchmarks pass including test_lt_8bit
-- Pre-existing qarray.__repr__ segfault documented (not introduced by this plan)
-
-**New decisions:**
-- cimport cython must be at module level in qint.pyx (not in .pxi files)
-- Use np.zeros(64, dtype=np.uint32) for qubit arrays to match memory view type
-- Annotation score threshold set at 30% minimum white lines
-
 ### Phase 57 Complete
 
 **Outcome:** Cython hot paths optimized with static typing and compiler directives.
@@ -185,12 +153,26 @@ Profiling infrastructure now available:
 - verify-optimization Makefile target
 - Annotation verification tests
 
+### Phase 58 Plan 01 Complete
+
+**Outcome:** Static QQ_add and cQQ_add sequences for 1-4 bit widths.
+
+**Files created:**
+- c_backend/include/sequences.h (53 lines) - dispatch function declarations
+- c_backend/src/sequences/add_seq_1_4.c (1504 lines) - static gate arrays
+
+**Layer counts:**
+- QQ_add: 3, 8, 13, 18 layers for widths 1-4
+- cQQ_add: 7, 17, 28, 40 layers for widths 1-4
+
+**Build integration:** setup.py updated to include new source file
+
 ## Session Continuity
 
-Last session: 2026-02-05
-Stopped at: Phase 57 complete and verified
-Resume file: .planning/ROADMAP.md
-Resume action: `/gsd:discuss-phase 58` to begin Hardcoded Sequences (1-8 bit)
+Last session: 2026-02-05 17:07 UTC
+Stopped at: Completed 58-01-PLAN.md
+Resume file: .planning/phases/58-hardcoded-sequences-1-8/58-02-PLAN.md
+Resume action: Execute Plan 02 (5-8 bit sequences)
 
 ---
-*State updated: 2026-02-05 — Phase 57 complete (Cython Optimization)*
+*State updated: 2026-02-05 — Phase 58 Plan 01 complete (1-4 bit sequences)*
