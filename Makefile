@@ -19,6 +19,8 @@ EXEC_SRC =
 # Check for required tools
 HAS_CC := $(shell command -v gcc 2>/dev/null || command -v clang 2>/dev/null || command -v cc 2>/dev/null)
 HAS_VALGRIND := $(shell command -v valgrind 2>/dev/null)
+HAS_PYSPY := $(shell command -v py-spy 2>/dev/null)
+HAS_MEMRAY := $(shell command -v memray 2>/dev/null)
 
 # === Test Targets ===
 
@@ -75,19 +77,104 @@ check:
 clean:
 	rm -rf build/test_runner_asan
 	rm -f valgrind-output.log
+	rm -f profile.svg memray.bin memory.html
+
+# === Profiling Targets ===
+
+.PHONY: profile-cython
+profile-cython:
+	@echo "Generating Cython annotation HTML..."
+	@mkdir -p build/cython-annotate
+	cython -a src/quantum_language/*.pyx -o build/cython-annotate/
+	@echo "Annotation files generated in build/cython-annotate/"
+	@echo "Open the .html files in a browser to see Python/C interaction points"
+	@echo "(Yellow lines = Python C-API calls = potential optimization targets)"
+
+.PHONY: profile-native
+profile-native:
+ifndef HAS_PYSPY
+	@echo "ERROR: py-spy not found"
+	@echo "Install with: pip install py-spy"
+	@exit 1
+endif
+	@echo "Running py-spy with native frame support..."
+	@echo "This requires elevated privileges on some systems."
+	py-spy record --native -o profile.svg -- $(PYTHON) -c "\
+		import quantum_language as ql; \
+		c = ql.circuit(); \
+		a = ql.qint(12345, width=16); \
+		b = ql.qint(6789, width=16); \
+		for _ in range(100): r = a + b"
+	@echo "Flame graph saved to profile.svg"
+
+.PHONY: profile-memory
+profile-memory:
+ifndef HAS_MEMRAY
+	@echo "ERROR: memray not found (Linux/macOS only)"
+	@echo "Install with: pip install memray"
+	@exit 1
+endif
+	@echo "Running memray memory profiler..."
+	memray run --native -o memray.bin -- $(PYTHON) -c "\
+		import quantum_language as ql; \
+		c = ql.circuit(); \
+		for _ in range(100): \
+			a = ql.qint(12345, width=16); \
+			b = ql.qint(6789, width=16); \
+			r = a + b"
+	memray flamegraph memray.bin -o memory.html
+	@echo "Memory flame graph saved to memory.html"
+
+.PHONY: profile-cprofile
+profile-cprofile:
+	@echo "Running cProfile on quantum operations..."
+	$(PYTHON) -m cProfile -s cumulative -c "\
+		import quantum_language as ql; \
+		c = ql.circuit(); \
+		a = ql.qint(12345, width=16); \
+		b = ql.qint(6789, width=16); \
+		for _ in range(100): r = a + b" 2>&1 | head -50
+
+.PHONY: benchmark
+benchmark:
+	@echo "Running benchmark tests..."
+	. $(VENV) && $(PYTEST) tests/benchmarks/ -v --benchmark-only
+
+.PHONY: benchmark-compare
+benchmark-compare:
+	@echo "Running benchmarks with comparison to baseline..."
+	. $(VENV) && $(PYTEST) tests/benchmarks/ -v --benchmark-only --benchmark-autosave
+	@echo "Results saved. Compare with: pytest tests/benchmarks/ --benchmark-compare"
+
+.PHONY: build-profile
+build-profile:
+	@echo "Building with Cython profiling enabled..."
+	@echo "This enables function-level profiling in cProfile output."
+	QUANTUM_PROFILE=1 pip install -e . --no-build-isolation
+	@echo "Profiling build complete. Cython functions now visible in cProfile."
 
 # === Help ===
 
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  test       - Run pytest characterization tests"
-	@echo "  memtest    - Run tests under Valgrind (requires valgrind)"
-	@echo "  asan-test  - Build and run C backend with AddressSanitizer (requires gcc/clang)"
-	@echo "  check      - Run pre-commit hooks on all files"
-	@echo "  clean      - Remove test artifacts"
-	@echo "  help       - Show this help message"
+	@echo "  test             - Run pytest characterization tests"
+	@echo "  memtest          - Run tests under Valgrind (requires valgrind)"
+	@echo "  asan-test        - Build and run C backend with AddressSanitizer"
+	@echo "  check            - Run pre-commit hooks on all files"
+	@echo "  clean            - Remove test artifacts"
+	@echo ""
+	@echo "Profiling targets:"
+	@echo "  profile-cython   - Generate Cython annotation HTML"
+	@echo "  profile-native   - Run py-spy with native frames (requires py-spy)"
+	@echo "  profile-memory   - Run memray memory profiler (requires memray)"
+	@echo "  profile-cprofile - Run cProfile on quantum operations"
+	@echo "  benchmark        - Run pytest-benchmark tests"
+	@echo "  benchmark-compare- Run benchmarks and save for comparison"
+	@echo "  build-profile    - Build with Cython profiling enabled"
 	@echo ""
 	@echo "Tool availability:"
 	@echo "  C compiler: $(if $(HAS_CC),$(CC),NOT FOUND)"
 	@echo "  Valgrind:   $(if $(HAS_VALGRIND),found,NOT FOUND)"
+	@echo "  py-spy:     $(if $(HAS_PYSPY),found,NOT FOUND)"
+	@echo "  memray:     $(if $(HAS_MEMRAY),found,NOT FOUND)"
