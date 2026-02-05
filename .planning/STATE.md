@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 Phase: 58 - Hardcoded Sequences (1-8 bit)
 Plan: 3/3 complete
 Status: Phase complete
-Last activity: 2026-02-05 — Completed 58-03-PLAN.md (validation tests)
+Last activity: 2026-02-05 — Completed quick task 014: cQQ_add qubit layout fix
 
 Progress: [██████....] ~50% (v2.2: 5/7 phases complete)
 
@@ -115,6 +115,13 @@ Key constraints and guidance from research:
 - BUG-MOD-REDUCE: _reduce_mod result corruption (needs different circuit structure)
 - BUG-COND-MUL-01: Controlled multiplication corruption (not yet investigated)
 - BUG-WIDTH-ADD: Mixed-width QFT addition off-by-one (discovered in v1.8)
+- BUG-CQQ-ARITH: cQQ_add algorithm produces incorrect arithmetic for widths 2+ (discovered in quick-014)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 014 | cQQ_add qubit layout fix | 2026-02-05 | abbd87f | [014-cqq-add-hardcoded-or-not-doesn-t-seem-to](./quick/014-cqq-add-hardcoded-or-not-doesn-t-seem-to/) |
 
 ### Phase 55 Deliverables
 
@@ -220,4 +227,4 @@ Resume file: .planning/ROADMAP.md
 Resume action: `/gsd:discuss-phase 59` to begin Hardcoded Sequences (9-16 bit)
 
 ---
-*State updated: 2026-02-05 — Phase 58 complete and verified (hardcoded sequences 1-8 bit)*
+*State updated: 2026-02-05 — Quick task 014 complete (cQQ_add qubit layout fix)*
