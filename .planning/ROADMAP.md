@@ -45,7 +45,7 @@
 
 - [x] **Phase 52: Ancilla Tracking & Inverse Qubit Reuse** (2/2 plans) -- completed 2026-02-04
 - [x] **Phase 53: Qubit-Saving Auto-Uncompute** (2/2 plans) -- completed 2026-02-04
-- [ ] **Phase 54: qarray Support in @ql.compile** - Pass ql.qarray as arguments to compiled functions
+- [ ] **Phase 54: qarray Support in @ql.compile** (2 plans) - Pass ql.qarray as arguments to compiled functions
 
 ## Phase Details
 
@@ -87,7 +87,10 @@ Plans:
   2. Replay of a compiled function with a different qarray of the same shape and element widths produces the correct remapped circuit
   3. Calling the same compiled function with qarrays of different shapes or element widths triggers separate cache entries (not incorrect replay)
   4. Compiled qarray functions produce identical circuits to their non-compiled equivalents (verified by gate-level comparison or Qiskit simulation)
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 54-01-PLAN.md -- qarray support implementation in compile.py
+- [ ] 54-02-PLAN.md -- Comprehensive tests for ARR-01 through ARR-04
 
 ## Progress
 
@@ -108,7 +111,7 @@ Plans:
 | 51. Differentiators & Polish | v2.0 | 2/2 | Complete | 2026-02-04 |
 | 52. Ancilla Tracking & Inverse Qubit Reuse | v2.1 | 2/2 | Complete | 2026-02-04 |
 | 53. Qubit-Saving Auto-Uncompute | v2.1 | 2/2 | Complete | 2026-02-04 |
-| 54. qarray Support in @ql.compile | v2.1 | 0/TBD | Not started | - |
+| 54. qarray Support in @ql.compile | v2.1 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-02*
@@ -116,3 +119,4 @@ Plans:
 *Milestone v1.9 shipped: 2026-02-03*
 *Milestone v2.0 shipped: 2026-02-04*
 *Milestone v2.1 roadmap added: 2026-02-04*
+*Phase 54 planned: 2026-02-05*
