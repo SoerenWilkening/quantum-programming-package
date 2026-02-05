@@ -9,13 +9,13 @@ Requirements for performance optimization milestone.
 
 ### Profiling Infrastructure
 
-- [ ] **PROF-01**: Python function profiling with cProfile integration
-- [ ] **PROF-02**: Memory profiling for C extensions via memray
-- [ ] **PROF-03**: Cython annotation HTML generation (`cython -a`)
-- [ ] **PROF-04**: Cross-layer profiling via py-spy with `--native`
-- [ ] **PROF-05**: `ql.profile()` context manager for inline profiling
-- [ ] **PROF-06**: Benchmark suite with pytest-benchmark fixtures
-- [ ] **PROF-07**: Profiling dependencies as optional `[profiling]` extra
+- [x] **PROF-01**: Python function profiling with cProfile integration
+- [x] **PROF-02**: Memory profiling for C extensions via memray
+- [x] **PROF-03**: Cython annotation HTML generation (`cython -a`)
+- [x] **PROF-04**: Cross-layer profiling via py-spy with `--native`
+- [x] **PROF-05**: `ql.profile()` context manager for inline profiling
+- [x] **PROF-06**: Benchmark suite with pytest-benchmark fixtures
+- [x] **PROF-07**: Profiling dependencies as optional `[profiling]` extra
 
 ### Compiler Bug Fix
 
@@ -74,13 +74,13 @@ Deferred to later milestones.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PROF-01 | Phase 55 | Pending |
-| PROF-02 | Phase 55 | Pending |
-| PROF-03 | Phase 55 | Pending |
-| PROF-04 | Phase 55 | Pending |
-| PROF-05 | Phase 55 | Pending |
-| PROF-06 | Phase 55 | Pending |
-| PROF-07 | Phase 55 | Pending |
+| PROF-01 | Phase 55 | Complete |
+| PROF-02 | Phase 55 | Complete |
+| PROF-03 | Phase 55 | Complete |
+| PROF-04 | Phase 55 | Complete |
+| PROF-05 | Phase 55 | Complete |
+| PROF-06 | Phase 55 | Complete |
+| PROF-07 | Phase 55 | Complete |
 | FIX-01 | Phase 56 | Pending |
 | FIX-02 | Phase 56 | Pending |
 | CYT-01 | Phase 57 | Pending |
@@ -107,4 +107,4 @@ Deferred to later milestones.
 
 ---
 *Requirements defined: 2026-02-05*
-*Last updated: 2026-02-05 after roadmap creation*
+*Last updated: 2026-02-05 — Phase 55 requirements complete*
