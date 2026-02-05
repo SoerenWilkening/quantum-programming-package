@@ -264,6 +264,8 @@ class CompiledBlock:
         "_capture_ancilla_qubits",
         "_capture_virtual_to_real",
         "_modifies_inputs",
+        "return_type",  # 'qint', 'qarray', or None
+        "_return_qarray_element_widths",  # List of element widths for qarray return
     )
 
     def __init__(
@@ -290,6 +292,8 @@ class CompiledBlock:
         self._capture_ancilla_qubits = None
         self._capture_virtual_to_real = None
         self._modifies_inputs = None
+        self.return_type = None
+        self._return_qarray_element_widths = None
 
 
 # ---------------------------------------------------------------------------
@@ -493,6 +497,50 @@ def _build_return_qint(block, virtual_to_real, start_layer, end_layer):
     result.operation_type = "COMPILED"
 
     return result
+
+
+def _build_return_qarray(block, virtual_to_real, start_layer, end_layer):
+    """Construct a qarray return value from replay-mapped qubits.
+
+    Creates new qint elements with qubits mapped from virtual space,
+    preserving the original element widths stored in the CompiledBlock.
+    """
+    from .qarray import qarray
+
+    ret_start, ret_qubit_count = block.return_qubit_range
+    element_widths = block._return_qarray_element_widths
+
+    if element_widths is None:
+        raise ValueError("CompiledBlock missing element widths for qarray return")
+
+    new_elements = []
+    virt_offset = ret_start
+
+    for elem_width in element_widths:
+        # Build qubit array for this element (right-aligned in 64-element array)
+        ret_qubits = np.zeros(64, dtype=np.uint32)
+        first_real_qubit = None
+
+        for i in range(elem_width):
+            virt_q = virt_offset + i
+            real_q = virtual_to_real[virt_q]
+            ret_qubits[64 - elem_width + i] = real_q
+            if first_real_qubit is None:
+                first_real_qubit = real_q
+
+        virt_offset += elem_width
+
+        # Create qint element with existing qubits (no allocation)
+        new_elem = qint(create_new=False, bit_list=ret_qubits, width=elem_width)
+        new_elem.allocated_start = first_real_qubit
+        new_elem.allocated_qubits = True
+        new_elem._start_layer = start_layer
+        new_elem._end_layer = end_layer
+        new_elem.operation_type = "COMPILED"
+        new_elements.append(new_elem)
+
+    # Create qarray view with the new elements
+    return qarray._create_view(new_elements, (len(new_elements),))
 
 
 # ---------------------------------------------------------------------------
@@ -715,10 +763,18 @@ class CompiledFunc:
 
         return_range = None
         return_is_param_index = None
+        return_type = None
+        return_qarray_element_widths = None
 
         if isinstance(result, qarray):
+            return_type = "qarray"
             # Get all qubit indices from the returned qarray
             ret_indices = _get_qarray_qubit_indices(result)
+
+            # Store element widths for replay reconstruction
+            return_qarray_element_widths = [
+                elem.width if hasattr(elem, "width") else 1 for elem in result
+            ]
 
             # Check if return qarray IS one of the input parameters
             for param_idx, param_indices in enumerate(param_qubit_indices):
@@ -731,6 +787,7 @@ class CompiledFunc:
                 virt_ret = [real_to_virtual[r] for r in ret_indices]
                 return_range = (min(virt_ret), len(ret_indices))
         elif isinstance(result, qint):
+            return_type = "qint"
             ret_indices = _get_qint_qubit_indices(result)
 
             # Check if return value IS one of the input parameters (in-place)
@@ -782,6 +839,8 @@ class CompiledFunc:
         block._first_call_result = result
         block._capture_ancilla_qubits = capture_ancilla_qubits
         block._capture_virtual_to_real = capture_vtr
+        block.return_type = return_type
+        block._return_qarray_element_widths = return_qarray_element_widths
         return block
 
     def _capture_and_cache_both(
@@ -884,6 +943,10 @@ class CompiledFunc:
             original_gate_count=uncontrolled_block.original_gate_count,
         )
         controlled_block.control_virtual_idx = control_virt_idx
+        controlled_block.return_type = uncontrolled_block.return_type
+        controlled_block._return_qarray_element_widths = (
+            uncontrolled_block._return_qarray_element_widths
+        )
         return controlled_block
 
     def _replay(self, block, quantum_args, track_forward=True):
@@ -934,8 +997,10 @@ class CompiledFunc:
         result = None
         if block.return_qubit_range is not None:
             if block.return_is_param_index is not None:
-                # Return value IS one of the input params -- return caller's qint
+                # Return value IS one of the input params -- return caller's qint/qarray
                 result = quantum_args[block.return_is_param_index]
+            elif block.return_type == "qarray":
+                result = _build_return_qarray(block, virtual_to_real, start_layer, end_layer)
             else:
                 result = _build_return_qint(block, virtual_to_real, start_layer, end_layer)
 
@@ -1163,6 +1228,8 @@ class _InverseCompiledFunc:
                 original_gate_count=block.original_gate_count,
             )
             inverted_block.control_virtual_idx = block.control_virtual_idx
+            inverted_block.return_type = block.return_type
+            inverted_block._return_qarray_element_widths = block._return_qarray_element_widths
             self._inv_cache[cache_key] = inverted_block
 
         return self._original._replay(self._inv_cache[cache_key], quantum_args, track_forward=False)
