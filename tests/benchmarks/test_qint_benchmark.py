@@ -48,6 +48,29 @@ class TestQintAddition:
 
         benchmark(lambda: a + b)
 
+    def test_iadd_8bit(self, benchmark, clean_circuit):
+        """Benchmark 8-bit in-place addition."""
+        a = ql.qint(5, width=8)
+
+        def do_iadd():
+            nonlocal a
+            a += 3
+            return a
+
+        benchmark(do_iadd)
+
+    def test_iadd_quantum_8bit(self, benchmark, clean_circuit):
+        """Benchmark 8-bit in-place quantum addition."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+
+        def do_iadd():
+            nonlocal a
+            a += b
+            return a
+
+        benchmark(do_iadd)
+
 
 class TestQintMultiplication:
     """Benchmark qint multiplication operations."""
@@ -64,6 +87,49 @@ class TestQintMultiplication:
         a = ql.qint(5, width=8)
 
         benchmark(lambda: a * 3)
+
+
+class TestQintBitwise:
+    """Benchmark qint bitwise operations."""
+
+    def test_xor_8bit(self, benchmark, clean_circuit):
+        """Benchmark 8-bit qint XOR."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+
+        benchmark(lambda: a ^ b)
+
+    def test_and_8bit(self, benchmark, clean_circuit):
+        """Benchmark 8-bit qint AND."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+
+        benchmark(lambda: a & b)
+
+    def test_or_8bit(self, benchmark, clean_circuit):
+        """Benchmark 8-bit qint OR."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+
+        benchmark(lambda: a | b)
+
+
+class TestQintComparison:
+    """Benchmark qint comparison operations."""
+
+    def test_eq_8bit(self, benchmark, clean_circuit):
+        """Benchmark 8-bit qint equality comparison."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+
+        benchmark(lambda: a == b)
+
+    def test_lt_8bit(self, benchmark, clean_circuit):
+        """Benchmark 8-bit qint less-than comparison."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+
+        benchmark(lambda: a < b)
 
 
 class TestCircuitCreation:
