@@ -99,7 +99,7 @@ ifndef HAS_PYSPY
 endif
 	@echo "Running py-spy with native frame support..."
 	@echo "This requires elevated privileges on some systems."
-	py-spy record --native -o profile.svg -- $(PYTHON) -c "\
+	. $(VENV) && PYTHONPATH=src py-spy record --native -o profile.svg -- $(PYTHON) -c "\
 		import quantum_language as ql; \
 		c = ql.circuit(); \
 		a = ql.qint(12345, width=16); \
@@ -115,25 +115,20 @@ ifndef HAS_MEMRAY
 	@exit 1
 endif
 	@echo "Running memray memory profiler..."
-	memray run --native -o memray.bin -- $(PYTHON) -c "\
+	. $(VENV) && PYTHONPATH=src memray run --native -o memray.bin -- $(PYTHON) -c "\
 		import quantum_language as ql; \
 		c = ql.circuit(); \
 		for _ in range(100): \
 			a = ql.qint(12345, width=16); \
 			b = ql.qint(6789, width=16); \
 			r = a + b"
-	memray flamegraph memray.bin -o memory.html
+	. $(VENV) && memray flamegraph memray.bin -o memory.html
 	@echo "Memory flame graph saved to memory.html"
 
 .PHONY: profile-cprofile
 profile-cprofile:
 	@echo "Running cProfile on quantum operations..."
-	$(PYTHON) -m cProfile -s cumulative -c "\
-		import quantum_language as ql; \
-		c = ql.circuit(); \
-		a = ql.qint(12345, width=16); \
-		b = ql.qint(6789, width=16); \
-		for _ in range(100): r = a + b" 2>&1 | head -50
+	@. $(VENV) && PYTHONPATH=src $(PYTHON) -c "import cProfile, pstats, io; pr = cProfile.Profile(); pr.enable(); import quantum_language as ql; c = ql.circuit(); a = ql.qint(12345, width=16); b = ql.qint(6789, width=16); [a + b for _ in range(100)]; pr.disable(); s = io.StringIO(); pstats.Stats(pr, stream=s).sort_stats('cumulative').print_stats(30); print(s.getvalue())"
 
 .PHONY: benchmark
 benchmark:
@@ -150,7 +145,7 @@ benchmark-compare:
 build-profile:
 	@echo "Building with Cython profiling enabled..."
 	@echo "This enables function-level profiling in cProfile output."
-	QUANTUM_PROFILE=1 pip install -e . --no-build-isolation
+	. $(VENV) && QUANTUM_PROFILE=1 $(PYTHON) setup.py build_ext --inplace
 	@echo "Profiling build complete. Cython functions now visible in cProfile."
 
 # === Help ===
