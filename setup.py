@@ -46,6 +46,15 @@ if os.environ.get("QUANTUM_PROFILE"):
     }
     compiler_args.append("-DCYTHON_TRACE=1")
 
+# Debug build mode - re-enables all safety checks for debugging
+debug_directives = {}
+if os.environ.get("CYTHON_DEBUG"):
+    debug_directives = {
+        "boundscheck": True,
+        "wraparound": True,
+        "initializedcheck": True,
+    }
+
 # src/ directory is at project root, not in python-backend
 SRC_DIR = os.path.join(PROJECT_ROOT, "src")
 
@@ -110,6 +119,7 @@ setup(
         compiler_directives={
             "embedsignature": True,  # Preserves docstrings in compiled modules
             **profiling_directives,
+            **debug_directives,
         },
     ),
     # Include .pxd and .py files for installed package (e.g. __init__.py wrappers)
