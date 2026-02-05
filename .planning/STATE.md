@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 56 - Forward/Inverse Depth Fix
-Plan: 1/? complete
-Status: In progress
-Last activity: 2026-02-05 — Completed 56-01-PLAN.md (Depth Diagnostic Tests)
+Plan: 2/2 complete
+Status: Phase complete
+Last activity: 2026-02-05 — Completed 56-02-PLAN.md (Depth Fix Implementation)
 
-Progress: [██........] ~17% (v2.2: 1/7 phases, plan 1 of phase 56 complete)
+Progress: [███.......] ~20% (v2.2: 2/7 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 160 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 4)
+- Total plans completed: 161 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 5)
 - Average duration: ~13 min/plan
 - Total execution time: ~24.1 hours
 
@@ -66,6 +66,8 @@ Recent decisions (v2.2):
 - Forward/adjoint replays produce equal depths - no fix needed for that
 - Real discrepancy is capture vs replay when capture allows parallelization
 - Root cause is layer_floor constraint in compile.py lines 984-994
+- ql.circuit() clears compilation cache - tests must warm cache before measuring
+- Phase 56 success criterion met: f(x) depth == f.adjoint(x) depth (verified)
 
 ### v2.2 Research Findings
 
@@ -109,12 +111,24 @@ Profiling infrastructure now available:
 - `make benchmark` — Run pytest-benchmark tests
 - `QUANTUM_PROFILE=1 pip install -e .` — Build with Cython profiling
 
+### Phase 56 Complete (Plan 02)
+
+**Outcome:** Success criterion met - f(x) and f.adjoint(x) produce equal circuit depth.
+
+**No code fix was needed** - The layer_floor constraint in _replay() already guarantees depth equality. Plan 01 diagnostics confirmed this. Plan 02 converted diagnostics to permanent regression tests.
+
+**Regression test suite established:**
+- test_forward_adjoint_depth_equal (width 8)
+- test_forward_adjoint_depth_equal_multiwidth (widths 4, 8, 16)
+- test_controlled_depth_parity (controlled variants)
+- test_depth_capture_vs_replay (capture/replay consistency)
+
 ## Session Continuity
 
 Last session: 2026-02-05
-Stopped at: Completed 56-01-PLAN.md (Depth Diagnostic Tests)
-Resume file: .planning/phases/56-forward-inverse-depth-fix/56-01-SUMMARY.md
-Resume action: Plan 02 should reassess if capture/replay depth discrepancy needs fixing
+Stopped at: Completed 56-02-PLAN.md (Depth Fix Implementation)
+Resume file: .planning/phases/56-forward-inverse-depth-fix/56-02-SUMMARY.md
+Resume action: Continue to next phase (57+)
 
 ---
-*State updated: 2026-02-05 — Phase 56 Plan 01 complete (Depth Diagnostic Tests)*
+*State updated: 2026-02-05 — Phase 56 complete (Forward/Inverse Depth Fix)*
