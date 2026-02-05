@@ -60,6 +60,13 @@
 
 **Requirements:** PROF-01, PROF-02, PROF-03, PROF-04, PROF-05, PROF-06, PROF-07
 
+**Plans:** 3 plans
+
+Plans:
+- [ ] 55-01-PLAN.md — Add [profiling] extra and QUANTUM_PROFILE build support
+- [ ] 55-02-PLAN.md — Create ql.profile() context manager and benchmark suite
+- [ ] 55-03-PLAN.md — Add Makefile profiling targets and verify tool integration
+
 **Success Criteria:**
 1. User can run `python -m cProfile` on circuit generation and see function-level timing
 2. User can run `memray` to see C extension memory allocation patterns
@@ -184,7 +191,7 @@
 | 52. Ancilla Tracking & Inverse Qubit Reuse | v2.1 | 2/2 | Complete | 2026-02-04 |
 | 53. Qubit-Saving Auto-Uncompute | v2.1 | 2/2 | Complete | 2026-02-04 |
 | 54. qarray Support in @ql.compile | v2.1 | 2/2 | Complete | 2026-02-05 |
-| 55. Profiling Infrastructure | v2.2 | 0/? | Pending | - |
+| 55. Profiling Infrastructure | v2.2 | 0/3 | Planned | - |
 | 56. Forward/Inverse Depth Fix | v2.2 | 0/? | Pending | - |
 | 57. Cython Optimization | v2.2 | 0/? | Pending | - |
 | 58. Hardcoded Sequences (1-8 bit) | v2.2 | 0/? | Pending | - |
