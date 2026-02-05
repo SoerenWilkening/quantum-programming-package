@@ -1,9 +1,8 @@
-from time import time
-from ket import Process, QFT, adj
-import numpy as np
-
-import os, psutil
 import sys
+from time import time
+
+from ket import QFT, Process
+
 sys.setrecursionlimit(3000)
 
 try:

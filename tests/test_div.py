@@ -1,0 +1,148 @@
+"""Floor division verification tests (VARITH-04).
+
+Tests qint // int (classical divisor floor division) through the full pipeline:
+Python quantum_language API -> C backend circuit -> OpenQASM 3.0 -> Qiskit simulate -> result check.
+
+Exhaustive at widths 1-3, sampled at width 4. Division by zero is skipped per design.
+
+Result extraction: Division allocates input(w) + quotient(w) + remainder(w) + ancillae.
+The quotient register occupies qubits w..2w-1. In the Qiskit MSB-first bitstring of
+length n, this maps to bs[n-2w : n-w].
+"""
+
+import random
+import warnings
+
+import pytest
+import qiskit.qasm3
+from qiskit_aer import AerSimulator
+from verify_helpers import format_failure_message
+
+import quantum_language as ql
+
+warnings.filterwarnings("ignore", message="Value .* exceeds")
+
+# ---------------------------------------------------------------------------
+# Known-failing (width, a, divisor) triples -- MSB comparison leak (BUG-DIV-02)
+# These are NOT overflow bugs. They occur when a >= 2^(w-1) and the >=
+# comparison operator corrupts ancilla state for values touching the MSB.
+# Separate from BUG-DIV-01 (overflow), which is fixed.
+# ---------------------------------------------------------------------------
+KNOWN_DIV_MSB_LEAK = {
+    # Width 3: comparison leak for values >= 4 with small divisors
+    (3, 4, 1),
+    (3, 5, 1),
+    (3, 6, 1),
+    (3, 7, 1),
+    # Width 4: comparison leak for large values
+    (4, 13, 1),
+    (4, 14, 1),
+    (4, 14, 2),
+    (4, 15, 1),
+    (4, 15, 2),
+}
+
+
+# ---------------------------------------------------------------------------
+# Pipeline helper
+# ---------------------------------------------------------------------------
+def _run_div(width, a_val, divisor):
+    """Run division through full pipeline, return (actual_quotient, total_qubits, bitstring)."""
+    ql.circuit()
+    a = ql.qint(a_val, width=width)
+    _q = a // divisor
+    qasm_str = ql.to_openqasm()
+
+    circuit = qiskit.qasm3.loads(qasm_str)
+    if not circuit.cregs:
+        circuit.measure_all()
+
+    sim = AerSimulator(method="matrix_product_state")
+    job = sim.run(circuit, shots=1)
+    counts = job.result().get_counts()
+    bitstring = list(counts.keys())[0]
+
+    n = len(bitstring)
+    quotient_bits = bitstring[n - 2 * width : n - width]
+    actual = int(quotient_bits, 2)
+    return actual, n, bitstring
+
+
+# ---------------------------------------------------------------------------
+# Test data generation
+# ---------------------------------------------------------------------------
+def _exhaustive_div_cases():
+    """Generate (width, a, divisor) for widths 1-3, divisor in [1, 2^width)."""
+    cases = []
+    for width in [1, 2, 3]:
+        for a_val in range(1 << width):
+            for divisor in range(1, 1 << width):
+                cases.append((width, a_val, divisor))
+    return cases
+
+
+def _sampled_div_cases():
+    """Generate ~30 (width, a, divisor) for width 4 with deterministic seed."""
+    width = 4
+    max_val = (1 << width) - 1
+    pairs = set()
+    # Edge cases
+    for a_val in [0, 1, max_val - 1, max_val]:
+        for divisor in [1, 2, max_val - 1, max_val]:
+            pairs.add((a_val, divisor))
+    # Random fill to ~30
+    rng = random.Random(42)
+    while len(pairs) < 30:
+        a_val = rng.randint(0, max_val)
+        divisor = rng.randint(1, max_val)
+        pairs.add((a_val, divisor))
+    return [(width, a, d) for a, d in sorted(pairs)]
+
+
+EXHAUSTIVE_DIV = _exhaustive_div_cases()
+SAMPLED_DIV = _sampled_div_cases()
+
+
+# ---------------------------------------------------------------------------
+# Helper to apply xfail marker for MSB leak cases only
+# ---------------------------------------------------------------------------
+def _mark_msb_leak_cases(cases):
+    """Wrap known MSB-leak cases with pytest.param(..., marks=xfail)."""
+    marked = []
+    for triple in cases:
+        if triple in KNOWN_DIV_MSB_LEAK:
+            marked.append(
+                pytest.param(
+                    *triple,
+                    marks=pytest.mark.xfail(
+                        reason="BUG-DIV-02: MSB comparison leak (not overflow)",
+                        strict=True,
+                    ),
+                )
+            )
+        else:
+            marked.append(triple)
+    return marked
+
+
+# ---------------------------------------------------------------------------
+# Parametrized tests
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "width,a,divisor", _mark_msb_leak_cases(EXHAUSTIVE_DIV), ids=lambda *args: None
+)
+def test_div_exhaustive(width, a, divisor):
+    """Floor division: qint(a) // divisor at widths 1-3 (exhaustive)."""
+    expected = a // divisor
+    actual, _n, _bs = _run_div(width, a, divisor)
+    assert actual == expected, format_failure_message("div", [a, divisor], width, expected, actual)
+
+
+@pytest.mark.parametrize(
+    "width,a,divisor", _mark_msb_leak_cases(SAMPLED_DIV), ids=lambda *args: None
+)
+def test_div_sampled(width, a, divisor):
+    """Floor division: qint(a) // divisor at width 4 (sampled)."""
+    expected = a // divisor
+    actual, _n, _bs = _run_div(width, a, divisor)
+    assert actual == expected, format_failure_message("div", [a, divisor], width, expected, actual)

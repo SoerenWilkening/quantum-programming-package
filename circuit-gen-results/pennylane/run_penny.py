@@ -1,6 +1,7 @@
-import pennylane as qml
-from time import time
 import sys
+from time import time
+
+import pennylane as qml
 
 try:
     n = int(sys.argv[1])

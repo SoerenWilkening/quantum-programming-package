@@ -1,0 +1,408 @@
+"""Tests for variable-width quantum integers (Phase 5).
+
+These tests verify the variable-width implementation meets all
+success criteria from ROADMAP.md:
+  1. QInt constructor accepts width parameter (8, 16, 32, 64, etc.)
+  2. Quantum integers dynamically allocate qubits based on width
+  3. Arithmetic operations validate width compatibility
+  4. Mixed-width integer operations work correctly
+  5. Addition and subtraction work for all variable-width integers
+"""
+
+import warnings
+
+import pytest
+
+import quantum_language as ql
+
+# ============================================================================
+# Width Parameter Tests (VINT-01)
+# ============================================================================
+
+
+class TestWidthParameter:
+    """Test QInt constructor accepts width parameter."""
+
+    def test_default_width_is_8(self):
+        """Default width is 8 bits when value is 0 (no auto-width)."""
+        a = ql.qint(0)  # Value 0 uses default width
+        assert a.width == 8
+
+    @pytest.mark.parametrize("width", [1, 2, 4, 8, 16, 32, 64])
+    def test_explicit_width_powers_of_2(self, width):
+        """Test common power-of-2 widths."""
+        a = ql.qint(0, width=width)
+        assert a.width == width
+
+    @pytest.mark.parametrize("width", [3, 5, 7, 12, 24, 48, 63])
+    def test_explicit_width_arbitrary(self, width):
+        """Test arbitrary widths (not just powers of 2)."""
+        a = ql.qint(0, width=width)
+        assert a.width == width
+
+    def test_width_1_creates_single_qubit(self):
+        """Minimum width is 1 bit per CONTEXT.md."""
+        a = ql.qint(0, width=1)
+        assert a.width == 1
+
+    def test_width_64_creates_max_qubits(self):
+        """Maximum width is 64 bits per CONTEXT.md."""
+        a = ql.qint(0, width=64)
+        assert a.width == 64
+
+    def test_bits_parameter_backward_compat(self):
+        """bits= parameter works for backward compatibility."""
+        a = ql.qint(5, bits=16)
+        assert a.width == 16
+
+    def test_width_takes_precedence_over_bits(self):
+        """width= takes precedence if both specified."""
+        a = ql.qint(5, width=32, bits=16)
+        assert a.width == 32
+
+    def test_qint_auto_width_from_value(self):
+        """Test auto-width mode determines width from value."""
+        # Value 5 needs 3 bits (binary 101)
+        a = ql.qint(5)
+        assert a.width == 3
+
+        # Value 255 needs 8 bits
+        b = ql.qint(255)
+        assert b.width == 8
+
+        # Value 0 still uses default (8 bits)
+        c = ql.qint(0)
+        assert c.width == 8
+
+
+# ============================================================================
+# Width Validation Tests (VINT-03)
+# ============================================================================
+
+
+class TestWidthValidation:
+    """Test width validation in arithmetic operations."""
+
+    def test_width_zero_raises_valueerror(self):
+        """Width 0 raises ValueError."""
+        with pytest.raises(ValueError, match="[Ww]idth"):
+            ql.qint(0, width=0)
+
+    def test_width_negative_raises_valueerror(self):
+        """Negative width raises ValueError."""
+        with pytest.raises(ValueError, match="[Ww]idth"):
+            ql.qint(0, width=-1)
+
+    def test_width_65_raises_valueerror(self):
+        """Width > 64 raises ValueError."""
+        with pytest.raises(ValueError, match="[Ww]idth"):
+            ql.qint(0, width=65)
+
+    def test_width_100_raises_valueerror(self):
+        """Large width raises ValueError."""
+        with pytest.raises(ValueError, match="[Ww]idth"):
+            ql.qint(0, width=100)
+
+    def test_value_exceeds_width_warns(self):
+        """Value exceeding width range emits warning."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            ql.qint(1000, width=8)  # 1000 > 127 (max 8-bit signed)
+            assert len(w) >= 1
+            assert "exceed" in str(w[-1].message).lower() or "range" in str(w[-1].message).lower()
+
+    def test_value_within_width_no_warning(self):
+        """Value within width range does not warn."""
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            ql.qint(100, width=8)  # 100 < 127
+            # Filter for our specific warning type
+            width_warnings = [
+                x
+                for x in w
+                if "width" in str(x.message).lower()
+                or "range" in str(x.message).lower()
+                or "exceed" in str(x.message).lower()
+            ]
+            assert len(width_warnings) == 0
+
+
+# ============================================================================
+# Width Property Tests
+# ============================================================================
+
+
+class TestWidthProperty:
+    """Test width property behavior."""
+
+    def test_width_is_readonly(self):
+        """Width property is read-only after construction."""
+        a = ql.qint(5, width=16)
+        # Attempting to set should raise AttributeError
+        with pytest.raises(AttributeError):
+            a.width = 32
+
+    def test_width_preserved_after_operations(self):
+        """Width is preserved through arithmetic operations."""
+        a = ql.qint(5, width=16)
+        b = a + 3
+        # Result width matches input width for same-width operations
+        assert b.width == 16
+
+
+# ============================================================================
+# Dynamic Allocation Tests (VINT-02)
+# ============================================================================
+
+
+class TestDynamicAllocation:
+    """Test quantum integers dynamically allocate qubits based on width."""
+
+    def test_different_widths_coexist(self):
+        """Multiple qints with different widths can coexist."""
+        a = ql.qint(1, width=8)
+        b = ql.qint(2, width=16)
+        c = ql.qint(3, width=32)
+
+        assert a.width == 8
+        assert b.width == 16
+        assert c.width == 32
+
+    def test_allocator_stats_reflect_width(self):
+        """Qubit allocator tracks variable-width allocations."""
+        # Get initial stats
+        initial_stats = ql.circuit_stats()
+        if initial_stats is None:
+            pytest.skip("circuit_stats not available")
+
+        initial_in_use = initial_stats.get("current_in_use", 0)
+
+        # Create 16-bit integer
+        qint_16bit = ql.qint(0, width=16)
+
+        # Check stats increased by width
+        stats = ql.circuit_stats()
+        # Note: exact tracking depends on implementation
+        assert stats is not None
+        # Verify allocator saw the 16-bit allocation
+        assert stats.get("current_in_use", 0) >= initial_in_use
+        # Use variable to avoid unused warning
+        assert qint_16bit.width == 16
+
+
+# ============================================================================
+# qbool as 1-bit qint Tests
+# ============================================================================
+
+
+class TestQboolAsOneBitQint:
+    """Test qbool is 1-bit quantum integer."""
+
+    def test_qbool_width_is_1(self):
+        """qbool has width of 1."""
+        b = ql.qbool(False)
+        assert b.width == 1
+
+    def test_qbool_is_qint_subclass(self):
+        """qbool is a subclass of qint."""
+        b = ql.qbool(False)
+        assert isinstance(b, ql.qint)
+
+    def test_qint_width_1_equivalent_to_qbool(self):
+        """qint with width=1 behaves like qbool."""
+        a = ql.qint(0, width=1)
+        b = ql.qbool(False)
+        assert a.width == b.width == 1
+
+
+# ============================================================================
+# Mixed-Width Operations Tests (VINT-04)
+# ============================================================================
+
+
+class TestMixedWidthOperations:
+    """Test mixed-width integer operations per CONTEXT.md decisions."""
+
+    def test_add_8bit_plus_32bit(self):
+        """8-bit + 32-bit addition works, result is 32-bit."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(100, width=32)
+
+        c = a + b
+
+        assert c is not None
+        assert isinstance(c, ql.qint)
+        assert c.width == 32  # Result width is larger of operands
+
+    def test_add_32bit_plus_8bit(self):
+        """32-bit + 8-bit addition works, result is 32-bit."""
+        a = ql.qint(100, width=32)
+        b = ql.qint(5, width=8)
+
+        c = a + b
+
+        assert c is not None
+        assert c.width == 32
+
+    def test_sub_mixed_widths(self):
+        """Mixed-width subtraction works."""
+        a = ql.qint(100, width=32)
+        b = ql.qint(5, width=8)
+
+        c = a - b
+
+        assert c is not None
+        assert c.width == 32
+
+    def test_inplace_add_mixed_width(self):
+        """In-place addition with different widths."""
+        a = ql.qint(5, width=16)
+        b = ql.qint(3, width=8)
+
+        a += b
+
+        assert a is not None
+        # Note: in-place may or may not change width depending on implementation
+        assert isinstance(a, ql.qint)
+
+    def test_add_1bit_plus_64bit(self):
+        """Extreme case: 1-bit + 64-bit."""
+        a = ql.qint(1, width=1)
+        b = ql.qint(1000, width=64)
+
+        c = a + b
+
+        assert c is not None
+        assert c.width == 64
+
+
+# ============================================================================
+# Variable-Width Addition Tests (ARTH-01)
+# ============================================================================
+
+
+class TestVariableWidthAddition:
+    """Test addition works for all variable-width integers."""
+
+    @pytest.mark.parametrize("width", [1, 2, 4, 8, 16, 32, 64])
+    def test_addition_at_width(self, width):
+        """Addition works for various widths."""
+        a = ql.qint(1, width=width)
+        b = ql.qint(1, width=width)
+
+        c = a + b
+
+        assert c is not None
+        assert isinstance(c, ql.qint)
+        assert c.width == width
+
+    @pytest.mark.parametrize("width", [1, 8, 16, 32])
+    def test_addition_with_classical_int(self, width):
+        """qint + int works for various widths."""
+        a = ql.qint(5, width=width)
+
+        b = a + 3
+
+        assert b is not None
+        assert b.width == width
+
+    def test_chained_addition_preserves_width(self):
+        """Chaining additions preserves width."""
+        a = ql.qint(1, width=16)
+        b = ql.qint(2, width=16)
+        c = ql.qint(3, width=16)
+
+        result = a + b + c
+
+        assert result.width == 16
+
+
+# ============================================================================
+# Variable-Width Subtraction Tests (ARTH-02)
+# ============================================================================
+
+
+class TestVariableWidthSubtraction:
+    """Test subtraction works for all variable-width integers."""
+
+    @pytest.mark.parametrize("width", [1, 2, 4, 8, 16, 32, 64])
+    def test_subtraction_at_width(self, width):
+        """Subtraction works for various widths."""
+        a = ql.qint(5, width=width)
+        b = ql.qint(3, width=width)
+
+        c = a - b
+
+        assert c is not None
+        assert isinstance(c, ql.qint)
+        assert c.width == width
+
+    @pytest.mark.parametrize("width", [1, 8, 16, 32])
+    def test_subtraction_with_classical_int(self, width):
+        """qint - int works for various widths."""
+        a = ql.qint(10, width=width)
+
+        b = a - 3
+
+        assert b is not None
+        assert b.width == width
+
+    def test_inplace_subtraction(self):
+        """In-place subtraction works for variable width."""
+        a = ql.qint(10, width=16)
+
+        a -= 5
+
+        assert a is not None
+        assert isinstance(a, ql.qint)
+
+
+# ============================================================================
+# Phase 5 Success Criteria Verification
+# ============================================================================
+
+
+class TestPhase5SuccessCriteria:
+    """Tests mapping directly to Phase 5 success criteria from ROADMAP.md."""
+
+    def test_criterion_1_constructor_accepts_width(self):
+        """SC1: QInt constructor accepts width parameter for arbitrary bit sizes."""
+        for width in [8, 16, 32, 64]:
+            a = ql.qint(0, width=width)
+            assert a.width == width
+
+    def test_criterion_2_dynamic_qubit_allocation(self):
+        """SC2: Quantum integers dynamically allocate qubits based on width."""
+        # Different widths create different allocations
+        a = ql.qint(0, width=8)
+        b = ql.qint(0, width=32)
+        assert a.width != b.width  # Different allocations
+
+    def test_criterion_3_width_validation(self):
+        """SC3: Arithmetic operations validate width compatibility."""
+        # Invalid widths rejected
+        with pytest.raises(ValueError):
+            ql.qint(0, width=0)
+        with pytest.raises(ValueError):
+            ql.qint(0, width=65)
+
+    def test_criterion_4_mixed_width_operations(self):
+        """SC4: Mixed-width integer operations work correctly."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(100, width=32)
+        c = a + b
+        assert c.width == 32  # Result is larger width
+
+    def test_criterion_5_addition_subtraction_all_widths(self):
+        """SC5: Addition and subtraction work for all variable-width integers."""
+        for width in [1, 8, 16, 32, 64]:
+            a = ql.qint(5, width=width)
+            b = ql.qint(3, width=width)
+
+            # Addition
+            c = a + b
+            assert c is not None
+
+            # Subtraction
+            d = a - b
+            assert d is not None

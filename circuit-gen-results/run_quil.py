@@ -1,12 +1,14 @@
-from pyquil import Program
-from pyquil.gates import H, CPHASE
-from time import time
 import sys
+from time import time
+
+from pyquil import Program
+from pyquil.gates import CPHASE, H
 
 n = 1500
 
 if len(sys.argv) > 1:
     n = int(sys.argv[1])
+
 
 def build_qft(n):
     t1 = time()

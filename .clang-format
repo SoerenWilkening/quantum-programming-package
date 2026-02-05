@@ -1,0 +1,7 @@
+---
+# LLVM-based C code formatting rules
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 100
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: Empty

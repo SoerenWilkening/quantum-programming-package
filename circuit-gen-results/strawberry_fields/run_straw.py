@@ -1,8 +1,10 @@
+import sys
+import time
+
+import numpy as np
 import strawberryfields as sf
 from strawberryfields import ops
-import numpy as np
-import time
-import sys
+
 
 def qft_circuit(n_qubits: int):
     prog = sf.Program(n_qubits)
@@ -10,10 +12,10 @@ def qft_circuit(n_qubits: int):
     with prog.context as q:
         for i in range(n_qubits):
             # Hadamard equivalent (50:50 beam splitter + phase shift)
-            ops.Rgate(np.pi/2) | q[i]
+            ops.Rgate(np.pi / 2) | q[i]
 
             # Controlled phase rotations (approximate with beamsplitters + Rgates)
-            for j in range(i+1, n_qubits):
+            for j in range(i + 1, n_qubits):
                 try:
                     angle = np.pi / (2 ** (j - i))
                 except:
@@ -22,9 +24,10 @@ def qft_circuit(n_qubits: int):
 
         # Swap qubits to reverse order (optional but standard in QFT)
         for i in range(n_qubits // 2):
-            ops.BSgate(np.pi/4) | (q[i], q[n_qubits - i - 1])
+            ops.BSgate(np.pi / 4) | (q[i], q[n_qubits - i - 1])
 
     return prog
+
 
 # 🔥 Benchmark the circuit generation time
 try:
