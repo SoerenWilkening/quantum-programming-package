@@ -19,8 +19,8 @@ Requirements for performance optimization milestone.
 
 ### Compiler Bug Fix
 
-- [ ] **FIX-01**: Investigate f() vs f.inverse() depth discrepancy
-- [ ] **FIX-02**: Fix forward compilation path to match inverse optimization
+- [x] **FIX-01**: Investigate f() vs f.inverse() depth discrepancy
+- [x] **FIX-02**: Fix forward compilation path to match inverse optimization
 
 ### Cython Optimization
 
@@ -81,8 +81,8 @@ Deferred to later milestones.
 | PROF-05 | Phase 55 | Complete |
 | PROF-06 | Phase 55 | Complete |
 | PROF-07 | Phase 55 | Complete |
-| FIX-01 | Phase 56 | Pending |
-| FIX-02 | Phase 56 | Pending |
+| FIX-01 | Phase 56 | Complete |
+| FIX-02 | Phase 56 | Complete |
 | CYT-01 | Phase 57 | Pending |
 | CYT-02 | Phase 57 | Pending |
 | CYT-03 | Phase 57 | Pending |
@@ -107,4 +107,4 @@ Deferred to later milestones.
 
 ---
 *Requirements defined: 2026-02-05*
-*Last updated: 2026-02-05 — Phase 55 requirements complete*
+*Last updated: 2026-02-05 — Phase 56 requirements complete*
