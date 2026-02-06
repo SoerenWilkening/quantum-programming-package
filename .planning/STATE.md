@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 59 - Hardcoded Sequences (9-16 bit)
-Plan: 2/4 complete
+Plan: 3/4 complete
 Status: In progress
-Last activity: 2026-02-06 — Completed 59-02-PLAN.md (per-width C files and infrastructure)
+Last activity: 2026-02-06 — Completed 59-03-PLAN.md (IntegerAddition.c routing)
 
-Progress: [██████....] ~56% (v2.2: 5/7 phases, 59: 2/4 plans)
+Progress: [███████...] ~63% (v2.2: 5/7 phases, 59: 3/4 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 169 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 13)
+- Total plans completed: 170 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 14)
 - Average duration: ~13 min/plan
 - Total execution time: ~24.5 hours
 
@@ -85,6 +85,7 @@ Recent decisions (v2.2):
 - SEQ-07: Conditional compilation via #ifdef SEQ_WIDTH_N per-width files
 - SEQ-08: Template-init functions return mutable sequence_t* for angle injection
 - SEQ-09: Dispatch file uses switch(bits) with #ifdef guards per case
+- SEQ-10: CQ/cCQ template-init populates existing precompiled cache before cache check
 
 ### v2.2 Research Findings
 
@@ -240,6 +241,19 @@ All success criteria met:
 - Cross-validation (--validate) against existing sequences
 - CLI: --width, --dry-run, --output-dir flags
 
+### Phase 59 Plan 03 Complete
+
+**Outcome:** IntegerAddition.c routes all 4 addition variants through hardcoded sequences for widths 1-16.
+
+**Changes:**
+- QQ_add/cQQ_add: Updated comments from "widths 1-8" to "widths 1-16" (routing logic unchanged via HARDCODED_MAX_WIDTH)
+- CQ_add: Added hardcoded template-init block (populates cache from get_hardcoded_CQ_add on first call)
+- cCQ_add: Added hardcoded template-init block (populates cache from get_hardcoded_cCQ_add on first call)
+
+**Critical bug fix:** All 16 per-width C files had `#include "sequences.h"` INSIDE the `#ifdef SEQ_WIDTH_N` guard, creating a circular dependency that compiled all files to empty objects. Fixed by moving include before guard. Also fixed generation script.
+
+**Verification:** All 888 addition tests pass, all 61 hardcoded sequence tests pass.
+
 ### Phase 59 Plan 02 Complete
 
 **Outcome:** Generated all 16 per-width C files + dispatch, restructured header and build system.
@@ -254,9 +268,9 @@ All success criteria met:
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 59-02-PLAN.md (per-width C files and infrastructure)
-Resume file: .planning/phases/59-hardcoded-sequences-9-16/59-03-PLAN.md
-Resume action: `/gsd:execute-phase` with 59-03-PLAN.md
+Stopped at: Completed 59-03-PLAN.md (IntegerAddition.c routing)
+Resume file: .planning/phases/59-hardcoded-sequences-9-16/59-04-PLAN.md
+Resume action: `/gsd:execute-phase` with 59-04-PLAN.md
 
 ---
-*State updated: 2026-02-06 — Completed 59-02-PLAN.md*
+*State updated: 2026-02-06 — Completed 59-03-PLAN.md*
