@@ -149,7 +149,7 @@ sequence_t *QQ_add(int bits) {
         return NULL;
     }
 
-    // Use hardcoded sequences for widths 1-8
+    // Use hardcoded sequences for widths 1-16
     if (bits <= HARDCODED_MAX_WIDTH) {
         const sequence_t *hardcoded = get_hardcoded_QQ_add(bits);
         if (hardcoded != NULL) {
@@ -161,7 +161,7 @@ sequence_t *QQ_add(int bits) {
         }
     }
 
-    // Check cache for dynamically generated (widths > 8)
+    // Check cache for dynamically generated (widths > HARDCODED_MAX_WIDTH)
     if (precompiled_QQ_add_width[bits] != NULL)
         return precompiled_QQ_add_width[bits];
 
@@ -358,7 +358,7 @@ sequence_t *cQQ_add(int bits) {
         return NULL;
     }
 
-    // Use hardcoded sequences for widths 1-8
+    // Use hardcoded sequences for widths 1-16
     if (bits <= HARDCODED_MAX_WIDTH) {
         const sequence_t *hardcoded = get_hardcoded_cQQ_add(bits);
         if (hardcoded != NULL) {
@@ -370,7 +370,7 @@ sequence_t *cQQ_add(int bits) {
         }
     }
 
-    // Check cache for dynamically generated (widths > 8)
+    // Check cache for dynamically generated (widths > HARDCODED_MAX_WIDTH)
     if (precompiled_cQQ_add_width[bits] != NULL)
         return precompiled_cQQ_add_width[bits];
 
