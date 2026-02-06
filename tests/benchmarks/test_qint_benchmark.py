@@ -228,3 +228,81 @@ class TestCircuitCreation:
             return ql.qint(12345, width=16)
 
         benchmark.pedantic(do_create, setup=setup, rounds=100, warmup_rounds=5)
+
+
+class TestHotPathBaseline:
+    """Baseline benchmarks for Phase 60 hot path migration.
+
+    These benchmarks cover operations identified as migration candidates
+    for the C hot path migration phase. They serve as pre-migration
+    baselines for before/after comparison.
+    """
+
+    def test_ixor_8bit(self, benchmark, clean_circuit):
+        """Benchmark 8-bit in-place classical XOR."""
+        a = ql.qint(5, width=8)
+
+        def do_ixor():
+            nonlocal a
+            a ^= 3
+            return a
+
+        benchmark(do_ixor)
+
+    def test_ixor_quantum_8bit(self, benchmark, clean_circuit):
+        """Benchmark 8-bit in-place quantum XOR."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+
+        def do_ixor():
+            nonlocal a
+            a ^= b
+            return a
+
+        benchmark(do_ixor)
+
+    def test_isub_8bit(self, benchmark, clean_circuit):
+        """Benchmark 8-bit in-place classical subtraction."""
+        a = ql.qint(5, width=8)
+
+        def do_isub():
+            nonlocal a
+            a -= 3
+            return a
+
+        benchmark(do_isub)
+
+    def test_isub_quantum_8bit(self, benchmark, clean_circuit):
+        """Benchmark 8-bit in-place quantum subtraction."""
+        a = ql.qint(5, width=8)
+        b = ql.qint(3, width=8)
+
+        def do_isub():
+            nonlocal a
+            a -= b
+            return a
+
+        benchmark(do_isub)
+
+    def test_iadd_16bit(self, benchmark, clean_circuit):
+        """Benchmark 16-bit in-place classical addition."""
+        a = ql.qint(5, width=16)
+
+        def do_iadd():
+            nonlocal a
+            a += 3
+            return a
+
+        benchmark(do_iadd)
+
+    def test_iadd_quantum_16bit(self, benchmark, clean_circuit):
+        """Benchmark 16-bit in-place quantum addition."""
+        a = ql.qint(5, width=16)
+        b = ql.qint(3, width=16)
+
+        def do_iadd():
+            nonlocal a
+            a += b
+            return a
+
+        benchmark(do_iadd)
