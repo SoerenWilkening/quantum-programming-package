@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# DEPRECATED: Use scripts/generate_seq_all.py instead.
+# This script is kept as reference only. Do not use for generation.
 """Generate add_seq_1_4.c with hardcoded QQ_add and cQQ_add sequences for widths 1-4."""
 
 import math

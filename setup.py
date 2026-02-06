@@ -33,8 +33,12 @@ c_sources = [
     os.path.join(PROJECT_ROOT, "c_backend", "src", "IntegerMultiplication.c"),
     os.path.join(PROJECT_ROOT, "c_backend", "src", "LogicOperations.c"),
     os.path.join(PROJECT_ROOT, "c_backend", "src", "execution.c"),
-    os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", "add_seq_1_4.c"),
-    os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", "add_seq_5_8.c"),
+    # Hardcoded addition sequences: 16 per-width files + unified dispatch
+    *[
+        os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"add_seq_{i}.c")
+        for i in range(1, 17)
+    ],
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", "add_seq_dispatch.c"),
 ]
 
 compiler_args = ["-O3", "-pthread"]  # Removed -flto due to GCC LTO bug
