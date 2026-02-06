@@ -508,98 +508,72 @@
 	@cython.boundscheck(False)
 	@cython.wraparound(False)
 	cdef multiplication_inplace(self, other, qint ret):
-		cdef sequence_t *seq
-		cdef unsigned int[:] arr
-		cdef int result_bits
-		cdef int other_bits
-		cdef int self_offset
-		cdef int ret_offset
-		cdef int other_offset
-		cdef int start
-		cdef int i
+		# Phase 60-02: Thin Cython wrapper -- all hot-path logic moved to C
+		# (hot_path_mul.c). We only extract qubit indices from Python objects
+		# here, then call the C function with nogil.
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _controlled = _get_controlled()
 		cdef object _control_bool = _get_control_bool()
+		cdef unsigned int self_qa[64]
+		cdef unsigned int ret_qa[64]
+		cdef unsigned int other_qa[64]
+		cdef unsigned int ancilla_qa[128]
+		cdef int self_bits = self.bits
+		cdef int self_offset = 64 - self_bits
+		cdef int ret_offset = 64 - (<qint>ret).bits
+		cdef int i
+		cdef int64_t classical_value = 0
+		cdef unsigned int control_qubit = 0
+		cdef int num_ancilla = NUMANCILLY
 		cdef unsigned int[:] ancilla_arr
 		cdef unsigned int[:] control_qubits
-		cdef unsigned int[:] ret_qubits
-		cdef unsigned int[:] other_qubits
+		cdef unsigned int[:] ret_qubits_mv = (<qint>ret).qubits
+		cdef int result_bits = (<qint>ret).bits
 
-		start = 0
-
-		# Determine result width (must match ret's width)
-		result_bits = (<qint>ret).bits
-
-		# Multiplication layout: ret (accumulator) at position 0, self at position result_bits
-		# Extract only used qubits (right-aligned in 64-element array)
-		self_offset = 64 - self.bits
-		ret_offset = 64 - result_bits
-
-		# ret qubits at position 0
-		# CYT-03: Replace slice with explicit loop for memory view optimization
-		ret_qubits = (<qint>ret).qubits
+		# Extract ret qubits (right-aligned in 64-element array)
 		for i in range(result_bits):
-			qubit_array[i] = ret_qubits[ret_offset + i]
-		# self qubits at position result_bits
-		for i in range(self.bits):
-			qubit_array[result_bits + i] = self.qubits[self_offset + i]
-		start = result_bits + self.bits
+			ret_qa[i] = ret_qubits_mv[ret_offset + i]
+
+		# Extract self qubits
+		for i in range(self_bits):
+			self_qa[i] = self.qubits[self_offset + i]
+
+		# Extract control qubit if controlled
+		if _controlled:
+			control_qubits = (<qint>_control_bool).qubits
+			control_qubit = control_qubits[63]
+
+		# Extract ancilla qubits
+		ancilla_arr = _get_ancilla()
+		for i in range(num_ancilla):
+			ancilla_qa[i] = ancilla_arr[i]
 
 		if type(other) == int:
-			# Classical-quantum multiplication
-			if _controlled:
-				# Control qubit from qbool (last element)
-				control_qubits = (<qint> _control_bool).qubits
-				qubit_array[start] = control_qubits[63]
-				ancilla_arr = _get_ancilla()
-				for i in range(NUMANCILLY):
-					qubit_array[start + 1 + i] = ancilla_arr[i]
-				seq = cCQ_mul(result_bits, other)  # Pass bits parameter
-			else:
-				ancilla_arr = _get_ancilla()
-				for i in range(NUMANCILLY):
-					qubit_array[start + i] = ancilla_arr[i]
-				seq = CQ_mul(result_bits, other)  # Pass bits parameter
-
-			if seq == NULL:
-				raise RuntimeError(f"Multiplication circuit generation failed for width {result_bits}")
-
-			arr = qubit_array
-			run_instruction(seq, &arr[0], False, _circuit)
+			classical_value = <int64_t>other
+			with nogil:
+				hot_path_mul_cq(_circuit, ret_qa, result_bits,
+								self_qa, self_bits,
+								classical_value,
+								_controlled, control_qubit,
+								ancilla_qa, num_ancilla)
 			return ret
 
 		if not isinstance(other, qint):
 			raise TypeError("Multiplication requires qint or int")
 
-		# Quantum-quantum multiplication
-		other_bits = (<qint> other).bits
-		other_offset = 64 - other_bits
-
-		# other qubits at position start
-		# CYT-03: Replace slice with explicit loop for memory view optimization
-		other_qubits = (<qint> other).qubits
+		# Extract other qubits for quantum-quantum multiplication
+		cdef int other_bits = (<qint>other).bits
+		cdef int other_offset = 64 - other_bits
+		cdef unsigned int[:] other_qubits_mv = (<qint>other).qubits
 		for i in range(other_bits):
-			qubit_array[start + i] = other_qubits[other_offset + i]
-		start += other_bits
+			other_qa[i] = other_qubits_mv[other_offset + i]
 
-		if _controlled:
-			control_qubits = (<qint> _control_bool).qubits
-			qubit_array[start] = control_qubits[63]
-			ancilla_arr = _get_ancilla()
-			for i in range(NUMANCILLY):
-				qubit_array[start + 1 + i] = ancilla_arr[i]
-			seq = cQQ_mul(result_bits)  # Pass bits parameter
-		else:
-			ancilla_arr = _get_ancilla()
-			for i in range(NUMANCILLY):
-				qubit_array[start + i] = ancilla_arr[i]
-			seq = QQ_mul(result_bits)  # Pass bits parameter
-
-		if seq == NULL:
-			raise RuntimeError(f"Multiplication circuit generation failed for width {result_bits}")
-
-		arr = qubit_array
-		run_instruction(seq, &arr[0], False, _circuit)
+		with nogil:
+			hot_path_mul_qq(_circuit, ret_qa, result_bits,
+							self_qa, self_bits,
+							other_qa, other_bits,
+							_controlled, control_qubit,
+							ancilla_qa, num_ancilla)
 		return ret
 
 	def __mul__(self, other):
