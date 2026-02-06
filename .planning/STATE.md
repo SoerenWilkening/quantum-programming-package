@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 59 - Hardcoded Sequences (9-16 bit)
-Plan: 3/4 complete
-Status: In progress
-Last activity: 2026-02-06 — Completed 59-03-PLAN.md (IntegerAddition.c routing)
+Plan: 4/4 complete
+Status: Phase complete
+Last activity: 2026-02-06 — Completed 59-04-PLAN.md (validation tests)
 
-Progress: [███████...] ~63% (v2.2: 5/7 phases, 59: 3/4 plans)
+Progress: [████████..] ~71% (v2.2: 6/7 phases complete, 59: 4/4 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 170 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 14)
+- Total plans completed: 171 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 15)
 - Average duration: ~13 min/plan
 - Total execution time: ~24.5 hours
 
@@ -86,6 +86,8 @@ Recent decisions (v2.2):
 - SEQ-08: Template-init functions return mutable sequence_t* for angle injection
 - SEQ-09: Dispatch file uses switch(bits) with #ifdef guards per case
 - SEQ-10: CQ/cCQ template-init populates existing precompiled cache before cache check
+- SEQ-11: QQ_add out-of-place tests limited to widths 1-9 (16GB+ needed for width 10)
+- SEQ-12: Custom simulation for controlled CQ_add tests (control qubit shifts bitstring layout)
 
 ### v2.2 Research Findings
 
@@ -265,12 +267,26 @@ All success criteria met:
 **Total generated C lines:** ~79,927
 **Build status:** Compiles without errors
 
+### Phase 59 Complete
+
+**Outcome:** Hardcoded addition sequences extended to widths 1-16 with comprehensive validation.
+
+**Phase 59 totals:**
+- Unified generation script: scripts/generate_seq_all.py (939 lines)
+- Per-width C files: 16 files (add_seq_1.c through add_seq_16.c)
+- Dispatch file: add_seq_dispatch.c
+- Total generated C lines: ~80,000
+- All 4 variants: QQ_add, cQQ_add, CQ_add (template), cCQ_add (template)
+- IntegerAddition.c routing: all 4 variants route through hardcoded for widths 1-16
+- Validation tests: 165 tests (all passing)
+- Dynamic fallback verified for widths 17+
+
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 59-03-PLAN.md (IntegerAddition.c routing)
-Resume file: .planning/phases/59-hardcoded-sequences-9-16/59-04-PLAN.md
-Resume action: `/gsd:execute-phase` with 59-04-PLAN.md
+Stopped at: Completed 59-04-PLAN.md (Phase 59 complete)
+Resume file: None
+Resume action: Next phase (60 or as directed)
 
 ---
-*State updated: 2026-02-06 — Completed 59-03-PLAN.md*
+*State updated: 2026-02-06 — Completed 59-04-PLAN.md (Phase 59 complete)*
