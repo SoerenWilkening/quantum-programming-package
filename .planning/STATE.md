@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 60 - C Hot Path Migration
-Plan: 3/4 complete
-Status: In progress
-Last activity: 2026-02-06 — Completed 60-03-PLAN.md (migrate addition_inplace to C)
+Plan: 4/4 complete
+Status: Phase complete
+Last activity: 2026-02-06 — Completed 60-04-PLAN.md (migrate XOR to C, final benchmarks)
 
-Progress: [█████████.] ~82% (v2.2: 60: 3/4 plans)
+Progress: [██████████] 100% (v2.2: 60: 4/4 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 174 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 18)
+- Total plans completed: 175 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 19)
 - Average duration: ~13 min/plan
 - Total execution time: ~24.5 hours
 
@@ -100,6 +100,29 @@ Recent decisions (v2.2):
 - MIG-08: Same two-entry-point pattern (hot_path_add_qq, hot_path_add_cq) for addition
 - MIG-09: Addition hot path passes invert parameter to run_instruction for subtraction support
 - MIG-10: Controlled QQ_add uses fixed position 2*result_bits for control qubit (not sequential)
+- MIG-11: XOR hot path uses hot_path_ixor_qq and hot_path_ixor_cq (simpler than add/mul -- no ancilla, no controlled variants)
+
+### Phase 60 Complete
+
+**Outcome:** All 3 hot paths migrated to C with nogil. Aggregate 27.7% improvement across benchmarked operations.
+
+**Final post-migration benchmarks (all 3 paths active):**
+| Operation | Baseline (us) | Post-Migration (us) | Change |
+|-----------|--------------|-------------------|--------|
+| ixor_8bit | 3.3 | 2.5 | -24.2% |
+| ixor_quantum_8bit | 6.3 | 4.4 | -30.2% |
+| iadd_8bit | 37.2 | 15.0 | -59.7% |
+| isub_8bit | 31.2 | 16.5 | -47.1% |
+| iadd_quantum_8bit | 62.4 | 44.0 | -29.5% |
+| isub_quantum_8bit | 61.7 | 37.3 | -39.5% |
+| iadd_16bit | 48.3 | 35.2 | -27.1% |
+| add_8bit | 59.6 | 31.2 | -47.7% |
+| eq_8bit | 103.1 | 62.7 | -39.2% |
+| lt_8bit | 115.3 | 95.5 | -17.2% |
+| mul_8bit | 236.2 | 201.5 | -14.7% |
+
+**Files created:** 6 C files (3 headers + 3 implementations), 3 C test files
+**CYT-04 (nogil):** Applied on all 6 C entry points
 
 ### Phase 60 Plan 01 Baseline Metrics
 
@@ -352,12 +375,30 @@ All success criteria met:
 
 **No deviations.** Plan executed exactly as written.
 
+### Phase 60 Plan 04 Complete
+
+**Outcome:** XOR hot path migrated to C with nogil wrapper. Phase 60 complete with all success criteria met.
+
+**Files created:**
+- c_backend/include/hot_path_xor.h (62 lines) - header with QQ and CQ declarations
+- c_backend/src/hot_path_xor.c (72 lines) - C implementation
+- tests/c/test_hot_path_xor.c (186 lines) - C unit tests (8 tests)
+
+**XOR-specific improvements:**
+| Operation | Baseline (us) | Post-migration (us) | Change |
+|-----------|--------------|-------------------|--------|
+| ixor_8bit | 3.3 | 2.5 | -24.2% |
+| ixor_quantum_8bit | 6.3 | 4.4 | -30.2% |
+| xor_8bit | 22.6 | 23.7 | -4.6% (out-of-place not migrated) |
+
+**No deviations** (except auto-fixed missing LogicOperations.c in Makefile).
+
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 60-03-PLAN.md (migrate addition_inplace to C)
+Stopped at: Completed 60-04-PLAN.md (Phase 60 complete)
 Resume file: None
-Resume action: Continue Phase 60 plan 04 (migrate __ixor__/__xor__ to C)
+Resume action: Phase 60 complete. Next phase TBD.
 
 ---
-*State updated: 2026-02-06 — Completed 60-03-PLAN.md (migrate addition_inplace to C)*
+*State updated: 2026-02-06 — Completed 60-04-PLAN.md (Phase 60 complete)*
