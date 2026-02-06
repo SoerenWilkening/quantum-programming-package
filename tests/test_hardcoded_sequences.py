@@ -1,11 +1,16 @@
 """Validation tests for hardcoded addition sequences.
 
-These tests verify that hardcoded (pre-computed) sequences for widths 1-8
+These tests verify that hardcoded (pre-computed) sequences for widths 1-16
 produce correct arithmetic results - functional equivalence to dynamic generation.
 
 NOTE: We test ARITHMETIC CORRECTNESS, not gate-by-gate structure comparison.
 The internal gate sequence is an implementation detail. What matters is that
 addition operations produce mathematically correct results.
+
+Simulation constraints (qubit budget):
+- QQ_add out-of-place (3*N qubits): feasible for widths 1-10 (30 qubits max)
+- CQ_add in-place (N qubits): feasible for ALL widths 1-16
+- cCQ_add / controlled CQ_add (N+1 qubits): feasible for ALL widths 1-16
 
 Per CONTEXT.md, this is one-time verification (not in regular CI).
 Mark with @pytest.mark.hardcoded_validation to allow filtering.
@@ -26,9 +31,12 @@ warnings.filterwarnings("ignore", message="Value .* exceeds")
 class TestHardcodedSequenceValidation:
     """Verify hardcoded sequences produce correct arithmetic results."""
 
-    @pytest.mark.parametrize("width", [1, 2, 3, 4, 5, 6, 7, 8])
+    @pytest.mark.parametrize("width", [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     def test_qq_add_produces_correct_results(self, verify_circuit, width):
-        """QQ_add hardcoded produces correct arithmetic results."""
+        """QQ_add hardcoded produces correct arithmetic results.
+
+        Out-of-place QQ_add uses 3*N qubits, so feasible up to width 10 (30 qubits).
+        """
         # Test representative values including edge cases
         test_cases = [(0, 0), (1, 1)]
         max_val = (1 << width) - 1
@@ -55,9 +63,12 @@ class TestHardcodedSequenceValidation:
                 "qq_add_hardcoded", [a, b], width, expected, actual
             )
 
-    @pytest.mark.parametrize("width", [1, 2, 3, 4, 5, 6, 7, 8])
+    @pytest.mark.parametrize("width", range(1, 17))
     def test_cq_add_produces_correct_results(self, verify_circuit, width):
-        """CQ_add (classical-quantum) produces correct arithmetic results."""
+        """CQ_add (classical-quantum) produces correct arithmetic results.
+
+        In-place CQ_add uses N qubits, feasible for all widths 1-16.
+        """
         # Test representative values
         test_cases = [(0, 0), (1, 1)]
         max_val = (1 << width) - 1
@@ -66,6 +77,11 @@ class TestHardcodedSequenceValidation:
             test_cases.append((2, 3) if max_val >= 3 else (max_val, 1))
 
         test_cases.extend([(max_val, 1), (1, max_val)])
+
+        # For large widths, cap classical values to keep them reasonable
+        if width > 8:
+            capped_max = min(max_val, 255)
+            test_cases = [(0, 0), (1, 1), (1, capped_max), (capped_max, 1)]
 
         for a, b in test_cases:
             if a >= (1 << width) or b >= (1 << width):
@@ -81,30 +97,57 @@ class TestHardcodedSequenceValidation:
                 "cq_add_hardcoded", [a, b], width, expected, actual
             )
 
-    def test_dynamic_fallback_widths(self, verify_circuit):
-        """Width 9 uses dynamic generation and produces correct results.
+    @pytest.mark.parametrize("width", [11, 12, 13, 14, 15, 16])
+    def test_cq_add_large_widths_correctness(self, verify_circuit, width):
+        """CQ_add for large widths (11-16) with multiple test values.
 
-        NOTE: QQ addition for width 9+ requires 3*width qubits for result.
-        Width 9 uses 27 qubits total which is near the simulation limit.
-        Width 10+ exceeds available memory for statevector simulation.
+        These widths are too large for out-of-place QQ_add simulation (3*N qubits),
+        but CQ_add (N qubits) is feasible. Tests boundary and representative values.
         """
-        width = 9
-        max_val = 255
+        max_val = (1 << width) - 1
+        test_cases = [
+            (0, 0),  # identity
+            (1, 1),  # simple
+            (1, max_val),  # 1 + max wraps to 0
+            (max_val, 1),  # max + 1 wraps to 0
+            (100, 200),  # medium values
+        ]
 
-        def circuit_builder(w=width, mv=max_val):
+        for a, b in test_cases:
+            if a >= (1 << width) or b >= (1 << width):
+                continue
+
+            def circuit_builder(a=a, b=b, w=width):
+                qa = ql.qint(a, width=w)
+                qa += b
+                return (a + b) % (1 << w)
+
+            actual, expected = verify_circuit(circuit_builder, width)
+            assert actual == expected, format_failure_message(
+                "cq_add_large", [a, b], width, expected, actual
+            )
+
+    def test_dynamic_fallback_widths(self, verify_circuit):
+        """Width 17 uses dynamic generation and produces correct results.
+
+        Width 17 is the first width beyond the hardcoded range (1-16).
+        Uses CQ_add (in-place, 17 qubits) to avoid memory issues.
+        """
+        width = 17
+
+        def circuit_builder(w=width):
             qa = ql.qint(1, width=w)
-            qb = ql.qint(mv, width=w)
-            _r = qa + qb
-            return (1 + mv) % (1 << w)
+            qa += 255  # In-place classical addition
+            return (1 + 255) % (1 << w)
 
         actual, expected = verify_circuit(circuit_builder, width)
         assert actual == expected, format_failure_message(
-            "qq_add_dynamic", [1, max_val], width, expected, actual
+            "cq_add_dynamic", [1, 255], width, expected, actual
         )
 
-    @pytest.mark.parametrize("width", [9, 10])
+    @pytest.mark.parametrize("width", [17, 18])
     def test_cq_dynamic_fallback_widths(self, verify_circuit, width):
-        """CQ addition with widths > 8 uses dynamic generation correctly."""
+        """CQ addition with widths > 16 uses dynamic generation correctly."""
         max_val = min((1 << width) - 1, 255)
 
         def circuit_builder(w=width, mv=max_val):
@@ -120,13 +163,15 @@ class TestHardcodedSequenceValidation:
 
 @pytest.mark.hardcoded_validation
 class TestHardcodedSequenceExecution:
-    """Verify hardcoded sequences execute without errors."""
+    """Verify hardcoded sequences execute without errors.
 
-    @pytest.mark.parametrize("width", [1, 2, 3, 4, 5, 6, 7, 8])
+    These tests build circuits without full simulation -- just verify that
+    the hardcoded gate sequences can be loaded and applied without crashing.
+    """
+
+    @pytest.mark.parametrize("width", range(1, 17))
     def test_qq_add_circuit_executes(self, width):
         """QQ_add hardcoded executes without error and produces non-trivial circuit."""
-        # NOTE: ql.circuit() resets the circuit and returns a reference.
-        # Do NOT call it again after building - use the same reference.
         circ = ql.circuit()
         qa = ql.qint(0, width=width)
         qb = ql.qint(0, width=width)
@@ -134,7 +179,7 @@ class TestHardcodedSequenceExecution:
 
         assert circ.depth >= 1, f"Circuit should have non-zero depth for width {width}"
 
-    @pytest.mark.parametrize("width", [1, 2, 3, 4, 5, 6, 7, 8])
+    @pytest.mark.parametrize("width", range(1, 17))
     def test_controlled_cq_add_circuit_executes(self, width):
         """Controlled CQ_add executes without error.
 
@@ -153,7 +198,7 @@ class TestHardcodedSequenceExecution:
 
         assert circ.depth >= 1, f"Controlled circuit should have depth for width {width}"
 
-    @pytest.mark.parametrize("width", [1, 2, 3, 4, 5, 6, 7, 8])
+    @pytest.mark.parametrize("width", range(1, 17))
     def test_cq_add_circuit_executes(self, width):
         """CQ_add (classical-quantum) executes without error."""
         circ = ql.circuit()
@@ -168,7 +213,7 @@ class TestHardcodedBoundaryConditions:
     """Test boundary conditions for hardcoded sequence widths."""
 
     def test_width_8_boundary(self, verify_circuit):
-        """Width 8 is the last hardcoded width - verify it works correctly."""
+        """Width 8 is the middle of the hardcoded range - verify it works correctly."""
         max_val = 255  # 2^8 - 1
 
         def circuit_builder():
@@ -180,41 +225,160 @@ class TestHardcodedBoundaryConditions:
         actual, expected = verify_circuit(circuit_builder, 8)
         assert actual == expected, f"Width 8 overflow: expected {expected}, got {actual}"
 
-    def test_width_9_uses_dynamic(self, verify_circuit):
-        """Width 9 should fall back to dynamic generation."""
+    def test_width_16_boundary(self, verify_circuit):
+        """Width 16 is the last hardcoded width - verify CQ_add with boundary values."""
+        width = 16
+        max_val = (1 << width) - 1  # 65535
 
-        def circuit_builder():
-            qa = ql.qint(1, width=9)
-            qb = ql.qint(1, width=9)
-            _r = qa + qb
-            return 2
-
-        actual, expected = verify_circuit(circuit_builder, 9)
-        assert actual == expected, f"Width 9 dynamic: expected {expected}, got {actual}"
-
-    @pytest.mark.parametrize("width", [1, 2, 3, 4, 5, 6, 7, 8])
-    def test_zero_plus_zero(self, verify_circuit, width):
-        """Addition identity: 0 + 0 = 0 for all hardcoded widths."""
-
-        def circuit_builder(w=width):
+        # Test 0 + 0 = 0
+        def circuit_zero(w=width):
             qa = ql.qint(0, width=w)
-            qb = ql.qint(0, width=w)
-            _r = qa + qb
+            qa += 0
             return 0
 
-        actual, expected = verify_circuit(circuit_builder, width)
+        actual, expected = verify_circuit(circuit_zero, width)
+        assert actual == expected, f"Width 16 zero: expected {expected}, got {actual}"
+
+        # Test 1 + 1 = 2
+        def circuit_one(w=width):
+            qa = ql.qint(1, width=w)
+            qa += 1
+            return 2
+
+        actual, expected = verify_circuit(circuit_one, width)
+        assert actual == expected, f"Width 16 add: expected {expected}, got {actual}"
+
+        # Test max + 1 = 0 (overflow wrapping)
+        def circuit_overflow(w=width, mv=max_val):
+            qa = ql.qint(mv, width=w)
+            qa += 1
+            return 0  # 65535 + 1 = 65536 mod 65536 = 0
+
+        actual, expected = verify_circuit(circuit_overflow, width)
+        assert actual == expected, f"Width 16 overflow: expected {expected}, got {actual}"
+
+    def test_width_17_uses_dynamic(self, verify_circuit):
+        """Width 17 should fall back to dynamic generation."""
+
+        def circuit_builder():
+            qa = ql.qint(1, width=17)
+            qa += 1  # CQ_add in-place to avoid 3*17=51 qubit issue
+            return 2
+
+        actual, expected = verify_circuit(circuit_builder, 17)
+        assert actual == expected, f"Width 17 dynamic: expected {expected}, got {actual}"
+
+    @pytest.mark.parametrize("width", range(1, 17))
+    def test_zero_plus_zero(self, verify_circuit, width):
+        """Addition identity: 0 + 0 = 0 for all hardcoded widths.
+
+        Uses CQ_add (in-place) for widths 11-16 to stay within qubit budget.
+        """
+        if width <= 10:
+            # Out-of-place QQ_add feasible
+            def circuit_builder(w=width):
+                qa = ql.qint(0, width=w)
+                qb = ql.qint(0, width=w)
+                _r = qa + qb
+                return 0
+
+            actual, expected = verify_circuit(circuit_builder, width)
+        else:
+            # In-place CQ_add for large widths
+            def circuit_builder(w=width):
+                qa = ql.qint(0, width=w)
+                qa += 0
+                return 0
+
+            actual, expected = verify_circuit(circuit_builder, width)
+
         assert actual == expected, f"Width {width} identity: expected {expected}, got {actual}"
 
-    @pytest.mark.parametrize("width", [1, 2, 3, 4, 5, 6, 7, 8])
+    @pytest.mark.parametrize("width", range(1, 17))
     def test_overflow_wrapping(self, verify_circuit, width):
-        """Max value + 1 wraps to 0 for all hardcoded widths."""
+        """Max value + 1 wraps to 0 for all hardcoded widths.
+
+        Uses CQ_add (in-place) for widths 11-16 to stay within qubit budget.
+        """
+        max_val = (1 << width) - 1
+
+        if width <= 10:
+            # Out-of-place QQ_add feasible
+            def circuit_builder(w=width, mv=max_val):
+                qa = ql.qint(mv, width=w)
+                qb = ql.qint(1, width=w)
+                _r = qa + qb
+                return 0  # max + 1 wraps to 0
+
+            actual, expected = verify_circuit(circuit_builder, width)
+        else:
+            # In-place CQ_add for large widths
+            def circuit_builder(w=width, mv=max_val):
+                qa = ql.qint(mv, width=w)
+                qa += 1
+                return 0  # max + 1 wraps to 0
+
+            actual, expected = verify_circuit(circuit_builder, width)
+
+        assert actual == expected, f"Width {width} overflow: expected {expected}, got {actual}"
+
+
+@pytest.mark.hardcoded_validation
+class TestHardcodedControlledVariants:
+    """Test controlled addition variants (cCQ_add path).
+
+    Controlled CQ addition (qa += b inside `with ctrl:`) internally uses
+    the cQQ_add-style circuit. Testing this for all widths 1-16 indirectly
+    validates the cQQ_add hardcoded sequences.
+
+    Uses N+1 qubits (N for target + 1 for control), feasible for all widths 1-16.
+    """
+
+    @pytest.mark.parametrize("width", range(1, 17))
+    def test_controlled_cq_add_correctness_control_on(self, verify_circuit, width):
+        """Controlled CQ_add with control=|1> performs addition."""
+
+        def circuit_builder(w=width):
+            qa = ql.qint(1, width=w)
+            ctrl = ql.qint(1, width=1)  # Control qubit ON
+            with ctrl:
+                qa += 1  # Should add because control is |1>
+            return 2 % (1 << w)
+
+        actual, expected = verify_circuit(circuit_builder, width)
+        assert actual == expected, format_failure_message(
+            "controlled_cq_add_on", [1, 1], width, expected, actual
+        )
+
+    @pytest.mark.parametrize("width", range(1, 17))
+    def test_controlled_cq_add_correctness_control_off(self, verify_circuit, width):
+        """Controlled CQ_add with control=|0> does NOT perform addition."""
+
+        def circuit_builder(w=width):
+            qa = ql.qint(1, width=w)
+            ctrl = ql.qint(0, width=1)  # Control qubit OFF
+            with ctrl:
+                qa += 1  # Should NOT add because control is |0>
+            return 1  # Unchanged
+
+        actual, expected = verify_circuit(circuit_builder, width)
+        assert actual == expected, format_failure_message(
+            "controlled_cq_add_off", [1, 1], width, expected, actual
+        )
+
+    @pytest.mark.parametrize("width", range(1, 17))
+    def test_controlled_cq_add_boundary_values(self, verify_circuit, width):
+        """Controlled CQ_add with boundary values (overflow wrapping)."""
         max_val = (1 << width) - 1
 
         def circuit_builder(w=width, mv=max_val):
             qa = ql.qint(mv, width=w)
-            qb = ql.qint(1, width=w)
-            _r = qa + qb
-            return 0  # max + 1 wraps to 0
+            ctrl = ql.qint(1, width=1)  # Control ON
+            with ctrl:
+                qa += 1  # max + 1 should wrap to 0
+            return 0
 
         actual, expected = verify_circuit(circuit_builder, width)
-        assert actual == expected, f"Width {width} overflow: expected {expected}, got {actual}"
+        assert actual == expected, format_failure_message(
+            "controlled_cq_add_overflow", [max_val, 1], width, expected, actual
+        )
