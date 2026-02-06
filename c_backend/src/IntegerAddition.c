@@ -436,7 +436,7 @@ sequence_t *cQQ_add(int bits) {
             double value = 2 * M_PI / (pow(2, i + 1)) / 2;
             int target_q = rounds + i; // reversed for textbook QFT
             g = &add->seq[layer][add->gates_per_layer[layer]++];
-            cp(g, target_q, control, -value);
+            cp(g, target_q, bits + bit, -value);
             layer++;
         }
         g = &add->seq[layer][add->gates_per_layer[layer]++];

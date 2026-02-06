@@ -135,7 +135,7 @@ def generate_cqq_add(bits: int) -> list[list[Gate]]:
         for i in range(bits - rounds):
             value = 2 * math.pi / (2 ** (i + 1)) / 2
             target_q = rounds + i
-            layers.append([Gate("P", target_q, control, -value)])
+            layers.append([Gate("P", target_q, bits + bit, -value)])
         # CNOT
         layers.append([Gate("X", bits + bit, control, 1)])
         rounds += 1
