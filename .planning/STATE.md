@@ -10,16 +10,16 @@ See: .planning/PROJECT.md (updated 2026-02-05)
 ## Current Position
 
 Phase: 60 - C Hot Path Migration
-Plan: 1/4 complete
+Plan: 2/4 complete
 Status: In progress
-Last activity: 2026-02-06 — Completed 60-01-PLAN.md (profiling and hot path identification)
+Last activity: 2026-02-06 — Completed 60-02-PLAN.md (migrate multiplication_inplace to C)
 
-Progress: [████████..] ~74% (v2.2: 60: 1/4 plans)
+Progress: [████████..] ~76% (v2.2: 60: 2/4 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 172 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 16)
+- Total plans completed: 173 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 17)
 - Average duration: ~13 min/plan
 - Total execution time: ~24.5 hours
 
@@ -93,6 +93,10 @@ Recent decisions (v2.2):
 - MIG-01: Top 3 hot paths: multiplication_inplace, addition_inplace, __ixor__/__xor__
 - MIG-02: Migration order: multiplication_inplace first (highest absolute time), addition_inplace second (highest frequency), ixor/xor third (enabler for many operations)
 - MIG-03: Baseline captured as JSON at /tmp/baseline_60.json and in 60-01-SUMMARY.md benchmark table
+- MIG-04: Two C entry points (hot_path_mul_qq, hot_path_mul_cq) instead of single function with NULL other_qubits
+- MIG-05: Stack-allocated qa[256] in C for qubit layout (matches original qubit_array global size)
+- MIG-06: Cython wrapper extracts all Python data before nogil block, passes flat C arrays
+- MIG-07: ancilla_qa[128] buffer in Cython (matches NUMANCILLY=128)
 
 ### Phase 60 Plan 01 Baseline Metrics
 
@@ -305,12 +309,31 @@ All success criteria met:
 - Validation tests: 165 tests (all passing)
 - Dynamic fallback verified for widths 17+
 
+### Phase 60 Plan 02 Complete
+
+**Outcome:** multiplication_inplace hot path fully migrated to C with nogil wrapper.
+
+**Files created:**
+- c_backend/include/hot_path_mul.h (84 lines) - header with QQ and CQ declarations
+- c_backend/src/hot_path_mul.c (116 lines) - C implementation
+- tests/c/test_hot_path_mul.c (207 lines) - C unit tests (7 tests)
+
+**Post-migration benchmarks:**
+| Operation | Baseline (us) | Post-migration (us) | Change |
+|-----------|--------------|-------------------|--------|
+| mul_8bit | 236.2 | 223.3 | -5.5% |
+| mul_classical | 11,807.7 | 12,847.9 | +8.8% (noise) |
+
+**Deviations:**
+- Fixed ancilla buffer overflow (ancilla_qa[16] -> ancilla_qa[128])
+- Added missing int64_t and hot_path_mul imports to qint.pyx
+
 ## Session Continuity
 
 Last session: 2026-02-06
-Stopped at: Completed 60-01-PLAN.md (profiling and hot path identification)
+Stopped at: Completed 60-02-PLAN.md (migrate multiplication_inplace to C)
 Resume file: None
-Resume action: Continue Phase 60 plan 02 (migrate multiplication_inplace to C)
+Resume action: Continue Phase 60 plan 03 (migrate addition_inplace to C)
 
 ---
-*State updated: 2026-02-06 — Completed 60-01-PLAN.md (profiling and hot path identification)*
+*State updated: 2026-02-06 — Completed 60-02-PLAN.md (migrate multiplication_inplace to C)*
