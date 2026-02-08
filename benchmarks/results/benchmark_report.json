@@ -206,7 +206,24 @@
         "15": 76.4,
         "16": 85.8
       },
-      "cq_mul_per_call_us": {},
+      "cq_mul_per_call_us": {
+        "1": 1876.69,
+        "2": 3307.94,
+        "3": 4723.16,
+        "4": 6865.88,
+        "5": 8676.06,
+        "6": 10377.09,
+        "7": 10831.42,
+        "8": 18799.5,
+        "9": 18180.99,
+        "10": 20380.8,
+        "11": 18832.88,
+        "12": 21262.96,
+        "13": 22482.91,
+        "14": 25053.08,
+        "15": 26081.72,
+        "16": 28700.74
+      },
       "recommendation": "investigate",
       "reasoning": "Multiplication generation cost is 48x addition on average (range: 8x to 86x). Average first-call cost: 16230us. QQ_mul IS cached after first call, so hardcoding would only save the first-call cost. CQ_mul is NOT cached (fresh malloc each call), so it would benefit more from hardcoding. However, multiplication sequences are O(N^2) additions, so binary size impact would be substantial relative to current 16.4MB. Recommend investigating selective hardcoding for small widths (1-4) where binary size is manageable."
     },
@@ -219,10 +236,28 @@
       "reasoning": "All bitwise operation generation costs are under 300.0us (max: 288.4us). XOR is O(N) CNOT gates with ~13us max cost. AND/OR use Toffoli decomposition at ~288us max. These are trivial compared to addition (379us median) and especially multiplication. Hardcoding would add binary size for negligible benefit."
     },
     "division": {
-      "classical_cost_us": {},
-      "quantum_cost_us": {},
+      "classical_cost_us": {
+        "1": 263.92,
+        "2": 637.39,
+        "3": 743.66,
+        "4": 1272.37,
+        "5": 1352.55,
+        "6": 1720.3,
+        "7": 1832.19,
+        "8": 1800.36
+      },
+      "quantum_cost_us": {
+        "1": 659.39,
+        "2": 730.96,
+        "3": 1191.73,
+        "4": 3209.55,
+        "5": 9807.83,
+        "6": 46501.13,
+        "7": 278483.81,
+        "8": 1710800.87
+      },
       "recommendation": "skip",
-      "reasoning": "Division cost is in Python-level loop, not C sequence generation."
+      "reasoning": "Division cost is in the Python-level loop structure (N comparison+subtraction iterations for classical divisor, 2^N for quantum divisor), NOT in C sequence generation. Hardcoding individual gate sequences would not reduce division cost because the overhead is in the number of high-level operations, not in generating each operation's gate sequence. The component operations (addition, subtraction, comparison) already benefit from hardcoded sequences when available."
     }
   },
   "amortization": {
@@ -236,7 +271,7 @@
     "analysis": "The hardcoded sequences add 192ms to import time. Each cached dispatch call saves ~54442ns vs dynamic generation. Break-even for cached dispatch: ~3533 calls. However, the primary benefit is first-call avoidance: each unique (operation, width) combination saves ~350us on first call. Break-even for first-call savings: ~550 unique first calls. In practice, a typical quantum program calls 5-20 unique (op, width) pairs, so first-call savings alone justify the import overhead after just 550 unique calls."
   },
   "metadata": {
-    "generated": "2026-02-08T16:46:32+0000",
+    "generated": "2026-02-08T16:48:18+0000",
     "python_version": "3.13.7",
     "bench_raw_timestamp": "2026-02-08T16:40:27+0000"
   }

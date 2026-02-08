@@ -1,6 +1,6 @@
 # Phase 62: Hardcoded Sequence Benchmark Report
 
-Generated: 2026-02-08T16:46:32+0000
+Generated: 2026-02-08T16:48:18+0000
 Python: 3.13.7
 Bench raw data: 2026-02-08T16:40:27+0000
 
@@ -106,6 +106,15 @@ The hardcoded sequences add 192ms to import time. Each cached dispatch call save
 |-------|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|
 | Ratio | 11x | 8x | 14x | 15x | 26x | 27x | 33x | 65x | 83x | 85x | 59x | 58x | 52x | 67x | 76x | 86x |
 
+### CQ_mul Per-Call Cost (NOT cached)
+
+CQ_mul returns a fresh malloc'd sequence each call. This is the per-call cost,
+not just first-call. Compare with QQ_mul first-call (which IS cached after first).
+
+| Width | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 |
+|-------|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|-----:|
+| Cost | 1.9ms | 3.3ms | 4.7ms | 6.9ms | 8.7ms | 10.4ms | 10.8ms | 18.8ms | 18.2ms | 20.4ms | 18.8ms | 21.3ms | 22.5ms | 25.1ms | 26.1ms | 28.7ms |
+
 **Recommendation: investigate**
 
 Multiplication generation cost is 48x addition on average (range: 8x to 86x). Average first-call cost: 16230us. QQ_mul IS cached after first call, so hardcoding would only save the first-call cost. CQ_mul is NOT cached (fresh malloc each call), so it would benefit more from hardcoding. However, multiplication sequences are O(N^2) additions, so binary size impact would be substantial relative to current 16.4MB. Recommend investigating selective hardcoding for small widths (1-4) where binary size is manageable.
@@ -128,9 +137,20 @@ Division is implemented at the Python/Cython level, not as a C sequence.
 Classical divisor uses O(N) comparison+subtraction iterations.
 Quantum divisor uses O(2^N) iterations (exponential cost).
 
+| Width | Classical (a // 3) | Quantum (a // b) |
+|------:|-----------------:|-----------------:|
+| 1 | 264us | 659us |
+| 2 | 637us | 731us |
+| 3 | 744us | 1.2ms |
+| 4 | 1.3ms | 3.2ms |
+| 5 | 1.4ms | 9.8ms |
+| 6 | 1.7ms | 46.5ms |
+| 7 | 1.8ms | 278.5ms |
+| 8 | 1.8ms | 1.7s |
+
 **Recommendation: skip**
 
-Division cost is in Python-level loop, not C sequence generation.
+Division cost is in the Python-level loop structure (N comparison+subtraction iterations for classical divisor, 2^N for quantum divisor), NOT in C sequence generation. Hardcoding individual gate sequences would not reduce division cost because the overhead is in the number of high-level operations, not in generating each operation's gate sequence. The component operations (addition, subtraction, comparison) already benefit from hardcoded sequences when available.
 
 ## 8. Summary Recommendations
 
