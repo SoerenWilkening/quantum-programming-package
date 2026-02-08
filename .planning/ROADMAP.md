@@ -82,7 +82,10 @@
   3. Running a benchmark script produces per-call dispatch overhead comparing hardcoded lookup vs dynamic cache hit, showing whether the difference is measurable
   4. A comparison report exists showing hardcoded vs dynamic cost per operation/width, with import time amortization analysis (break-even point in calls)
   5. Multiplication, bitwise, and division generation costs are each measured and documented with a clear keep/hardcode/skip recommendation
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 62-01-PLAN.md -- Benchmark measurement engine (BENCH-01, BENCH-02, BENCH-03)
+- [ ] 62-02-PLAN.md -- Evaluation and comparison report (EVAL-01/02/03, BENCH-04)
 
 ### Phase 63: Right-Sizing Implementation
 **Goal**: Addition hardcoded sequences are right-sized (kept, factored, or removed) based on Phase 62 measurements
@@ -132,7 +135,7 @@ Phases execute in numeric order: 62 -> 63 -> 64
 | 59. Hardcoded Sequences (9-16 bit) | v2.2 | 4/4 | Complete | 2026-02-06 |
 | 60. C Hot Path Migration | v2.2 | 4/4 | Complete | 2026-02-06 |
 | 61. Memory Optimization | v2.2 | 3/3 | Complete | 2026-02-08 |
-| 62. Measurement | v2.3 | 0/TBD | Not started | - |
+| 62. Measurement | v2.3 | 0/2 | Not started | - |
 | 63. Right-Sizing Implementation | v2.3 | 0/TBD | Not started | - |
 | 64. Regression Verification | v2.3 | 0/TBD | Not started | - |
 
