@@ -107,7 +107,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. A benchmark comparing circuit generation throughput before and after changes shows no regression (or documents acceptable trade-offs with justification)
   2. The full test suite passes with zero new failures compared to the v2.2 baseline
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 64-01-PLAN.md -- Benchmark comparison and regression report (ADD-04)
 
 ## Progress
 
@@ -139,7 +141,7 @@ Phases execute in numeric order: 62 -> 63 -> 64
 | 61. Memory Optimization | v2.2 | 3/3 | Complete | 2026-02-08 |
 | 62. Measurement | v2.3 | 2/2 | Complete | 2026-02-08 |
 | 63. Right-Sizing Implementation | v2.3 | 1/1 | Complete | 2026-02-08 |
-| 64. Regression Verification | v2.3 | 0/TBD | Not started | - |
+| 64. Regression Verification | v2.3 | 0/1 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-02*
