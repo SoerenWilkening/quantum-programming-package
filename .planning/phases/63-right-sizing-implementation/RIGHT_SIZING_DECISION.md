@@ -74,15 +74,15 @@ Optimization is applied independently to QFT, middle, and IQFT segments to preve
 
 | File | Before | After | Reduction |
 |------|--------|-------|-----------|
-| add_seq_2.c | 503 | 371 | 132 (26.2%) |
-| add_seq_8.c | 3,665 | 1,974 | 1,691 (46.1%) |
-| add_seq_16.c | 12,611 | 6,322 | 6,289 (49.9%) |
-| add_seq_dispatch.c | 427 | 359 | 68 (formatting only) |
-| **All files total** | **79,867** | **41,821** | **38,046 (47.6%)** |
+| add_seq_2.c | 503 | 438 | 65 (12.9%) |
+| add_seq_8.c | 3,665 | 2,513 | 1,152 (31.4%) |
+| add_seq_16.c | 12,611 | 8,182 | 4,429 (35.1%) |
+| add_seq_dispatch.c | 427 | 427 | 0 (unchanged) |
+| **All files total** | **79,867** | **53,598** | **26,269 (32.9%)** |
 
-- **Total lines after:** 41,821
-- **Lines reduced:** 38,046
-- **Percentage reduction:** 47.6%
+- **Total lines after:** 53,598 (after clang-format)
+- **Lines reduced:** 26,269
+- **Percentage reduction:** 32.9%
 
 The reduction is much larger than the initial 5-8% estimate from the research phase because:
 1. The shared QFT/IQFT static const arrays eliminate two full sets of layer definitions per width (QQ and cQQ each had their own QFT/IQFT)

@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-08)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Phase 62 complete, ready for Phase 63 (v2.3 Hardcoding Right-Sizing)
+**Current focus:** Phase 63 plan 01 complete (right-sizing implementation), ready for remaining Phase 63 plans or Phase 64
 
 ## Current Position
 
-Phase: 62 of 64 (Measurement) -- COMPLETE
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-02-08 -- Completed 62-02-PLAN.md (benchmark evaluation & report)
+Phase: 63 of 64 (Right-Sizing Implementation)
+Plan: 1 of 1 in current phase
+Status: Phase complete (63-01 is the only plan)
+Last activity: 2026-02-08 -- Completed 63-01-PLAN.md (right-sizing decision + shared QFT/IQFT factoring)
 
-Progress: [████░░░░░░] 33% (2/6 plans across 3 phases)
+Progress: [█████░░░░░] 50% (3/6 plans across 3 phases)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 179 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 2)
+- Total plans completed: 180 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 3)
 - Average duration: ~13 min/plan
-- Total execution time: ~26.0 hours
+- Total execution time: ~26.6 hours
 
 **By Milestone:**
 
@@ -40,7 +40,7 @@ Progress: [████░░░░░░] 33% (2/6 plans across 3 phases)
 | v2.0 Function Compilation | 48-51 | 8 | Complete (2026-02-04) |
 | v2.1 Compile Enhancements | 52-54 | 6 | Complete (2026-02-05) |
 | v2.2 Performance Optimization | 55-61 | 22 | Complete (2026-02-08) |
-| v2.3 Hardcoding Right-Sizing | 62-64 | TBD | In progress |
+| v2.3 Hardcoding Right-Sizing | 62-64 | 3 | In progress |
 
 ## Accumulated Context
 
@@ -55,6 +55,10 @@ Recent: "Profile before optimizing" principle from v2.2 carries forward -- this 
 - Bitwise recommendation: "skip" (max 288us, trivial generation)
 - Division recommendation: "skip" (Python-level loop cost, not C sequence generation)
 - Break-even: 3,533 cached calls or 550 first calls to recoup 192ms import overhead
+- **KEEP all addition widths 1-16 hardcoded** (Phase 63 decision, data-driven from Phase 62 benchmarks)
+- **Segmented optimization** (QFT/middle/IQFT optimized independently) to enable shared layer arrays
+- **Packed QFT layout** from _generate_qft_layers() for shared static const arrays
+- **Const vs mutable separation** for sharing: static const arrays for QQ/cQQ, init helpers for CQ/cCQ
 
 ### Blockers/Concerns
 
@@ -75,9 +79,9 @@ Recent: "Profile before optimizing" principle from v2.2 carries forward -- this 
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed Phase 62 (Measurement) -- both plans done
-Resume file: .planning/phases/63-analysis/ (next phase)
-Resume action: Execute Phase 63 via `/gsd:execute-phase 63`
+Stopped at: Completed Phase 63 plan 01 (right-sizing decision + shared QFT/IQFT factoring)
+Resume file: .planning/phases/64-*/ (next phase, if exists)
+Resume action: Check ROADMAP.md for remaining phases in v2.3 milestone
 
 ---
-*State updated: 2026-02-08 -- Completed 62-02 benchmark evaluation & report (Phase 62 complete)*
+*State updated: 2026-02-08 -- Completed 63-01 right-sizing implementation (Phase 63 complete)*
