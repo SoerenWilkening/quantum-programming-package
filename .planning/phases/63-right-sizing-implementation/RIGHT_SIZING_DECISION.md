@@ -70,11 +70,25 @@ Optimization is applied independently to QFT, middle, and IQFT segments to preve
 ### Directory Size
 - **Before:** 4.0 MB on disk
 
-### After Factoring (to be filled in by Task 3)
-- Total lines: _TBD_
-- Lines reduced: _TBD_
-- Percentage reduction: _TBD_
-- Per-file comparison (widths 2, 8, 16): _TBD_
+### After Factoring (Actual Measurements)
+
+| File | Before | After | Reduction |
+|------|--------|-------|-----------|
+| add_seq_2.c | 503 | 371 | 132 (26.2%) |
+| add_seq_8.c | 3,665 | 1,974 | 1,691 (46.1%) |
+| add_seq_16.c | 12,611 | 6,322 | 6,289 (49.9%) |
+| add_seq_dispatch.c | 427 | 359 | 68 (formatting only) |
+| **All files total** | **79,867** | **41,821** | **38,046 (47.6%)** |
+
+- **Total lines after:** 41,821
+- **Lines reduced:** 38,046
+- **Percentage reduction:** 47.6%
+
+The reduction is much larger than the initial 5-8% estimate from the research phase because:
+1. The shared QFT/IQFT static const arrays eliminate two full sets of layer definitions per width (QQ and cQQ each had their own QFT/IQFT)
+2. The shared init helpers eliminate two full sets of QFT/IQFT initialization code per width (CQ and cCQ each had their own)
+3. The packed QFT layout from `_generate_qft_layers()` produces fewer layers than the sequential approach, further reducing code
+4. Segmented optimization (QFT/middle/IQFT independently) has minimal overhead (+1 layer for widths >= 2)
 
 ## Widths Excluded from Hardcoding
 
