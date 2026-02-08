@@ -2,24 +2,24 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-05)
+See: .planning/PROJECT.md (updated 2026-02-08)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v2.2 Performance Optimization
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 61 - Memory Optimization
-Plan: 3/3 complete
-Status: Phase complete
-Last activity: 2026-02-08 — Completed 61-03-PLAN.md (final profiling and validation)
+Phase: N/A — between milestones
+Plan: N/A
+Status: Milestone v2.2 shipped
+Last activity: 2026-02-08 — Archived v2.2 Performance Optimization milestone
 
-Progress: [██████████] 100% (v2.2: 61: 3/3 plans)
+Progress: All milestones through v2.2 complete
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 177 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 21)
+- Total plans completed: 177 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22)
 - Average duration: ~13 min/plan
 - Total execution time: ~25.7 hours
 
@@ -39,146 +39,13 @@ Progress: [██████████] 100% (v2.2: 61: 3/3 plans)
 | v1.9 Pixel-Art Circuit Visualization | 45-47 | 7 | Complete (2026-02-03) |
 | v2.0 Function Compilation | 48-51 | 8 | Complete (2026-02-04) |
 | v2.1 Compile Enhancements | 52-54 | 6 | Complete (2026-02-05) |
-| v2.2 Performance Optimization | 55-61 | TBD | Active |
+| v2.2 Performance Optimization | 55-61 | 22 | Complete (2026-02-08) |
 
 ## Accumulated Context
 
 ### Decisions
 
 See PROJECT.md Key Decisions table for full history.
-
-Recent decisions (v2.1):
-- Only track forward calls when ancilla qubits exist
-- f.inverse is @property returning _AncillaInverseProxy
-- f.adjoint is @property returning _InverseCompiledFunc
-- Auto-uncompute triggers after both replay and capture paths
-- Cache key includes qubit_saving mode
-- Use iteration protocol for qarray cdef access
-- Cache key uses ('arr', length) tuple for qarray
-
-Recent decisions (v2.2):
-- Used cProfile + pstats directly for profiler (no external dependency)
-- Benchmarks skip gracefully when pytest-benchmark not installed
-- Benchmark fixtures create fresh circuit for state isolation
-- Use PYTHONPATH=src for profiling targets (in-place builds)
-- Process pyx files individually in profile-cython (include directive handling)
-- Use inline cProfile API instead of -c flag (better compatibility)
-- Forward/adjoint replays produce equal depths - no fix needed for that
-- Real discrepancy is capture vs replay when capture allows parallelization
-- Root cause is layer_floor constraint in compile.py lines 984-994
-- ql.circuit() clears compilation cache - tests must warm cache before measuring
-- Phase 56 success criterion met: f(x) depth == f.adjoint(x) depth (verified)
-- Use benchmark.pedantic with setup for qubit-allocating operations
-- CYTHON_DEBUG enables boundscheck, wraparound, initializedcheck
-- Apply CYT-01 (static typing), CYT-02 (directives), CYT-03 (memory views) to hot paths
-- Defer CYT-04 (nogil) to Phase 60 due to Python call dependencies in accessors
-
-**Phase 58 decisions:**
-- SEQ-01: Use SEQ_PI compile-time constant instead of M_PI (M_PI not constant expression)
-- SEQ-02: Separate 1-4 and 5-8 bit widths into different source files
-- SEQ-03: Use const gate_t arrays with designated initializers for compile-time allocation
-- SEQ-04: Generate C code via Python script for 5-8 bit sequences (reproducibility)
-- SEQ-05: Use const cast in IntegerAddition.c for hardcoded return (safe due to static lifetime)
-
-**Phase 59 decisions:**
-- SEQ-06: Use C QFT() packed layer layout (2*n-1 layers) for CQ/cCQ templates
-- SEQ-07: Conditional compilation via #ifdef SEQ_WIDTH_N per-width files
-- SEQ-08: Template-init functions return mutable sequence_t* for angle injection
-- SEQ-09: Dispatch file uses switch(bits) with #ifdef guards per case
-- SEQ-10: CQ/cCQ template-init populates existing precompiled cache before cache check
-- SEQ-11: QQ_add out-of-place tests limited to widths 1-9 (16GB+ needed for width 10)
-- SEQ-12: Custom simulation for controlled CQ_add tests (control qubit shifts bitstring layout)
-
-**Phase 60 decisions:**
-- MIG-01: Top 3 hot paths: multiplication_inplace, addition_inplace, __ixor__/__xor__
-- MIG-02: Migration order: multiplication_inplace first (highest absolute time), addition_inplace second (highest frequency), ixor/xor third (enabler for many operations)
-- MIG-03: Baseline captured as JSON at /tmp/baseline_60.json and in 60-01-SUMMARY.md benchmark table
-- MIG-04: Two C entry points (hot_path_mul_qq, hot_path_mul_cq) instead of single function with NULL other_qubits
-- MIG-05: Stack-allocated qa[256] in C for qubit layout (matches original qubit_array global size)
-- MIG-06: Cython wrapper extracts all Python data before nogil block, passes flat C arrays
-- MIG-07: ancilla_qa[128] buffer in Cython (matches NUMANCILLY=128)
-- MIG-08: Same two-entry-point pattern (hot_path_add_qq, hot_path_add_cq) for addition
-- MIG-09: Addition hot path passes invert parameter to run_instruction for subtraction support
-- MIG-10: Controlled QQ_add uses fixed position 2*result_bits for control qubit (not sequential)
-- MIG-11: XOR hot path uses hot_path_ixor_qq and hot_path_ixor_cq (simpler than add/mul -- no ancilla, no controlled variants)
-
-**Phase 61 decisions:**
-- MEM-01: 32-bit multiplication segfaults in C backend (buffer overflow), profiling capped at 24-bit
-- MEM-02: 32-bit memray profiling requires inline script (-c) due to argparse/memray interaction crash
-- MEM-03: Top optimization target is run_instruction() per-gate malloc (leaked, ~40 bytes per gate)
-- MEM-04: Stack-allocated gate_t is safe because add_gate() copies via memcpy before pointer goes out of scope
-- MEM-05: For n-controlled gates (NumControls > 2), large_control still needs malloc for remapped array, freed after add_gate
-- MEM-06: colliding_gates() changed from returning malloc'd array to accepting caller-provided gate_t*[3]
-- MEM-07: Arena allocator not needed -- remaining allocation sites are circuit infrastructure realloc (amortized) and Python overhead (one-time)
-
-### Phase 60 Complete
-
-**Outcome:** All 3 hot paths migrated to C with nogil. Aggregate 27.7% improvement across benchmarked operations.
-
-**Final post-migration benchmarks (all 3 paths active):**
-| Operation | Baseline (us) | Post-Migration (us) | Change |
-|-----------|--------------|-------------------|--------|
-| ixor_8bit | 3.3 | 2.5 | -24.2% |
-| ixor_quantum_8bit | 6.3 | 4.4 | -30.2% |
-| iadd_8bit | 37.2 | 15.0 | -59.7% |
-| isub_8bit | 31.2 | 16.5 | -47.1% |
-| iadd_quantum_8bit | 62.4 | 44.0 | -29.5% |
-| isub_quantum_8bit | 61.7 | 37.3 | -39.5% |
-| iadd_16bit | 48.3 | 35.2 | -27.1% |
-| add_8bit | 59.6 | 31.2 | -47.7% |
-| eq_8bit | 103.1 | 62.7 | -39.2% |
-| lt_8bit | 115.3 | 95.5 | -17.2% |
-| mul_8bit | 236.2 | 201.5 | -14.7% |
-
-**Files created:** 6 C files (3 headers + 3 implementations), 3 C test files
-**CYT-04 (nogil):** Applied on all 6 C entry points
-
-### Phase 60 Plan 01 Baseline Metrics
-
-**Benchmark results (key operations, Phase 60 pre-migration):**
-| Operation | Mean (us) | OPS |
-|-----------|-----------|-----|
-| ixor_8bit | 3.3 | 302,317 |
-| ixor_quantum_8bit | 6.3 | 159,529 |
-| xor_8bit | 22.6 | 44,231 |
-| isub_8bit | 31.2 | 32,098 |
-| iadd_8bit | 37.2 | 26,854 |
-| isub_quantum_8bit | 61.7 | 16,204 |
-| iadd_quantum_8bit | 62.4 | 16,019 |
-| iadd_16bit | 48.3 | 20,714 |
-| add_8bit | 59.6 | 16,788 |
-| eq_8bit | 103.1 | 9,703 |
-| lt_8bit | 115.3 | 8,675 |
-| mul_8bit | 236.2 | 4,234 |
-| mul_classical | 11,807.7 | 85 |
-
-### v2.2 Research Findings
-
-Key constraints and guidance from research:
-- Python 3.11 mandatory for Cython profiling (PEP-669 breaks profiling in 3.12+)
-- Profile before optimizing (avoid premature optimization)
-- f()/f.inverse() depth discrepancy is a quick win
-- Move entire hot paths to C (not individual functions) to avoid boundary overhead
-- Hardcoded sequences split into 4 files (~400 LOC each per constraint)
-- MIG and MEM phases are conditional on profiling results
-
-### Phase 57 Plan 01 Baseline Metrics
-
-**Benchmark results (key operations):**
-| Operation | Mean (us) | OPS |
-|-----------|-----------|-----|
-| iadd_8bit | 25 | 40,040 |
-| xor_8bit | 30 | 33,546 |
-| add_8bit | 53 | 18,733 |
-| eq_8bit | 100 | 10,001 |
-| lt_8bit | 152 | 6,572 |
-| mul_8bit | 356 | 2,807 |
-| mul_classical | 31,256 | 32 |
-
-**Primary optimization targets:**
-1. mul_classical (100x slower than mul_8bit)
-2. qint_preprocessed.pyx (1.95 MB annotation file)
-3. qarray.pyx (1.21 MB annotation file)
 
 ### Blockers/Concerns
 
@@ -187,7 +54,7 @@ Key constraints and guidance from research:
 - BUG-MOD-REDUCE: _reduce_mod result corruption (needs different circuit structure)
 - BUG-COND-MUL-01: Controlled multiplication corruption (not yet investigated)
 - BUG-WIDTH-ADD: Mixed-width QFT addition off-by-one (discovered in v1.8)
-- ~~BUG-CQQ-ARITH: cQQ_add algorithm produces incorrect arithmetic for widths 2+~~ FIXED in quick-015 (c891a32)
+- 32-bit multiplication segfault (buffer overflow in C backend, discovered in Phase 61)
 
 ### Quick Tasks Completed
 
@@ -196,250 +63,12 @@ Key constraints and guidance from research:
 | 014 | cQQ_add qubit layout fix | 2026-02-05 | abbd87f | [014-cqq-add-hardcoded-or-not-doesn-t-seem-to](./quick/014-cqq-add-hardcoded-or-not-doesn-t-seem-to/) |
 | 015 | Fix cQQ_add algorithm bugs | 2026-02-06 | c891a32 | [015-fix-cqq-add-algorithm-bugs](./quick/015-fix-cqq-add-algorithm-bugs/) |
 
-### Phase 55 Deliverables
-
-Profiling infrastructure now available:
-- `pip install '.[profiling]'` — Install profiling dependencies
-- `ql.profile()` — Inline profiling context manager
-- `make profile-cprofile` — Run cProfile on quantum operations
-- `make profile-cython` — Generate Cython annotation HTML
-- `make benchmark` — Run pytest-benchmark tests
-- `QUANTUM_PROFILE=1 pip install -e .` — Build with Cython profiling
-- `CYTHON_DEBUG=1 pip install -e .` — Build with all safety checks enabled
-
-### Phase 56 Complete (Plan 02)
-
-**Outcome:** Success criterion met - f(x) and f.adjoint(x) produce equal circuit depth.
-
-**No code fix was needed** - The layer_floor constraint in _replay() already guarantees depth equality. Plan 01 diagnostics confirmed this. Plan 02 converted diagnostics to permanent regression tests.
-
-**Regression test suite established:**
-- test_forward_adjoint_depth_equal (width 8)
-- test_forward_adjoint_depth_equal_multiwidth (widths 4, 8, 16)
-- test_controlled_depth_parity (controlled variants)
-- test_depth_capture_vs_replay (capture/replay consistency)
-
-### Phase 57 Complete
-
-**Outcome:** Cython hot paths optimized with static typing and compiler directives.
-
-**Verified (7/7 must-haves):**
-- CYT-01 (Static typing): Typed loop variables, memory views, intermediate values
-- CYT-02 (Compiler directives): @cython.boundscheck(False), @cython.wraparound(False)
-- CYT-03 (Memory views): Explicit loops replace slice operations
-- CYT-04 (nogil): Deferred to Phase 60 (documented)
-
-**Deliverables:**
-- CYTHON_DEBUG=1 build mode for debugging
-- Expanded benchmark suite (18 tests)
-- verify-optimization Makefile target
-- Annotation verification tests
-
-### Phase 58 Plan 01 Complete
-
-**Outcome:** Static QQ_add and cQQ_add sequences for 1-4 bit widths.
-
-**Files created:**
-- c_backend/include/sequences.h (53 lines) - dispatch function declarations
-- c_backend/src/sequences/add_seq_1_4.c (1504 lines) - static gate arrays
-
-**Layer counts:**
-- QQ_add: 3, 8, 13, 18 layers for widths 1-4
-- cQQ_add: 7, 17, 28, 40 layers for widths 1-4
-
-**Build integration:** setup.py updated to include new source file
-
-### Phase 58 Plan 02 Complete
-
-**Outcome:** Static QQ_add and cQQ_add sequences for 5-8 bit widths with routing integration.
-
-**Files created/modified:**
-- c_backend/src/sequences/add_seq_5_8.c (6351 lines) - static gate arrays for 5-8 bit
-- c_backend/src/IntegerAddition.c - routing to hardcoded sequences
-- scripts/generate_seq_5_8.py - code generation script
-
-**Layer counts (5-8 bit):**
-- QQ_add: 35, 43, 51, 58 layers
-- cQQ_add: 53, 71, 90, 110 layers
-
-**Routing:** QQ_add() and cQQ_add() now return hardcoded sequences for widths 1-8
-
-### Phase 58 Complete
-
-**Outcome:** Hardcoded addition sequences for widths 1-8 with comprehensive validation.
-
-**Plan 03 deliverables:**
-- tests/test_hardcoded_sequences.py (220 lines, 61 tests)
-- Verification: All 61 new tests pass
-- Verification: All 888 existing addition tests pass
-- Arithmetic correctness confirmed for widths 1-8
-- Dynamic fallback confirmed for width 9+
-
-**Phase 58 totals:**
-- Static gate sequences: ~7,855 lines of C code
-- QQ_add sequences: 8 widths (1-8 bits)
-- cQQ_add sequences: 8 widths (1-8 bits)
-- Validation tests: 61 test cases
-
-### Phase 58 Verified
-
-**Verification status:** passed (4/4 must-haves)
-**Report:** .planning/phases/58-hardcoded-sequences-1-8/58-VERIFICATION.md
-
-All success criteria met:
-1. ✓ Addition operations for 1-4 bit widths use pre-computed gate sequences
-2. ✓ Addition operations for 5-8 bit widths use pre-computed gate sequences
-3. ✓ Validation tests confirm hardcoded output matches dynamic generation
-4. ✓ Width > 8 automatically falls back to dynamic generation
-
-### Phase 59 Plan 01 Complete
-
-**Outcome:** Unified generation script for all 16 per-width C files + dispatch file.
-
-**Files created:**
-- scripts/generate_seq_all.py (939 lines) - unified generation script
-
-**Key features:**
-- 4 addition variants per width: QQ_add, cQQ_add, CQ_add (template), cCQ_add (template)
-- Per-width files with #ifdef SEQ_WIDTH_N guards
-- Dispatch file with switch(bits) routing
-- Cross-validation (--validate) against existing sequences
-- CLI: --width, --dry-run, --output-dir flags
-
-### Phase 59 Plan 03 Complete
-
-**Outcome:** IntegerAddition.c routes all 4 addition variants through hardcoded sequences for widths 1-16.
-
-**Changes:**
-- QQ_add/cQQ_add: Updated comments from "widths 1-8" to "widths 1-16" (routing logic unchanged via HARDCODED_MAX_WIDTH)
-- CQ_add: Added hardcoded template-init block (populates cache from get_hardcoded_CQ_add on first call)
-- cCQ_add: Added hardcoded template-init block (populates cache from get_hardcoded_cCQ_add on first call)
-
-**Critical bug fix:** All 16 per-width C files had `#include "sequences.h"` INSIDE the `#ifdef SEQ_WIDTH_N` guard, creating a circular dependency that compiled all files to empty objects. Fixed by moving include before guard. Also fixed generation script.
-
-**Verification:** All 888 addition tests pass, all 61 hardcoded sequence tests pass.
-
-### Phase 59 Plan 02 Complete
-
-**Outcome:** Generated all 16 per-width C files + dispatch, restructured header and build system.
-
-**Files created:** 17 C files (add_seq_1.c through add_seq_16.c + add_seq_dispatch.c)
-**Files removed:** add_seq_1_4.c, add_seq_5_8.c (replaced by per-width files)
-**Files modified:** sequences.h (16 preprocessor guards, 4-variant API), setup.py (17 source entries)
-
-**Total generated C lines:** ~79,927
-**Build status:** Compiles without errors
-
-### Phase 59 Complete
-
-**Outcome:** Hardcoded addition sequences extended to widths 1-16 with comprehensive validation.
-
-**Phase 59 totals:**
-- Unified generation script: scripts/generate_seq_all.py (939 lines)
-- Per-width C files: 16 files (add_seq_1.c through add_seq_16.c)
-- Dispatch file: add_seq_dispatch.c
-- Total generated C lines: ~80,000
-- All 4 variants: QQ_add, cQQ_add, CQ_add (template), cCQ_add (template)
-- IntegerAddition.c routing: all 4 variants route through hardcoded for widths 1-16
-- Validation tests: 165 tests (all passing)
-- Dynamic fallback verified for widths 17+
-
-### Phase 60 Plan 02 Complete
-
-**Outcome:** multiplication_inplace hot path fully migrated to C with nogil wrapper.
-
-**Files created:**
-- c_backend/include/hot_path_mul.h (84 lines) - header with QQ and CQ declarations
-- c_backend/src/hot_path_mul.c (116 lines) - C implementation
-- tests/c/test_hot_path_mul.c (207 lines) - C unit tests (7 tests)
-
-**Post-migration benchmarks:**
-| Operation | Baseline (us) | Post-migration (us) | Change |
-|-----------|--------------|-------------------|--------|
-| mul_8bit | 236.2 | 223.3 | -5.5% |
-| mul_classical | 11,807.7 | 12,847.9 | +8.8% (noise) |
-
-**Deviations:**
-- Fixed ancilla buffer overflow (ancilla_qa[16] -> ancilla_qa[128])
-- Added missing int64_t and hot_path_mul imports to qint.pyx
-
-### Phase 60 Plan 03 Complete
-
-**Outcome:** addition_inplace hot path fully migrated to C with nogil wrapper. Massive speedup.
-
-**Files created:**
-- c_backend/include/hot_path_add.h - header with QQ and CQ declarations
-- c_backend/src/hot_path_add.c - C implementation with invert support
-- tests/c/test_hot_path_add.c - C unit tests (9 tests)
-
-**Post-migration benchmarks:**
-| Operation | Baseline (us) | Post-migration (us) | Change |
-|-----------|--------------|-------------------|--------|
-| iadd_8bit | 37.2 | 14.4 | -61.3% |
-| isub_8bit | 31.2 | 17.1 | -45.2% |
-| iadd_quantum_8bit | 62.4 | 36.0 | -42.3% |
-| eq_8bit | 103.1 | 60.0 | -41.8% |
-| lt_8bit | 115.3 | 78.5 | -31.9% |
-| add_8bit | 59.6 | 39.2 | -34.2% |
-
-**No deviations.** Plan executed exactly as written.
-
-### Phase 60 Plan 04 Complete
-
-**Outcome:** XOR hot path migrated to C with nogil wrapper. Phase 60 complete with all success criteria met.
-
-**Files created:**
-- c_backend/include/hot_path_xor.h (62 lines) - header with QQ and CQ declarations
-- c_backend/src/hot_path_xor.c (72 lines) - C implementation
-- tests/c/test_hot_path_xor.c (186 lines) - C unit tests (8 tests)
-
-**XOR-specific improvements:**
-| Operation | Baseline (us) | Post-migration (us) | Change |
-|-----------|--------------|-------------------|--------|
-| ixor_8bit | 3.3 | 2.5 | -24.2% |
-| ixor_quantum_8bit | 6.3 | 4.4 | -30.2% |
-| xor_8bit | 22.6 | 23.7 | -4.6% (out-of-place not migrated) |
-
-**No deviations** (except auto-fixed missing LogicOperations.c in Makefile).
-
-### Phase 61 Complete
-
-**Outcome:** Memory optimization complete. Per-gate malloc eliminated, memory leak fixed, 59-93% allocation reduction confirmed. Arena allocator evaluated and skipped (not needed).
-
-**Memory allocation reduction (baseline vs final):**
-| Width | Baseline Allocs | Final Allocs | Reduction |
-|-------|----------------|-------------|-----------|
-| 8-bit | 633,855 | 261,048 | -58.8% |
-| 16-bit | 535,843 | 155,196 | -71.0% |
-| 32-bit | 173,511 | 12,317 | -92.9% |
-
-**Phase 61 success criteria:** All 4 criteria PASS (MEM-01: profiling done, MEM-02: N/A, MEM-03: PASS via stack allocation, SC4: allocation reduction confirmed).
-
-**Combined Phase 60+61 results:**
-- Phase 60: 27.7% aggregate throughput improvement via C hot path migration
-- Phase 61: 59-93% allocation count reduction, memory leak eliminated
-
-**Files modified:** c_backend/src/execution.c, c_backend/src/optimizer.c, c_backend/include/optimizer.h
-
-### Phase 61 Plan 02 Complete
-
-**Outcome:** Memory leak in run_instruction()/reverse_circuit_range() eliminated via stack allocation. Per-gate malloc in colliding_gates() eliminated via caller-provided array.
-
-**Memory improvement (8-bit, 200 iterations each add/mul/xor):**
-| Metric | Baseline | Post-Fix | Change |
-|--------|----------|----------|--------|
-| Total allocations | 633,855 | 139,702 | -78.0% |
-| Total memory allocated | 323.5 MB | 197.6 MB | -38.9% |
-| Peak memory usage | 86.1 MB | 75.5 MB | -12.3% |
-
-**Files modified:** c_backend/src/execution.c, c_backend/src/optimizer.c, c_backend/include/optimizer.h
-
 ## Session Continuity
 
 Last session: 2026-02-08
-Stopped at: Completed Phase 61 (memory optimization) -- all 3 plans done
-Resume file: N/A (phase complete)
-Resume action: Plan next phase or milestone
+Stopped at: Milestone v2.2 archived
+Resume file: N/A
+Resume action: Start next milestone with `/gsd:new-milestone`
 
 ---
-*State updated: 2026-02-08 — Completed 61-03-PLAN.md (final profiling and validation -- Phase 61 complete)*
+*State updated: 2026-02-08 — Milestone v2.2 archived*

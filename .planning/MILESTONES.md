@@ -1,5 +1,32 @@
 # Project Milestones: Quantum Assembly
 
+## v2.2 Performance Optimization (Shipped: 2026-02-08)
+
+**Delivered:** Profiling-driven performance optimization achieving 27.7% aggregate throughput improvement via C hot path migration, 59-93% memory allocation reduction, hardcoded gate sequences for widths 1-16, and Cython hot path typing.
+
+**Phases completed:** 55-61 (22 plans total)
+
+**Key accomplishments:**
+
+- Profiling infrastructure with cProfile, memray, Cython annotations, py-spy, and pytest-benchmark
+- Forward/adjoint depth equality verified and regression-tested (no fix needed)
+- Cython hot paths optimized with static typing, compiler directives, and memory views
+- Hardcoded gate sequences for all 4 addition variants, widths 1-16 (~80K lines generated C)
+- Top 3 hot paths (mul, add, xor) migrated to C with nogil — 27.7% aggregate throughput improvement
+- Memory leaks eliminated, 59-93% allocation reduction via stack allocation
+
+**Stats:**
+
+- 68 commits
+- 7 phases, 22 plans
+- 4 days (2026-02-05 → 2026-02-08)
+
+**Git range:** `16ff5cd` → `681f8a1`
+
+**What's next:** TBD — next milestone planning via `/gsd:new-milestone`
+
+---
+
 ## v2.1 Compile Enhancements (Shipped: 2026-02-05)
 
 **Delivered:** Ancilla qubit reuse in compiled function inverses (track, uncompute, deallocate), auto-uncompute in qubit_saving mode, and `ql.qarray` support as `@ql.compile` arguments.
