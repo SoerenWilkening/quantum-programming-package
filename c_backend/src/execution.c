@@ -23,31 +23,36 @@ void run_instruction(sequence_t *res, const qubit_t qubit_array[], int invert, c
         layer_t layer = invert * res->used_layer + direction * layer_index - invert;
         for (int gate_index = 0; gate_index < res->gates_per_layer[layer]; ++gate_index) {
             layer_t gate = invert * res->gates_per_layer[layer] + direction * gate_index - invert;
-            gate_t *g = malloc(sizeof(gate_t));
-            memcpy(g, &res->seq[layer][gate], sizeof(gate_t));
-            g->Target = qubit_array[g->Target];
+            gate_t g; // Stack allocated -- no malloc, no leak (Phase 61)
+            memcpy(&g, &res->seq[layer][gate], sizeof(gate_t));
+            g.Target = qubit_array[g.Target];
 
             // Handle n-controlled gates (Phase 12): controls may be in large_control
-            if (g->NumControls > 2 && res->seq[layer][gate].large_control != NULL) {
+            if (g.NumControls > 2 && res->seq[layer][gate].large_control != NULL) {
                 // Allocate new large_control array for mapped qubits
-                g->large_control = malloc(g->NumControls * sizeof(qubit_t));
-                if (g->large_control != NULL) {
-                    for (int i = 0; i < (int)g->NumControls; ++i) {
-                        g->large_control[i] = qubit_array[res->seq[layer][gate].large_control[i]];
+                g.large_control = malloc(g.NumControls * sizeof(qubit_t));
+                if (g.large_control != NULL) {
+                    for (int i = 0; i < (int)g.NumControls; ++i) {
+                        g.large_control[i] = qubit_array[res->seq[layer][gate].large_control[i]];
                     }
                     // Also update Control[0] and Control[1] for compatibility
-                    g->Control[0] = g->large_control[0];
-                    g->Control[1] = g->large_control[1];
+                    g.Control[0] = g.large_control[0];
+                    g.Control[1] = g.large_control[1];
                 }
             } else {
                 // Standard case: up to 2 controls in Control[] array
-                for (int i = 0; i < (int)g->NumControls && i < MAXCONTROLS; ++i) {
-                    g->Control[i] = qubit_array[g->Control[i]];
+                for (int i = 0; i < (int)g.NumControls && i < MAXCONTROLS; ++i) {
+                    g.Control[i] = qubit_array[g.Control[i]];
                 }
             }
-            g->GateValue *= pow(-1, invert);
+            g.GateValue *= (invert ? -1.0 : 1.0); // Micro-opt: avoid pow() (Phase 61)
 
-            add_gate(circ, g);
+            add_gate(circ, &g);
+            // Free remapped large_control if we allocated one
+            if (g.NumControls > 2 && g.large_control != NULL &&
+                g.large_control != res->seq[layer][gate].large_control) {
+                free(g.large_control);
+            }
         }
     }
 }
@@ -70,35 +75,35 @@ void reverse_circuit_range(circuit_t *circ, int start_layer, int end_layer) {
              --gate_index) {
             gate_t *original_gate = &circ->sequence[layer_index][gate_index];
 
-            // Create a copy of the gate with inverted GateValue
-            gate_t *g = malloc(sizeof(gate_t));
-            if (g == NULL) {
-                // Memory allocation failed - cannot continue reversal
-                return;
-            }
-
-            memcpy(g, original_gate, sizeof(gate_t));
+            // Create a stack-allocated copy with inverted GateValue (Phase 61)
+            gate_t g;
+            memcpy(&g, original_gate, sizeof(gate_t));
 
             // Invert the gate value (phase gates: P(t) -> P(-t))
             // Self-adjoint gates (X, H, CX) have GateValue that doesn't affect inversion
-            g->GateValue *= pow(-1, 1);
+            g.GateValue = -g.GateValue; // Micro-opt: pow(-1,1) is always -1 (Phase 61)
 
             // Handle n-controlled gates: allocate new large_control array
-            if (g->NumControls > 2 && original_gate->large_control != NULL) {
-                g->large_control = malloc(g->NumControls * sizeof(qubit_t));
-                if (g->large_control != NULL) {
-                    for (int i = 0; i < (int)g->NumControls; ++i) {
-                        g->large_control[i] = original_gate->large_control[i];
+            if (g.NumControls > 2 && original_gate->large_control != NULL) {
+                g.large_control = malloc(g.NumControls * sizeof(qubit_t));
+                if (g.large_control != NULL) {
+                    for (int i = 0; i < (int)g.NumControls; ++i) {
+                        g.large_control[i] = original_gate->large_control[i];
                     }
                     // Update Control[0] and Control[1] for compatibility
-                    g->Control[0] = g->large_control[0];
-                    g->Control[1] = g->large_control[1];
+                    g.Control[0] = g.large_control[0];
+                    g.Control[1] = g.large_control[1];
                 }
             }
             // For gates with <= 2 controls, memcpy already copied Control[] array
 
             // Append inverted gate to circuit
-            add_gate(circ, g);
+            add_gate(circ, &g);
+            // Free remapped large_control if we allocated one
+            if (g.NumControls > 2 && g.large_control != NULL &&
+                g.large_control != original_gate->large_control) {
+                free(g.large_control);
+            }
         }
     }
 }
