@@ -6,7 +6,8 @@
 - v1.8 Quantum Copy, Array Mutability & Uncomputation Fix -- Phases 41-44 (shipped 2026-02-03) -- See `milestones/v1.8-ROADMAP.md`
 - v1.9 Pixel-Art Circuit Visualization -- Phases 45-47 (shipped 2026-02-03) -- See `milestones/v1.9-ROADMAP.md`
 - v2.0 Function Compilation -- Phases 48-51 (shipped 2026-02-04) -- See `milestones/v2.0-ROADMAP.md`
-- ✅ **v2.1 Compile Enhancements** -- Phases 52-54 (shipped 2026-02-05) -- See `milestones/v2.1-ROADMAP.md`
+- v2.1 Compile Enhancements -- Phases 52-54 (shipped 2026-02-05) -- See `milestones/v2.1-ROADMAP.md`
+- v2.2 Performance Optimization -- Phases 55-61 (shipped 2026-02-08) -- See `milestones/v2.2-ROADMAP.md`
 
 ## Phases
 
@@ -40,7 +41,7 @@
 </details>
 
 <details>
-<summary>✅ v2.1 Compile Enhancements (Phases 52-54) -- SHIPPED 2026-02-05</summary>
+<summary>v2.1 Compile Enhancements (Phases 52-54) -- SHIPPED 2026-02-05</summary>
 
 - [x] Phase 52: Ancilla Tracking & Inverse Qubit Reuse (2/2 plans) -- completed 2026-02-04
 - [x] Phase 53: Qubit-Saving Auto-Uncompute (2/2 plans) -- completed 2026-02-04
@@ -48,9 +49,20 @@
 
 </details>
 
-## Progress
+<details>
+<summary>v2.2 Performance Optimization (Phases 55-61) -- SHIPPED 2026-02-08</summary>
 
-**Execution Order:** 52 -> 53 -> 54
+- [x] Phase 55: Profiling Infrastructure (3/3 plans) -- completed 2026-02-05
+- [x] Phase 56: Forward/Inverse Depth Fix (2/2 plans) -- completed 2026-02-05
+- [x] Phase 57: Cython Optimization (3/3 plans) -- completed 2026-02-05
+- [x] Phase 58: Hardcoded Sequences 1-8 bit (3/3 plans) -- completed 2026-02-05
+- [x] Phase 59: Hardcoded Sequences 9-16 bit (4/4 plans) -- completed 2026-02-06
+- [x] Phase 60: C Hot Path Migration (4/4 plans) -- completed 2026-02-06
+- [x] Phase 61: Memory Optimization (3/3 plans) -- completed 2026-02-08
+
+</details>
+
+## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -68,6 +80,13 @@
 | 52. Ancilla Tracking & Inverse Qubit Reuse | v2.1 | 2/2 | Complete | 2026-02-04 |
 | 53. Qubit-Saving Auto-Uncompute | v2.1 | 2/2 | Complete | 2026-02-04 |
 | 54. qarray Support in @ql.compile | v2.1 | 2/2 | Complete | 2026-02-05 |
+| 55. Profiling Infrastructure | v2.2 | 3/3 | Complete | 2026-02-05 |
+| 56. Forward/Inverse Depth Fix | v2.2 | 2/2 | Complete | 2026-02-05 |
+| 57. Cython Optimization | v2.2 | 3/3 | Complete | 2026-02-05 |
+| 58. Hardcoded Sequences (1-8 bit) | v2.2 | 3/3 | Complete | 2026-02-05 |
+| 59. Hardcoded Sequences (9-16 bit) | v2.2 | 4/4 | Complete | 2026-02-06 |
+| 60. C Hot Path Migration | v2.2 | 4/4 | Complete | 2026-02-06 |
+| 61. Memory Optimization | v2.2 | 3/3 | Complete | 2026-02-08 |
 
 ---
 *Roadmap created: 2026-02-02*
@@ -75,3 +94,4 @@
 *Milestone v1.9 shipped: 2026-02-03*
 *Milestone v2.0 shipped: 2026-02-04*
 *Milestone v2.1 shipped: 2026-02-05*
+*Milestone v2.2 shipped: 2026-02-08*

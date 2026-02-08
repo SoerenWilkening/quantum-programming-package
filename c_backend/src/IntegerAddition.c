@@ -3,6 +3,7 @@
 //
 
 #include "Integer.h"
+#include "sequences.h"
 
 // Legacy globals for backward compatibility (point to INTEGERSIZE versions)
 sequence_t *precompiled_QQ_add = NULL;
@@ -61,6 +62,14 @@ sequence_t *CQ_add(int bits, int64_t value) {
     free(bin);
     // Phase rotations start after QFT (which uses 2*bits-1 layers)
     int start_layer = 2 * bits - 1;
+
+    // Use hardcoded template for widths 1-16 (allocates on first call, caches)
+    if (bits <= HARDCODED_MAX_WIDTH && precompiled_CQ_add_width[bits] == NULL) {
+        sequence_t *hardcoded = get_hardcoded_CQ_add(bits);
+        if (hardcoded != NULL) {
+            precompiled_CQ_add_width[bits] = hardcoded;
+        }
+    }
 
     // Check cache for this width (use width-parameterized cache)
     if (precompiled_CQ_add_width[bits] != NULL) {
@@ -148,7 +157,19 @@ sequence_t *QQ_add(int bits) {
         return NULL;
     }
 
-    // Check cache for this width
+    // Use hardcoded sequences for widths 1-16
+    if (bits <= HARDCODED_MAX_WIDTH) {
+        const sequence_t *hardcoded = get_hardcoded_QQ_add(bits);
+        if (hardcoded != NULL) {
+            // SAFETY: Const cast is safe here because:
+            // 1. Static sequences have program lifetime (never freed)
+            // 2. Caller should never free returned sequences anyway
+            // 3. Cast needed only because existing API returns non-const
+            return (sequence_t *)hardcoded;
+        }
+    }
+
+    // Check cache for dynamically generated (widths > HARDCODED_MAX_WIDTH)
     if (precompiled_QQ_add_width[bits] != NULL)
         return precompiled_QQ_add_width[bits];
 
@@ -259,6 +280,14 @@ sequence_t *cCQ_add(int bits, int64_t value) {
     // Phase rotations start after QFT (which uses 2*bits-1 layers)
     int start_layer = 2 * bits - 1;
 
+    // Use hardcoded template for widths 1-16 (allocates on first call, caches)
+    if (bits <= HARDCODED_MAX_WIDTH && precompiled_cCQ_add_width[bits] == NULL) {
+        sequence_t *hardcoded = get_hardcoded_cCQ_add(bits);
+        if (hardcoded != NULL) {
+            precompiled_cCQ_add_width[bits] = hardcoded;
+        }
+    }
+
     // Check cache for this width (use width-parameterized cache)
     if (precompiled_cCQ_add_width[bits] != NULL) {
         sequence_t *add = precompiled_cCQ_add_width[bits];
@@ -337,15 +366,27 @@ sequence_t *cQQ_add(int bits) {
     //
     // Qubit layout for cQQ_add(bits):
     // - Qubits [0, bits-1]: First operand (target, modified in place)
-    // - Qubits [bits, 2*bits-1]: Second operand (control)
-    // - Qubit [3*bits-1]: Conditional control qubit
+    // - Qubits [bits, 2*bits-1]: Second operand (other)
+    // - Qubit [2*bits]: Conditional control qubit
 
     // Bounds check: valid widths are 1-64
     if (bits < 1 || bits > 64) {
         return NULL;
     }
 
-    // Check cache for this width
+    // Use hardcoded sequences for widths 1-16
+    if (bits <= HARDCODED_MAX_WIDTH) {
+        const sequence_t *hardcoded = get_hardcoded_cQQ_add(bits);
+        if (hardcoded != NULL) {
+            // SAFETY: Const cast is safe here because:
+            // 1. Static sequences have program lifetime (never freed)
+            // 2. Caller should never free returned sequences anyway
+            // 3. Cast needed only because existing API returns non-const
+            return (sequence_t *)hardcoded;
+        }
+    }
+
+    // Check cache for dynamically generated (widths > HARDCODED_MAX_WIDTH)
     if (precompiled_cQQ_add_width[bits] != NULL)
         return precompiled_cQQ_add_width[bits];
 
@@ -384,7 +425,7 @@ sequence_t *cQQ_add(int bits) {
 
     QFT(add, bits);
 
-    int control = 3 * bits - 1;
+    int control = 2 * bits;
     int rounds;
     int layer = 2 * bits - 1;
 
@@ -411,7 +452,7 @@ sequence_t *cQQ_add(int bits) {
             double value = 2 * M_PI / (pow(2, i + 1)) / 2;
             int target_q = rounds + i; // reversed for textbook QFT
             g = &add->seq[layer][add->gates_per_layer[layer]++];
-            cp(g, target_q, control, -value);
+            cp(g, target_q, bits + bit, -value);
             layer++;
         }
         g = &add->seq[layer][add->gates_per_layer[layer]++];

@@ -48,6 +48,7 @@ from ._core import (
 )
 from .compile import compile
 from .openqasm import to_openqasm
+from .profiler import profile
 from .qarray import qarray
 from .qbool import qbool
 from .qint import qint
@@ -179,6 +180,7 @@ __all__ = [
     "compile",
     "array",
     "option",
+    "profile",
     "draw_circuit",
     "all",
     "any",

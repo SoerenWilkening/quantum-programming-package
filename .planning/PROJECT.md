@@ -100,38 +100,32 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - ✓ `ql.qarray` support as `@ql.compile` arguments with correct capture, caching, and replay — v2.1
 - ✓ 106 compilation tests covering all INV and ARR requirements — v2.1
 
+- ✓ Profiling infrastructure: cProfile, memray, Cython annotations, py-spy, pytest-benchmark — v2.2
+- ✓ Forward/adjoint depth equality verified with regression tests — v2.2
+- ✓ Cython hot paths: static typing, compiler directives, memory views — v2.2
+- ✓ Hardcoded gate sequences for all 4 addition variants, widths 1-16 (~80K lines generated C) — v2.2
+- ✓ Top 3 hot paths (mul, add, xor) migrated to C with nogil — 27.7% aggregate improvement — v2.2
+- ✓ Memory leaks eliminated, 59-93% allocation reduction via stack allocation — v2.2
+
 ### Active
 
-## Current Milestone: v2.2 Performance Optimization
-
-**Goal:** Improve circuit generation performance through profiling-driven optimization
-
-**Target features:**
-- Profiler infrastructure (Python timing + C profiling + Cython annotation analysis)
-- Fix f() vs f.inverse() depth discrepancy — forward path should match inverse optimization
-- C memory optimizations based on profiling results
-- Cython optimizations based on `cython -a` analysis (typing, cdef/nogil)
-- Python→C migration for identified hot paths
-- Hardcoded gate sequences PoC — addition for 1-16 bits to test precomputation approach
-- Opportunistic bug fixes if profiling reveals easy root causes
-
-**Constraints:**
-- New code: ~400 LOC per file max
-- Don't refactor existing file structure
-
----
+(No active milestone — use `/gsd:new-milestone` to start next)
 
 **Deferred bugs (carry forward):**
 - Fix _reduce_mod result corruption (BUG-MOD-REDUCE) — needs fundamentally different circuit structure
 - Fix controlled multiplication corruption (BUG-COND-MUL-01) — not yet investigated
 - Fix MSB comparison leak in division (BUG-DIV-02) — 9 cases per div/mod test file
 - Fix mixed-width QFT addition off-by-one (BUG-WIDTH-ADD) — discovered in Phase 43
+- Fix 32-bit multiplication segfault (buffer overflow in C backend) — discovered in Phase 61
 
 **Deferred features (carry forward):**
 - Parametric compilation (compile once for all classical values) — PAR-01, PAR-02
 - Resource estimation for compiled functions — ADV-01
 - Serialization of compiled functions to disk — ADV-02
 - Compiled function composition — ADV-03
+- Hardcoded sequences for multiplication — ADV-OPT-01
+- SIMD vectorization for bulk gate operations — ADV-OPT-03
+- Multi-threaded circuit building — ADV-OPT-04
 
 ### Out of Scope
 
@@ -147,7 +141,7 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 **Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) -> Cython bindings -> Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
 
-**Current state:** v2.1 shipped — compile enhancements complete. `@ql.compile` now supports ancilla tracking with forward call registry, `f.inverse(x)` for uncomputing/deallocating exact physical ancillas from prior forward calls, `f.adjoint(x)` for standalone adjoint generation, auto-uncompute in qubit_saving mode, and `ql.qarray` arguments. 106 compilation tests. Pixel-art circuit visualization with two zoom levels scaling to 200+ qubits. Exhaustive verification suite with 8,365+ tests covering every operation category through the full pipeline (Python -> C circuit -> OpenQASM 3.0 -> Qiskit simulate -> result check). Clean modular C backend with types.h, circuit.h, arithmetic_ops.h, comparison_ops.h, bitwise_ops.h, circuit_output.h. Centralized qubit allocator with ownership tracking. Variable-width quantum integers (1-64 bits) with complete arithmetic, comparison, and initialization operations. Automatic uncomputation with dependency tracking, mode control (lazy/eager), and user override methods. Proper package structure with ql.array supporting multi-dimensional arrays, reductions, element-wise operations, and in-place element mutation. CNOT-based quantum copy for binary operations. Memory-safe Python-to-C bridge with Cython try-finally cleanup.
+**Current state:** v2.2 shipped — performance optimization complete. Profiling infrastructure (cProfile, memray, Cython annotations, py-spy, pytest-benchmark) established and used to drive all optimization decisions. Top 3 hot paths (multiplication, addition, XOR) migrated to C with nogil wrappers achieving 27.7% aggregate throughput improvement. Hardcoded gate sequences for all 4 addition variants at widths 1-16 (~80K generated C lines). Memory leaks eliminated and 59-93% allocation reduction via stack allocation. Cython hot paths fully typed with compiler directives. `@ql.compile` supports ancilla tracking, inverse/adjoint generation, auto-uncompute, and `ql.qarray` arguments. 106 compilation tests. Pixel-art circuit visualization scaling to 200+ qubits. Exhaustive verification suite with 8,365+ tests. Clean modular C backend with types.h, circuit.h, arithmetic_ops.h, comparison_ops.h, bitwise_ops.h, circuit_output.h. Variable-width quantum integers (1-64 bits). Automatic uncomputation with dependency tracking. CNOT-based quantum copy. Memory-safe Python-to-C bridge.
 
 **Codebase:**
 - ~345,901 lines of code (Python, Cython, C)
@@ -243,6 +237,13 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Cache key includes qubit_saving mode | Mode change triggers recompilation | ✓ Good — correct semantics |
 | Iteration protocol for qarray cdef access | _elements is cdef attribute; iteration uses __iter__ | ✓ Good — Python-accessible |
 | Cache key uses ('arr', length) tuple | Distinguishes qarray from qint widths | ✓ Good — unambiguous caching |
+| Profile before optimizing (v2.2 principle) | Avoid premature optimization — measure first | ✓ Good — all phases data-driven |
+| Hardcoded sequences for widths 1-16 | Eliminate runtime QFT generation for common widths | ✓ Good — ~80K generated C |
+| Unified generation script for all variants | Single source of truth for 4 addition variants | ✓ Good — reproducible |
+| Two C entry points per hot path (QQ + CQ) | Clean API vs single function with NULL check | ✓ Good — type-safe |
+| Stack-allocated gate_t in run_instruction | add_gate() copies via memcpy; safe for stack | ✓ Good — eliminates per-gate malloc |
+| Arena allocator skipped | Remaining allocs are amortized realloc — not worth complexity | ✓ Good — evidence-based |
+| Defer CYT-04 nogil to Phase 60 | Python call dependencies in Cython accessors | ✓ Good — applied with C migration |
 
 ---
-*Last updated: 2026-02-05 after v2.2 milestone started*
+*Last updated: 2026-02-08 after v2.2 milestone shipped*

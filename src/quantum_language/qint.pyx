@@ -3,6 +3,9 @@
 # See .planning/quick/004-consolidate-qint-pxi-includes-to-remove-/004-SUMMARY.md
 """Quantum integer type with arithmetic, bitwise, and comparison operations."""
 
+cimport cython
+from libc.stdint cimport int64_t
+
 import sys
 import warnings
 
@@ -22,6 +25,9 @@ from ._core cimport (
     cQ_not,
     CQ_equal_width, cCQ_equal_width,
     print_circuit as c_print_circuit,
+    hot_path_mul_qq, hot_path_mul_cq,
+    hot_path_add_qq, hot_path_add_cq,
+    hot_path_ixor_qq, hot_path_ixor_cq,
 )
 
 # Python-level imports for global state access via accessor functions

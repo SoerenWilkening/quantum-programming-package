@@ -982,6 +982,12 @@ class CompiledFunc:
                 ancilla_qubits.append(real_q)
 
         # Save layer_floor, set to current layer to prevent gate reordering
+        # into earlier circuit layers. This ensures consistent depth behavior:
+        # - Forward replay f(x) and adjoint replay f.adjoint(x) produce EQUAL
+        #   circuit depth because both use this same replay path with the same
+        #   layer_floor constraint (verified Phase 56 FIX-02).
+        # - Capture vs replay may differ if capture occurs after operations on
+        #   non-overlapping qubits (capture can pack into earlier layers).
         saved_floor = _get_layer_floor()
         start_layer = get_current_layer()
         _set_layer_floor(start_layer)

@@ -2972,3 +2972,209 @@ def test_qarray_slice_as_argument():
 
     result = sum_slice(slice_view)
     assert isinstance(result, ql.qint), "Result should be qint"
+
+
+# ============================================================================
+# DEPTH-PARITY: Forward/Adjoint Depth Equality Tests (Phase 56)
+# ============================================================================
+"""
+Forward/Adjoint Depth Parity Tests (Phase 56 FIX-02)
+
+These tests ensure that f(x) replay and f.adjoint(x) replay produce
+identical circuit depths. This is a permanent regression test suite
+for the depth behavior verified in Phase 56.
+
+Background: The forward replay path and adjoint replay path both use
+the same layer_floor constraint in _replay(), ensuring consistent depth.
+The layer_floor prevents gates from being scheduled into earlier layers
+during replay, which guarantees depth parity between forward and adjoint.
+
+Key invariant: forward_depth == adjoint_depth for all replay operations.
+
+Note: Capture vs replay depth may differ when capture occurs after
+operations on non-overlapping qubits (capture can pack gates into
+earlier layers). This is a separate concern from forward/adjoint parity.
+"""
+
+
+def test_forward_adjoint_depth_equal():
+    """Regression test: Forward and adjoint replay produce equal circuit depth.
+
+    This is the primary regression test for Phase 56 FIX-02.
+
+    Note: We keep all operations on a single circuit because ql.circuit()
+    clears the compilation cache. The cache is cleared to ensure gates
+    don't reference stale qubit indices from the previous circuit.
+    """
+    ql.circuit()
+
+    @ql.compile
+    def add_one(x):
+        x += 1
+        return x
+
+    # Populate both forward and adjoint caches
+    a = ql.qint(0, width=8)
+    add_one(a)
+
+    b = ql.qint(0, width=8)
+    add_one.adjoint(b)
+
+    # Now test depth equality with warm caches
+    # Forward replay
+    c = ql.qint(0, width=8)
+    start_fwd = get_current_layer()
+    add_one(c)
+    end_fwd = get_current_layer()
+    forward_depth = end_fwd - start_fwd
+
+    # Adjoint replay
+    d = ql.qint(0, width=8)
+    start_adj = get_current_layer()
+    add_one.adjoint(d)
+    end_adj = get_current_layer()
+    adjoint_depth = end_adj - start_adj
+
+    # Core assertion: forward and adjoint MUST have equal depth
+    assert forward_depth == adjoint_depth, (
+        f"REGRESSION: Forward depth {forward_depth} != adjoint depth {adjoint_depth}. "
+        f"The layer_floor constraint in _replay() should ensure equal depth."
+    )
+
+
+def test_forward_adjoint_depth_equal_multiwidth():
+    """Regression test: Forward/adjoint depth equality across multiple widths.
+
+    Parametrized test ensuring depth parity holds for widths 4, 8, and 16.
+
+    Note: Each width requires a fresh circuit because different widths have
+    different cache keys. We must populate both forward and adjoint caches
+    before testing depth equality.
+    """
+    widths = [4, 8, 16]
+
+    for width in widths:
+        # Fresh circuit for each width (also clears cache)
+        ql.circuit()
+
+        @ql.compile
+        def add_one(x):
+            x += 1
+            return x
+
+        # Populate both forward and adjoint caches
+        a = ql.qint(0, width=width)
+        add_one(a)
+
+        b = ql.qint(0, width=width)
+        add_one.adjoint(b)
+
+        # Forward replay (warm cache)
+        c = ql.qint(0, width=width)
+        start_fwd = get_current_layer()
+        add_one(c)
+        end_fwd = get_current_layer()
+        forward_depth = end_fwd - start_fwd
+
+        # Adjoint replay (warm cache)
+        d = ql.qint(0, width=width)
+        start_adj = get_current_layer()
+        add_one.adjoint(d)
+        end_adj = get_current_layer()
+        adjoint_depth = end_adj - start_adj
+
+        # Assert depth equality for this width
+        assert forward_depth == adjoint_depth, (
+            f"REGRESSION at width {width}: Forward depth {forward_depth} != "
+            f"adjoint depth {adjoint_depth}"
+        )
+
+
+def test_controlled_depth_parity():
+    """Regression test: Controlled forward/adjoint replay produce equal depth.
+
+    Tests that depth parity holds when compiled functions are called
+    inside a control context (with qbool:).
+
+    Note: We keep all operations on a single circuit because ql.circuit()
+    clears the compilation cache. We must populate both forward and adjoint
+    controlled caches before testing depth equality.
+    """
+    ql.circuit()
+
+    @ql.compile
+    def add_one(x):
+        x += 1
+        return x
+
+    # Populate uncontrolled and controlled forward caches
+    a = ql.qint(0, width=4)
+    add_one(a)
+
+    ctrl1 = ql.qbool(True)
+    b = ql.qint(0, width=4)
+    with ctrl1:
+        add_one(b)
+
+    # Populate controlled adjoint cache
+    ctrl2 = ql.qbool(True)
+    c = ql.qint(0, width=4)
+    with ctrl2:
+        add_one.adjoint(c)
+
+    # Now test depth equality with warm caches
+    ctrl3 = ql.qbool(True)
+
+    # Forward controlled replay
+    d = ql.qint(0, width=4)
+    start_fwd = get_current_layer()
+    with ctrl3:
+        add_one(d)
+    end_fwd = get_current_layer()
+    forward_depth = end_fwd - start_fwd
+
+    # Adjoint controlled replay
+    e = ql.qint(0, width=4)
+    start_adj = get_current_layer()
+    with ctrl3:
+        add_one.adjoint(e)
+    end_adj = get_current_layer()
+    adjoint_depth = end_adj - start_adj
+
+    # Assert depth equality for controlled variants
+    assert forward_depth == adjoint_depth, (
+        f"REGRESSION (controlled): Forward depth {forward_depth} != adjoint depth {adjoint_depth}"
+    )
+
+
+def test_depth_capture_vs_replay():
+    """Test capture and replay depth consistency from same circuit state.
+
+    When both capture and replay start from layer 0 with no prior operations,
+    they should produce the same depth.
+    """
+    ql.circuit()
+
+    @ql.compile
+    def add_one(x):
+        x += 1
+        return x
+
+    # First call (capture path) on fresh circuit
+    a = ql.qint(3, width=8)
+    start_cap = get_current_layer()
+    add_one(a)
+    end_cap = get_current_layer()
+    capture_depth = end_cap - start_cap
+
+    # Second call (replay path) on fresh qubits
+    b = ql.qint(5, width=8)
+    start_rep = get_current_layer()
+    add_one(b)
+    end_rep = get_current_layer()
+    replay_depth = end_rep - start_rep
+
+    # Both paths should produce same depth when starting from same state
+    assert capture_depth == replay_depth, (
+        f"Capture depth {capture_depth} != replay depth {replay_depth}"
+    )

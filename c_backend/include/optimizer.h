@@ -28,8 +28,9 @@ layer_t smallest_layer_below_comp(circuit_t *circ, qubit_t qubit, layer_t compar
 // Gate merging (returns true if gates merged/cancelled)
 int merge_gates(circuit_t *circ, gate_t *g, layer_t min_possible_layer, int gate_index);
 
-// Get colliding gates at a layer (internal helper)
-gate_t **colliding_gates(circuit_t *circ, gate_t *g, layer_t min_possible_layer, int *gate_index);
+// Get colliding gates at a layer (internal helper, caller-provided array, Phase 61)
+void colliding_gates(circuit_t *circ, gate_t *g, layer_t min_possible_layer, int *gate_index,
+                     gate_t **coll);
 
 // Layer application (internal helper)
 void apply_layer(circuit_t *circ, gate_t *g, layer_t min_possible_layer);

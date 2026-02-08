@@ -33,9 +33,37 @@ c_sources = [
     os.path.join(PROJECT_ROOT, "c_backend", "src", "IntegerMultiplication.c"),
     os.path.join(PROJECT_ROOT, "c_backend", "src", "LogicOperations.c"),
     os.path.join(PROJECT_ROOT, "c_backend", "src", "execution.c"),
+    # Hot path migrations (Phase 60)
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "hot_path_mul.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "hot_path_add.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "hot_path_xor.c"),
+    # Hardcoded addition sequences: 16 per-width files + unified dispatch
+    *[
+        os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"add_seq_{i}.c")
+        for i in range(1, 17)
+    ],
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", "add_seq_dispatch.c"),
 ]
 
 compiler_args = ["-O3", "-pthread"]  # Removed -flto due to GCC LTO bug
+
+# Profiling build mode - enables Cython function-level profiling
+profiling_directives = {}
+if os.environ.get("QUANTUM_PROFILE"):
+    profiling_directives = {
+        "profile": True,
+        "linetrace": True,
+    }
+    compiler_args.append("-DCYTHON_TRACE=1")
+
+# Debug build mode - re-enables all safety checks for debugging
+debug_directives = {}
+if os.environ.get("CYTHON_DEBUG"):
+    debug_directives = {
+        "boundscheck": True,
+        "wraparound": True,
+        "initializedcheck": True,
+    }
 
 # src/ directory is at project root, not in python-backend
 SRC_DIR = os.path.join(PROJECT_ROOT, "src")
@@ -100,6 +128,8 @@ setup(
         language_level="3",
         compiler_directives={
             "embedsignature": True,  # Preserves docstrings in compiled modules
+            **profiling_directives,
+            **debug_directives,
         },
     ),
     # Include .pxd and .py files for installed package (e.g. __init__.py wrappers)
@@ -112,6 +142,11 @@ setup(
     ],
     extras_require={
         "verification": ["qiskit>=1.0"],
+        "profiling": [
+            "line-profiler>=5.0.0",
+            "snakeviz>=2.2.2",
+            "pytest-benchmark>=5.2.3",
+        ],
     },
     python_requires=">=3.11",
 )

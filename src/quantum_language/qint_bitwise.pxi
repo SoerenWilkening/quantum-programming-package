@@ -2,6 +2,8 @@
 	# BITWISE OPERATIONS
 	# ====================================================================
 
+	@cython.boundscheck(False)
+	@cython.wraparound(False)
 	def __and__(self, other):
 		"""Bitwise AND: self & other
 
@@ -30,9 +32,14 @@
 		cdef int self_offset, result_offset, other_offset
 		cdef int classical_width
 		cdef int start_layer
+		cdef int i
+		cdef int _self_pad, _other_pad
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _circuit_initialized = _get_circuit_initialized()
 		cdef bint _controlled = _get_controlled()
+		cdef unsigned int[:] result_qubits
+		cdef unsigned int[:] other_qubits
+		cdef unsigned int[:] pad_qubits
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
@@ -84,13 +91,19 @@
 		result_offset = 64 - result_bits
 
 		# Output qubits (result) - at position 0
-		qubit_array[:result_bits] = result.qubits[result_offset:64]
+		# CYT-03: Replace slice with explicit loop for memory view optimization
+		result_qubits = result.qubits
+		for i in range(result_bits):
+			qubit_array[i] = result_qubits[result_offset + i]
 		# Self qubits (LSB positions) - at position result_bits
-		qubit_array[result_bits:result_bits + self.bits] = self.qubits[self_offset:64]
+		for i in range(self.bits):
+			qubit_array[result_bits + i] = self.qubits[self_offset + i]
 		# Zero-extend self if narrower: use pre-allocated padding for MSB
 		if _self_pad_qint is not None:
 			_self_pad = result_bits - self.bits
-			qubit_array[result_bits + self.bits:2*result_bits] = _self_pad_qint.qubits[64 - _self_pad:64]
+			pad_qubits = _self_pad_qint.qubits
+			for i in range(_self_pad):
+				qubit_array[result_bits + self.bits + i] = pad_qubits[64 - _self_pad + i]
 
 		if type(other) == int:
 			# Classical-quantum AND
@@ -102,11 +115,15 @@
 		else:
 			# Quantum-quantum AND
 			other_offset = 64 - (<qint>other).bits
-			qubit_array[2*result_bits:2*result_bits + (<qint>other).bits] = (<qint>other).qubits[other_offset:64]
+			other_qubits = (<qint>other).qubits
+			for i in range((<qint>other).bits):
+				qubit_array[2*result_bits + i] = other_qubits[other_offset + i]
 			# Zero-extend other if narrower: use pre-allocated padding for MSB
 			if _other_pad_qint is not None:
 				_other_pad = result_bits - (<qint>other).bits
-				qubit_array[2*result_bits + (<qint>other).bits:3*result_bits] = _other_pad_qint.qubits[64 - _other_pad:64]
+				pad_qubits = _other_pad_qint.qubits
+				for i in range(_other_pad):
+					qubit_array[2*result_bits + (<qint>other).bits + i] = pad_qubits[64 - _other_pad + i]
 
 			if _controlled:
 				raise NotImplementedError("Controlled quantum-quantum AND not yet supported")
@@ -309,6 +326,8 @@
 		"""Reverse OR for int | qint."""
 		return self | other
 
+	@cython.boundscheck(False)
+	@cython.wraparound(False)
 	def __xor__(self, other):
 		"""Bitwise XOR: self ^ other
 
@@ -337,9 +356,12 @@
 		cdef int self_offset, result_offset, other_offset
 		cdef int classical_width
 		cdef int start_layer
+		cdef int i
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _circuit_initialized = _get_circuit_initialized()
 		cdef bint _controlled = _get_controlled()
+		cdef unsigned int[:] result_qubits
+		cdef unsigned int[:] other_qubits
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
@@ -383,8 +405,12 @@
 		result_offset = 64 - result_bits
 
 		# First, copy self to result by XORing self into result (result starts at 0)
-		qubit_array[:self.bits] = result.qubits[result_offset:result_offset + self.bits]
-		qubit_array[self.bits:2*self.bits] = self.qubits[self_offset:64]
+		# CYT-03: Replace slice with explicit loop for memory view optimization
+		result_qubits = result.qubits
+		for i in range(self.bits):
+			qubit_array[i] = result_qubits[result_offset + i]
+		for i in range(self.bits):
+			qubit_array[self.bits + i] = self.qubits[self_offset + i]
 		arr = qubit_array
 		seq = Q_xor(self.bits)  # XOR self into result (copying self to result)
 		run_instruction(seq, &arr[0], False, _circuit)
@@ -396,14 +422,17 @@
 			else:
 				for i in range(result_bits):
 					if (other >> i) & 1:
-						qubit_array[0] = result.qubits[64 - result_bits + i]
+						qubit_array[0] = result_qubits[64 - result_bits + i]
 						arr = qubit_array
 						seq = Q_not(1)
 						run_instruction(seq, &arr[0], False, _circuit)
 		else:
 			other_offset = 64 - (<qint>other).bits
-			qubit_array[:(<qint>other).bits] = result.qubits[result_offset:result_offset + (<qint>other).bits]
-			qubit_array[(<qint>other).bits:2*(<qint>other).bits] = (<qint>other).qubits[other_offset:64]
+			for i in range((<qint>other).bits):
+				qubit_array[i] = result_qubits[result_offset + i]
+			other_qubits = (<qint>other).qubits
+			for i in range((<qint>other).bits):
+				qubit_array[(<qint>other).bits + i] = other_qubits[other_offset + i]
 
 			if _controlled:
 				raise NotImplementedError("Controlled quantum-quantum XOR not yet supported")
@@ -421,6 +450,8 @@
 			(<circuit_s*>_circuit).layer_floor = _saved_floor_xor
 		return result
 
+	@cython.boundscheck(False)
+	@cython.wraparound(False)
 	def __ixor__(self, other):
 		"""In-place XOR: self ^= other
 
@@ -442,40 +473,46 @@
 		>>> a ^= 0b0110
 		>>> # a now represents |1010>
 		"""
-		cdef sequence_t *seq
-		cdef unsigned int[:] arr
-		cdef int self_offset, other_offset
+		# Phase 60-04: Thin Cython wrapper -- all hot-path logic moved to C
+		# (hot_path_xor.c). We only extract qubit indices from Python objects
+		# here, then call the C function with nogil.
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _controlled = _get_controlled()
+		cdef unsigned int self_qa[64]
+		cdef unsigned int other_qa[64]
+		cdef int self_bits = self.bits
+		cdef int self_offset = 64 - self_bits
+		cdef int i
+		cdef int64_t classical_value = 0
 
-		# XOR can be done truly in-place since target ^= source modifies target
-		self_offset = 64 - self.bits
+		# Extract self qubits (right-aligned in 64-element array)
+		for i in range(self_bits):
+			self_qa[i] = self.qubits[self_offset + i]
 
 		if type(other) == int:
 			if _controlled:
 				raise NotImplementedError("Controlled classical-quantum XOR not yet supported")
-			else:
-				for i in range(self.bits):
-					if (other >> i) & 1:
-						qubit_array[0] = self.qubits[64 - self.bits + i]
-						arr = qubit_array
-						seq = Q_not(1)
-						run_instruction(seq, &arr[0], False, _circuit)
-		elif isinstance(other, qint):
-			other_offset = 64 - (<qint>other).bits
-			qubit_array[:self.bits] = self.qubits[self_offset:64]
-			qubit_array[self.bits:self.bits + (<qint>other).bits] = (<qint>other).qubits[other_offset:64]
+			classical_value = <int64_t>other
+			with nogil:
+				hot_path_ixor_cq(_circuit, self_qa, self_bits, classical_value)
+			return self
 
-			if _controlled:
-				raise NotImplementedError("Controlled quantum-quantum XOR not yet supported")
-			else:
-				seq = Q_xor(min(self.bits, (<qint>other).bits))
-
-			arr = qubit_array
-			run_instruction(seq, &arr[0], False, _circuit)
-		else:
+		if not isinstance(other, qint):
 			raise TypeError("Operand must be qint or int")
 
+		if _controlled:
+			raise NotImplementedError("Controlled quantum-quantum XOR not yet supported")
+
+		# Extract other qubits for quantum-quantum XOR
+		cdef int other_bits = (<qint>other).bits
+		cdef int other_offset = 64 - other_bits
+		cdef unsigned int[:] other_qubits_mv = (<qint>other).qubits
+		for i in range(other_bits):
+			other_qa[i] = other_qubits_mv[other_offset + i]
+
+		with nogil:
+			hot_path_ixor_qq(_circuit, self_qa, self_bits,
+							other_qa, other_bits)
 		return self
 
 	def __rxor__(self, other):
@@ -684,7 +721,8 @@
 		>>> # bit1 is qbool representing |1>
 		"""
 		from quantum_language.qbool import qbool
-		bit_list = np.zeros(64)
+		# Use uint32 dtype to match qint.qubits memory view type
+		bit_list = np.zeros(64, dtype=np.uint32)
 		bit_list[-1] = self.qubits[item]
 		a = qbool(create_new = False, bit_list = bit_list)
 		return a

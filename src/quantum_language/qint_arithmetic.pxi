@@ -2,66 +2,65 @@
 	# ARITHMETIC OPERATIONS
 	# ====================================================================
 
+	@cython.boundscheck(False)
+	@cython.wraparound(False)
 	cdef addition_inplace(self, other, int invert=False):
-		cdef sequence_t *seq
-		cdef unsigned int[:] arr
-		cdef int result_bits
-		cdef int other_bits
-		cdef int self_offset
-		cdef int other_offset
+		# Phase 60-03: Thin Cython wrapper -- all hot-path logic moved to C
+		# (hot_path_add.c). We only extract qubit indices from Python objects
+		# here, then call the C function with nogil.
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _controlled = _get_controlled()
 		cdef object _control_bool = _get_control_bool()
+		cdef unsigned int self_qa[64]
+		cdef unsigned int other_qa[64]
+		cdef unsigned int ancilla_qa[128]
+		cdef int self_bits = self.bits
+		cdef int self_offset = 64 - self_bits
+		cdef int i
+		cdef int64_t classical_value = 0
+		cdef unsigned int control_qubit = 0
+		cdef int num_ancilla = NUMANCILLY
+		cdef unsigned int[:] ancilla_arr
+		cdef unsigned int[:] control_qubits
 
-		start = 0
+		# Extract self qubits (right-aligned in 64-element array)
+		for i in range(self_bits):
+			self_qa[i] = self.qubits[self_offset + i]
 
-		# Extract only the used qubits (right-aligned in 64-element array)
-		# self.qubits[64-self.bits:64] contains the actual qubit indices
-		self_offset = 64 - self.bits
-		qubit_array[:self.bits] = self.qubits[self_offset:64]
-		start += self.bits
+		# Extract control qubit if controlled
+		if _controlled:
+			control_qubits = (<qint> _control_bool).qubits
+			control_qubit = control_qubits[63]
+
+		# Extract ancilla qubits
+		ancilla_arr = _get_ancilla()
+		for i in range(num_ancilla):
+			ancilla_qa[i] = ancilla_arr[i]
 
 		if type(other) == int:
-			# value is a classical integer
-			if _controlled:
-				# Control qubit from qbool (last element)
-				qubit_array[start: start + 1] = (<qint> _control_bool).qubits[63:64]
-				qubit_array[start + 1: start + 1 + NUMANCILLY] = _get_ancilla()
-				seq = cCQ_add(self.bits, other)
-			else:
-				qubit_array[start: start + NUMANCILLY] = _get_ancilla()
-				seq = CQ_add(self.bits, other)
-
-
-			arr = qubit_array
-			run_instruction(seq, &arr[0], invert, _circuit)
-
+			classical_value = <int64_t>other
+			with nogil:
+				hot_path_add_cq(_circuit, self_qa, self_bits,
+								classical_value,
+								invert, _controlled, control_qubit,
+								ancilla_qa, num_ancilla)
 			return self
+
 		if not isinstance(other, qint):
 			raise ValueError()
 
+		# Extract other qubits for quantum-quantum addition
+		cdef int other_bits = (<qint> other).bits
+		cdef int other_offset = 64 - other_bits
+		cdef unsigned int[:] other_qubits_mv = (<qint> other).qubits
+		for i in range(other_bits):
+			other_qa[i] = other_qubits_mv[other_offset + i]
 
-		# other type is qint as well - determine result width
-		other_bits = (<qint> other).bits
-		result_bits = max(self.bits, other_bits)
-		other_offset = 64 - other_bits
-
-		# Extract used qubits from other
-		qubit_array[start: start + other_bits] = (<qint> other).qubits[other_offset:64]
-		start += other_bits
-
-
-		if _controlled:
-			# Control qubit from qbool (last element)
-			qubit_array[start: start + 1] = (<qint> _control_bool).qubits[63:64]
-			qubit_array[start + 1: start + 1 + NUMANCILLY] = _get_ancilla()
-			seq = cQQ_add(result_bits)
-		else:
-			qubit_array[start: start + NUMANCILLY] = _get_ancilla()
-			seq = QQ_add(result_bits)
-
-		arr = qubit_array
-		run_instruction(seq, &arr[0], invert, _circuit)
+		with nogil:
+			hot_path_add_qq(_circuit, self_qa, self_bits,
+							other_qa, other_bits,
+							invert, _controlled, control_qubit,
+							ancilla_qa, num_ancilla)
 		return self
 
 	def __add__(self, other: qint | int):
@@ -483,76 +482,75 @@
 		return self
 
 
+	@cython.boundscheck(False)
+	@cython.wraparound(False)
 	cdef multiplication_inplace(self, other, qint ret):
-		cdef sequence_t *seq
-		cdef unsigned int[:] arr
-		cdef int result_bits
-		cdef int other_bits
-		cdef int self_offset
-		cdef int ret_offset
-		cdef int other_offset
+		# Phase 60-02: Thin Cython wrapper -- all hot-path logic moved to C
+		# (hot_path_mul.c). We only extract qubit indices from Python objects
+		# here, then call the C function with nogil.
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _controlled = _get_controlled()
 		cdef object _control_bool = _get_control_bool()
+		cdef unsigned int self_qa[64]
+		cdef unsigned int ret_qa[64]
+		cdef unsigned int other_qa[64]
+		cdef unsigned int ancilla_qa[128]
+		cdef int self_bits = self.bits
+		cdef int self_offset = 64 - self_bits
+		cdef int ret_offset = 64 - (<qint>ret).bits
+		cdef int i
+		cdef int64_t classical_value = 0
+		cdef unsigned int control_qubit = 0
+		cdef int num_ancilla = NUMANCILLY
+		cdef unsigned int[:] ancilla_arr
+		cdef unsigned int[:] control_qubits
+		cdef unsigned int[:] ret_qubits_mv = (<qint>ret).qubits
+		cdef int result_bits = (<qint>ret).bits
 
-		start = 0
+		# Extract ret qubits (right-aligned in 64-element array)
+		for i in range(result_bits):
+			ret_qa[i] = ret_qubits_mv[ret_offset + i]
 
-		# Determine result width (must match ret's width)
-		result_bits = (<qint>ret).bits
+		# Extract self qubits
+		for i in range(self_bits):
+			self_qa[i] = self.qubits[self_offset + i]
 
-		# Multiplication layout: ret (accumulator) at position 0, self at position result_bits
-		# Extract only used qubits (right-aligned in 64-element array)
-		self_offset = 64 - self.bits
-		ret_offset = 64 - result_bits
+		# Extract control qubit if controlled
+		if _controlled:
+			control_qubits = (<qint>_control_bool).qubits
+			control_qubit = control_qubits[63]
 
-		# ret qubits at position 0
-		qubit_array[:result_bits] = (<qint>ret).qubits[ret_offset:64]
-		# self qubits at position result_bits
-		qubit_array[result_bits: result_bits + self.bits] = self.qubits[self_offset:64]
-		start = result_bits + self.bits
+		# Extract ancilla qubits
+		ancilla_arr = _get_ancilla()
+		for i in range(num_ancilla):
+			ancilla_qa[i] = ancilla_arr[i]
 
 		if type(other) == int:
-			# Classical-quantum multiplication
-			if _controlled:
-				# Control qubit from qbool (last element)
-				qubit_array[start: start + 1] = (<qint> _control_bool).qubits[63:64]
-				qubit_array[start + 1: start + 1 + NUMANCILLY] = _get_ancilla()
-				seq = cCQ_mul(result_bits, other)  # Pass bits parameter
-			else:
-				qubit_array[start: start + NUMANCILLY] = _get_ancilla()
-				seq = CQ_mul(result_bits, other)  # Pass bits parameter
-
-			if seq == NULL:
-				raise RuntimeError(f"Multiplication circuit generation failed for width {result_bits}")
-
-			arr = qubit_array
-			run_instruction(seq, &arr[0], False, _circuit)
+			classical_value = <int64_t>other
+			with nogil:
+				hot_path_mul_cq(_circuit, ret_qa, result_bits,
+								self_qa, self_bits,
+								classical_value,
+								_controlled, control_qubit,
+								ancilla_qa, num_ancilla)
 			return ret
 
 		if not isinstance(other, qint):
 			raise TypeError("Multiplication requires qint or int")
 
-		# Quantum-quantum multiplication
-		other_bits = (<qint> other).bits
-		other_offset = 64 - other_bits
+		# Extract other qubits for quantum-quantum multiplication
+		cdef int other_bits = (<qint>other).bits
+		cdef int other_offset = 64 - other_bits
+		cdef unsigned int[:] other_qubits_mv = (<qint>other).qubits
+		for i in range(other_bits):
+			other_qa[i] = other_qubits_mv[other_offset + i]
 
-		# other qubits at position start
-		qubit_array[start: start + other_bits] = (<qint> other).qubits[other_offset:64]
-		start += other_bits
-
-		if _controlled:
-			qubit_array[start: start + 1] = (<qint> _control_bool).qubits[63:64]
-			qubit_array[start + 1: start + 1 + NUMANCILLY] = _get_ancilla()
-			seq = cQQ_mul(result_bits)  # Pass bits parameter
-		else:
-			qubit_array[start: start + NUMANCILLY] = _get_ancilla()
-			seq = QQ_mul(result_bits)  # Pass bits parameter
-
-		if seq == NULL:
-			raise RuntimeError(f"Multiplication circuit generation failed for width {result_bits}")
-
-		arr = qubit_array
-		run_instruction(seq, &arr[0], False, _circuit)
+		with nogil:
+			hot_path_mul_qq(_circuit, ret_qa, result_bits,
+							self_qa, self_bits,
+							other_qa, other_bits,
+							_controlled, control_qubit,
+							ancilla_qa, num_ancilla)
 		return ret
 
 	def __mul__(self, other):
