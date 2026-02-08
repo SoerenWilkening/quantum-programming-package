@@ -67,7 +67,7 @@
 **Milestone Goal:** Benchmark hardcoded vs dynamic gate sequence generation, right-size or eliminate hardcoded sequences based on data, and evaluate whether other operations warrant hardcoding.
 
 - [x] **Phase 62: Measurement** - Benchmark all generation paths and evaluate other operations for hardcoding viability -- completed 2026-02-08
-- [ ] **Phase 63: Right-Sizing Implementation** - Apply data-driven decisions to right-size addition sequences
+- [x] **Phase 63: Right-Sizing Implementation** - Apply data-driven decisions to right-size addition sequences -- completed 2026-02-08
 - [ ] **Phase 64: Regression Verification** - Confirm no performance regression after changes
 
 ## Phase Details
@@ -98,7 +98,7 @@ Plans:
   4. The existing test suite (`pytest tests/python/ -v`) passes after implementation changes
 **Plans:** 1 plan
 Plans:
-- [ ] 63-01-PLAN.md -- Decision document + shared QFT/IQFT factoring (ADD-01, ADD-02)
+- [x] 63-01-PLAN.md -- Decision document + shared QFT/IQFT factoring (ADD-01, ADD-02)
 
 ### Phase 64: Regression Verification
 **Goal**: End-to-end circuit generation performance is verified to have no regression after right-sizing changes
@@ -138,7 +138,7 @@ Phases execute in numeric order: 62 -> 63 -> 64
 | 60. C Hot Path Migration | v2.2 | 4/4 | Complete | 2026-02-06 |
 | 61. Memory Optimization | v2.2 | 3/3 | Complete | 2026-02-08 |
 | 62. Measurement | v2.3 | 2/2 | Complete | 2026-02-08 |
-| 63. Right-Sizing Implementation | v2.3 | 0/1 | Not started | - |
+| 63. Right-Sizing Implementation | v2.3 | 1/1 | Complete | 2026-02-08 |
 | 64. Regression Verification | v2.3 | 0/TBD | Not started | - |
 
 ---
