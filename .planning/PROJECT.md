@@ -109,7 +109,15 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ### Active
 
-(No active milestone — use `/gsd:new-milestone` to start next)
+## Current Milestone: v2.3 Hardcoding Right-Sizing
+
+**Goal:** Benchmark hardcoded vs dynamic gate sequence generation (including import time), right-size or eliminate hardcoded sequences based on data, and evaluate whether other operations (mul, bitwise, div) warrant hardcoding.
+
+**Target features:**
+- Benchmark infrastructure for import time, first-call generation cost, and per-call overhead
+- Data-driven decision on which widths/operations to keep hardcoded vs revert to dynamic
+- File size reduction for any retained hardcoded sequences (QFT/IQFT factoring)
+- Evaluation of multiplication/bitwise/division hardcoding viability
 
 **Deferred bugs (carry forward):**
 - Fix _reduce_mod result corruption (BUG-MOD-REDUCE) — needs fundamentally different circuit structure
@@ -246,4 +254,4 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Defer CYT-04 nogil to Phase 60 | Python call dependencies in Cython accessors | ✓ Good — applied with C migration |
 
 ---
-*Last updated: 2026-02-08 after v2.2 milestone shipped*
+*Last updated: 2026-02-08 after v2.3 milestone started*
