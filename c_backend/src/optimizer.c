@@ -134,21 +134,18 @@ void append_gate(circuit_t *circ, gate_t *g, layer_t min_possible_layer) {
     circ->used++;
 }
 
-gate_t **colliding_gates(circuit_t *circ, gate_t *g, layer_t min_possible_layer, int *gate_index) {
-    gate_t **coll = malloc(3 * sizeof(gate_t *));
-    if (coll == NULL) {
-        return NULL;
-    }
+void colliding_gates(circuit_t *circ, gate_t *g, layer_t min_possible_layer, int *gate_index,
+                     gate_t **coll) {
     coll[0] = NULL;
     coll[1] = NULL;
     coll[2] = NULL;
     if (min_possible_layer == 0)
-        return coll;
+        return;
     gate_index[0] = circ->gate_index_of_layer_and_qubits[min_possible_layer - 1][g->Target];
     //    printf("indices %d ", gate_index[0]);
     if (gate_index[0] >= 0) {
         coll[0] = &circ->sequence[min_possible_layer - 1][gate_index[0]];
-        return coll;
+        return;
     }
     // we have at most three colliding gates
     for (int i = 0; i < (int)g->NumControls; ++i) {
@@ -158,10 +155,9 @@ gate_t **colliding_gates(circuit_t *circ, gate_t *g, layer_t min_possible_layer,
         if (step >= 0) {
             coll[0] = &circ->sequence[min_possible_layer - 1][step];
             gate_index[0] = step;
-            return coll;
+            return;
         }
     }
-    return coll;
 }
 
 void add_gate(circuit_t *circ, gate_t *g) {
@@ -180,7 +176,8 @@ void add_gate(circuit_t *circ, gate_t *g) {
 
         // will be NULL, if min_possible_layer = 0
         int gate_index[3];
-        gate_t **coll = colliding_gates(circ, g, min_possible_layer, gate_index);
+        gate_t *coll[3]; // Stack allocated -- no malloc/free per gate (Phase 61)
+        colliding_gates(circ, g, min_possible_layer, gate_index, coll);
         //        printf("\n");
         int delta = prev - min_possible_layer;
 
@@ -200,13 +197,11 @@ void add_gate(circuit_t *circ, gate_t *g) {
                 // if inverse, gate is removed
                 if (gates_are_inverse(g, g2)) {
                     merge_gates(circ, g, min_possible_layer, gate_index[j]);
-                    free(coll);
                     return;
                 }
                 total_inverse &= inverse;
             }
         }
-        free(coll);
         // only previous layer and dont merge: undo swap
         //        if (delta == 1 && !total_inverse) {
         //            min_possible_layer =  prev;
