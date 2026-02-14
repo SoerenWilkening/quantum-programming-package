@@ -77,7 +77,7 @@
 
 **Milestone Goal:** Implement Toffoli-based arithmetic (no phase/rotation gates) as an alternative backend, enabling fault-tolerant circuit generation. CDKM ripple-carry adder as foundation, schoolbook multiplication, restoring division, CLA depth optimization, all wired through `ql.option('fault_tolerant')` dispatch.
 
-- [ ] **Phase 65: Infrastructure Prerequisites** - Fix reverse_circuit_range, allocator block reuse, and ancilla lifecycle contracts
+- [x] **Phase 65: Infrastructure Prerequisites** - Fix reverse_circuit_range, allocator block reuse, and ancilla lifecycle contracts -- completed 2026-02-14
 - [ ] **Phase 66: CDKM Ripple-Carry Adder** - QQ/CQ addition and subtraction via MAJ/UMA chain with 1 ancilla
 - [ ] **Phase 67: Controlled Adder & Backend Dispatch** - cQQ/cCQ controlled addition and fault_tolerant mode switching
 - [ ] **Phase 68: Schoolbook Multiplication** - QQ/CQ Toffoli-based multiplication using shift-and-add
@@ -100,9 +100,9 @@
 **Plans**: 3 plans
 
 Plans:
-- [ ] 65-01-PLAN.md -- Fix GateValue negation for self-inverse gates in reverse_circuit_range and run_instruction
-- [ ] 65-02-PLAN.md -- Replace freed stack with block-based free-list for contiguous ancilla allocation
-- [ ] 65-03-PLAN.md -- Add debug-mode ancilla lifecycle assertions and integration tests
+- [x] 65-01-PLAN.md -- Fix GateValue negation for self-inverse gates in reverse_circuit_range and run_instruction
+- [x] 65-02-PLAN.md -- Replace freed stack with block-based free-list for contiguous ancilla allocation
+- [x] 65-03-PLAN.md -- Add debug-mode ancilla lifecycle assertions and integration tests
 
 ### Phase 66: CDKM Ripple-Carry Adder
 **Goal**: Users can perform Toffoli-based addition and subtraction on quantum registers of any width using the CDKM ripple-carry algorithm
@@ -246,7 +246,7 @@ Phases execute in numeric order: 65 -> 66 -> 67 -> 68 -> 69 -> 70 -> 71 -> 72
 | 62. Measurement | v2.3 | 2/2 | Complete | 2026-02-08 |
 | 63. Right-Sizing Implementation | v2.3 | 1/1 | Complete | 2026-02-08 |
 | 64. Regression Verification | v2.3 | 1/1 | Complete | 2026-02-08 |
-| 65. Infrastructure Prerequisites | v3.0 | 0/3 | Not started | - |
+| 65. Infrastructure Prerequisites | v3.0 | 3/3 | Complete | 2026-02-14 |
 | 66. CDKM Ripple-Carry Adder | v3.0 | 0/TBD | Not started | - |
 | 67. Controlled Adder & Backend Dispatch | v3.0 | 0/TBD | Not started | - |
 | 68. Schoolbook Multiplication | v3.0 | 0/TBD | Not started | - |
