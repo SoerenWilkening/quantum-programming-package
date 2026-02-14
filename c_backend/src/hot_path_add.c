@@ -49,28 +49,53 @@ void hot_path_add_qq(circuit_t *circ, const unsigned int *self_qubits, int self_
 
     /* Toffoli CDKM dispatch (uncontrolled only; controlled falls through to QFT) */
     if (circ->arithmetic_mode == ARITH_TOFFOLI && !controlled) {
+        /*
+         * CDKM adder layout:
+         *   [0..bits-1]       = register a (source operand, preserved)
+         *   [bits..2*bits-1]  = register b (target, receives a+b)
+         *   [2*bits]          = ancilla carry (bits >= 2)
+         *
+         * Since self is the target (should receive the sum), we need:
+         *   a-register (indices 0..bits-1) = other_qubits (source)
+         *   b-register (indices bits..2*bits-1) = self_qubits (target)
+         *
+         * Build a swapped qubit array for the Toffoli path.
+         */
+        unsigned int tqa[256];
         sequence_t *toff_seq;
         if (result_bits == 1) {
-            /* 1-bit: no ancilla needed */
+            /* 1-bit: CNOT(target=a[0], control=b[0]) -> a[0] ^= b[0]
+             * For 1-bit, CNOT is symmetric in terms of "a += b" since
+             * it's just XOR. self at [0], other at [1] works fine. */
             toff_seq = toffoli_QQ_add(result_bits);
             if (toff_seq == NULL)
                 return;
             run_instruction(toff_seq, qa, invert, circ);
         } else {
-            /* n >= 2: allocate 1 ancilla qubit */
+            /* n >= 2: swap register positions for CDKM */
+            /* a-register [0..bits-1] = other (source, preserved) */
+            for (i = 0; i < other_bits; i++) {
+                tqa[i] = other_qubits[i];
+            }
+            /* b-register [bits..2*bits-1] = self (target, gets sum) */
+            for (i = 0; i < self_bits; i++) {
+                tqa[result_bits + i] = self_qubits[i];
+            }
+
+            /* Allocate 1 ancilla qubit */
             qubit_t ancilla_qubit = allocator_alloc(circ->allocator, 1, true);
             if (ancilla_qubit == (qubit_t)-1)
                 return; /* allocation failed */
 
             /* Ancilla at virtual index 2*result_bits (after both registers) */
-            qa[2 * result_bits] = ancilla_qubit;
+            tqa[2 * result_bits] = ancilla_qubit;
 
             toff_seq = toffoli_QQ_add(result_bits);
             if (toff_seq == NULL) {
                 allocator_free(circ->allocator, ancilla_qubit, 1);
                 return;
             }
-            run_instruction(toff_seq, qa, invert, circ);
+            run_instruction(toff_seq, tqa, invert, circ);
 
             /* Free ancilla (CDKM guarantees return to |0>) */
             allocator_free(circ->allocator, ancilla_qubit, 1);
