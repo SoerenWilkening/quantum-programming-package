@@ -131,12 +131,12 @@ Plans:
   3. `ql.option('fault_tolerant', True)` causes `a += b` to emit CCX/CX/X gates instead of CP/H gates, and `ql.option('fault_tolerant', False)` restores QFT behavior
   4. Hot-path C dispatch functions check the fault_tolerant flag and route to the correct sequence generator without qubit layout collisions
   5. Toffoli-based arithmetic is the default mode; QFT arithmetic is available via explicit `ql.option('fault_tolerant', False)`
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 67-01: TBD
-- [ ] 67-02: TBD
-- [ ] 67-03: TBD
+- [ ] 67-01-PLAN.md -- Implement controlled CDKM adder (cQQ/cCQ) in ToffoliAddition.c with MCX memory fix
+- [ ] 67-02-PLAN.md -- Wire controlled Toffoli dispatch in hot_path_add.c, Cython declarations, exhaustive tests
+- [ ] 67-03-PLAN.md -- Change default arithmetic mode to ARITH_TOFFOLI and adapt test suite
 
 ### Phase 68: Schoolbook Multiplication
 **Goal**: Users can multiply quantum integers using Toffoli-based circuits with quadratic gate count
@@ -248,7 +248,7 @@ Phases execute in numeric order: 65 -> 66 -> 67 -> 68 -> 69 -> 70 -> 71 -> 72
 | 64. Regression Verification | v2.3 | 1/1 | Complete | 2026-02-08 |
 | 65. Infrastructure Prerequisites | v3.0 | 3/3 | Complete | 2026-02-14 |
 | 66. CDKM Ripple-Carry Adder | v3.0 | 3/3 | Complete | 2026-02-14 |
-| 67. Controlled Adder & Backend Dispatch | v3.0 | 0/TBD | Not started | - |
+| 67. Controlled Adder & Backend Dispatch | v3.0 | 0/3 | Not started | - |
 | 68. Schoolbook Multiplication | v3.0 | 0/TBD | Not started | - |
 | 69. Controlled Multiplication & Division | v3.0 | 0/TBD | Not started | - |
 | 70. Cross-Backend Verification | v3.0 | 0/TBD | Not started | - |
