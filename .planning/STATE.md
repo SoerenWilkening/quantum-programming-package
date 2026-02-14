@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 ## Current Position
 
 Phase: 66 of 72 (CDKM Ripple-Carry Adder) -- COMPLETE
-Plan: 2 of 2 in current phase
-Status: Phase 66 complete, ready for Phase 67
-Last activity: 2026-02-14 -- Completed 66-02 (Python integration + verification tests)
+Plan: 3 of 3 in current phase
+Status: Phase 66 fully complete (including CQ gap closure), ready for Phase 67
+Last activity: 2026-02-14 -- Completed 66-03 (CQ Toffoli gap closure)
 
-Progress: [#######_________________] 20% (v3.0 phases -- 6/~24 plans)
+Progress: [########________________] 23% (v3.0 phases -- 7/~24 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 187 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 6)
+- Total plans completed: 188 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 7)
 - Average duration: ~13 min/plan
-- Total execution time: ~27.5 hours
+- Total execution time: ~27.8 hours
 
 **By Milestone:**
 
@@ -55,6 +55,7 @@ Phase 65-02: Block free-list uses sorted array with first-fit allocation and adj
 Phase 65-03: #ifdef DEBUG ancilla bitmap uses separate guard from DEBUG_OWNERSHIP for independent control. Dynamic bool array with doubling expansion.
 Phase 66-01: Separate Toffoli QQ cache (not shared with QFT). CQ sequences fresh per call, freed by caller. Controlled ops fall back to QFT. ARITH_QFT=0 for backward-compatible default.
 Phase 66-02: CDKM stores sum in b-register, so hot_path_add_qq swaps self/other for Toffoli path. CQ Toffoli MAJ/UMA simplification has bugs (xfail tests document them). Inline cast for fault_tolerant option (no cdef in elif).
+Phase 66-03: CQ Toffoli uses temp-register QQ approach (X-init temp to classical value, run proven QQ CDKM adder, X-cleanup). CQ now requires 2*N+1 qubits (N temp + N self + 1 carry). BUG-CQ-TOFFOLI resolved.
 
 ### Blockers/Concerns
 
@@ -69,14 +70,14 @@ Phase 66-02: CDKM stores sum in b-register, so hot_path_add_qq swaps self/other 
 - ~~reverse_circuit_range() negates GateValue for self-inverse gates~~ -- FIXED in 65-01 (b8a567a)
 - ~~allocator_alloc() only reuses freed ancilla for count=1~~ -- FIXED in 65-02 (11fb70d)
 - Optimizer gate cancellation rules designed for QFT -- may need disabling for Toffoli initially
-- BUG-CQ-TOFFOLI: CQ Toffoli MAJ/UMA simplification in ToffoliAddition.c produces incorrect results for widths 2+ (discovered in 66-02, documented as xfail tests)
+- ~~BUG-CQ-TOFFOLI: CQ Toffoli MAJ/UMA simplification in ToffoliAddition.c produces incorrect results for widths 2+~~ -- FIXED in 66-03 (911e442, c313bbe) via temp-register QQ approach
 
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Completed 66-02-PLAN.md (Python integration + verification tests)
+Stopped at: Completed 66-03-PLAN.md (CQ Toffoli gap closure)
 Resume file: N/A
-Resume action: Plan Phase 67 (controlled Toffoli operations) or fix CQ Toffoli bugs
+Resume action: Plan Phase 67 (controlled Toffoli operations)
 
 ---
-*State updated: 2026-02-14 -- 66-02 complete (Python integration + verification tests, CDKM register-swap fix)*
+*State updated: 2026-02-14 -- 66-03 complete (CQ Toffoli gap closure via temp-register QQ approach, BUG-CQ-TOFFOLI resolved)*
