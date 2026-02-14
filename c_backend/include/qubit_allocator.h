@@ -33,19 +33,32 @@ typedef struct {
 } allocator_stats_t;
 
 /**
+ * @brief A contiguous block of freed qubits available for reuse.
+ *
+ * Used in the block-based free-list within the qubit allocator.
+ * Blocks are maintained sorted by start index for efficient coalescing.
+ */
+typedef struct {
+    qubit_t start;
+    num_t count;
+} qubit_block_t;
+
+/**
  * @brief Centralized qubit allocator structure.
  *
- * Manages qubit allocation with reuse capability for freed qubits.
+ * Manages qubit allocation with block-based reuse for freed qubits.
+ * Supports contiguous multi-qubit allocation with first-fit search
+ * and adjacent-block coalescing on free.
  * Prevents runaway allocation with hard-coded ALLOCATOR_MAX_QUBITS limit.
  */
 typedef struct {
-    qubit_t *indices;        // Array of qubit indices
-    num_t capacity;          // Current array capacity
-    num_t next_qubit;        // Next qubit index to allocate
-    num_t freed_count;       // Number of qubits returned to pool
-    qubit_t *freed_stack;    // Stack of freed qubit indices (for reuse)
-    num_t freed_capacity;    // Capacity of freed stack
-    allocator_stats_t stats; // Usage statistics
+    qubit_t *indices;            // Array of qubit indices
+    num_t capacity;              // Current array capacity
+    num_t next_qubit;            // Next qubit index to allocate
+    qubit_block_t *freed_blocks; // Sorted array of freed qubit blocks (by start index)
+    num_t freed_block_count;     // Number of freed blocks in the list
+    num_t freed_block_capacity;  // Capacity of freed_blocks array
+    allocator_stats_t stats;     // Usage statistics
 
 #ifdef DEBUG_OWNERSHIP
     // Debug-only: track which entity owns each qubit

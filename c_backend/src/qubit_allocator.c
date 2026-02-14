@@ -8,8 +8,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Initial freed stack capacity
-#define FREED_STACK_INITIAL_SIZE 32
+// Initial freed blocks array capacity
+#define FREED_BLOCKS_INITIAL_SIZE 32
 
 qubit_allocator_t *allocator_create(num_t initial_capacity) {
     // OWNERSHIP: Caller owns returned qubit_allocator_t*, must call allocator_destroy()
@@ -29,9 +29,9 @@ qubit_allocator_t *allocator_create(num_t initial_capacity) {
         return NULL;
     }
 
-    // Allocate freed stack for qubit reuse
-    alloc->freed_stack = malloc(FREED_STACK_INITIAL_SIZE * sizeof(qubit_t));
-    if (alloc->freed_stack == NULL) {
+    // Allocate freed blocks array for block-based qubit reuse
+    alloc->freed_blocks = malloc(FREED_BLOCKS_INITIAL_SIZE * sizeof(qubit_block_t));
+    if (alloc->freed_blocks == NULL) {
         free(alloc->indices);
         free(alloc);
         return NULL;
@@ -40,8 +40,8 @@ qubit_allocator_t *allocator_create(num_t initial_capacity) {
     // Initialize basic fields
     alloc->capacity = initial_capacity;
     alloc->next_qubit = 0;
-    alloc->freed_count = 0;
-    alloc->freed_capacity = FREED_STACK_INITIAL_SIZE;
+    alloc->freed_block_count = 0;
+    alloc->freed_block_capacity = FREED_BLOCKS_INITIAL_SIZE;
 
     // Zero all statistics
     memset(&alloc->stats, 0, sizeof(allocator_stats_t));
@@ -50,7 +50,7 @@ qubit_allocator_t *allocator_create(num_t initial_capacity) {
     // Allocate ownership tracking arrays
     alloc->owner_tags = calloc(initial_capacity, sizeof(char *));
     if (alloc->owner_tags == NULL) {
-        free(alloc->freed_stack);
+        free(alloc->freed_blocks);
         free(alloc->indices);
         free(alloc);
         return NULL;
@@ -78,7 +78,7 @@ void allocator_destroy(qubit_allocator_t *alloc) {
     }
 #endif
 
-    free(alloc->freed_stack);
+    free(alloc->freed_blocks);
     free(alloc->indices);
     free(alloc);
 }
@@ -90,12 +90,32 @@ qubit_t allocator_alloc(qubit_allocator_t *alloc, num_t count, bool is_ancilla) 
 
     qubit_t start_qubit;
 
-    // Try to reuse freed qubits (only for single qubit allocations for now)
-    if (count == 1 && alloc->freed_count > 0) {
-        // Pop from freed stack
-        alloc->freed_count--;
-        start_qubit = alloc->freed_stack[alloc->freed_count];
-    } else {
+    // Try to reuse freed blocks (first-fit search for any count >= 1)
+    bool reused = false;
+    for (num_t i = 0; i < alloc->freed_block_count; i++) {
+        if (alloc->freed_blocks[i].count >= count) {
+            start_qubit = alloc->freed_blocks[i].start;
+
+            if (alloc->freed_blocks[i].count == count) {
+                // Exact fit: remove block from array
+                alloc->freed_block_count--;
+                if (i < alloc->freed_block_count) {
+                    memmove(&alloc->freed_blocks[i], &alloc->freed_blocks[i + 1],
+                            (alloc->freed_block_count - i) * sizeof(qubit_block_t));
+                }
+            } else {
+                // Partial fit: shrink block (take from the front)
+                alloc->freed_blocks[i].start += count;
+                alloc->freed_blocks[i].count -= count;
+            }
+
+            reused = true;
+            break;
+        }
+    }
+
+    if (!reused) {
+        // No freed block fits -- allocate fresh from next_qubit
         // Check if we need to expand capacity
         if (alloc->next_qubit + count > alloc->capacity) {
             // Double capacity, but don't exceed max
@@ -167,25 +187,67 @@ int allocator_free(qubit_allocator_t *alloc, qubit_t start, num_t count) {
     alloc->stats.total_deallocations++;
     alloc->stats.current_in_use -= count;
 
-    // For now, only push single qubits to freed stack for reuse
-    if (count == 1) {
-        // Expand freed stack if needed
-        if (alloc->freed_count >= alloc->freed_capacity) {
-            num_t new_capacity = alloc->freed_capacity * 2;
-            qubit_t *new_freed_stack = realloc(alloc->freed_stack, new_capacity * sizeof(qubit_t));
-            if (new_freed_stack == NULL) {
-                // Can't expand, but freeing still succeeded conceptually
-                return 0;
-            }
-            alloc->freed_stack = new_freed_stack;
-            alloc->freed_capacity = new_capacity;
+    // Expand freed_blocks array if needed
+    if (alloc->freed_block_count >= alloc->freed_block_capacity) {
+        num_t new_capacity = alloc->freed_block_capacity * 2;
+        qubit_block_t *new_blocks =
+            realloc(alloc->freed_blocks, new_capacity * sizeof(qubit_block_t));
+        if (new_blocks == NULL) {
+            // Can't expand, but freeing still succeeded conceptually
+            return 0;
         }
-
-        // Push to freed stack
-        alloc->freed_stack[alloc->freed_count] = start;
-        alloc->freed_count++;
+        alloc->freed_blocks = new_blocks;
+        alloc->freed_block_capacity = new_capacity;
     }
-    // For count > 1, we don't currently support reuse, but still track deallocation
+
+    // Find insertion point to maintain sort by start index
+    num_t insert_pos = 0;
+    while (insert_pos < alloc->freed_block_count && alloc->freed_blocks[insert_pos].start < start) {
+        insert_pos++;
+    }
+
+    // Make room for the new block by shifting elements right
+    if (insert_pos < alloc->freed_block_count) {
+        memmove(&alloc->freed_blocks[insert_pos + 1], &alloc->freed_blocks[insert_pos],
+                (alloc->freed_block_count - insert_pos) * sizeof(qubit_block_t));
+    }
+
+    // Insert the new block
+    alloc->freed_blocks[insert_pos].start = start;
+    alloc->freed_blocks[insert_pos].count = count;
+    alloc->freed_block_count++;
+
+    // Coalesce with next block (if adjacent)
+    if (insert_pos + 1 < alloc->freed_block_count) {
+        qubit_block_t *cur = &alloc->freed_blocks[insert_pos];
+        qubit_block_t *next = &alloc->freed_blocks[insert_pos + 1];
+        if (cur->start + cur->count == next->start) {
+            // Merge next into current
+            cur->count += next->count;
+            // Remove next block
+            alloc->freed_block_count--;
+            if (insert_pos + 1 < alloc->freed_block_count) {
+                memmove(&alloc->freed_blocks[insert_pos + 1], &alloc->freed_blocks[insert_pos + 2],
+                        (alloc->freed_block_count - insert_pos - 1) * sizeof(qubit_block_t));
+            }
+        }
+    }
+
+    // Coalesce with previous block (if adjacent)
+    if (insert_pos > 0) {
+        qubit_block_t *prev = &alloc->freed_blocks[insert_pos - 1];
+        qubit_block_t *cur = &alloc->freed_blocks[insert_pos];
+        if (prev->start + prev->count == cur->start) {
+            // Merge current into previous
+            prev->count += cur->count;
+            // Remove current block
+            alloc->freed_block_count--;
+            if (insert_pos < alloc->freed_block_count) {
+                memmove(&alloc->freed_blocks[insert_pos], &alloc->freed_blocks[insert_pos + 1],
+                        (alloc->freed_block_count - insert_pos) * sizeof(qubit_block_t));
+            }
+        }
+    }
 
 #ifdef DEBUG_OWNERSHIP
     // Clear ownership tags
