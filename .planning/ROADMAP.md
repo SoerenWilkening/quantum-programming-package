@@ -78,7 +78,7 @@
 **Milestone Goal:** Implement Toffoli-based arithmetic (no phase/rotation gates) as an alternative backend, enabling fault-tolerant circuit generation. CDKM ripple-carry adder as foundation, schoolbook multiplication, restoring division, CLA depth optimization, all wired through `ql.option('fault_tolerant')` dispatch.
 
 - [x] **Phase 65: Infrastructure Prerequisites** - Fix reverse_circuit_range, allocator block reuse, and ancilla lifecycle contracts -- completed 2026-02-14
-- [ ] **Phase 66: CDKM Ripple-Carry Adder** - QQ/CQ addition and subtraction via MAJ/UMA chain with 1 ancilla
+- [x] **Phase 66: CDKM Ripple-Carry Adder** - QQ/CQ addition and subtraction via MAJ/UMA chain with 1 ancilla -- completed 2026-02-14
 - [ ] **Phase 67: Controlled Adder & Backend Dispatch** - cQQ/cCQ controlled addition and fault_tolerant mode switching
 - [ ] **Phase 68: Schoolbook Multiplication** - QQ/CQ Toffoli-based multiplication using shift-and-add
 - [ ] **Phase 69: Controlled Multiplication & Division** - cQQ/cCQ multiplication and restoring division via Toffoli add/sub
@@ -119,7 +119,7 @@ Plans:
 Plans:
 - [x] 66-01-PLAN.md -- Implement CDKM adder in C (ToffoliAddition.c, types/circuit changes, hot path dispatch)
 - [x] 66-02-PLAN.md -- Python wiring (Cython declarations, fault_tolerant option, build) and exhaustive verification tests
-- [ ] 66-03-PLAN.md -- Gap closure: fix CQ Toffoli addition via temp-register QQ approach
+- [x] 66-03-PLAN.md -- Gap closure: fix CQ Toffoli addition via temp-register QQ approach
 
 ### Phase 67: Controlled Adder & Backend Dispatch
 **Goal**: Users can switch all addition/subtraction to Toffoli-based circuits via `ql.option('fault_tolerant', True)` with controlled variants for quantum conditionals
@@ -247,7 +247,7 @@ Phases execute in numeric order: 65 -> 66 -> 67 -> 68 -> 69 -> 70 -> 71 -> 72
 | 63. Right-Sizing Implementation | v2.3 | 1/1 | Complete | 2026-02-08 |
 | 64. Regression Verification | v2.3 | 1/1 | Complete | 2026-02-08 |
 | 65. Infrastructure Prerequisites | v3.0 | 3/3 | Complete | 2026-02-14 |
-| 66. CDKM Ripple-Carry Adder | v3.0 | 2/3 | In progress | - |
+| 66. CDKM Ripple-Carry Adder | v3.0 | 3/3 | Complete | 2026-02-14 |
 | 67. Controlled Adder & Backend Dispatch | v3.0 | 0/TBD | Not started | - |
 | 68. Schoolbook Multiplication | v3.0 | 0/TBD | Not started | - |
 | 69. Controlled Multiplication & Division | v3.0 | 0/TBD | Not started | - |
