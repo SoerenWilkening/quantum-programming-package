@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 ## Current Position
 
 Phase: 67 of 72 (Controlled Adder & Backend Dispatch)
-Plan: 1 of 3 in current phase
-Status: Plan 67-01 complete (controlled CDKM adder in C), ready for 67-02
-Last activity: 2026-02-14 -- Completed 67-01 (controlled CDKM adder cQQ/cCQ)
+Plan: 2 of 3 in current phase
+Status: Plan 67-02 complete (controlled Toffoli hot-path dispatch), ready for 67-03
+Last activity: 2026-02-14 -- Completed 67-02 (controlled Toffoli dispatch + MCX fix)
 
-Progress: [########________________] 26% (v3.0 phases -- 8/~24 plans)
+Progress: [#########_______________] 29% (v3.0 phases -- 9/~24 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 189 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 8)
+- Total plans completed: 190 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 9)
 - Average duration: ~13 min/plan
-- Total execution time: ~27.8 hours
+- Total execution time: ~28.5 hours
 
 **By Milestone:**
 
@@ -57,6 +57,7 @@ Phase 66-01: Separate Toffoli QQ cache (not shared with QFT). CQ sequences fresh
 Phase 66-02: CDKM stores sum in b-register, so hot_path_add_qq swaps self/other for Toffoli path. CQ Toffoli MAJ/UMA simplification has bugs (xfail tests document them). Inline cast for fault_tolerant option (no cdef in elif).
 Phase 66-03: CQ Toffoli uses temp-register QQ approach (X-init temp to classical value, run proven QQ CDKM adder, X-cleanup). CQ now requires 2*N+1 qubits (N temp + N self + 1 carry). BUG-CQ-TOFFOLI resolved.
 Phase 67-01: Controlled CDKM adder (cQQ/cCQ) uses CCX + MCX(3 controls) pattern. Control qubit at 2*bits+1 (not 2*bits). CX-based controlled temp init/cleanup for cCQ. toffoli_sequence_free now handles large_control cleanup.
+Phase 67-02: Controlled Toffoli dispatch wired into hot_path_add.c (no QFT fallback). Fixed MCX use-after-free: run_instruction transfers large_control ownership to circuit, free_circuit cleans up. 70 Toffoli tests pass.
 
 ### Blockers/Concerns
 
@@ -72,13 +73,14 @@ Phase 67-01: Controlled CDKM adder (cQQ/cCQ) uses CCX + MCX(3 controls) pattern.
 - ~~allocator_alloc() only reuses freed ancilla for count=1~~ -- FIXED in 65-02 (11fb70d)
 - Optimizer gate cancellation rules designed for QFT -- may need disabling for Toffoli initially
 - ~~BUG-CQ-TOFFOLI: CQ Toffoli MAJ/UMA simplification in ToffoliAddition.c produces incorrect results for widths 2+~~ -- FIXED in 66-03 (911e442, c313bbe) via temp-register QQ approach
+- ~~MCX use-after-free in run_instruction (garbage qubit indices for 3+ control gates)~~ -- FIXED in 67-02 (cf5b6b6) via circuit ownership transfer
 
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Completed 67-01-PLAN.md (controlled CDKM adder cQQ/cCQ)
+Stopped at: Completed 67-02-PLAN.md (controlled Toffoli hot-path dispatch)
 Resume file: N/A
-Resume action: Execute 67-02-PLAN.md (hot-path dispatch wiring)
+Resume action: Execute 67-03-PLAN.md (default arithmetic mode switch)
 
 ---
-*State updated: 2026-02-14 -- 67-01 complete (controlled CDKM adder cQQ/cCQ via CCX + MCX pattern)*
+*State updated: 2026-02-14 -- 67-02 complete (controlled Toffoli dispatch + MCX use-after-free fix)*
