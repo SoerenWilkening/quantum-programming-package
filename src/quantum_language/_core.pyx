@@ -169,6 +169,7 @@ def option(key: str, value=None):
 	key : str
 		Option name. Currently supported:
 		- 'qubit_saving': Enable eager uncomputation (bool)
+		- 'fault_tolerant': Enable Toffoli-based arithmetic (bool)
 	value : bool, optional
 		New value for option. If None, returns current value.
 
@@ -184,11 +185,19 @@ def option(key: str, value=None):
 	>>> ql.option('qubit_saving', True)
 	>>> ql.option('qubit_saving')
 	True
+	>>> ql.option('fault_tolerant', True)  # Enable Toffoli arithmetic
+	>>> ql.option('fault_tolerant')
+	True
 
 	Notes
 	-----
 	Mode changes affect newly created qbools only. Existing qbools
 	retain their creation-time mode.
+
+	The 'fault_tolerant' option switches arithmetic operations from
+	QFT-based rotations to Toffoli-based (CDKM ripple-carry adder).
+	Toffoli circuits use only CCX/CX/X gates, which are compatible
+	with fault-tolerant error correction schemes.
 	"""
 	global _qubit_saving_mode
 
@@ -198,6 +207,12 @@ def option(key: str, value=None):
 		if not isinstance(value, bool):
 			raise ValueError("qubit_saving option requires bool value")
 		_qubit_saving_mode = value
+	elif key == 'fault_tolerant':
+		if value is None:
+			return (<circuit_s*><circuit_t*><unsigned long long>_get_circuit()).arithmetic_mode == 1
+		if not isinstance(value, bool):
+			raise ValueError("fault_tolerant option requires bool value")
+		(<circuit_s*><circuit_t*><unsigned long long>_get_circuit()).arithmetic_mode = 1 if value else 0
 	else:
 		raise ValueError(f"Unknown option: {key}")
 

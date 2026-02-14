@@ -36,6 +36,11 @@ cdef extern from "arithmetic_ops.h":
 	sequence_t *cCQ_mul(int bits, long long value);
 	sequence_t *cQQ_mul(int bits);
 
+cdef extern from "toffoli_arithmetic_ops.h":
+	sequence_t *toffoli_QQ_add(int bits)
+	sequence_t *toffoli_CQ_add(int bits, int64_t value)
+	void toffoli_sequence_free(sequence_t *seq)
+
 cdef extern from "Integer.h":
 	# Type creation and manipulation (non-arithmetic functions only)
 	pass  # Arithmetic functions moved to arithmetic_ops.h block
@@ -117,6 +122,7 @@ cdef extern from "qubit_allocator.h":
 		unsigned int *used_gates_per_layer  # [layer]
 		unsigned int used_qubits
 		unsigned int layer_floor
+		unsigned int arithmetic_mode    # 0=ARITH_QFT, 1=ARITH_TOFFOLI
 
 	ctypedef struct allocator_stats_t:
 		unsigned int peak_allocated

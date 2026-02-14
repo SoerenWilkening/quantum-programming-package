@@ -37,6 +37,8 @@ c_sources = [
     os.path.join(PROJECT_ROOT, "c_backend", "src", "hot_path_mul.c"),
     os.path.join(PROJECT_ROOT, "c_backend", "src", "hot_path_add.c"),
     os.path.join(PROJECT_ROOT, "c_backend", "src", "hot_path_xor.c"),
+    # Toffoli arithmetic (Phase 66)
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "ToffoliAddition.c"),
     # Hardcoded addition sequences: 16 per-width files + unified dispatch
     *[
         os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"add_seq_{i}.c")
