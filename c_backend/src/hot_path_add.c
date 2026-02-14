@@ -12,6 +12,8 @@
 #include "hot_path_add.h"
 #include "arithmetic_ops.h"
 #include "execution.h"
+#include "qubit_allocator.h"
+#include "toffoli_arithmetic_ops.h"
 
 void hot_path_add_qq(circuit_t *circ, const unsigned int *self_qubits, int self_bits,
                      const unsigned int *other_qubits, int other_bits, int invert, int controlled,
@@ -45,7 +47,39 @@ void hot_path_add_qq(circuit_t *circ, const unsigned int *self_qubits, int self_
         qa[pos++] = other_qubits[i];
     }
 
-    /* control + ancilla */
+    /* Toffoli CDKM dispatch (uncontrolled only; controlled falls through to QFT) */
+    if (circ->arithmetic_mode == ARITH_TOFFOLI && !controlled) {
+        sequence_t *toff_seq;
+        if (result_bits == 1) {
+            /* 1-bit: no ancilla needed */
+            toff_seq = toffoli_QQ_add(result_bits);
+            if (toff_seq == NULL)
+                return;
+            run_instruction(toff_seq, qa, invert, circ);
+        } else {
+            /* n >= 2: allocate 1 ancilla qubit */
+            qubit_t ancilla_qubit = allocator_alloc(circ->allocator, 1, true);
+            if (ancilla_qubit == (qubit_t)-1)
+                return; /* allocation failed */
+
+            /* Ancilla at virtual index 2*result_bits (after both registers) */
+            qa[2 * result_bits] = ancilla_qubit;
+
+            toff_seq = toffoli_QQ_add(result_bits);
+            if (toff_seq == NULL) {
+                allocator_free(circ->allocator, ancilla_qubit, 1);
+                return;
+            }
+            run_instruction(toff_seq, qa, invert, circ);
+
+            /* Free ancilla (CDKM guarantees return to |0>) */
+            allocator_free(circ->allocator, ancilla_qubit, 1);
+        }
+        return;
+    }
+    /* Toffoli mode with controlled: fall back to QFT path below */
+
+    /* control + ancilla (QFT path) */
     sequence_t *seq;
     if (controlled) {
         /* Control qubit goes at position 2*result_bits (NOT at pos/start) */
@@ -94,7 +128,41 @@ void hot_path_add_cq(circuit_t *circ, const unsigned int *self_qubits, int self_
         qa[pos++] = self_qubits[i];
     }
 
-    /* control + ancilla */
+    /* Toffoli CDKM dispatch (uncontrolled only; controlled falls through to QFT) */
+    if (circ->arithmetic_mode == ARITH_TOFFOLI && !controlled) {
+        sequence_t *toff_seq;
+        if (self_bits == 1) {
+            /* 1-bit: no ancilla needed */
+            toff_seq = toffoli_CQ_add(self_bits, classical_value);
+            if (toff_seq == NULL)
+                return;
+            run_instruction(toff_seq, qa, invert, circ);
+            toffoli_sequence_free(toff_seq); /* CQ sequences are not cached */
+        } else {
+            /* n >= 2: allocate 1 ancilla qubit */
+            qubit_t ancilla_qubit = allocator_alloc(circ->allocator, 1, true);
+            if (ancilla_qubit == (qubit_t)-1)
+                return; /* allocation failed */
+
+            /* Ancilla at virtual index self_bits (right after target register) */
+            qa[self_bits] = ancilla_qubit;
+
+            toff_seq = toffoli_CQ_add(self_bits, classical_value);
+            if (toff_seq == NULL) {
+                allocator_free(circ->allocator, ancilla_qubit, 1);
+                return;
+            }
+            run_instruction(toff_seq, qa, invert, circ);
+            toffoli_sequence_free(toff_seq); /* CQ sequences are not cached */
+
+            /* Free ancilla (CDKM guarantees return to |0>) */
+            allocator_free(circ->allocator, ancilla_qubit, 1);
+        }
+        return;
+    }
+    /* Toffoli mode with controlled: fall back to QFT path below */
+
+    /* control + ancilla (QFT path) */
     sequence_t *seq;
     if (controlled) {
         qa[pos++] = control_qubit;
