@@ -4,6 +4,7 @@
 #        make test_hot_path_add && ./test_hot_path_add
 #        make test_hot_path_xor && ./test_hot_path_xor
 #        make test_reverse_circuit && ./test_reverse_circuit
+#        make test_allocator_block && ./test_allocator_block
 
 CC = gcc
 CFLAGS = -Wall -Wextra -g -I../../c_backend/include
@@ -67,6 +68,9 @@ XOR_SRCS = $(BACKEND_SRC)/Integer.c \
            $(BACKEND_SRC)/circuit_optimizer.c \
            $(BACKEND_SRC)/hot_path_xor.c
 
+# Sources for allocator block tests (minimal -- allocator only)
+ALLOC_SRCS = $(BACKEND_SRC)/qubit_allocator.c
+
 # Sources for reverse_circuit tests (circuit + execution, no arithmetic)
 REVERSE_SRCS = $(BACKEND_SRC)/execution.c \
                $(BACKEND_SRC)/optimizer.c \
@@ -93,9 +97,12 @@ test_hot_path_xor: test_hot_path_xor.c $(XOR_SRCS)
 test_reverse_circuit: test_reverse_circuit.c $(REVERSE_SRCS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
+test_allocator_block: test_allocator_block.c $(ALLOC_SRCS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
 .PHONY: clean
 clean:
-	rm -f test_comparison test_hot_path_mul test_hot_path_add test_hot_path_xor test_reverse_circuit
+	rm -f test_comparison test_hot_path_mul test_hot_path_add test_hot_path_xor test_reverse_circuit test_allocator_block
 
 .PHONY: run
 run: test_comparison
@@ -108,3 +115,7 @@ run_mul: test_hot_path_mul
 .PHONY: run_reverse
 run_reverse: test_reverse_circuit
 	./test_reverse_circuit
+
+.PHONY: run_alloc
+run_alloc: test_allocator_block
+	./test_allocator_block
