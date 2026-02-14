@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-14)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 66 CDKM Ripple-Carry Adder
+**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 67 Controlled Adder & Backend Dispatch
 
 ## Current Position
 
-Phase: 66 of 72 (CDKM Ripple-Carry Adder) -- COMPLETE
-Plan: 3 of 3 in current phase
-Status: Phase 66 fully complete (including CQ gap closure), ready for Phase 67
-Last activity: 2026-02-14 -- Completed 66-03 (CQ Toffoli gap closure)
+Phase: 67 of 72 (Controlled Adder & Backend Dispatch)
+Plan: 1 of 3 in current phase
+Status: Plan 67-01 complete (controlled CDKM adder in C), ready for 67-02
+Last activity: 2026-02-14 -- Completed 67-01 (controlled CDKM adder cQQ/cCQ)
 
-Progress: [########________________] 23% (v3.0 phases -- 7/~24 plans)
+Progress: [########________________] 26% (v3.0 phases -- 8/~24 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 188 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 7)
+- Total plans completed: 189 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 8)
 - Average duration: ~13 min/plan
 - Total execution time: ~27.8 hours
 
@@ -56,6 +56,7 @@ Phase 65-03: #ifdef DEBUG ancilla bitmap uses separate guard from DEBUG_OWNERSHI
 Phase 66-01: Separate Toffoli QQ cache (not shared with QFT). CQ sequences fresh per call, freed by caller. Controlled ops fall back to QFT. ARITH_QFT=0 for backward-compatible default.
 Phase 66-02: CDKM stores sum in b-register, so hot_path_add_qq swaps self/other for Toffoli path. CQ Toffoli MAJ/UMA simplification has bugs (xfail tests document them). Inline cast for fault_tolerant option (no cdef in elif).
 Phase 66-03: CQ Toffoli uses temp-register QQ approach (X-init temp to classical value, run proven QQ CDKM adder, X-cleanup). CQ now requires 2*N+1 qubits (N temp + N self + 1 carry). BUG-CQ-TOFFOLI resolved.
+Phase 67-01: Controlled CDKM adder (cQQ/cCQ) uses CCX + MCX(3 controls) pattern. Control qubit at 2*bits+1 (not 2*bits). CX-based controlled temp init/cleanup for cCQ. toffoli_sequence_free now handles large_control cleanup.
 
 ### Blockers/Concerns
 
@@ -75,9 +76,9 @@ Phase 66-03: CQ Toffoli uses temp-register QQ approach (X-init temp to classical
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Completed 66-03-PLAN.md (CQ Toffoli gap closure)
+Stopped at: Completed 67-01-PLAN.md (controlled CDKM adder cQQ/cCQ)
 Resume file: N/A
-Resume action: Plan Phase 67 (controlled Toffoli operations)
+Resume action: Execute 67-02-PLAN.md (hot-path dispatch wiring)
 
 ---
-*State updated: 2026-02-14 -- 66-03 complete (CQ Toffoli gap closure via temp-register QQ approach, BUG-CQ-TOFFOLI resolved)*
+*State updated: 2026-02-14 -- 67-01 complete (controlled CDKM adder cQQ/cCQ via CCX + MCX pattern)*
