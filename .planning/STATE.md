@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-14)
 
 ## Current Position
 
-Phase: 65 of 72 (Infrastructure Prerequisites)
-Plan: 2 of 3 in current phase
-Status: Executing
-Last activity: 2026-02-14 -- Completed 65-02 (block-based qubit allocator)
+Phase: 65 of 72 (Infrastructure Prerequisites) -- COMPLETE
+Plan: 3 of 3 in current phase
+Status: Phase complete -- ready for Phase 66
+Last activity: 2026-02-14 -- Completed 65-03 (ancilla lifecycle assertions)
 
-Progress: [####____________________] 8% (v3.0 phases -- 2/~24 plans)
+Progress: [#####___________________] 12% (v3.0 phases -- 3/~24 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 183 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 2)
+- Total plans completed: 184 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 3)
 - Average duration: ~13 min/plan
-- Total execution time: ~27.1 hours
+- Total execution time: ~27.5 hours
 
 **By Milestone:**
 
@@ -52,6 +52,7 @@ Recent (v2.3): Keep all addition widths 1-16 hardcoded (data-driven), shared QFT
 v3.0: Toffoli arithmetic as default (DSP-03), RCA before CLA, division via existing Python-level composition.
 Phase 65-01: Inline switch/case for self-inverse gate classification (no helper function). Fixed run_instruction() proactively for Phase 66+ Toffoli inversion.
 Phase 65-02: Block free-list uses sorted array with first-fit allocation and adjacent-block coalescing. No defragmentation -- fresh alloc when no block fits.
+Phase 65-03: #ifdef DEBUG ancilla bitmap uses separate guard from DEBUG_OWNERSHIP for independent control. Dynamic bool array with doubling expansion.
 
 ### Blockers/Concerns
 
@@ -70,9 +71,9 @@ Phase 65-02: Block free-list uses sorted array with first-fit allocation and adj
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Completed 65-02-PLAN.md (block-based qubit allocator)
+Stopped at: Completed 65-03-PLAN.md (ancilla lifecycle assertions) -- Phase 65 complete
 Resume file: N/A
-Resume action: Execute 65-03-PLAN.md via `/gsd:execute-phase 65`
+Resume action: Plan Phase 66 (Toffoli ripple-carry adder) via `/gsd:plan-phase 66`
 
 ---
-*State updated: 2026-02-14 -- 65-02 complete (block-based qubit allocator)*
+*State updated: 2026-02-14 -- 65-03 complete (ancilla lifecycle assertions), Phase 65 complete*
