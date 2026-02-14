@@ -79,7 +79,7 @@
 
 - [x] **Phase 65: Infrastructure Prerequisites** - Fix reverse_circuit_range, allocator block reuse, and ancilla lifecycle contracts -- completed 2026-02-14
 - [x] **Phase 66: CDKM Ripple-Carry Adder** - QQ/CQ addition and subtraction via MAJ/UMA chain with 1 ancilla -- completed 2026-02-14
-- [ ] **Phase 67: Controlled Adder & Backend Dispatch** - cQQ/cCQ controlled addition and fault_tolerant mode switching
+- [x] **Phase 67: Controlled Adder & Backend Dispatch** - cQQ/cCQ controlled addition and fault_tolerant mode switching -- completed 2026-02-14
 - [ ] **Phase 68: Schoolbook Multiplication** - QQ/CQ Toffoli-based multiplication using shift-and-add
 - [ ] **Phase 69: Controlled Multiplication & Division** - cQQ/cCQ multiplication and restoring division via Toffoli add/sub
 - [ ] **Phase 70: Cross-Backend Verification** - Exhaustive equivalence testing between Toffoli and QFT backends
@@ -134,9 +134,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 67-01-PLAN.md -- Implement controlled CDKM adder (cQQ/cCQ) in ToffoliAddition.c with MCX memory fix
-- [ ] 67-02-PLAN.md -- Wire controlled Toffoli dispatch in hot_path_add.c, Cython declarations, exhaustive tests
-- [ ] 67-03-PLAN.md -- Change default arithmetic mode to ARITH_TOFFOLI and adapt test suite
+- [x] 67-01-PLAN.md -- Implement controlled CDKM adder (cQQ/cCQ) in ToffoliAddition.c with MCX memory fix
+- [x] 67-02-PLAN.md -- Wire controlled Toffoli dispatch in hot_path_add.c, Cython declarations, exhaustive tests
+- [x] 67-03-PLAN.md -- Change default arithmetic mode to ARITH_TOFFOLI and adapt test suite
 
 ### Phase 68: Schoolbook Multiplication
 **Goal**: Users can multiply quantum integers using Toffoli-based circuits with quadratic gate count
@@ -248,7 +248,7 @@ Phases execute in numeric order: 65 -> 66 -> 67 -> 68 -> 69 -> 70 -> 71 -> 72
 | 64. Regression Verification | v2.3 | 1/1 | Complete | 2026-02-08 |
 | 65. Infrastructure Prerequisites | v3.0 | 3/3 | Complete | 2026-02-14 |
 | 66. CDKM Ripple-Carry Adder | v3.0 | 3/3 | Complete | 2026-02-14 |
-| 67. Controlled Adder & Backend Dispatch | v3.0 | 0/3 | Not started | - |
+| 67. Controlled Adder & Backend Dispatch | v3.0 | 3/3 | Complete | 2026-02-14 |
 | 68. Schoolbook Multiplication | v3.0 | 0/TBD | Not started | - |
 | 69. Controlled Multiplication & Division | v3.0 | 0/TBD | Not started | - |
 | 70. Cross-Backend Verification | v3.0 | 0/TBD | Not started | - |
