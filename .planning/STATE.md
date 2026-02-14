@@ -2,17 +2,19 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-08)
+See: .planning/PROJECT.md (updated 2026-02-14)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v3.0 Fault-Tolerant Arithmetic — Toffoli-based arithmetic without phase gates
+**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 65 Infrastructure Prerequisites
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-14 — Milestone v3.0 started
+Phase: 65 of 72 (Infrastructure Prerequisites)
+Plan: 0 of TBD in current phase
+Status: Ready to plan
+Last activity: 2026-02-14 -- Roadmap created for v3.0 (8 phases, 21 requirements)
+
+Progress: [________________________] 0% (v3.0 phases)
 
 ## Performance Metrics
 
@@ -39,6 +41,7 @@ Last activity: 2026-02-14 — Milestone v3.0 started
 | v2.1 Compile Enhancements | 52-54 | 6 | Complete (2026-02-05) |
 | v2.2 Performance Optimization | 55-61 | 22 | Complete (2026-02-08) |
 | v2.3 Hardcoding Right-Sizing | 62-64 | 4 | Complete (2026-02-08) |
+| v3.0 Fault-Tolerant Arithmetic | 65-72 | TBD | In progress |
 
 ## Accumulated Context
 
@@ -46,6 +49,7 @@ Last activity: 2026-02-14 — Milestone v3.0 started
 
 See PROJECT.md Key Decisions table for full history.
 Recent (v2.3): Keep all addition widths 1-16 hardcoded (data-driven), shared QFT/IQFT factoring, multiplication "investigate" for future.
+v3.0: Toffoli arithmetic as default (DSP-03), RCA before CLA, division via existing Python-level composition.
 
 ### Blockers/Concerns
 
@@ -56,19 +60,17 @@ Recent (v2.3): Keep all addition widths 1-16 hardcoded (data-driven), shared QFT
 - BUG-WIDTH-ADD: Mixed-width QFT addition off-by-one (discovered in v1.8)
 - 32-bit multiplication segfault (buffer overflow in C backend, discovered in Phase 61)
 
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 014 | cQQ_add qubit layout fix | 2026-02-05 | abbd87f | [014-cqq-add-hardcoded-or-not-doesn-t-seem-to](./quick/014-cqq-add-hardcoded-or-not-doesn-t-seem-to/) |
-| 015 | Fix cQQ_add algorithm bugs | 2026-02-06 | c891a32 | [015-fix-cqq-add-algorithm-bugs](./quick/015-fix-cqq-add-algorithm-bugs/) |
+**v3.0 specific:**
+- reverse_circuit_range() negates GateValue for self-inverse gates -- must fix in Phase 65
+- allocator_alloc() only reuses freed ancilla for count=1 -- must fix in Phase 65
+- Optimizer gate cancellation rules designed for QFT -- may need disabling for Toffoli initially
 
 ## Session Continuity
 
 Last session: 2026-02-14
-Stopped at: Milestone v3.0 started — defining requirements
+Stopped at: Roadmap created for v3.0 milestone (8 phases, 21 requirements mapped)
 Resume file: N/A
-Resume action: Continue with requirements definition and roadmap creation
+Resume action: Plan Phase 65 via `/gsd:plan-phase 65`
 
 ---
-*State updated: 2026-02-14 — v3.0 milestone started*
+*State updated: 2026-02-14 -- v3.0 roadmap created*

@@ -77,33 +77,33 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ADD-01 | TBD | Pending |
-| ADD-02 | TBD | Pending |
-| ADD-03 | TBD | Pending |
-| ADD-04 | TBD | Pending |
-| ADD-05 | TBD | Pending |
-| ADD-06 | TBD | Pending |
-| ADD-07 | TBD | Pending |
-| MUL-01 | TBD | Pending |
-| MUL-02 | TBD | Pending |
-| MUL-03 | TBD | Pending |
-| MUL-04 | TBD | Pending |
-| MUL-05 | TBD | Pending |
-| DIV-01 | TBD | Pending |
-| DIV-02 | TBD | Pending |
-| DSP-01 | TBD | Pending |
-| DSP-02 | TBD | Pending |
-| DSP-03 | TBD | Pending |
-| INF-01 | TBD | Pending |
-| INF-02 | TBD | Pending |
-| INF-03 | TBD | Pending |
-| INF-04 | TBD | Pending |
+| ADD-01 | Phase 66 | Pending |
+| ADD-02 | Phase 66 | Pending |
+| ADD-03 | Phase 67 | Pending |
+| ADD-04 | Phase 67 | Pending |
+| ADD-05 | Phase 66 | Pending |
+| ADD-06 | Phase 71 | Pending |
+| ADD-07 | Phase 66 | Pending |
+| MUL-01 | Phase 68 | Pending |
+| MUL-02 | Phase 68 | Pending |
+| MUL-03 | Phase 69 | Pending |
+| MUL-04 | Phase 69 | Pending |
+| MUL-05 | Phase 72 | Pending |
+| DIV-01 | Phase 69 | Pending |
+| DIV-02 | Phase 69 | Pending |
+| DSP-01 | Phase 67 | Pending |
+| DSP-02 | Phase 67 | Pending |
+| DSP-03 | Phase 67 | Pending |
+| INF-01 | Phase 65 | Pending |
+| INF-02 | Phase 70 | Pending |
+| INF-03 | Phase 72 | Pending |
+| INF-04 | Phase 72 | Pending |
 
 **Coverage:**
 - v3.0 requirements: 21 total
-- Mapped to phases: 0
-- Unmapped: 21 (awaiting roadmap creation)
+- Mapped to phases: 21
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-14*
-*Last updated: 2026-02-14 after initial definition*
+*Last updated: 2026-02-14 after roadmap creation (all 21 requirements mapped to phases 65-72)*

@@ -9,6 +9,7 @@
 - v2.1 Compile Enhancements -- Phases 52-54 (shipped 2026-02-05) -- See `milestones/v2.1-ROADMAP.md`
 - v2.2 Performance Optimization -- Phases 55-61 (shipped 2026-02-08) -- See `milestones/v2.2-ROADMAP.md`
 - v2.3 Hardcoding Right-Sizing -- Phases 62-64 (shipped 2026-02-08) -- See `milestones/v2.3-ROADMAP.md`
+- v3.0 Fault-Tolerant Arithmetic -- Phases 65-72 (in progress)
 
 ## Phases
 
@@ -72,7 +73,151 @@
 
 </details>
 
+### v3.0 Fault-Tolerant Arithmetic (In Progress)
+
+**Milestone Goal:** Implement Toffoli-based arithmetic (no phase/rotation gates) as an alternative backend, enabling fault-tolerant circuit generation. CDKM ripple-carry adder as foundation, schoolbook multiplication, restoring division, CLA depth optimization, all wired through `ql.option('fault_tolerant')` dispatch.
+
+- [ ] **Phase 65: Infrastructure Prerequisites** - Fix reverse_circuit_range, allocator block reuse, and ancilla lifecycle contracts
+- [ ] **Phase 66: CDKM Ripple-Carry Adder** - QQ/CQ addition and subtraction via MAJ/UMA chain with 1 ancilla
+- [ ] **Phase 67: Controlled Adder & Backend Dispatch** - cQQ/cCQ controlled addition and fault_tolerant mode switching
+- [ ] **Phase 68: Schoolbook Multiplication** - QQ/CQ Toffoli-based multiplication using shift-and-add
+- [ ] **Phase 69: Controlled Multiplication & Division** - cQQ/cCQ multiplication and restoring division via Toffoli add/sub
+- [ ] **Phase 70: Cross-Backend Verification** - Exhaustive equivalence testing between Toffoli and QFT backends
+- [ ] **Phase 71: Carry Look-Ahead Adder** - O(log n) depth addition with 2n-2 ancilla (Draper et al. 2004)
+- [ ] **Phase 72: Performance Polish** - Hardcoded sequences, T-count reporting, controlled add-subtract optimization
+
+## Phase Details
+
+### Phase 65: Infrastructure Prerequisites
+**Goal**: All infrastructure bugs that would silently corrupt Toffoli circuits are fixed before algorithm work begins
+**Depends on**: Nothing (first phase of v3.0)
+**Requirements**: INF-01
+**Success Criteria** (what must be TRUE):
+  1. `reverse_circuit_range()` correctly inverts circuits containing CCX, CX, and X gates (self-inverse gates retain GateValue=1, not -1)
+  2. `allocator_alloc()` can allocate and reuse contiguous blocks of ancilla qubits (count > 1), not just single-qubit allocations
+  3. Ancilla qubits allocated with `is_ancilla=true` are verified to be in |0> state after uncomputation via debug assertion
+  4. Existing QFT arithmetic tests still pass with zero regressions after infrastructure changes
+**Plans**: TBD
+
+Plans:
+- [ ] 65-01: TBD
+- [ ] 65-02: TBD
+
+### Phase 66: CDKM Ripple-Carry Adder
+**Goal**: Users can perform Toffoli-based addition and subtraction on quantum registers of any width using the CDKM ripple-carry algorithm
+**Depends on**: Phase 65
+**Requirements**: ADD-01, ADD-02, ADD-05, ADD-07
+**Success Criteria** (what must be TRUE):
+  1. `QQ_add_toffoli(bits)` generates a correct sequence using only CCX/CX/X gates with exactly 1 ancilla qubit, verified for all input pairs at widths 1-4
+  2. `CQ_add_toffoli(bits, val)` adds a classical constant to a quantum register using only CCX/CX/X gates, verified for all input pairs at widths 1-4
+  3. Subtraction works via inverted adder sequence (reversed gate order) for both QQ and CQ variants, verified for all input pairs at widths 1-4
+  4. Mixed-width addition handles operands of different bit widths via zero-extension, verified for width combinations (2,3), (3,4), (4,6)
+  5. Ancilla qubit is allocated before computation, uncomputed to |0>, and freed after each operation
+**Plans**: TBD
+
+Plans:
+- [ ] 66-01: TBD
+- [ ] 66-02: TBD
+- [ ] 66-03: TBD
+
+### Phase 67: Controlled Adder & Backend Dispatch
+**Goal**: Users can switch all addition/subtraction to Toffoli-based circuits via `ql.option('fault_tolerant', True)` with controlled variants for quantum conditionals
+**Depends on**: Phase 66
+**Requirements**: ADD-03, ADD-04, DSP-01, DSP-02, DSP-03
+**Success Criteria** (what must be TRUE):
+  1. `cQQ_add_toffoli(bits)` performs addition conditioned on a control qubit using only CCX/CX/X gates, verified for widths 1-4
+  2. `cCQ_add_toffoli(bits, val)` performs classical-quantum addition conditioned on a control qubit, verified for widths 1-4
+  3. `ql.option('fault_tolerant', True)` causes `a += b` to emit CCX/CX/X gates instead of CP/H gates, and `ql.option('fault_tolerant', False)` restores QFT behavior
+  4. Hot-path C dispatch functions check the fault_tolerant flag and route to the correct sequence generator without qubit layout collisions
+  5. Toffoli-based arithmetic is the default mode; QFT arithmetic is available via explicit `ql.option('fault_tolerant', False)`
+**Plans**: TBD
+
+Plans:
+- [ ] 67-01: TBD
+- [ ] 67-02: TBD
+- [ ] 67-03: TBD
+
+### Phase 68: Schoolbook Multiplication
+**Goal**: Users can multiply quantum integers using Toffoli-based circuits with quadratic gate count
+**Depends on**: Phase 67
+**Requirements**: MUL-01, MUL-02
+**Success Criteria** (what must be TRUE):
+  1. `QQ_mul_toffoli(bits)` computes the product of two quantum registers using shift-and-add with Toffoli adders, verified for all input pairs at widths 1-3
+  2. `CQ_mul_toffoli(bits, val)` computes the product of a quantum register and a classical value, verified for all input pairs at widths 1-3
+  3. Multiplication circuits contain only CCX/CX/X gates (no CP/H gates) when fault_tolerant mode is active
+  4. `a * b` and `a *= b` operators dispatch to Toffoli multiplication when fault_tolerant mode is active
+**Plans**: TBD
+
+Plans:
+- [ ] 68-01: TBD
+- [ ] 68-02: TBD
+
+### Phase 69: Controlled Multiplication & Division
+**Goal**: Users can perform controlled multiplication and division/modulo using Toffoli-based circuits, completing the full arithmetic surface
+**Depends on**: Phase 68
+**Requirements**: MUL-03, MUL-04, DIV-01, DIV-02
+**Success Criteria** (what must be TRUE):
+  1. `cQQ_mul_toffoli(bits)` performs multiplication conditioned on a control qubit, verified for widths 1-3
+  2. `cCQ_mul_toffoli(bits, val)` performs classical-quantum multiplication conditioned on a control qubit, verified for widths 1-3
+  3. `a // b` and `a % b` produce correct quotient and remainder using Toffoli add/sub underneath when fault_tolerant is active, verified for widths 2-4 with classical divisors
+  4. `a // b` and `a % b` work with quantum divisors using Toffoli add/sub, verified for widths 2-3
+  5. Division operations inside `with` blocks (controlled context) work correctly with Toffoli dispatch
+**Plans**: TBD
+
+Plans:
+- [ ] 69-01: TBD
+- [ ] 69-02: TBD
+- [ ] 69-03: TBD
+
+### Phase 70: Cross-Backend Verification
+**Goal**: Toffoli and QFT backends are proven to produce identical computational results for all arithmetic operations across practical widths
+**Depends on**: Phase 69
+**Requirements**: INF-02
+**Success Criteria** (what must be TRUE):
+  1. For widths 1-8, every addition input pair produces identical results between Toffoli and QFT backends (QQ, CQ, cQQ, cCQ variants)
+  2. For widths 1-6, every multiplication input pair produces identical results between Toffoli and QFT backends (QQ, CQ, cQQ, cCQ variants)
+  3. For widths 2-6, division/modulo results match between Toffoli and QFT backends for classical and quantum divisors
+  4. A regression test suite runs both backends and compares results, integrated into `pytest tests/python/ -v`
+**Plans**: TBD
+
+Plans:
+- [ ] 70-01: TBD
+- [ ] 70-02: TBD
+
+### Phase 71: Carry Look-Ahead Adder
+**Goal**: Users can perform O(log n) depth addition for large register widths using the Draper CLA algorithm
+**Depends on**: Phase 70
+**Requirements**: ADD-06
+**Success Criteria** (what must be TRUE):
+  1. `QQ_add_cla(bits)` computes addition using a generate/propagate prefix tree with O(log n) depth and 2n-2 ancilla qubits
+  2. CLA adder produces identical results to RCA adder for all input pairs at widths 1-6
+  3. CLA circuit depth is measurably less than RCA circuit depth for widths >= 8
+  4. All 2n-2 ancilla qubits are correctly uncomputed to |0> and freed after each CLA operation
+**Plans**: TBD
+
+Plans:
+- [ ] 71-01: TBD
+- [ ] 71-02: TBD
+
+### Phase 72: Performance Polish
+**Goal**: Toffoli arithmetic is optimized for production use with hardcoded sequences, resource reporting, and gate count reduction
+**Depends on**: Phase 71
+**Requirements**: INF-03, INF-04, MUL-05
+**Success Criteria** (what must be TRUE):
+  1. Hardcoded Toffoli gate sequences for widths 1-8 eliminate runtime sequence generation, with measurable dispatch speedup
+  2. `ql.stats()` reports T-count alongside existing gate counts, computed as 7 * Toffoli_count for fault-tolerant circuits
+  3. Controlled add-subtract optimization in multiplication reduces Toffoli count by approximately 50% compared to naive controlled addition approach, verified by gate count comparison
+**Plans**: TBD
+
+Plans:
+- [ ] 72-01: TBD
+- [ ] 72-02: TBD
+- [ ] 72-03: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 65 -> 66 -> 67 -> 68 -> 69 -> 70 -> 71 -> 72
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -100,6 +245,14 @@
 | 62. Measurement | v2.3 | 2/2 | Complete | 2026-02-08 |
 | 63. Right-Sizing Implementation | v2.3 | 1/1 | Complete | 2026-02-08 |
 | 64. Regression Verification | v2.3 | 1/1 | Complete | 2026-02-08 |
+| 65. Infrastructure Prerequisites | v3.0 | 0/TBD | Not started | - |
+| 66. CDKM Ripple-Carry Adder | v3.0 | 0/TBD | Not started | - |
+| 67. Controlled Adder & Backend Dispatch | v3.0 | 0/TBD | Not started | - |
+| 68. Schoolbook Multiplication | v3.0 | 0/TBD | Not started | - |
+| 69. Controlled Multiplication & Division | v3.0 | 0/TBD | Not started | - |
+| 70. Cross-Backend Verification | v3.0 | 0/TBD | Not started | - |
+| 71. Carry Look-Ahead Adder | v3.0 | 0/TBD | Not started | - |
+| 72. Performance Polish | v3.0 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-02*
@@ -109,3 +262,4 @@
 *Milestone v2.1 shipped: 2026-02-05*
 *Milestone v2.2 shipped: 2026-02-08*
 *Milestone v2.3 shipped: 2026-02-08*
+*Milestone v3.0 roadmap created: 2026-02-14*
