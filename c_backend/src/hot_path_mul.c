@@ -19,11 +19,15 @@ void hot_path_mul_qq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bi
                      const unsigned int *self_qubits, int self_bits,
                      const unsigned int *other_qubits, int other_bits, int controlled,
                      unsigned int control_qubit, const unsigned int *ancilla, int num_ancilla) {
-    /* Toffoli schoolbook multiplication dispatch (uncontrolled only).
-     * Controlled Toffoli multiplication deferred to Phase 69 -- falls through to QFT. */
-    if (circ->arithmetic_mode == ARITH_TOFFOLI && !controlled) {
-        toffoli_mul_qq(circ, ret_qubits, ret_bits, self_qubits, self_bits, other_qubits,
-                       other_bits);
+    /* Toffoli schoolbook multiplication dispatch (controlled and uncontrolled). */
+    if (circ->arithmetic_mode == ARITH_TOFFOLI) {
+        if (controlled) {
+            toffoli_cmul_qq(circ, ret_qubits, ret_bits, self_qubits, self_bits, other_qubits,
+                            other_bits, control_qubit);
+        } else {
+            toffoli_mul_qq(circ, ret_qubits, ret_bits, self_qubits, self_bits, other_qubits,
+                           other_bits);
+        }
         return;
     }
 
@@ -81,10 +85,14 @@ void hot_path_mul_cq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bi
                      const unsigned int *self_qubits, int self_bits, int64_t classical_value,
                      int controlled, unsigned int control_qubit, const unsigned int *ancilla,
                      int num_ancilla) {
-    /* Toffoli schoolbook CQ multiplication dispatch (uncontrolled only).
-     * Controlled Toffoli CQ multiplication deferred to Phase 69 -- falls through to QFT. */
-    if (circ->arithmetic_mode == ARITH_TOFFOLI && !controlled) {
-        toffoli_mul_cq(circ, ret_qubits, ret_bits, self_qubits, self_bits, classical_value);
+    /* Toffoli schoolbook CQ multiplication dispatch (controlled and uncontrolled). */
+    if (circ->arithmetic_mode == ARITH_TOFFOLI) {
+        if (controlled) {
+            toffoli_cmul_cq(circ, ret_qubits, ret_bits, self_qubits, self_bits, classical_value,
+                            control_qubit);
+        } else {
+            toffoli_mul_cq(circ, ret_qubits, ret_bits, self_qubits, self_bits, classical_value);
+        }
         return;
     }
 
