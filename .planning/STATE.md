@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-14)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 69 plan 03 complete
+**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 69 plans 01 and 03 complete
 
 ## Current Position
 
 Phase: 69 of 72 (Controlled Multiplication/Division) -- IN PROGRESS
-Plan: 3 of 3 in current phase (plan 03 complete)
-Status: Toffoli division/modulo verification tests complete. 105 pass, 34 xfail.
-Last activity: 2026-02-15 -- Completed 69-03 (Toffoli division verification tests)
+Plan: 2 of 3 remaining (plans 01 and 03 complete, plan 02 pending)
+Status: Controlled Toffoli multiplication implemented and dispatched. Plan 02 (tests) remaining.
+Last activity: 2026-02-15 -- Completed 69-01 (Controlled Toffoli multiplication implementation)
 
 Progress: [#############___________] 46% (v3.0 phases -- 15/~24 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 194 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 13)
+- Total plans completed: 195 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 14)
 - Average duration: ~13 min/plan
 - Total execution time: ~30.2 hours
 
@@ -61,6 +61,7 @@ Phase 67-02: Controlled Toffoli dispatch wired into hot_path_add.c (no QFT fallb
 Phase 67-03: ARITH_TOFFOLI is now the default arithmetic mode (1-line change in init_circuit). QFT available via ql.option('fault_tolerant', False). All QFT tests updated with explicit opt-in. 72 Toffoli + 165 hardcoded sequence tests pass.
 Phase 68-01: Toffoli schoolbook multiplication via shift-and-add loop calling CDKM adders. QQ uses controlled adders per multiplier bit; CQ uses uncontrolled adders for set classical bits. Controlled mul falls through to QFT (Phase 69 scope). Fixed test_mul.py and test_add.py for Toffoli default mode (explicit QFT opt-in).
 Phase 68-02: Exhaustive Toffoli multiplication verification at widths 1-3 (QQ and CQ). Custom result extraction: QQ at [2*width..3*width-1], CQ at [width..2*width-1]. Gate purity confirmed (no QFT gates). Default operator dispatch verified.
+Phase 69-01: Controlled Toffoli multiplication uses AND-ancilla pattern for cQQ (CCX compute AND, cQQ_add, CCX uncompute) and direct cQQ_add with ext_ctrl for cCQ. Width 1 uses MCX(3 controls). Carry+AND ancilla reused per loop iteration. hot_path_mul.c now routes all controlled+Toffoli to new functions.
 Phase 69-03: Toffoli division/modulo verification with MCX-to-basis-gate transpilation for MPS compatibility. Toffoli div failures differ from QFT (width 3 even values with div=1). Modulo widely broken (BUG-MOD-REDUCE). Controlled division blocked by missing controlled XOR. Gate purity confirmed. Used allocated_start for result extraction.
 
 ### Blockers/Concerns
@@ -82,9 +83,9 @@ Phase 69-03: Toffoli division/modulo verification with MCX-to-basis-gate transpi
 ## Session Continuity
 
 Last session: 2026-02-15
-Stopped at: Completed 69-03-PLAN.md (Toffoli division verification tests)
+Stopped at: Completed 69-01-PLAN.md (Controlled Toffoli multiplication implementation)
 Resume file: N/A
-Resume action: Continue Phase 69 (plans 01-02 still incomplete)
+Resume action: Execute Phase 69-02 (Controlled multiplication verification tests)
 
 ---
-*State updated: 2026-02-15 -- Phase 69-03 complete (Toffoli division verification tests)*
+*State updated: 2026-02-15 -- Phase 69-01 complete (Controlled Toffoli multiplication)*
