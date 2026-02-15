@@ -170,6 +170,7 @@ def option(key: str, value=None):
 		Option name. Currently supported:
 		- 'qubit_saving': Enable eager uncomputation (bool)
 		- 'fault_tolerant': Enable Toffoli-based arithmetic (bool)
+		- 'cla': Enable carry look-ahead adder dispatch (bool)
 	value : bool, optional
 		New value for option. If None, returns current value.
 
@@ -188,6 +189,9 @@ def option(key: str, value=None):
 	>>> ql.option('fault_tolerant', True)  # Enable Toffoli arithmetic
 	>>> ql.option('fault_tolerant')
 	True
+	>>> ql.option('cla', False)  # Force RCA (disable CLA dispatch)
+	>>> ql.option('cla')
+	False
 
 	Notes
 	-----
@@ -198,6 +202,11 @@ def option(key: str, value=None):
 	QFT-based rotations to Toffoli-based (CDKM ripple-carry adder).
 	Toffoli circuits use only CCX/CX/X gates, which are compatible
 	with fault-tolerant error correction schemes.
+
+	The 'cla' option controls carry look-ahead adder dispatch. When
+	True (default), Toffoli additions at width >= 4 automatically use
+	the Brent-Kung CLA adder for O(log n) depth. When False, all
+	additions use the CDKM ripple-carry adder regardless of width.
 	"""
 	global _qubit_saving_mode
 
@@ -213,6 +222,12 @@ def option(key: str, value=None):
 		if not isinstance(value, bool):
 			raise ValueError("fault_tolerant option requires bool value")
 		(<circuit_s*><circuit_t*><unsigned long long>_get_circuit()).arithmetic_mode = 1 if value else 0
+	elif key == 'cla':
+		if value is None:
+			return (<circuit_s*><circuit_t*><unsigned long long>_get_circuit()).cla_override == 0
+		if not isinstance(value, bool):
+			raise ValueError("cla option requires bool value")
+		(<circuit_s*><circuit_t*><unsigned long long>_get_circuit()).cla_override = 0 if value else 1
 	else:
 		raise ValueError(f"Unknown option: {key}")
 

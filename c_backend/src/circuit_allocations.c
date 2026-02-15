@@ -16,6 +16,7 @@ circuit_t *init_circuit() {
     circ->layer_floor = 0;
     circ->toff_decomp = DONTDECOMPOSETOFFOLI;
     circ->arithmetic_mode = ARITH_TOFFOLI;
+    circ->cla_override = 0; // Auto: use CLA when width >= threshold
 
     // Create allocator for qubit management
     circ->allocator = allocator_create(QUBIT_BLOCK);

@@ -41,6 +41,7 @@ cdef extern from "toffoli_arithmetic_ops.h":
 	sequence_t *toffoli_CQ_add(int bits, int64_t value)
 	sequence_t *toffoli_cQQ_add(int bits)
 	sequence_t *toffoli_cCQ_add(int bits, int64_t value)
+	sequence_t *toffoli_QQ_add_bk(int bits)
 	void toffoli_sequence_free(sequence_t *seq)
 
 cdef extern from "Integer.h":
@@ -125,6 +126,7 @@ cdef extern from "qubit_allocator.h":
 		unsigned int used_qubits
 		unsigned int layer_floor
 		unsigned int arithmetic_mode    # 0=ARITH_QFT, 1=ARITH_TOFFOLI
+		int cla_override               # 0=auto CLA, 1=force RCA
 
 	ctypedef struct allocator_stats_t:
 		unsigned int peak_allocated

@@ -76,6 +76,8 @@ typedef struct circuit_s {
 
     arithmetic_mode_t arithmetic_mode; // ARITH_QFT (default) or ARITH_TOFFOLI
 
+    int cla_override; // 0 = auto (CLA when width >= threshold), 1 = force RCA (no CLA)
+
     // Legacy fields (deprecated, kept for backward compatibility)
     qubit_t qubit_indices[MAXQUBITS];
     qubit_t used_qubit_indices;

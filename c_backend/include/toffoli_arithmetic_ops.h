@@ -111,6 +111,31 @@ sequence_t *toffoli_cQQ_add(int bits);
 sequence_t *toffoli_cCQ_add(int bits, int64_t value);
 
 // ============================================================================
+// Brent-Kung Carry Look-Ahead Addition (Phase 71)
+// ============================================================================
+
+/**
+ * @brief Brent-Kung CLA QQ addition: b += a (O(log n) depth).
+ *
+ * Generates a Brent-Kung carry look-ahead adder sequence. Uses parallel
+ * prefix tree to compute all carries in O(log n) depth instead of O(n).
+ * Requires 2*(bits-1) ancilla qubits for generate and propagate intermediates.
+ *
+ * @param bits Width of operands (2-64; returns NULL for bits < 2)
+ * @return Cached sequence - DO NOT FREE (NULL on invalid input)
+ *
+ * Qubit layout:
+ *   [0..bits-1]            = register a (source, preserved)
+ *   [bits..2*bits-1]       = register b (target, gets a+b)
+ *   [2*bits..3*bits-2]     = generate ancilla g[0..bits-2]
+ *   [3*bits-1..4*bits-3]   = propagate ancilla p_anc[0..bits-2]
+ *   Total: 4*bits - 2 qubits
+ *
+ * OWNERSHIP: Returns cached sequence - DO NOT FREE
+ */
+sequence_t *toffoli_QQ_add_bk(int bits);
+
+// ============================================================================
 // Toffoli Multiplication (Phase 68)
 // ============================================================================
 
