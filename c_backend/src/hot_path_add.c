@@ -117,7 +117,7 @@ void hot_path_add_qq(circuit_t *circ, const unsigned int *self_qubits, int self_
                     return;
                 run_instruction(toff_seq, qa, invert, circ);
             } else {
-                /* n >= 2: swap register positions for CDKM */
+                /* n >= 2: swap register positions for adder */
                 /* a-register [0..bits-1] = other (source, preserved) */
                 for (i = 0; i < other_bits; i++) {
                     tqa[i] = other_qubits[i];
@@ -127,7 +127,31 @@ void hot_path_add_qq(circuit_t *circ, const unsigned int *self_qubits, int self_
                     tqa[result_bits + i] = self_qubits[i];
                 }
 
-                /* Allocate 1 ancilla qubit */
+                /* CLA dispatch: use Brent-Kung CLA for width >= threshold */
+#define CLA_THRESHOLD 4
+                if (circ->cla_override == 0 && result_bits >= CLA_THRESHOLD) {
+                    /* Brent-Kung CLA: 2*(n-1) ancilla */
+                    int cla_ancilla_count = 2 * (result_bits - 1);
+                    qubit_t cla_ancilla = allocator_alloc(circ->allocator, cla_ancilla_count, true);
+                    if (cla_ancilla != (qubit_t)-1) {
+                        /* CLA ancilla [2*bits..4*bits-3] */
+                        for (i = 0; i < cla_ancilla_count; i++) {
+                            tqa[2 * result_bits + i] = cla_ancilla + i;
+                        }
+                        toff_seq = toffoli_QQ_add_bk(result_bits);
+                        if (toff_seq != NULL) {
+                            run_instruction(toff_seq, tqa, invert, circ);
+                            allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count);
+                            return;
+                        }
+                        /* CLA sequence generation failed -- fall through to RCA */
+                        allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count);
+                    }
+                    /* Silent fallback to RCA (ancilla allocation failed or sequence failed) */
+                }
+#undef CLA_THRESHOLD
+
+                /* RCA (CDKM) path: 1 ancilla qubit */
                 qubit_t ancilla_qubit = allocator_alloc(circ->allocator, 1, true);
                 if (ancilla_qubit == (qubit_t)-1)
                     return; /* allocation failed */

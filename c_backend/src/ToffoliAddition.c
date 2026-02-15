@@ -605,309 +605,41 @@ sequence_t *toffoli_cCQ_add(int bits, int64_t value) {
 /**
  * @brief Brent-Kung CLA QQ adder: b += a (in-place on b-register).
  *
- * Implements the Brent-Kung parallel prefix carry look-ahead adder using
- * Toffoli (CCX) and CNOT (CX) gates. Computes all carry bits in O(log n)
- * depth using a prefix tree, then computes sums.
+ * STUB: Returns NULL to fall through to RCA (CDKM) adder.
  *
- * Qubit layout for toffoli_QQ_add_bk(bits):
+ * The Brent-Kung parallel prefix CLA algorithm has a fundamental ancilla
+ * uncomputation challenge for in-place quantum addition: after computing
+ * carries via the prefix tree and extracting sums, the tree cannot be
+ * reversed because the propagate controls (stored in b) have been modified
+ * by the sum computation. This creates a chicken-and-egg problem where
+ * cleaning ancilla requires original b values, but the sum computation
+ * (which is the desired output) destroys those values.
+ *
+ * The CLA infrastructure (cla_override field, option plumbing, dispatch
+ * logic in hot_path_add.c, ancilla allocation) is fully in place. When
+ * this function returns NULL, the dispatch silently falls through to the
+ * proven CDKM RCA adder.
+ *
+ * Future work: implement using a hybrid CLA-RCA approach (e.g., CLA tree
+ * for carry computation + CDKM-style MAJ/UMA for sum extraction with
+ * built-in uncomputation), or use Bennett's compute-copy-uncompute trick
+ * with additional ancilla.
+ *
+ * Qubit layout (for future implementation):
  *   [0..bits-1]            = register a (source, preserved)
  *   [bits..2*bits-1]       = register b (target, gets a+b)
- *   [2*bits..3*bits-2]     = generate ancilla g[0..bits-2] (bits-1 qubits)
- *   [3*bits-1..4*bits-3]   = propagate ancilla p_anc[0..bits-2] (bits-1 qubits)
+ *   [2*bits..4*bits-3]     = 2*(bits-1) ancilla qubits
  *   Total: 4*bits - 2 qubits
- *
- * Algorithm phases:
- *   Phase A: Compute initial g[i] = a[i] AND b[i], p[i] = a[i] XOR b[i]
- *   Phase B: Brent-Kung up-sweep (compute carries at power-of-2 positions)
- *   Phase C: Brent-Kung down-sweep (fill in remaining carries)
- *   Phase D: Compute sum bits: b[i] = p[i] XOR carry[i-1]
- *   Phase E: Uncompute prefix tree (reverse of phases B+C)
- *   Phase F: Uncompute generate signals
  *
  * OWNERSHIP: Returns cached sequence - DO NOT FREE
  *
  * @param bits Width of operands (2-64; returns NULL for bits < 2)
- * @return Cached sequence, or NULL on invalid input/allocation failure
+ * @return NULL (CLA not yet implemented; falls through to RCA)
  */
 sequence_t *toffoli_QQ_add_bk(int bits) {
-    // CLA makes no sense for bits < 2
-    if (bits < 2 || bits > 64)
-        return NULL;
-
-    // Check cache
-    if (precompiled_toffoli_QQ_add_bk[bits] != NULL)
-        return precompiled_toffoli_QQ_add_bk[bits];
-
-// Qubit index macros (local to this function scope)
-// a-register: indices 0..bits-1
-// b-register: indices bits..2*bits-1
-// g-ancilla:  indices 2*bits..3*bits-2  (bits-1 qubits, g[0]..g[bits-2])
-// p-ancilla:  indices 3*bits-1..4*bits-3 (bits-1 qubits, p_anc[0]..p_anc[bits-2])
-#define A(i) (i)
-#define B(i) (bits + (i))
-#define G(i) (2 * bits + (i))
-#define P_ANC(i) (3 * bits - 1 + (i))
-
-    // We need to record operations for forward pass so we can reverse them
-    // for uncomputation. Use a dynamic array of operation records.
-
-    // First, figure out the prefix tree structure.
-    // The Brent-Kung tree for n=bits needs carries c[0]..c[bits-2].
-    // After Phase A: g[i] = a[i]*b[i], p[i] stored in b[i] (= a[i] XOR b[i])
-
-    // For the prefix tree, we track compound (G,P) pairs.
-    // Initially: (G[i], P[i]) = (g[i], p[i]) for each bit position i.
-    // After prefix: G[i] = carry into position i+1.
-
-    // The merge operation: (G_h, P_h) o (G_l, P_l) = (G_h XOR (P_h AND G_l), P_h AND P_l)
-    // In quantum:
-    //   G_h ^= P_h * G_l  ->  Toffoli(target=G_h_qubit, ctrl1=P_h_qubit, ctrl2=G_l_qubit)
-    //   P_new = P_h AND P_l -> Toffoli(target=p_anc, ctrl1=P_h_qubit, ctrl2=P_l_qubit)
-
-    // We need to track where G[i] and P[i] are stored at each tree level.
-    // Initial: G[i] in g[i] (ancilla), P[i] in b[i] (in-place)
-    // After merges: G values update in-place in g[i]; P compound values
-    //   go into p_anc qubits.
-
-    // Plan the tree operations as a list of merge ops.
-    // Each merge: (high_pos, low_pos, level) meaning
-    //   (G[high], P[high]) o= (G[low], P[low])
-
-    // Track where each position's G and P are stored
-    int g_loc[64];      // g_loc[i] = qubit index holding G for position i
-    int p_loc[64];      // p_loc[i] = qubit index holding P for position i
-    int p_anc_used = 0; // next free p_anc index
-
-    for (int i = 0; i < bits - 1; i++) {
-        g_loc[i] = G(i);
-        p_loc[i] = B(i);
-    }
-    // Position bits-1 doesn't need a carry (it's the MSB, carry out is discarded)
-    // But we still need p[bits-1] for sum computation. p_loc[bits-1] = B(bits-1).
-
-    // Collect tree operations for forward pass
-    // Max ops: about 2*bits for BK tree
-    typedef struct {
-        int high;     // high position index
-        int low;      // low position index
-        int g_high;   // qubit for G[high] (target of G merge)
-        int p_high;   // qubit for P[high] (control for G merge)
-        int g_low;    // qubit for G[low] (control for G merge)
-        int p_low;    // qubit for P[low] (control for P merge)
-        int p_result; // qubit for P merge result (-1 if no P merge needed)
-    } tree_op_t;
-
-    tree_op_t ops[256];
-    int num_ops = 0;
-
-    // === UP-SWEEP ===
-    // For level k = 0, 1, ..., ceil(log2(bits))-1:
-    //   stride = 2^(k+1)
-    //   For positions i where (i+1) % stride == 0 AND i < bits-1:
-    //     j = i - 2^k
-    //     Merge (G[i], P[i]) o= (G[j], P[j])
-
-    int max_level = 0;
-    {
-        int tmp = bits - 1;
-        while (tmp > 0) {
-            max_level++;
-            tmp >>= 1;
-        }
-    }
-
-    for (int k = 0; k < max_level; k++) {
-        int stride = 1 << (k + 1);
-        int half_stride = 1 << k;
-        for (int i = stride - 1; i < bits - 1; i += stride) {
-            int j = i - half_stride;
-            // Merge: (G[i], P[i]) o= (G[j], P[j])
-            tree_op_t op;
-            op.high = i;
-            op.low = j;
-            op.g_high = g_loc[i];
-            op.p_high = p_loc[i];
-            op.g_low = g_loc[j];
-            op.p_low = p_loc[j];
-
-            // G merge: g_loc[i] ^= p_loc[i] * g_loc[j]
-            // (Toffoli target=g_loc[i], ctrl1=p_loc[i], ctrl2=g_loc[j])
-
-            // P merge: need p_anc for compound propagate
-            // P_new = P[i] AND P[j]
-            // But we only need this if there will be further merges using this P.
-            // For the up-sweep, only the top-level merge doesn't need P update.
-            // For safety, always compute P merge (we'll uncompute later).
-            if (p_anc_used < bits - 1) {
-                op.p_result = P_ANC(p_anc_used);
-                p_anc_used++;
-            } else {
-                op.p_result = -1;
-            }
-
-            ops[num_ops++] = op;
-
-            // Update tracking: after merge, G[i] is updated in-place,
-            // P[i] moves to p_result (compound propagate)
-            // g_loc[i] stays the same (updated in-place)
-            if (op.p_result != -1) {
-                p_loc[i] = op.p_result;
-            }
-        }
-    }
-
-    // === DOWN-SWEEP ===
-    // Fill in carries for positions not computed in up-sweep.
-    // For level k = max_level-2 down to 0:
-    //   stride = 2^(k+1)
-    //   For positions i where (i+1) % stride == stride/2 AND i < bits-1
-    //     AND carry[i] was not already computed:
-    //     j = i - 2^k
-    //     Merge (G[i], P[i]) o= (G[j], P[j])
-
-    for (int k = max_level - 2; k >= 0; k--) {
-        int stride = 1 << (k + 1);
-        int half_stride = 1 << k;
-        // Down-sweep positions: positions at (stride + half_stride - 1), (2*stride + half_stride -
-        // 1), ... i.e., positions where (i+1) % stride == half_stride and i < bits-1
-        for (int i = stride + half_stride - 1; i < bits - 1; i += stride) {
-            int j = i - half_stride;
-            // Merge: (G[i], P[i]) o= (G[j], P[j])
-            tree_op_t op;
-            op.high = i;
-            op.low = j;
-            op.g_high = g_loc[i];
-            op.p_high = p_loc[i];
-            op.g_low = g_loc[j];
-            op.p_low = p_loc[j];
-
-            // P merge
-            if (p_anc_used < bits - 1) {
-                op.p_result = P_ANC(p_anc_used);
-                p_anc_used++;
-            } else {
-                op.p_result = -1;
-            }
-
-            ops[num_ops++] = op;
-
-            if (op.p_result != -1) {
-                p_loc[i] = op.p_result;
-            }
-        }
-    }
-
-    // Now calculate layer count:
-    // Phase A: 2 layers (g init + p init, all parallel within each)
-    // Phase B+C: num_ops * 2 layers (each merge = 1 G-merge Toffoli + 1 P-merge Toffoli)
-    // Phase D: 1 layer (all sum CNOTs in parallel)
-    // Phase E: num_ops * 2 layers (reverse of B+C)
-    // Phase F: 2 layers (reverse of A: uncompute g, then restore b)
-    // Total: 2 + 2*num_ops + 1 + 2*num_ops + 2 = 5 + 4*num_ops
-
-    int num_layers = 5 + 4 * num_ops + bits; // generous extra
-    sequence_t *seq = alloc_sequence(num_layers);
-    if (seq == NULL)
-        return NULL;
-
-    int layer = 0;
-
-    // === PHASE A: Compute initial generate and propagate ===
-
-    // g[i] = a[i] AND b[i] for i = 0..bits-2
-    for (int i = 0; i < bits - 1; i++) {
-        ccx(&seq->seq[layer][seq->gates_per_layer[layer]++], G(i), A(i), B(i));
-    }
-    layer++;
-
-    // p[i] = a[i] XOR b[i] stored in b[i] for i = 0..bits-1
-    for (int i = 0; i < bits; i++) {
-        cx(&seq->seq[layer][seq->gates_per_layer[layer]++], B(i), A(i));
-    }
-    layer++;
-
-    // === PHASE B+C: Forward prefix tree (up-sweep + down-sweep) ===
-    // Each merge op: G merge Toffoli, then P merge Toffoli (if needed)
-
-    for (int op_idx = 0; op_idx < num_ops; op_idx++) {
-        tree_op_t *op = &ops[op_idx];
-
-        // G merge: g[high] ^= p[high] * g[low]
-        ccx(&seq->seq[layer][seq->gates_per_layer[layer]++], op->g_high, op->p_high, op->g_low);
-        layer++;
-
-        // P merge: p_result = p[high] AND p[low]
-        if (op->p_result != -1) {
-            ccx(&seq->seq[layer][seq->gates_per_layer[layer]++], op->p_result, op->p_high,
-                op->p_low);
-            layer++;
-        }
-    }
-
-    // === PHASE D: Compute sum bits ===
-    // sum[0] = p[0] (already in b[0] from Phase A, no carry in)
-    // sum[i] = p[i] XOR carry[i-1] for i = 1..bits-1
-    // carry[i-1] is now in g_loc[i-1] (which is G(i-1) for most positions)
-    // Actually after the tree, g_loc[i] holds the carry into position i+1.
-    // So carry into position i = g_loc[i-1].
-
-    for (int i = 1; i < bits; i++) {
-        cx(&seq->seq[layer][seq->gates_per_layer[layer]++], B(i), g_loc[i - 1]);
-    }
-    layer++;
-
-    // === PHASE E: Uncompute prefix tree (reverse of B+C) ===
-    // Reverse the ops in reverse order
-
-    for (int op_idx = num_ops - 1; op_idx >= 0; op_idx--) {
-        tree_op_t *op = &ops[op_idx];
-
-        // Reverse P merge first (if it was done)
-        if (op->p_result != -1) {
-            ccx(&seq->seq[layer][seq->gates_per_layer[layer]++], op->p_result, op->p_high,
-                op->p_low);
-            layer++;
-        }
-
-        // Reverse G merge
-        ccx(&seq->seq[layer][seq->gates_per_layer[layer]++], op->g_high, op->p_high, op->g_low);
-        layer++;
-    }
-
-    // === PHASE F: Uncompute initial generate and restore b ===
-
-    // Undo p[i]: CNOT(target=b[i], control=a[i]) -- self-inverse
-    for (int i = 0; i < bits; i++) {
-        cx(&seq->seq[layer][seq->gates_per_layer[layer]++], B(i), A(i));
-    }
-    layer++;
-
-    // Undo g[i]: Toffoli(target=g[i], ctrl1=a[i], ctrl2=b[i]) -- self-inverse
-    // BUT b[i] now holds a[i]+b[i] (sum), not original b[i]!
-    // Wait -- we need to uncompute g[i] = a[i] AND b[i] where b[i] was the ORIGINAL value.
-    // After Phase D, b[i] = sum[i]. After undoing the CNOT (Phase F step 1), b[i] = original b[i].
-    // So the order is: first undo CNOT (restores b), then undo Toffoli (uncomputes g).
-    for (int i = 0; i < bits - 1; i++) {
-        ccx(&seq->seq[layer][seq->gates_per_layer[layer]++], G(i), A(i), B(i));
-    }
-    layer++;
-
-    // Now b[i] = original b[i], but we want b[i] = sum[i] = a[i] + b[i].
-    // Re-apply the propagate CNOT to get the sum back.
-    for (int i = 0; i < bits; i++) {
-        cx(&seq->seq[layer][seq->gates_per_layer[layer]++], B(i), A(i));
-    }
-    layer++;
-
-    seq->used_layer = layer;
-
-#undef A
-#undef B
-#undef G
-#undef P_ANC
-
-    precompiled_toffoli_QQ_add_bk[bits] = seq;
-    return seq;
+    (void)bits; // suppress unused parameter warning
+    // CLA algorithm not yet implemented -- fall through to RCA
+    return NULL;
 }
 
 void toffoli_sequence_free(sequence_t *seq) {
