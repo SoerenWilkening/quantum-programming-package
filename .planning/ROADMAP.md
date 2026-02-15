@@ -147,11 +147,11 @@ Plans:
   2. `CQ_mul_toffoli(bits, val)` computes the product of a quantum register and a classical value, verified for all input pairs at widths 1-3
   3. Multiplication circuits contain only CCX/CX/X gates (no CP/H gates) when fault_tolerant mode is active
   4. `a * b` and `a *= b` operators dispatch to Toffoli multiplication when fault_tolerant mode is active
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 68-01: TBD
-- [ ] 68-02: TBD
+- [ ] 68-01-PLAN.md -- Implement ToffoliMultiplication.c (QQ/CQ shift-and-add) and wire Toffoli dispatch into hot_path_mul.c
+- [ ] 68-02-PLAN.md -- Exhaustive verification tests for Toffoli multiplication (widths 1-3), gate purity, operator dispatch
 
 ### Phase 69: Controlled Multiplication & Division
 **Goal**: Users can perform controlled multiplication and division/modulo using Toffoli-based circuits, completing the full arithmetic surface
