@@ -169,6 +169,64 @@ sequence_t *toffoli_CQ_add_bk(int bits, int64_t value);
 sequence_t *toffoli_CQ_add_ks(int bits, int64_t value);
 
 // ============================================================================
+// Controlled Carry Look-Ahead Addition (Phase 71, Plan 03)
+// ============================================================================
+
+/**
+ * @brief Controlled Brent-Kung CLA QQ addition: b += a, controlled.
+ *
+ * STUB: Returns NULL -- same ancilla uncomputation impossibility as uncontrolled BK.
+ * Dispatch silently falls through to controlled CDKM RCA adder.
+ *
+ * @param bits Width of operands (2-64; returns NULL for bits < 2)
+ * @return NULL (controlled CLA not yet implemented; falls through to RCA)
+ *
+ * OWNERSHIP: Returns cached sequence - DO NOT FREE
+ */
+sequence_t *toffoli_cQQ_add_bk(int bits);
+
+/**
+ * @brief Controlled Kogge-Stone CLA QQ addition: b += a, controlled.
+ *
+ * STUB: Returns NULL -- same ancilla uncomputation impossibility as uncontrolled KS.
+ * Dispatch silently falls through to controlled CDKM RCA adder.
+ *
+ * @param bits Width of operands (2-64; returns NULL for bits < 2)
+ * @return NULL (controlled CLA not yet implemented; falls through to RCA)
+ *
+ * OWNERSHIP: Returns cached sequence - DO NOT FREE
+ */
+sequence_t *toffoli_cQQ_add_ks(int bits);
+
+/**
+ * @brief Controlled Brent-Kung CLA CQ addition: self += classical_value, controlled.
+ *
+ * STUB: Returns NULL -- controlled BK CLA not implemented.
+ * Dispatch silently falls through to controlled CDKM RCA CQ adder.
+ *
+ * @param bits Width of target operand (1-64)
+ * @param value Classical integer value to add
+ * @return NULL (falls through to controlled RCA CQ)
+ *
+ * OWNERSHIP: Caller owns returned sequence_t*, must free via toffoli_sequence_free()
+ */
+sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value);
+
+/**
+ * @brief Controlled Kogge-Stone CLA CQ addition: self += classical_value, controlled.
+ *
+ * STUB: Returns NULL -- controlled KS CLA not implemented.
+ * Dispatch silently falls through to controlled CDKM RCA CQ adder.
+ *
+ * @param bits Width of target operand (1-64)
+ * @param value Classical integer value to add
+ * @return NULL (falls through to controlled RCA CQ)
+ *
+ * OWNERSHIP: Caller owns returned sequence_t*, must free via toffoli_sequence_free()
+ */
+sequence_t *toffoli_cCQ_add_ks(int bits, int64_t value);
+
+// ============================================================================
 // Toffoli Multiplication (Phase 68)
 // ============================================================================
 

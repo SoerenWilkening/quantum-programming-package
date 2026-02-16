@@ -29,6 +29,8 @@ static sequence_t *precompiled_toffoli_QQ_add[65] = {NULL};
 static sequence_t *precompiled_toffoli_cQQ_add[65] = {NULL};
 static sequence_t *precompiled_toffoli_QQ_add_bk[65] = {NULL};
 static sequence_t *precompiled_toffoli_QQ_add_ks[65] = {NULL};
+static sequence_t *precompiled_toffoli_cQQ_add_bk[65] = {NULL};
+static sequence_t *precompiled_toffoli_cQQ_add_ks[65] = {NULL};
 
 // No cache for CQ/cCQ: value-dependent sequences, generated fresh each call.
 
@@ -794,6 +796,149 @@ sequence_t *toffoli_CQ_add_ks(int bits, int64_t value) {
     (void)bits;
     (void)value;
     // KS QQ CLA not implemented -- fall through to RCA CQ
+    return NULL;
+}
+
+// ============================================================================
+// Controlled CLA Adders (Phase 71, Plan 03)
+// ============================================================================
+
+/**
+ * @brief Controlled Brent-Kung CLA QQ adder: b += a, controlled by ext_ctrl.
+ *
+ * STUB: Returns NULL to fall through to controlled RCA (CDKM) adder.
+ *
+ * The controlled variant inherits the same fundamental ancilla uncomputation
+ * impossibility as the uncontrolled toffoli_QQ_add_bk(): after computing
+ * carries via the prefix tree and extracting sums, the tree cannot be
+ * reversed because the propagate controls (stored in b) have been modified
+ * by the sum computation. Adding a control qubit does not resolve this
+ * issue -- it merely conditions all gates on ext_ctrl being |1>.
+ *
+ * When this function returns NULL, the dispatch in hot_path_add.c
+ * silently falls through to the proven controlled CDKM RCA adder
+ * (toffoli_cQQ_add).
+ *
+ * Qubit layout (for future implementation):
+ *   [0..bits-1]            = register a (source, preserved)
+ *   [bits..2*bits-1]       = register b (target, gets a+b)
+ *   [2*bits..4*bits-3]     = 2*(bits-1) ancilla qubits
+ *   [4*bits-2]             = external control qubit
+ *   Total: 4*bits - 1 qubits
+ *
+ * OWNERSHIP: Returns cached sequence - DO NOT FREE
+ *
+ * @param bits Width of operands (2-64; returns NULL for bits < 2)
+ * @return NULL (controlled CLA not yet implemented; falls through to RCA)
+ */
+sequence_t *toffoli_cQQ_add_bk(int bits) {
+    (void)bits; // suppress unused parameter warning
+    // Controlled CLA algorithm not yet implemented -- fall through to controlled RCA
+    return NULL;
+}
+
+/**
+ * @brief Controlled Kogge-Stone CLA QQ adder: b += a, controlled by ext_ctrl.
+ *
+ * STUB: Returns NULL to fall through to controlled RCA (CDKM) adder.
+ *
+ * The controlled variant inherits the same fundamental ancilla uncomputation
+ * impossibility as the uncontrolled toffoli_QQ_add_ks(). The Kogge-Stone
+ * tree uses more ancilla (~n*log(n)) but fewer depth levels than Brent-Kung.
+ * However, the chicken-and-egg uncomputation problem is identical, and
+ * adding a control qubit does not resolve it.
+ *
+ * When this function returns NULL, the dispatch in hot_path_add.c
+ * silently falls through to the proven controlled CDKM RCA adder
+ * (toffoli_cQQ_add).
+ *
+ * Qubit layout (for future implementation):
+ *   [0..bits-1]            = register a (source, preserved)
+ *   [bits..2*bits-1]       = register b (target, gets a+b)
+ *   [2*bits..]             = ks_ancilla_count(bits) ancilla qubits
+ *   [2*bits+ks_anc]        = external control qubit
+ *   Total: 2*bits + ks_ancilla_count(bits) + 1 qubits
+ *
+ * OWNERSHIP: Returns cached sequence - DO NOT FREE
+ *
+ * @param bits Width of operands (2-64; returns NULL for bits < 2)
+ * @return NULL (controlled CLA not yet implemented; falls through to RCA)
+ */
+sequence_t *toffoli_cQQ_add_ks(int bits) {
+    (void)bits; // suppress unused parameter warning
+    // Controlled KS CLA not implemented -- fall through to controlled RCA
+    return NULL;
+}
+
+/**
+ * @brief Controlled Brent-Kung CLA CQ adder: self += classical_value, controlled.
+ *
+ * STUB: Returns NULL to fall through to controlled RCA (CDKM) CQ adder.
+ *
+ * Would use the controlled temp-register approach (same as toffoli_cCQ_add):
+ * 1. CX-init temp register with classical value bits (controlled by ext_ctrl)
+ * 2. Run toffoli_cQQ_add_bk() on temp + self registers
+ * 3. CX-cleanup temp register (controlled by ext_ctrl)
+ *
+ * Since toffoli_cQQ_add_bk() returns NULL (ancilla uncomputation
+ * impossibility), this function also returns NULL. The CQ dispatch
+ * in hot_path_add.c silently falls through to the proven controlled
+ * CDKM RCA CQ adder (toffoli_cCQ_add).
+ *
+ * Qubit layout (for future implementation):
+ *   [0..bits-1]       = temp register (controlled init to classical value)
+ *   [bits..2*bits-1]  = self register (target, gets self + value)
+ *   [2*bits..4*bits-3] = CLA ancilla (2*(bits-1) for BK)
+ *   [4*bits-2]         = external control qubit
+ *   Total: 4*bits - 1 qubits
+ *
+ * OWNERSHIP: Caller owns returned sequence_t*, must free via toffoli_sequence_free()
+ * NOT cached (value-dependent).
+ *
+ * @param bits Width of target operand (1-64)
+ * @param value Classical integer value to add
+ * @return NULL (controlled BK CLA not implemented; falls through to RCA)
+ */
+sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value) {
+    (void)bits;
+    (void)value;
+    // Controlled BK CLA CQ not implemented -- fall through to controlled RCA CQ
+    return NULL;
+}
+
+/**
+ * @brief Controlled Kogge-Stone CLA CQ adder: self += classical_value, controlled.
+ *
+ * STUB: Returns NULL to fall through to controlled RCA (CDKM) CQ adder.
+ *
+ * Would use the controlled temp-register approach (same as toffoli_cCQ_add):
+ * 1. CX-init temp register with classical value bits (controlled by ext_ctrl)
+ * 2. Run toffoli_cQQ_add_ks() on temp + self registers
+ * 3. CX-cleanup temp register (controlled by ext_ctrl)
+ *
+ * Since toffoli_cQQ_add_ks() returns NULL (ancilla uncomputation
+ * impossibility), this function also returns NULL. The CQ dispatch
+ * in hot_path_add.c silently falls through to the proven controlled
+ * CDKM RCA CQ adder (toffoli_cCQ_add).
+ *
+ * Qubit layout (for future implementation):
+ *   [0..bits-1]       = temp register (controlled init to classical value)
+ *   [bits..2*bits-1]  = self register (target, gets self + value)
+ *   [2*bits..]        = CLA ancilla (ks_ancilla_count(bits) for KS)
+ *   [2*bits+ks_anc]   = external control qubit
+ *   Total: 2*bits + ks_ancilla_count(bits) + 1 qubits
+ *
+ * OWNERSHIP: Caller owns returned sequence_t*, must free via toffoli_sequence_free()
+ * NOT cached (value-dependent).
+ *
+ * @param bits Width of target operand (1-64)
+ * @param value Classical integer value to add
+ * @return NULL (controlled KS CLA not implemented; falls through to RCA)
+ */
+sequence_t *toffoli_cCQ_add_ks(int bits, int64_t value) {
+    (void)bits;
+    (void)value;
+    // Controlled KS CLA CQ not implemented -- fall through to controlled RCA CQ
     return NULL;
 }
 

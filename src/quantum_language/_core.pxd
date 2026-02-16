@@ -45,6 +45,10 @@ cdef extern from "toffoli_arithmetic_ops.h":
 	sequence_t *toffoli_QQ_add_ks(int bits)
 	sequence_t *toffoli_CQ_add_bk(int bits, int64_t value)
 	sequence_t *toffoli_CQ_add_ks(int bits, int64_t value)
+	sequence_t *toffoli_cQQ_add_bk(int bits)
+	sequence_t *toffoli_cQQ_add_ks(int bits)
+	sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value)
+	sequence_t *toffoli_cCQ_add_ks(int bits, int64_t value)
 	void toffoli_sequence_free(sequence_t *seq)
 
 cdef extern from "Integer.h":
