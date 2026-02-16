@@ -155,12 +155,11 @@ sequence_t *toffoli_QQ_add_ks(int bits);
 /**
  * @brief Brent-Kung CLA CQ addition: self += classical_value.
  *
- * STUB: Returns NULL -- BK QQ CLA not implemented.
- * Dispatch silently falls through to CDKM RCA CQ adder.
+ * Uses sequence-copy from cached QQ BK with X-init/cleanup for classical value.
  *
- * @param bits Width of target operand (1-64)
+ * @param bits Width of target operand (2-64; returns NULL for bits < 2)
  * @param value Classical integer value to add
- * @return NULL (falls through to RCA CQ)
+ * @return Fresh sequence, or NULL on failure
  *
  * OWNERSHIP: Caller owns returned sequence_t*, must free via toffoli_sequence_free()
  */
@@ -185,13 +184,13 @@ sequence_t *toffoli_CQ_add_ks(int bits, int64_t value);
 // ============================================================================
 
 /**
- * @brief Controlled Brent-Kung CLA QQ addition: b += a, controlled.
+ * @brief Controlled Brent-Kung CLA QQ addition: b += a, controlled by ext_ctrl.
  *
- * STUB: Returns NULL -- same ancilla uncomputation impossibility as uncontrolled BK.
- * Dispatch silently falls through to controlled CDKM RCA adder.
+ * Sequence-copy from cached QQ BK with ext_ctrl injected into every gate.
+ * ext_ctrl placed at qubit index 2*bits + bk_cla_ancilla_count(bits).
  *
  * @param bits Width of operands (2-64; returns NULL for bits < 2)
- * @return NULL (controlled CLA not yet implemented; falls through to RCA)
+ * @return Cached sequence, or NULL on failure
  *
  * OWNERSHIP: Returns cached sequence - DO NOT FREE
  */
@@ -213,12 +212,12 @@ sequence_t *toffoli_cQQ_add_ks(int bits);
 /**
  * @brief Controlled Brent-Kung CLA CQ addition: self += classical_value, controlled.
  *
- * STUB: Returns NULL -- controlled BK CLA not implemented.
- * Dispatch silently falls through to controlled CDKM RCA CQ adder.
+ * Sequence-copy from cached cQQ BK with CX-init/cleanup for classical value.
+ * ext_ctrl placed at qubit index 2*bits + bk_cla_ancilla_count(bits).
  *
- * @param bits Width of target operand (1-64)
+ * @param bits Width of target operand (2-64; returns NULL for bits < 2)
  * @param value Classical integer value to add
- * @return NULL (falls through to controlled RCA CQ)
+ * @return Fresh sequence, or NULL on failure
  *
  * OWNERSHIP: Caller owns returned sequence_t*, must free via toffoli_sequence_free()
  */

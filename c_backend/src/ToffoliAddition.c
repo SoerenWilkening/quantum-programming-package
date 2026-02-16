@@ -1021,36 +1021,103 @@ sequence_t *toffoli_QQ_add_ks(int bits) {
 /**
  * @brief Brent-Kung CLA CQ adder: self += classical_value.
  *
- * STUB: Returns NULL to fall through to RCA (CDKM) CQ adder.
- *
- * Would use the temp-register approach (same as toffoli_CQ_add):
+ * Uses the temp-register approach (same as toffoli_CQ_add):
  * 1. X-init temp register with classical value bits
- * 2. Run toffoli_QQ_add_bk() on temp + self registers
+ * 2. Copy gates from cached QQ BK sequence (same qubit indices)
  * 3. X-cleanup temp register
  *
- * Since toffoli_QQ_add_bk() returns NULL (ancilla uncomputation
- * impossibility), this function also returns NULL. The CQ dispatch
- * in hot_path_add.c silently falls through to the proven CDKM
- * RCA CQ adder (toffoli_CQ_add).
- *
- * Qubit layout (for future implementation):
+ * Qubit layout:
  *   [0..bits-1]       = temp register (initialized to classical value, cleaned to |0>)
  *   [bits..2*bits-1]  = self register (target, gets self + value)
- *   [2*bits..4*bits-3] = CLA ancilla (2*(bits-1) for BK)
- *   Total: 4*bits - 2 qubits
+ *   [2*bits..end]     = CLA ancilla (bk_cla_ancilla_count(bits))
+ *   Total: 2*bits + bk_cla_ancilla_count(bits)
  *
  * OWNERSHIP: Caller owns returned sequence_t*, must free via toffoli_sequence_free()
  * NOT cached (value-dependent).
  *
  * @param bits Width of target operand (1-64)
  * @param value Classical integer value to add
- * @return NULL (BK QQ CLA not implemented; falls through to RCA)
+ * @return Fresh sequence, or NULL for bits < 2 or allocation failure
  */
 sequence_t *toffoli_CQ_add_bk(int bits, int64_t value) {
-    (void)bits;
-    (void)value;
-    // BK QQ CLA not implemented -- fall through to RCA CQ
-    return NULL;
+    if (bits < 2 || bits > 64)
+        return NULL;
+
+    /* Get cached QQ BK sequence */
+    sequence_t *seq_qq = toffoli_QQ_add_bk(bits);
+    if (seq_qq == NULL)
+        return NULL;
+
+    /* Convert value to binary (MSB-first: bin[0]=MSB, bin[bits-1]=LSB) */
+    int *bin = two_complement(value, bits);
+    if (bin == NULL)
+        return NULL;
+
+    /* Count number of 1-bits in classical value */
+    int x_count = 0;
+    for (int i = 0; i < bits; i++) {
+        if (bin[bits - 1 - i] == 1) /* LSB-first: bit i */
+            x_count++;
+    }
+
+    /* Allocate new sequence: X-init + QQ gates + X-cleanup */
+    int num_layers = 2 * x_count + (int)seq_qq->num_layer;
+    sequence_t *seq = alloc_sequence(num_layers);
+    if (seq == NULL) {
+        free(bin);
+        return NULL;
+    }
+
+    int layer = 0;
+
+    /* Phase 1: X-init temp register */
+    for (int i = 0; i < bits; i++) {
+        if (bin[bits - 1 - i] == 1) {
+            x(&seq->seq[layer][seq->gates_per_layer[layer]++], i);
+            layer++;
+        }
+    }
+
+    /* Phase 2: Copy QQ BK gates (qubit indices match: temp=a, self=b, ancilla) */
+    for (num_t l = 0; l < seq_qq->num_layer; l++) {
+        for (num_t g = 0; g < seq_qq->gates_per_layer[l]; g++) {
+            gate_t *src = &seq_qq->seq[l][g];
+            gate_t *dst = &seq->seq[layer][seq->gates_per_layer[layer]];
+            /* Copy gate fields */
+            dst->Gate = src->Gate;
+            dst->Target = src->Target;
+            dst->GateValue = src->GateValue;
+            dst->NumControls = src->NumControls;
+            dst->NumBasisGates = src->NumBasisGates;
+            dst->large_control = NULL;
+            if (src->NumControls <= 2) {
+                dst->Control[0] = src->Control[0];
+                dst->Control[1] = src->Control[1];
+            } else if (src->large_control != NULL) {
+                dst->large_control = malloc(src->NumControls * sizeof(qubit_t));
+                if (dst->large_control != NULL) {
+                    for (num_t c = 0; c < src->NumControls; c++)
+                        dst->large_control[c] = src->large_control[c];
+                    dst->Control[0] = src->Control[0];
+                    dst->Control[1] = src->Control[1];
+                }
+            }
+            seq->gates_per_layer[layer]++;
+        }
+        layer++;
+    }
+
+    /* Phase 3: X-cleanup temp register (X is self-inverse) */
+    for (int i = 0; i < bits; i++) {
+        if (bin[bits - 1 - i] == 1) {
+            x(&seq->seq[layer][seq->gates_per_layer[layer]++], i);
+            layer++;
+        }
+    }
+
+    seq->used_layer = layer;
+    free(bin);
+    return seq;
 }
 
 /**
@@ -1095,35 +1162,89 @@ sequence_t *toffoli_CQ_add_ks(int bits, int64_t value) {
 /**
  * @brief Controlled Brent-Kung CLA QQ adder: b += a, controlled by ext_ctrl.
  *
- * STUB: Returns NULL to fall through to controlled RCA (CDKM) adder.
+ * Every gate in the uncontrolled QQ BK sequence gets an additional control
+ * qubit (ext_ctrl):
+ *   - X (0 controls) -> CX(target, ext_ctrl)
+ *   - CX (1 control) -> CCX(target, control, ext_ctrl)
+ *   - CCX (2 controls) -> MCX(target, [ctrl1, ctrl2, ext_ctrl])
  *
- * The controlled variant inherits the same fundamental ancilla uncomputation
- * impossibility as the uncontrolled toffoli_QQ_add_bk(): after computing
- * carries via the prefix tree and extracting sums, the tree cannot be
- * reversed because the propagate controls (stored in b) have been modified
- * by the sum computation. Adding a control qubit does not resolve this
- * issue -- it merely conditions all gates on ext_ctrl being |1>.
- *
- * When this function returns NULL, the dispatch in hot_path_add.c
- * silently falls through to the proven controlled CDKM RCA adder
- * (toffoli_cQQ_add).
- *
- * Qubit layout (for future implementation):
- *   [0..bits-1]            = register a (source, preserved)
- *   [bits..2*bits-1]       = register b (target, gets a+b)
- *   [2*bits..4*bits-3]     = 2*(bits-1) ancilla qubits
- *   [4*bits-2]             = external control qubit
- *   Total: 4*bits - 1 qubits
+ * Qubit layout:
+ *   [0..n-1]              = register a (source, preserved)
+ *   [n..2n-1]             = register b (target, gets a+b)
+ *   [2n..2n+anc-1]        = CLA ancilla (same count as uncontrolled BK)
+ *   [2n+anc]              = ext_ctrl (external control qubit)
  *
  * OWNERSHIP: Returns cached sequence - DO NOT FREE
  *
  * @param bits Width of operands (2-64; returns NULL for bits < 2)
- * @return NULL (controlled CLA not yet implemented; falls through to RCA)
+ * @return Cached sequence, or NULL for bits < 2 or allocation failure
  */
 sequence_t *toffoli_cQQ_add_bk(int bits) {
-    (void)bits; // suppress unused parameter warning
-    // Controlled CLA algorithm not yet implemented -- fall through to controlled RCA
-    return NULL;
+    if (bits < 2 || bits > 64)
+        return NULL;
+
+    /* Check cache */
+    if (precompiled_toffoli_cQQ_add_bk[bits] != NULL)
+        return precompiled_toffoli_cQQ_add_bk[bits];
+
+    /* Get cached QQ BK sequence */
+    sequence_t *seq_qq = toffoli_QQ_add_bk(bits);
+    if (seq_qq == NULL)
+        return NULL;
+
+    /* ext_ctrl qubit index = 2*bits + bk_cla_ancilla_count(bits) */
+    int ext_ctrl = 2 * bits + bk_cla_ancilla_count(bits);
+
+    /* Allocate new sequence with same layer count */
+    sequence_t *seq = alloc_sequence((int)seq_qq->num_layer);
+    if (seq == NULL)
+        return NULL;
+
+    int layer = 0;
+
+    /* Copy each gate from QQ sequence, injecting ext_ctrl */
+    for (num_t l = 0; l < seq_qq->num_layer; l++) {
+        for (num_t g = 0; g < seq_qq->gates_per_layer[l]; g++) {
+            gate_t *src = &seq_qq->seq[l][g];
+
+            if (src->NumControls == 0) {
+                /* X -> CX with ext_ctrl */
+                cx(&seq->seq[layer][seq->gates_per_layer[layer]++], src->Target, (qubit_t)ext_ctrl);
+            } else if (src->NumControls == 1) {
+                /* CX -> CCX with [original_ctrl, ext_ctrl] */
+                ccx(&seq->seq[layer][seq->gates_per_layer[layer]++], src->Target, src->Control[0],
+                    (qubit_t)ext_ctrl);
+            } else if (src->NumControls == 2) {
+                /* CCX -> MCX with [ctrl1, ctrl2, ext_ctrl] */
+                qubit_t ctrls[3] = {src->Control[0], src->Control[1], (qubit_t)ext_ctrl};
+                mcx(&seq->seq[layer][seq->gates_per_layer[layer]++], src->Target, ctrls, 3);
+            } else {
+                /* MCX with n controls -> MCX with n+1 controls */
+                num_t new_count = src->NumControls + 1;
+                qubit_t *ctrls = malloc(new_count * sizeof(qubit_t));
+                if (ctrls != NULL) {
+                    if (src->large_control != NULL) {
+                        for (num_t c = 0; c < src->NumControls; c++)
+                            ctrls[c] = src->large_control[c];
+                    } else {
+                        for (num_t c = 0; c < src->NumControls && c < 2; c++)
+                            ctrls[c] = src->Control[c];
+                    }
+                    ctrls[src->NumControls] = (qubit_t)ext_ctrl;
+                    mcx(&seq->seq[layer][seq->gates_per_layer[layer]++], src->Target, ctrls,
+                        new_count);
+                    free(ctrls);
+                }
+            }
+        }
+        layer++;
+    }
+
+    seq->used_layer = layer;
+
+    /* Cache and return */
+    precompiled_toffoli_cQQ_add_bk[bits] = seq;
+    return seq;
 }
 
 /**
@@ -1162,37 +1283,107 @@ sequence_t *toffoli_cQQ_add_ks(int bits) {
 /**
  * @brief Controlled Brent-Kung CLA CQ adder: self += classical_value, controlled.
  *
- * STUB: Returns NULL to fall through to controlled RCA (CDKM) CQ adder.
+ * Combines CQ (X-init/cleanup) with controlled gates:
+ * 1. Controlled X-init: CX(target=temp[i], control=ext_ctrl) for set bits
+ * 2. Copy controlled QQ BK gates from cached cQQ sequence
+ * 3. Controlled X-cleanup: same CX gates as init
  *
- * Would use the controlled temp-register approach (same as toffoli_cCQ_add):
- * 1. CX-init temp register with classical value bits (controlled by ext_ctrl)
- * 2. Run toffoli_cQQ_add_bk() on temp + self registers
- * 3. CX-cleanup temp register (controlled by ext_ctrl)
- *
- * Since toffoli_cQQ_add_bk() returns NULL (ancilla uncomputation
- * impossibility), this function also returns NULL. The CQ dispatch
- * in hot_path_add.c silently falls through to the proven controlled
- * CDKM RCA CQ adder (toffoli_cCQ_add).
- *
- * Qubit layout (for future implementation):
- *   [0..bits-1]       = temp register (controlled init to classical value)
- *   [bits..2*bits-1]  = self register (target, gets self + value)
- *   [2*bits..4*bits-3] = CLA ancilla (2*(bits-1) for BK)
- *   [4*bits-2]         = external control qubit
- *   Total: 4*bits - 1 qubits
+ * Qubit layout:
+ *   [0..bits-1]           = temp register (controlled init to classical value)
+ *   [bits..2*bits-1]      = self register (target, gets self + value)
+ *   [2*bits..end-1]       = CLA ancilla (bk_cla_ancilla_count(bits))
+ *   [end]                 = external control qubit
+ *   Total: 2*bits + bk_cla_ancilla_count(bits) + 1
  *
  * OWNERSHIP: Caller owns returned sequence_t*, must free via toffoli_sequence_free()
  * NOT cached (value-dependent).
  *
  * @param bits Width of target operand (1-64)
  * @param value Classical integer value to add
- * @return NULL (controlled BK CLA not implemented; falls through to RCA)
+ * @return Fresh sequence, or NULL for bits < 2 or allocation failure
  */
 sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value) {
-    (void)bits;
-    (void)value;
-    // Controlled BK CLA CQ not implemented -- fall through to controlled RCA CQ
-    return NULL;
+    if (bits < 2 || bits > 64)
+        return NULL;
+
+    /* Get cached controlled QQ BK sequence */
+    sequence_t *seq_cqq = toffoli_cQQ_add_bk(bits);
+    if (seq_cqq == NULL)
+        return NULL;
+
+    /* ext_ctrl qubit index (same position as in cQQ) */
+    int ext_ctrl = 2 * bits + bk_cla_ancilla_count(bits);
+
+    /* Convert value to binary (MSB-first: bin[0]=MSB, bin[bits-1]=LSB) */
+    int *bin = two_complement(value, bits);
+    if (bin == NULL)
+        return NULL;
+
+    /* Count number of 1-bits in classical value */
+    int x_count = 0;
+    for (int i = 0; i < bits; i++) {
+        if (bin[bits - 1 - i] == 1)
+            x_count++;
+    }
+
+    /* Allocate: CX-init + cQQ gates + CX-cleanup */
+    int num_layers = 2 * x_count + (int)seq_cqq->num_layer;
+    sequence_t *seq = alloc_sequence(num_layers);
+    if (seq == NULL) {
+        free(bin);
+        return NULL;
+    }
+
+    int layer = 0;
+
+    /* Phase 1: Controlled X-init temp register (CX with ext_ctrl) */
+    for (int i = 0; i < bits; i++) {
+        if (bin[bits - 1 - i] == 1) {
+            cx(&seq->seq[layer][seq->gates_per_layer[layer]++], i, (qubit_t)ext_ctrl);
+            layer++;
+        }
+    }
+
+    /* Phase 2: Copy controlled QQ BK gates (qubit indices match) */
+    for (num_t l = 0; l < seq_cqq->num_layer; l++) {
+        for (num_t g = 0; g < seq_cqq->gates_per_layer[l]; g++) {
+            gate_t *src = &seq_cqq->seq[l][g];
+            gate_t *dst = &seq->seq[layer][seq->gates_per_layer[layer]];
+            /* Copy gate fields */
+            dst->Gate = src->Gate;
+            dst->Target = src->Target;
+            dst->GateValue = src->GateValue;
+            dst->NumControls = src->NumControls;
+            dst->NumBasisGates = src->NumBasisGates;
+            dst->large_control = NULL;
+            if (src->NumControls <= 2) {
+                dst->Control[0] = src->Control[0];
+                dst->Control[1] = src->Control[1];
+            } else if (src->large_control != NULL) {
+                dst->large_control = malloc(src->NumControls * sizeof(qubit_t));
+                if (dst->large_control != NULL) {
+                    for (num_t c = 0; c < src->NumControls; c++)
+                        dst->large_control[c] = src->large_control[c];
+                    dst->Control[0] = src->Control[0];
+                    dst->Control[1] = src->Control[1];
+                }
+            }
+            seq->gates_per_layer[layer]++;
+        }
+        layer++;
+    }
+
+    /* Phase 3: Controlled X-cleanup temp register */
+    for (int i = 0; i < bits; i++) {
+        if (bin[bits - 1 - i] == 1) {
+            cx(&seq->seq[layer][seq->gates_per_layer[layer]++], i, (qubit_t)ext_ctrl);
+            layer++;
+        }
+    }
+
+    seq->used_layer = layer;
+    free(bin);
+    return seq;
 }
 
 /**
