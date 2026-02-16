@@ -194,13 +194,15 @@ Plans:
   2. CLA adder produces identical results to RCA adder for all input pairs at widths 1-6
   3. CLA circuit depth is measurably less than RCA circuit depth for widths >= 8
   4. All 2n-2 ancilla qubits are correctly uncomputed to |0> and freed after each CLA operation
-**Plans**: 4 plans
+**Plans**: 6 plans
 
 Plans:
-- [ ] 71-01-PLAN.md -- Infrastructure (cla_override, option plumbing) + Brent-Kung QQ adder + QQ dispatch + smoke tests
-- [ ] 71-02-PLAN.md -- Kogge-Stone QQ adder + BK/KS CQ adders + CQ dispatch + variant selection tests
-- [ ] 71-03-PLAN.md -- Controlled CLA variants (cQQ/cCQ for BK+KS) + controlled dispatch + controlled tests
-- [ ] 71-04-PLAN.md -- Comprehensive verification: CLA vs RCA equivalence, depth comparison, ancilla cleanup, gate purity
+- [x] 71-01-PLAN.md -- Infrastructure (cla_override, option plumbing) + Brent-Kung QQ adder stub + QQ dispatch + smoke tests
+- [x] 71-02-PLAN.md -- Kogge-Stone QQ adder stub + BK/KS CQ stubs + CQ dispatch + variant selection tests
+- [x] 71-03-PLAN.md -- Controlled CLA stubs (cQQ/cCQ for BK+KS) + controlled dispatch + controlled tests
+- [x] 71-04-PLAN.md -- Comprehensive verification: CLA vs RCA equivalence, depth comparison (xfail), ancilla cleanup, gate purity
+- [ ] 71-05-PLAN.md -- Gap closure: Implement working BK QQ CLA adder with prefix tree + update dispatch ancilla count
+- [ ] 71-06-PLAN.md -- Gap closure: Wire BK CQ/cQQ/cCQ variants + remove depth comparison xfail markers
 
 ### Phase 72: Performance Polish
 **Goal**: Toffoli arithmetic is optimized for production use with hardcoded sequences, resource reporting, and gate count reduction
@@ -254,7 +256,7 @@ Phases execute in numeric order: 65 -> 66 -> 67 -> 68 -> 69 -> 70 -> 71 -> 72
 | 68. Schoolbook Multiplication | v3.0 | 2/2 | Complete | 2026-02-15 |
 | 69. Controlled Multiplication & Division | v3.0 | 3/3 | Complete | 2026-02-15 |
 | 70. Cross-Backend Verification | v3.0 | 2/2 | Complete | 2026-02-15 |
-| 71. Carry Look-Ahead Adder | v3.0 | 0/4 | Not started | - |
+| 71. Carry Look-Ahead Adder | v3.0 | 4/6 | In progress | - |
 | 72. Performance Polish | v3.0 | 0/TBD | Not started | - |
 
 ---
