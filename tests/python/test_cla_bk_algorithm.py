@@ -13,6 +13,7 @@ Subtraction uses RCA fallback (BK CLA carry-copy ancilla prevent
 circuit inversion). This is by design, not a bug.
 
 Plan 71-05: BK CLA algorithm implementation and verification.
+Plan 71-06: BK CQ, controlled QQ, controlled CQ CLA verification.
 """
 
 import gc
@@ -542,3 +543,221 @@ class TestBKAncillaCleanup:
         # We just document it, not assert it
         if dirty_carries:
             pass  # Expected: some carry-copy ancilla are non-zero
+
+
+# ===========================================================================
+# Test Class 7: Exhaustive BK CQ Addition (Plan 71-06)
+# ===========================================================================
+
+
+def _run_bk_cq_add(self_val, val, width):
+    """Run BK CQ addition: self += classical_val."""
+    gc.collect()
+    ql.circuit()
+    ql.option("fault_tolerant", True)
+    ql.option("cla", True)
+    ql.option("qubit_saving", True)  # BK variant
+    qa = ql.qint(self_val, width=width)
+    qa += val
+    qasm_str = ql.to_openqasm()
+    num_qubits = _get_num_qubits_from_qasm(qasm_str)
+    actual = _simulate_and_extract(qasm_str, num_qubits, 0, width)
+    _ = qa
+    return actual
+
+
+def _run_rca_cq_add(self_val, val, width):
+    """Run RCA CQ addition (CLA disabled): self += classical_val."""
+    gc.collect()
+    ql.circuit()
+    ql.option("fault_tolerant", True)
+    ql.option("cla", False)
+    qa = ql.qint(self_val, width=width)
+    qa += val
+    qasm_str = ql.to_openqasm()
+    num_qubits = _get_num_qubits_from_qasm(qasm_str)
+    actual = _simulate_and_extract(qasm_str, num_qubits, 0, width)
+    _ = qa
+    return actual
+
+
+class TestBKCQAddExhaustive:
+    """Exhaustive verification of BK CQ CLA addition at widths 2-5.
+
+    Plan 71-06: toffoli_CQ_add_bk uses sequence-copy from cached QQ BK
+    with X-init/cleanup for the classical value.
+    """
+
+    @pytest.mark.parametrize("width", [2, 3, 4, 5])
+    def test_bk_cq_add_exhaustive(self, width):
+        """BK CQ CLA: self += classical_val for all input pairs."""
+        modulus = 1 << width
+        failures = []
+
+        for self_val in range(modulus):
+            for val in range(modulus):
+                expected = (self_val + val) % modulus
+                actual = _run_bk_cq_add(self_val, val, width)
+                if actual != expected:
+                    failures.append(
+                        f"self={self_val}, val={val}: expected {expected}, got {actual}"
+                    )
+
+        assert not failures, (
+            f"BK CQ add width={width}: {len(failures)}/{modulus * modulus} failures:\n"
+            + "\n".join(failures[:20])
+        )
+
+    @pytest.mark.parametrize("width", [2, 3, 4, 5])
+    def test_bk_cq_vs_rca_equivalence(self, width):
+        """BK CQ CLA produces identical results to RCA CQ."""
+        modulus = 1 << width
+        mismatches = []
+
+        for self_val in range(modulus):
+            for val in range(modulus):
+                bk_result = _run_bk_cq_add(self_val, val, width)
+                rca_result = _run_rca_cq_add(self_val, val, width)
+                if bk_result != rca_result:
+                    mismatches.append(
+                        f"self={self_val}, val={val}: BK={bk_result}, RCA={rca_result}"
+                    )
+
+        assert not mismatches, (
+            f"BK CQ vs RCA mismatch width={width}: {len(mismatches)}/{modulus * modulus}:\n"
+            + "\n".join(mismatches[:20])
+        )
+
+
+# ===========================================================================
+# Test Class 8: Controlled BK QQ Addition (Plan 71-06)
+# ===========================================================================
+
+
+def _run_bk_controlled_qq_add(a_val, b_val, width, ctrl_val):
+    """Run controlled BK QQ addition: a += b, controlled by ctrl."""
+    gc.collect()
+    ql.circuit()
+    ql.option("fault_tolerant", True)
+    ql.option("cla", True)
+    ql.option("qubit_saving", True)  # BK variant
+    qa = ql.qint(a_val, width=width)
+    qb = ql.qint(b_val, width=width)
+    ctrl = ql.qint(ctrl_val, width=1)
+    with ctrl:
+        qa += qb
+    qasm_str = ql.to_openqasm()
+    num_qubits = _get_num_qubits_from_qasm(qasm_str)
+    actual = _simulate_and_extract(qasm_str, num_qubits, 0, width)
+    _ = (qa, qb, ctrl)
+    return actual
+
+
+class TestBKControlledQQAdd:
+    """Exhaustive verification of controlled BK QQ CLA addition.
+
+    Plan 71-06: toffoli_cQQ_add_bk copies QQ BK gates with ext_ctrl
+    injected into every gate (X->CX, CX->CCX, CCX->MCX).
+    """
+
+    @pytest.mark.parametrize("width", [2, 3, 4])
+    def test_controlled_bk_qq_add_ctrl1(self, width):
+        """Controlled BK QQ add: a += b when control=|1>."""
+        modulus = 1 << width
+        failures = []
+
+        for a_val in range(modulus):
+            for b_val in range(modulus):
+                expected = (a_val + b_val) % modulus
+                actual = _run_bk_controlled_qq_add(a_val, b_val, width, 1)
+                if actual != expected:
+                    failures.append(f"a={a_val}, b={b_val}: expected {expected}, got {actual}")
+
+        assert not failures, (
+            f"Controlled BK QQ add ctrl=1 width={width}: "
+            f"{len(failures)}/{modulus * modulus} failures:\n" + "\n".join(failures[:20])
+        )
+
+    @pytest.mark.parametrize("width", [2, 3, 4])
+    def test_controlled_bk_qq_add_ctrl0(self, width):
+        """Controlled BK QQ add: a unchanged when control=|0>."""
+        modulus = 1 << width
+        failures = []
+
+        for a_val in range(modulus):
+            for b_val in range(modulus):
+                actual = _run_bk_controlled_qq_add(a_val, b_val, width, 0)
+                if actual != a_val:
+                    failures.append(f"a={a_val}, b={b_val}: expected {a_val}, got {actual}")
+
+        assert not failures, (
+            f"Controlled BK QQ add ctrl=0 width={width}: "
+            f"{len(failures)}/{modulus * modulus} failures:\n" + "\n".join(failures[:20])
+        )
+
+
+# ===========================================================================
+# Test Class 9: Controlled BK CQ Addition (Plan 71-06)
+# ===========================================================================
+
+
+def _run_bk_controlled_cq_add(self_val, val, width, ctrl_val):
+    """Run controlled BK CQ addition: self += val, controlled by ctrl."""
+    gc.collect()
+    ql.circuit()
+    ql.option("fault_tolerant", True)
+    ql.option("cla", True)
+    ql.option("qubit_saving", True)  # BK variant
+    qa = ql.qint(self_val, width=width)
+    ctrl = ql.qint(ctrl_val, width=1)
+    with ctrl:
+        qa += val
+    qasm_str = ql.to_openqasm()
+    num_qubits = _get_num_qubits_from_qasm(qasm_str)
+    actual = _simulate_and_extract(qasm_str, num_qubits, 0, width)
+    _ = (qa, ctrl)
+    return actual
+
+
+class TestBKControlledCQAdd:
+    """Exhaustive verification of controlled BK CQ CLA addition.
+
+    Plan 71-06: toffoli_cCQ_add_bk uses CX-init/cleanup with ext_ctrl
+    and copies cached cQQ BK gates.
+    """
+
+    @pytest.mark.parametrize("width", [2, 3, 4])
+    def test_controlled_bk_cq_add_ctrl1(self, width):
+        """Controlled BK CQ add: self += val when control=|1>."""
+        modulus = 1 << width
+        failures = []
+
+        for self_val in range(modulus):
+            for val in range(modulus):
+                expected = (self_val + val) % modulus
+                actual = _run_bk_controlled_cq_add(self_val, val, width, 1)
+                if actual != expected:
+                    failures.append(
+                        f"self={self_val}, val={val}: expected {expected}, got {actual}"
+                    )
+
+        assert not failures, (
+            f"Controlled BK CQ add ctrl=1 width={width}: "
+            f"{len(failures)}/{modulus * modulus} failures:\n" + "\n".join(failures[:20])
+        )
+
+    @pytest.mark.parametrize("width", [2, 3, 4])
+    def test_controlled_bk_cq_add_ctrl0(self, width):
+        """Controlled BK CQ add: self unchanged when control=|0>."""
+        modulus = 1 << width
+        failures = []
+
+        for self_val in range(modulus):
+            actual = _run_bk_controlled_cq_add(self_val, 3, width, 0)
+            if actual != self_val:
+                failures.append(f"self={self_val}, val=3: expected {self_val}, got {actual}")
+
+        assert not failures, (
+            f"Controlled BK CQ add ctrl=0 width={width}: "
+            f"{len(failures)}/{modulus * modulus} failures:\n" + "\n".join(failures[:20])
+        )

@@ -1,13 +1,15 @@
 """Phase 71: CLA Adder Tests.
 
-Tests CLA QQ and CQ addition at widths >= CLA_THRESHOLD (4).
+Tests CLA QQ and CQ addition at widths >= CLA_THRESHOLD (2).
 Uses Qiskit AerSimulator for exhaustive statevector verification.
 
 Plan 71-01: BK QQ smoke tests + option tests.
 Plan 71-02: KS QQ tests, BK/KS CQ tests, variant selection tests.
 
-All CLA adders currently return NULL (ancilla uncomputation impossibility),
-so tests verify correctness via silent RCA fallback.
+BK CLA is implemented and working for width >= 2 (Plan 71-05).
+KS CLA still returns NULL (falls back to RCA).
+BK CQ, controlled BK QQ, and controlled BK CQ are implemented (Plan 71-06).
+Carry-copy ancilla are known to be dirty (documented trade-off per SC4).
 """
 
 import gc
@@ -318,8 +320,8 @@ class TestKSQQAddition:
 class TestBKCQAddition:
     """Test Brent-Kung CQ addition (qubit_saving=True).
 
-    BK CQ adder currently returns NULL (ancilla uncomputation impossibility),
-    so these tests verify correctness via silent RCA fallback.
+    BK CQ adder is now implemented via sequence-copy from cached QQ BK
+    (Plan 71-06). Uses X-init/cleanup with the BK CLA core.
     """
 
     @pytest.mark.parametrize("width", [4, 5])
@@ -461,9 +463,9 @@ def _run_controlled_cq_add(self_val, val, width, ctrl_val, variant):
 class TestControlledCLAAddition:
     """Phase 71-03: Controlled CLA addition verification (cQQ and cCQ).
 
-    All controlled CLA adders currently return NULL (ancilla uncomputation
-    impossibility), so tests verify correctness via silent fallback to
-    controlled RCA (CDKM) adders.
+    BK controlled CLA adders (cQQ, cCQ) are now implemented via
+    sequence-copy with ext_ctrl injection (Plan 71-06).
+    KS controlled CLA adders still return NULL (fall back to controlled RCA).
     """
 
     @pytest.mark.parametrize("variant", ["bk", "ks"])
@@ -576,4 +578,48 @@ class TestControlledCLAAddition:
         assert not failures, (
             f"Controlled CLA {variant.upper()} sub width=4: "
             f"{len(failures)} failures:\n" + "\n".join(failures[:20])
+        )
+
+
+# ============================================================================
+# Phase 71-06: BK CLA depth verification
+# ============================================================================
+
+
+class TestBKCLADepthVerification:
+    """Verify BK CLA is actually being used (not RCA fallback).
+
+    The BK CLA has O(log n) parallel depth, which is measurably less
+    than RCA's O(n) depth. This test confirms BK CLA dispatch is
+    working by checking that the circuit depth is significantly
+    less than what RCA would produce.
+    """
+
+    def test_bk_depth_less_than_rca_width8(self):
+        """BK CLA depth at width 8 is less than RCA depth."""
+        gc.collect()
+        c_rca = ql.circuit()
+        ql.option("fault_tolerant", True)
+        ql.option("cla", False)  # Force RCA
+        qa = ql.qint(0, width=8)
+        qb = ql.qint(0, width=8)
+        qa += qb
+        rca_depth = c_rca.depth
+        _ = (qa, qb)
+
+        gc.collect()
+        c_bk = ql.circuit()
+        ql.option("fault_tolerant", True)
+        ql.option("cla", True)
+        ql.option("qubit_saving", True)  # BK
+        qa = ql.qint(0, width=8)
+        qb = ql.qint(0, width=8)
+        qa += qb
+        bk_depth = c_bk.depth
+        _ = (qa, qb)
+
+        # RCA depth for width 8 is ~35 layers, BK should be ~19
+        assert bk_depth < rca_depth, (
+            f"BK depth ({bk_depth}) should be < RCA depth ({rca_depth}) at width 8. "
+            f"BK CLA dispatch may not be working."
         )
