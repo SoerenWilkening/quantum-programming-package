@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-14)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 71 gap closure (5/6 plans, 71-06 remaining)
+**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 71 gap closure complete (6/6 plans)
 
 ## Current Position
 
-Phase: 71 of 72 (Carry Look-Ahead Adder) -- GAP CLOSURE IN PROGRESS
-Plan: 5 of 6 complete (gap closure plans 71-05, 71-06 added)
-Status: BK CLA algorithm implemented and verified. Forward-only (subtraction uses RCA fallback). Exhaustive verification at widths 2-6 (5,456+ input pairs). 71-06 (KS CLA) remaining.
-Last activity: 2026-02-17 -- Completed 71-05 (BK CLA algorithm implementation + verification)
+Phase: 71 of 72 (Carry Look-Ahead Adder) -- GAP CLOSURE COMPLETE
+Plan: 6 of 6 complete (gap closure plans 71-05, 71-06 done)
+Status: All four BK CLA variants working (QQ, CQ, cQQ, cCQ). BK depth < RCA depth confirmed. Forward-only (subtraction uses RCA fallback). KS CLA deferred (returns NULL). Phase 71 fully closed.
+Last activity: 2026-02-17 -- Completed 71-06 (BK CQ/cQQ/cCQ CLA adders + depth verification)
 
-Progress: [######################__] 66% (v3.0 phases -- 23/~26 plans)
+Progress: [########################] 69% (v3.0 phases -- 24/~26 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 203 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 22)
+- Total plans completed: 204 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 23)
 - Average duration: ~13 min/plan
 - Total execution time: ~32.3 hours
 
@@ -71,6 +71,7 @@ Phase 71-02: KS QQ + BK/KS CQ CLA adder stubs all return NULL (same uncomputatio
 Phase 71-03: Controlled CLA stubs (cQQ/cCQ x BK/KS) all return NULL. Controlled CLA dispatch in both QQ and CQ hot_path_add paths with silent RCA fallback. ext_ctrl placed after CLA ancilla in qubit layout. 18 controlled CLA tests + 22 existing = 40 total CLA tests pass.
 Phase 71-04: Comprehensive CLA verification suite: CLA vs RCA equivalence at widths 1-6 (QQ/CQ/sub), depth comparison xfail (CLA deferred), gate purity, mixed-width, multiplication propagation, ancilla cleanup via statevector. 40 verification tests (32 pass + 4 xfail + 4 slow). Phase 71 complete.
 Phase 71-05 (gap closure): BK CLA algorithm implementation with 6-phase compute-copy-uncompute pattern. Forward-only (carry-copy ancilla NOT uncomputed; subtraction uses RCA fallback via !invert guard). CLA_THRESHOLD lowered from 4 to 2. Ancilla count uses actual merge count from bk_compute_merges(). 18 exhaustive BK tests (16 pass + 2 xfail). All 40 existing CLA tests still pass.
+Phase 71-06 (gap closure): BK CQ/cQQ/cCQ CLA adders via sequence-copy pattern. CQ: X-init temp + copy QQ gates + X-cleanup. cQQ: inject ext_ctrl into every gate (X->CX, CX->CCX, CCX->MCX). cCQ: CX-init + copy cQQ gates + CX-cleanup. Fixed depth measurement: ql.circuit() creates new circuit, must store reference. BK depth ~50% less than RCA (width 8: 19 vs 35). Phase 71 gap closure complete.
 
 ### Blockers/Concerns
 
@@ -93,9 +94,9 @@ Phase 71-05 (gap closure): BK CLA algorithm implementation with 6-phase compute-
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 71-05-PLAN.md (BK CLA algorithm implementation, gap closure)
+Stopped at: Completed 71-06-PLAN.md (BK CQ/cQQ/cCQ CLA adders, Phase 71 gap closure complete)
 Resume file: N/A
-Resume action: Continue with 71-06 (KS CLA) or Phase 72.
+Resume action: Phase 72 or milestone completion.
 
 ---
-*State updated: 2026-02-17 -- Phase 71-05 complete (BK CLA algorithm implemented, 98 total CLA tests, gap closure in progress)*
+*State updated: 2026-02-17 -- Phase 71-06 complete (BK CQ/cQQ/cCQ CLA adders, Phase 71 gap closure complete, ~120 total CLA tests)*
