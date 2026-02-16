@@ -395,3 +395,185 @@ class TestKSCQAddition:
             f"KS CQ add width={width}: {len(failures)}/{modulus * modulus} failures:\n"
             + "\n".join(failures[:20])
         )
+
+
+# ============================================================================
+# Phase 71-03: Controlled CLA tests (cQQ and cCQ, BK and KS)
+# ============================================================================
+
+
+def _run_controlled_qq_add(a_val, b_val, width, ctrl_val, variant):
+    """Run controlled QQ addition with CLA enabled and extract result."""
+    gc.collect()
+    ql.circuit()
+    ql.option("fault_tolerant", True)
+    ql.option("qubit_saving", variant == "bk")
+    ql.option("cla", True)
+    qa = ql.qint(a_val, width=width)
+    qb = ql.qint(b_val, width=width)
+    ctrl = ql.qint(ctrl_val, width=1)
+    with ctrl:
+        qa += qb
+    qasm_str = ql.to_openqasm()
+    num_qubits = _get_num_qubits_from_qasm(qasm_str)
+    actual = _simulate_and_extract(qasm_str, num_qubits, 0, width)
+    _ = (qa, qb, ctrl)
+    return actual
+
+
+def _run_controlled_qq_sub(a_val, b_val, width, ctrl_val, variant):
+    """Run controlled QQ subtraction with CLA enabled and extract result."""
+    gc.collect()
+    ql.circuit()
+    ql.option("fault_tolerant", True)
+    ql.option("qubit_saving", variant == "bk")
+    ql.option("cla", True)
+    qa = ql.qint(a_val, width=width)
+    qb = ql.qint(b_val, width=width)
+    ctrl = ql.qint(ctrl_val, width=1)
+    with ctrl:
+        qa -= qb
+    qasm_str = ql.to_openqasm()
+    num_qubits = _get_num_qubits_from_qasm(qasm_str)
+    actual = _simulate_and_extract(qasm_str, num_qubits, 0, width)
+    _ = (qa, qb, ctrl)
+    return actual
+
+
+def _run_controlled_cq_add(self_val, val, width, ctrl_val, variant):
+    """Run controlled CQ addition with CLA enabled and extract result."""
+    gc.collect()
+    ql.circuit()
+    ql.option("fault_tolerant", True)
+    ql.option("qubit_saving", variant == "bk")
+    ql.option("cla", True)
+    qa = ql.qint(self_val, width=width)
+    ctrl = ql.qint(ctrl_val, width=1)
+    with ctrl:
+        qa += val
+    qasm_str = ql.to_openqasm()
+    num_qubits = _get_num_qubits_from_qasm(qasm_str)
+    actual = _simulate_and_extract(qasm_str, num_qubits, 0, width)
+    _ = (qa, ctrl)
+    return actual
+
+
+class TestControlledCLAAddition:
+    """Phase 71-03: Controlled CLA addition verification (cQQ and cCQ).
+
+    All controlled CLA adders currently return NULL (ancilla uncomputation
+    impossibility), so tests verify correctness via silent fallback to
+    controlled RCA (CDKM) adders.
+    """
+
+    @pytest.mark.parametrize("variant", ["bk", "ks"])
+    @pytest.mark.parametrize("width", [4, 5])
+    def test_cqq_cla_add_ctrl1(self, variant, width):
+        """Controlled QQ CLA addition: a += b when control=|1>."""
+        modulus = 1 << width
+        failures = []
+
+        for a_val in range(min(modulus, 8)):
+            for b_val in range(min(modulus, 8)):
+                expected = (a_val + b_val) % modulus
+                actual = _run_controlled_qq_add(a_val, b_val, width, 1, variant)
+                if actual != expected:
+                    failures.append(
+                        format_failure_message(
+                            f"cqq_cla_{variant}_ctrl1", [a_val, b_val], width, expected, actual
+                        )
+                    )
+
+        assert not failures, (
+            f"cQQ CLA {variant.upper()} add ctrl=1 width={width}: "
+            f"{len(failures)} failures:\n" + "\n".join(failures[:20])
+        )
+
+    @pytest.mark.parametrize("variant", ["bk", "ks"])
+    @pytest.mark.parametrize("width", [4, 5])
+    def test_cqq_cla_add_ctrl0(self, variant, width):
+        """Controlled QQ CLA addition: a unchanged when control=|0>."""
+        modulus = 1 << width
+        failures = []
+
+        for a_val in range(min(modulus, 4)):
+            for b_val in range(min(modulus, 4)):
+                actual = _run_controlled_qq_add(a_val, b_val, width, 0, variant)
+                if actual != a_val:
+                    failures.append(
+                        format_failure_message(
+                            f"cqq_cla_{variant}_ctrl0", [a_val, b_val], width, a_val, actual
+                        )
+                    )
+
+        assert not failures, (
+            f"cQQ CLA {variant.upper()} add ctrl=0 width={width}: "
+            f"{len(failures)} failures:\n" + "\n".join(failures[:20])
+        )
+
+    @pytest.mark.parametrize("variant", ["bk", "ks"])
+    @pytest.mark.parametrize("width", [4, 5])
+    def test_ccq_cla_add_ctrl1(self, variant, width):
+        """Controlled CQ CLA addition: a += classical when control=|1>."""
+        modulus = 1 << width
+        failures = []
+
+        for val in range(min(modulus, 8)):
+            for self_val in range(min(modulus, 8)):
+                expected = (self_val + val) % modulus
+                actual = _run_controlled_cq_add(self_val, val, width, 1, variant)
+                if actual != expected:
+                    failures.append(
+                        format_failure_message(
+                            f"ccq_cla_{variant}_ctrl1", [self_val, val], width, expected, actual
+                        )
+                    )
+
+        assert not failures, (
+            f"cCQ CLA {variant.upper()} add ctrl=1 width={width}: "
+            f"{len(failures)} failures:\n" + "\n".join(failures[:20])
+        )
+
+    @pytest.mark.parametrize("variant", ["bk", "ks"])
+    @pytest.mark.parametrize("width", [4, 5])
+    def test_ccq_cla_add_ctrl0(self, variant, width):
+        """Controlled CQ CLA addition: a unchanged when control=|0>."""
+        modulus = 1 << width
+        failures = []
+
+        for self_val in range(min(modulus, 4)):
+            actual = _run_controlled_cq_add(self_val, 3, width, 0, variant)
+            if actual != self_val:
+                failures.append(
+                    format_failure_message(
+                        f"ccq_cla_{variant}_ctrl0", [self_val, 3], width, self_val, actual
+                    )
+                )
+
+        assert not failures, (
+            f"cCQ CLA {variant.upper()} add ctrl=0 width={width}: "
+            f"{len(failures)} failures:\n" + "\n".join(failures[:20])
+        )
+
+    @pytest.mark.parametrize("variant", ["bk", "ks"])
+    def test_controlled_cla_subtraction(self, variant):
+        """Controlled CLA subtraction works via inversion."""
+        width = 4
+        modulus = 16
+        failures = []
+
+        for a_val in range(min(modulus, 8)):
+            for b_val in range(min(modulus, 8)):
+                expected = (a_val - b_val) % modulus
+                actual = _run_controlled_qq_sub(a_val, b_val, width, 1, variant)
+                if actual != expected:
+                    failures.append(
+                        format_failure_message(
+                            f"cqq_cla_{variant}_sub", [a_val, b_val], width, expected, actual
+                        )
+                    )
+
+        assert not failures, (
+            f"Controlled CLA {variant.upper()} sub width=4: "
+            f"{len(failures)} failures:\n" + "\n".join(failures[:20])
+        )

@@ -77,7 +77,54 @@ void hot_path_add_qq(circuit_t *circ, const unsigned int *self_qubits, int self_
                     tqa[result_bits + i] = self_qubits[i];
                 }
 
-                /* Allocate 1 ancilla for carry */
+                /* Controlled CLA dispatch: try CLA for width >= threshold.
+                 * Same variant selection as uncontrolled path.
+                 * Layout: [0..bits-1] a, [bits..2*bits-1] b,
+                 *         [2*bits..] CLA ancilla, [after ancilla] ext_ctrl
+                 */
+#define CLA_THRESHOLD 4
+                if (circ->cla_override == 0 && result_bits >= CLA_THRESHOLD) {
+                    int cla_ancilla_count;
+                    if (circ->qubit_saving) {
+                        /* Brent-Kung: 2*(n-1) ancilla */
+                        cla_ancilla_count = 2 * (result_bits - 1);
+                    } else {
+                        /* Kogge-Stone: ~n*ceil(log2(n)) ancilla */
+                        int log_n = 0;
+                        int tmp = result_bits;
+                        while (tmp > 1) {
+                            log_n++;
+                            tmp = (tmp + 1) >> 1;
+                        }
+                        cla_ancilla_count = (result_bits - 1) + (result_bits - 1) * log_n;
+                    }
+                    qubit_t cla_ancilla = allocator_alloc(circ->allocator, cla_ancilla_count, true);
+                    if (cla_ancilla != (qubit_t)-1) {
+                        /* CLA ancilla at [2*bits..] */
+                        for (i = 0; i < cla_ancilla_count; i++) {
+                            tqa[2 * result_bits + i] = cla_ancilla + i;
+                        }
+                        /* ext_ctrl after CLA ancilla */
+                        tqa[2 * result_bits + cla_ancilla_count] = control_qubit;
+
+                        if (circ->qubit_saving) {
+                            toff_seq = toffoli_cQQ_add_bk(result_bits);
+                        } else {
+                            toff_seq = toffoli_cQQ_add_ks(result_bits);
+                        }
+                        if (toff_seq != NULL) {
+                            run_instruction(toff_seq, tqa, invert, circ);
+                            allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count);
+                            return;
+                        }
+                        /* CLA sequence failed -- fall through to controlled RCA */
+                        allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count);
+                    }
+                    /* Silent fallback to controlled RCA */
+                }
+#undef CLA_THRESHOLD
+
+                /* Controlled RCA (CDKM) path: 1 ancilla for carry */
                 qubit_t ancilla_qubit = allocator_alloc(circ->allocator, 1, true);
                 if (ancilla_qubit == (qubit_t)-1)
                     return;
@@ -259,33 +306,95 @@ void hot_path_add_cq(circuit_t *circ, const unsigned int *self_qubits, int self_
                 run_instruction(toff_seq, tqa, invert, circ);
                 toffoli_sequence_free(toff_seq);
             } else {
-                /* n >= 2: allocate self_bits + 1 ancilla (temp + carry) */
-                qubit_t temp_start = allocator_alloc(circ->allocator, self_bits + 1, true);
-                if (temp_start == (qubit_t)-1)
-                    return;
+                /* Controlled CQ CLA dispatch: try CLA for width >= threshold.
+                 * Layout: [0..bits-1] temp, [bits..2*bits-1] self,
+                 *         [2*bits..] CLA ancilla, [after ancilla] ext_ctrl
+                 * Total allocation: bits (temp) + CLA ancilla count
+                 */
+#define CLA_THRESHOLD 4
+                if (circ->cla_override == 0 && self_bits >= CLA_THRESHOLD) {
+                    int cla_ancilla_count;
+                    if (circ->qubit_saving) {
+                        /* Brent-Kung: 2*(n-1) CLA ancilla */
+                        cla_ancilla_count = 2 * (self_bits - 1);
+                    } else {
+                        /* Kogge-Stone: ~n*ceil(log2(n)) CLA ancilla */
+                        int log_n = 0;
+                        int tmp = self_bits;
+                        while (tmp > 1) {
+                            log_n++;
+                            tmp = (tmp + 1) >> 1;
+                        }
+                        cla_ancilla_count = (self_bits - 1) + (self_bits - 1) * log_n;
+                    }
+                    int total_cla_ancilla = self_bits + cla_ancilla_count;
+                    qubit_t cla_start = allocator_alloc(circ->allocator, total_cla_ancilla, true);
+                    if (cla_start != (qubit_t)-1) {
+                        unsigned int cla_qa[256];
+                        /* [0..self_bits-1] = temp (from allocated block) */
+                        for (i = 0; i < self_bits; i++) {
+                            cla_qa[i] = cla_start + i;
+                        }
+                        /* [self_bits..2*self_bits-1] = self qubits (target) */
+                        for (i = 0; i < self_bits; i++) {
+                            cla_qa[self_bits + i] = self_qubits[i];
+                        }
+                        /* [2*self_bits..] = CLA ancilla (after temp) */
+                        for (i = 0; i < cla_ancilla_count; i++) {
+                            cla_qa[2 * self_bits + i] = cla_start + self_bits + i;
+                        }
+                        /* ext_ctrl after CLA ancilla */
+                        cla_qa[2 * self_bits + cla_ancilla_count] = control_qubit;
 
-                unsigned int tqa[256];
-                /* [0..self_bits-1] = temp ancilla qubits */
-                for (i = 0; i < self_bits; i++) {
-                    tqa[i] = temp_start + i;
+                        if (circ->qubit_saving) {
+                            toff_seq = toffoli_cCQ_add_bk(self_bits, classical_value);
+                        } else {
+                            toff_seq = toffoli_cCQ_add_ks(self_bits, classical_value);
+                        }
+                        if (toff_seq != NULL) {
+                            run_instruction(toff_seq, cla_qa, invert, circ);
+                            toffoli_sequence_free(toff_seq);
+                            allocator_free(circ->allocator, cla_start, total_cla_ancilla);
+                            goto ccq_toffoli_done;
+                        }
+                        /* CLA CQ failed -- fall through to controlled RCA CQ */
+                        allocator_free(circ->allocator, cla_start, total_cla_ancilla);
+                    }
+                    /* Silent fallback to controlled RCA CQ */
                 }
-                /* [self_bits..2*self_bits-1] = self qubits (target) */
-                for (i = 0; i < self_bits; i++) {
-                    tqa[self_bits + i] = self_qubits[i];
-                }
-                /* [2*self_bits] = carry ancilla */
-                tqa[2 * self_bits] = temp_start + self_bits;
-                /* [2*self_bits+1] = external control */
-                tqa[2 * self_bits + 1] = control_qubit;
+#undef CLA_THRESHOLD
 
-                toff_seq = toffoli_cCQ_add(self_bits, classical_value);
-                if (toff_seq == NULL) {
+                {
+                    /* n >= 2: controlled RCA (CDKM) CQ path:
+                     * self_bits + 1 ancilla (temp + carry) */
+                    qubit_t temp_start = allocator_alloc(circ->allocator, self_bits + 1, true);
+                    if (temp_start == (qubit_t)-1)
+                        return;
+
+                    unsigned int tqa[256];
+                    /* [0..self_bits-1] = temp ancilla qubits */
+                    for (i = 0; i < self_bits; i++) {
+                        tqa[i] = temp_start + i;
+                    }
+                    /* [self_bits..2*self_bits-1] = self qubits (target) */
+                    for (i = 0; i < self_bits; i++) {
+                        tqa[self_bits + i] = self_qubits[i];
+                    }
+                    /* [2*self_bits] = carry ancilla */
+                    tqa[2 * self_bits] = temp_start + self_bits;
+                    /* [2*self_bits+1] = external control */
+                    tqa[2 * self_bits + 1] = control_qubit;
+
+                    toff_seq = toffoli_cCQ_add(self_bits, classical_value);
+                    if (toff_seq == NULL) {
+                        allocator_free(circ->allocator, temp_start, self_bits + 1);
+                        return;
+                    }
+                    run_instruction(toff_seq, tqa, invert, circ);
+                    toffoli_sequence_free(toff_seq);
                     allocator_free(circ->allocator, temp_start, self_bits + 1);
-                    return;
                 }
-                run_instruction(toff_seq, tqa, invert, circ);
-                toffoli_sequence_free(toff_seq);
-                allocator_free(circ->allocator, temp_start, self_bits + 1);
+            ccq_toffoli_done:;
             }
         } else {
             /* Uncontrolled Toffoli CQ path */
