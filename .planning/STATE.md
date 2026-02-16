@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-14)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 71 gap closure complete (6/6 plans)
+**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 72 in progress (1/3 plans)
 
 ## Current Position
 
-Phase: 71 of 72 (Carry Look-Ahead Adder) -- GAP CLOSURE COMPLETE
-Plan: 6 of 6 complete (gap closure plans 71-05, 71-06 done)
-Status: All four BK CLA variants working (QQ, CQ, cQQ, cCQ). BK depth < RCA depth confirmed. Forward-only (subtraction uses RCA fallback). KS CLA deferred (returns NULL). Phase 71 fully closed.
-Last activity: 2026-02-17 -- Completed 71-06 (BK CQ/cQQ/cCQ CLA adders + depth verification)
+Phase: 72 of 72 (Performance Polish)
+Plan: 1 of 3 complete
+Status: Toffoli hardcoded sequence generation infrastructure created. 8 per-width C files + dispatch + header generated for CDKM widths 1-8.
+Last activity: 2026-02-16 -- Completed 72-01 (Toffoli hardcoded sequence generation)
 
-Progress: [########################] 69% (v3.0 phases -- 24/~26 plans)
+Progress: [########################] 71% (v3.0 phases -- 25/~26 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 204 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 23)
+- Total plans completed: 205 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 24)
 - Average duration: ~13 min/plan
 - Total execution time: ~32.3 hours
 
@@ -72,6 +72,11 @@ Phase 71-03: Controlled CLA stubs (cQQ/cCQ x BK/KS) all return NULL. Controlled 
 Phase 71-04: Comprehensive CLA verification suite: CLA vs RCA equivalence at widths 1-6 (QQ/CQ/sub), depth comparison xfail (CLA deferred), gate purity, mixed-width, multiplication propagation, ancilla cleanup via statevector. 40 verification tests (32 pass + 4 xfail + 4 slow). Phase 71 complete.
 Phase 71-05 (gap closure): BK CLA algorithm implementation with 6-phase compute-copy-uncompute pattern. Forward-only (carry-copy ancilla NOT uncomputed; subtraction uses RCA fallback via !invert guard). CLA_THRESHOLD lowered from 4 to 2. Ancilla count uses actual merge count from bk_compute_merges(). 18 exhaustive BK tests (16 pass + 2 xfail). All 40 existing CLA tests still pass.
 Phase 71-06 (gap closure): BK CQ/cQQ/cCQ CLA adders via sequence-copy pattern. CQ: X-init temp + copy QQ gates + X-cleanup. cQQ: inject ext_ctrl into every gate (X->CX, CX->CCX, CCX->MCX). cCQ: CX-init + copy cQQ gates + CX-cleanup. Fixed depth measurement: ql.circuit() creates new circuit, must store reference. BK depth ~50% less than RCA (width 8: 19 vs 35). Phase 71 gap closure complete.
+Phase 72-01: Toffoli hardcoded sequence generation. QQ as static const (CX/CCX max 2 controls), cQQ as dynamic init with caching (MCX needs large_control). Separate toffoli_sequences.h header. 8 per-width C files + dispatch for widths 1-8. Generation script: scripts/generate_toffoli_seq.py (856 lines).
+
+### Roadmap Evolution
+
+- Phase 73 added: Toffoli CQ/cCQ Classical-Bit Gate Reduction
 
 ### Blockers/Concerns
 
@@ -93,10 +98,10 @@ Phase 71-06 (gap closure): BK CQ/cQQ/cCQ CLA adders via sequence-copy pattern. C
 
 ## Session Continuity
 
-Last session: 2026-02-17
-Stopped at: Completed 71-06-PLAN.md (BK CQ/cQQ/cCQ CLA adders, Phase 71 gap closure complete)
+Last session: 2026-02-16
+Stopped at: Completed 72-01-PLAN.md (Toffoli hardcoded sequence generation infrastructure)
 Resume file: N/A
-Resume action: Phase 72 or milestone completion.
+Resume action: Phase 72-02 (integration into ToffoliAddition.c) or 72-03 (T-count/MCX decomposition).
 
 ---
-*State updated: 2026-02-17 -- Phase 71-06 complete (BK CQ/cQQ/cCQ CLA adders, Phase 71 gap closure complete, ~120 total CLA tests)*
+*State updated: 2026-02-16 -- Phase 72-01 complete (Toffoli hardcoded sequence generation, 11 files created)*
