@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-14)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 72 in progress (1/3 plans)
+**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 72 in progress (2/3 plans)
 
 ## Current Position
 
 Phase: 72 of 72 (Performance Polish)
-Plan: 1 of 3 complete
-Status: Toffoli hardcoded sequence generation infrastructure created. 8 per-width C files + dispatch + header generated for CDKM widths 1-8.
-Last activity: 2026-02-16 -- Completed 72-01 (Toffoli hardcoded sequence generation)
+Plan: 2 of 3 complete
+Status: AND-ancilla MCX decomposition eliminates all 3-control gates from QQ multiplication. MCX tracking added to gate_counts. 41 multiplication tests pass.
+Last activity: 2026-02-16 -- Completed 72-03 (AND-ancilla MCX decomposition for QQ multiplication)
 
-Progress: [########################] 71% (v3.0 phases -- 25/~26 plans)
+Progress: [########################] 73% (v3.0 phases -- 26/~26 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 205 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 24)
+- Total plans completed: 206 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 25)
 - Average duration: ~13 min/plan
 - Total execution time: ~32.3 hours
 
@@ -73,6 +73,7 @@ Phase 71-04: Comprehensive CLA verification suite: CLA vs RCA equivalence at wid
 Phase 71-05 (gap closure): BK CLA algorithm implementation with 6-phase compute-copy-uncompute pattern. Forward-only (carry-copy ancilla NOT uncomputed; subtraction uses RCA fallback via !invert guard). CLA_THRESHOLD lowered from 4 to 2. Ancilla count uses actual merge count from bk_compute_merges(). 18 exhaustive BK tests (16 pass + 2 xfail). All 40 existing CLA tests still pass.
 Phase 71-06 (gap closure): BK CQ/cQQ/cCQ CLA adders via sequence-copy pattern. CQ: X-init temp + copy QQ gates + X-cleanup. cQQ: inject ext_ctrl into every gate (X->CX, CX->CCX, CCX->MCX). cCQ: CX-init + copy cQQ gates + CX-cleanup. Fixed depth measurement: ql.circuit() creates new circuit, must store reference. BK depth ~50% less than RCA (width 8: 19 vs 35). Phase 71 gap closure complete.
 Phase 72-01: Toffoli hardcoded sequence generation. QQ as static const (CX/CCX max 2 controls), cQQ as dynamic init with caching (MCX needs large_control). Separate toffoli_sequences.h header. 8 per-width C files + dispatch for widths 1-8. Generation script: scripts/generate_toffoli_seq.py (856 lines).
+Phase 72-03: AND-ancilla MCX decomposition for QQ multiplication. Each MCX(3-control) in controlled CDKM adder decomposed into 3 CCX via AND-ancilla. Inline gate emission (not cached sequences) for decomposed controlled addition. gate_counts_t now separates CCX (2 controls) from MCX (3+ controls). Python gate_counts dict exposes 'MCX' and 'T' keys. 20 new tests + 21 existing = 41 multiplication tests pass.
 
 ### Roadmap Evolution
 
@@ -99,9 +100,9 @@ Phase 72-01: Toffoli hardcoded sequence generation. QQ as static const (CX/CCX m
 ## Session Continuity
 
 Last session: 2026-02-16
-Stopped at: Completed 72-01-PLAN.md (Toffoli hardcoded sequence generation infrastructure)
+Stopped at: Completed 72-03-PLAN.md (AND-ancilla MCX decomposition for QQ multiplication)
 Resume file: N/A
-Resume action: Phase 72-02 (integration into ToffoliAddition.c) or 72-03 (T-count/MCX decomposition).
+Resume action: Phase 72-02 (T-count exposure) or next milestone.
 
 ---
-*State updated: 2026-02-16 -- Phase 72-01 complete (Toffoli hardcoded sequence generation, 11 files created)*
+*State updated: 2026-02-16 -- Phase 72-03 complete (AND-ancilla MCX decomposition, 41 multiplication tests, MCX tracking in gate_counts)*
