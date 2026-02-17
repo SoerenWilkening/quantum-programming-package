@@ -3,6 +3,7 @@
 //
 
 #include "gate.h"
+#include "optimizer.h"
 
 void print_dash(int k) {
     for (int i = 0; i < k; ++i) {
@@ -536,4 +537,150 @@ bool gates_commute(gate_t *g1, gate_t *g2) {
         break;
     }
     return false;
+}
+
+// ============================================================================
+// CCX -> Clifford+T Decomposition Helpers (Phase 74-04)
+// ============================================================================
+
+void emit_ccx_clifford_t(circuit_t *circ, qubit_t target, qubit_t ctrl1, qubit_t ctrl2) {
+    gate_t g;
+
+    // H(target)
+    memset(&g, 0, sizeof(gate_t));
+    h(&g, target);
+    add_gate(circ, &g);
+
+    // CX(target, ctrl2)
+    memset(&g, 0, sizeof(gate_t));
+    cx(&g, target, ctrl2);
+    add_gate(circ, &g);
+
+    // Tdg(target)
+    memset(&g, 0, sizeof(gate_t));
+    tdg_gate(&g, target);
+    add_gate(circ, &g);
+
+    // CX(target, ctrl1)
+    memset(&g, 0, sizeof(gate_t));
+    cx(&g, target, ctrl1);
+    add_gate(circ, &g);
+
+    // T(target)
+    memset(&g, 0, sizeof(gate_t));
+    t_gate(&g, target);
+    add_gate(circ, &g);
+
+    // CX(target, ctrl2)
+    memset(&g, 0, sizeof(gate_t));
+    cx(&g, target, ctrl2);
+    add_gate(circ, &g);
+
+    // Tdg(target)
+    memset(&g, 0, sizeof(gate_t));
+    tdg_gate(&g, target);
+    add_gate(circ, &g);
+
+    // CX(target, ctrl1)
+    memset(&g, 0, sizeof(gate_t));
+    cx(&g, target, ctrl1);
+    add_gate(circ, &g);
+
+    // T(target)
+    memset(&g, 0, sizeof(gate_t));
+    t_gate(&g, target);
+    add_gate(circ, &g);
+
+    // T(ctrl2)
+    memset(&g, 0, sizeof(gate_t));
+    t_gate(&g, ctrl2);
+    add_gate(circ, &g);
+
+    // H(target)
+    memset(&g, 0, sizeof(gate_t));
+    h(&g, target);
+    add_gate(circ, &g);
+
+    // CX(ctrl2, ctrl1)
+    memset(&g, 0, sizeof(gate_t));
+    cx(&g, ctrl2, ctrl1);
+    add_gate(circ, &g);
+
+    // T(ctrl1)
+    memset(&g, 0, sizeof(gate_t));
+    t_gate(&g, ctrl1);
+    add_gate(circ, &g);
+
+    // Tdg(ctrl2)
+    memset(&g, 0, sizeof(gate_t));
+    tdg_gate(&g, ctrl2);
+    add_gate(circ, &g);
+
+    // CX(ctrl2, ctrl1)
+    memset(&g, 0, sizeof(gate_t));
+    cx(&g, ctrl2, ctrl1);
+    add_gate(circ, &g);
+}
+
+void emit_ccx_clifford_t_seq(sequence_t *seq, int *layer, qubit_t target, qubit_t ctrl1,
+                             qubit_t ctrl2) {
+    // H(target)
+    h(&seq->seq[*layer][seq->gates_per_layer[*layer]++], target);
+    (*layer)++;
+
+    // CX(target, ctrl2)
+    cx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], target, ctrl2);
+    (*layer)++;
+
+    // Tdg(target)
+    tdg_gate(&seq->seq[*layer][seq->gates_per_layer[*layer]++], target);
+    (*layer)++;
+
+    // CX(target, ctrl1)
+    cx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], target, ctrl1);
+    (*layer)++;
+
+    // T(target)
+    t_gate(&seq->seq[*layer][seq->gates_per_layer[*layer]++], target);
+    (*layer)++;
+
+    // CX(target, ctrl2)
+    cx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], target, ctrl2);
+    (*layer)++;
+
+    // Tdg(target)
+    tdg_gate(&seq->seq[*layer][seq->gates_per_layer[*layer]++], target);
+    (*layer)++;
+
+    // CX(target, ctrl1)
+    cx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], target, ctrl1);
+    (*layer)++;
+
+    // T(target)
+    t_gate(&seq->seq[*layer][seq->gates_per_layer[*layer]++], target);
+    (*layer)++;
+
+    // T(ctrl2)
+    t_gate(&seq->seq[*layer][seq->gates_per_layer[*layer]++], ctrl2);
+    (*layer)++;
+
+    // H(target)
+    h(&seq->seq[*layer][seq->gates_per_layer[*layer]++], target);
+    (*layer)++;
+
+    // CX(ctrl2, ctrl1)
+    cx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], ctrl2, ctrl1);
+    (*layer)++;
+
+    // T(ctrl1)
+    t_gate(&seq->seq[*layer][seq->gates_per_layer[*layer]++], ctrl1);
+    (*layer)++;
+
+    // Tdg(ctrl2)
+    tdg_gate(&seq->seq[*layer][seq->gates_per_layer[*layer]++], ctrl2);
+    (*layer)++;
+
+    // CX(ctrl2, ctrl1)
+    cx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], ctrl2, ctrl1);
+    (*layer)++;
 }

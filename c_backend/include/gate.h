@@ -43,6 +43,39 @@ void mcx(gate_t *g, qubit_t target, qubit_t *controls, num_t num_controls);
 void t_gate(gate_t *g, qubit_t target);
 void tdg_gate(gate_t *g, qubit_t target);
 
+// Forward declaration for circuit_t (full definition in circuit.h)
+struct circuit_s;
+typedef struct circuit_s circuit_t;
+
+/**
+ * @brief Emit CCX decomposed into Clifford+T basis gates into a circuit.
+ *
+ * Standard exact decomposition: 2H + 4T + 3Tdg + 6CX = 15 gates, 7 T/Tdg.
+ * Source: Nielsen & Chuang Fig. 4.9, Shende & Markov arXiv:0803.2316.
+ *
+ * @param circ   Active circuit (gates emitted via add_gate)
+ * @param target Target qubit
+ * @param ctrl1  First control qubit
+ * @param ctrl2  Second control qubit
+ */
+void emit_ccx_clifford_t(circuit_t *circ, qubit_t target, qubit_t ctrl1, qubit_t ctrl2);
+
+/**
+ * @brief Emit CCX decomposed into Clifford+T basis gates into a sequence.
+ *
+ * Same 15-gate decomposition as emit_ccx_clifford_t, but emitted into
+ * sequential layers of a sequence_t. Each gate occupies one layer.
+ * Caller must ensure sequence has at least 15 layers available from *layer.
+ *
+ * @param seq    Sequence to emit gates into
+ * @param layer  Pointer to current layer index (incremented by 15)
+ * @param target Target qubit
+ * @param ctrl1  First control qubit
+ * @param ctrl2  Second control qubit
+ */
+void emit_ccx_clifford_t_seq(sequence_t *seq, int *layer, qubit_t target, qubit_t ctrl1,
+                             qubit_t ctrl2);
+
 sequence_t *cx_gate();
 sequence_t *ccx_gate();
 

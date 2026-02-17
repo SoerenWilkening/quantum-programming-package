@@ -66,33 +66,48 @@
  * @param ext_ctrl Qubit index for external control qubit
  * @param and_anc  Qubit index for AND-ancilla (reused, starts and ends at |0>)
  */
+/**
+ * @brief Emit a single CCX gate or its Clifford+T decomposition.
+ *
+ * Helper that checks the decompose flag and either emits a CCX gate
+ * directly or calls emit_ccx_clifford_t for the 15-gate Clifford+T sequence.
+ * Phase 74-04: CCX -> Clifford+T decomposition support.
+ *
+ * @param circ      Active circuit
+ * @param target    Target qubit
+ * @param ctrl1     First control qubit
+ * @param ctrl2     Second control qubit
+ * @param decompose 1 = emit Clifford+T (15 gates), 0 = emit CCX (1 gate)
+ */
+static void emit_ccx_or_clifford_t(circuit_t *circ, qubit_t target, qubit_t ctrl1, qubit_t ctrl2,
+                                   int decompose) {
+    if (decompose) {
+        emit_ccx_clifford_t(circ, target, ctrl1, ctrl2);
+    } else {
+        gate_t g;
+        memset(&g, 0, sizeof(gate_t));
+        ccx(&g, target, ctrl1, ctrl2);
+        add_gate(circ, &g);
+    }
+}
+
 static void emit_cMAJ_decomposed(circuit_t *circ, int a, int b, int c, int ext_ctrl, int and_anc) {
-    gate_t g;
+    int decompose = circ->toffoli_decompose;
 
     /* Step 1: CCX(target=b, ctrl1=c, ctrl2=ext_ctrl) */
-    memset(&g, 0, sizeof(gate_t));
-    ccx(&g, (qubit_t)b, (qubit_t)c, (qubit_t)ext_ctrl);
-    add_gate(circ, &g);
+    emit_ccx_or_clifford_t(circ, (qubit_t)b, (qubit_t)c, (qubit_t)ext_ctrl, decompose);
 
     /* Step 2: CCX(target=a, ctrl1=c, ctrl2=ext_ctrl) */
-    memset(&g, 0, sizeof(gate_t));
-    ccx(&g, (qubit_t)a, (qubit_t)c, (qubit_t)ext_ctrl);
-    add_gate(circ, &g);
+    emit_ccx_or_clifford_t(circ, (qubit_t)a, (qubit_t)c, (qubit_t)ext_ctrl, decompose);
 
     /* Step 3a: CCX(target=and_anc, ctrl1=a, ctrl2=b) -- compute AND */
-    memset(&g, 0, sizeof(gate_t));
-    ccx(&g, (qubit_t)and_anc, (qubit_t)a, (qubit_t)b);
-    add_gate(circ, &g);
+    emit_ccx_or_clifford_t(circ, (qubit_t)and_anc, (qubit_t)a, (qubit_t)b, decompose);
 
     /* Step 3b: CCX(target=c, ctrl1=and_anc, ctrl2=ext_ctrl) */
-    memset(&g, 0, sizeof(gate_t));
-    ccx(&g, (qubit_t)c, (qubit_t)and_anc, (qubit_t)ext_ctrl);
-    add_gate(circ, &g);
+    emit_ccx_or_clifford_t(circ, (qubit_t)c, (qubit_t)and_anc, (qubit_t)ext_ctrl, decompose);
 
     /* Step 3c: CCX(target=and_anc, ctrl1=a, ctrl2=b) -- uncompute AND */
-    memset(&g, 0, sizeof(gate_t));
-    ccx(&g, (qubit_t)and_anc, (qubit_t)a, (qubit_t)b);
-    add_gate(circ, &g);
+    emit_ccx_or_clifford_t(circ, (qubit_t)and_anc, (qubit_t)a, (qubit_t)b, decompose);
 }
 
 /**
@@ -118,32 +133,22 @@ static void emit_cMAJ_decomposed(circuit_t *circ, int a, int b, int c, int ext_c
  * @param and_anc  Qubit index for AND-ancilla (reused, starts and ends at |0>)
  */
 static void emit_cUMA_decomposed(circuit_t *circ, int a, int b, int c, int ext_ctrl, int and_anc) {
-    gate_t g;
+    int decompose = circ->toffoli_decompose;
 
     /* Step 1a: CCX(target=and_anc, ctrl1=a, ctrl2=b) -- compute AND */
-    memset(&g, 0, sizeof(gate_t));
-    ccx(&g, (qubit_t)and_anc, (qubit_t)a, (qubit_t)b);
-    add_gate(circ, &g);
+    emit_ccx_or_clifford_t(circ, (qubit_t)and_anc, (qubit_t)a, (qubit_t)b, decompose);
 
     /* Step 1b: CCX(target=c, ctrl1=and_anc, ctrl2=ext_ctrl) */
-    memset(&g, 0, sizeof(gate_t));
-    ccx(&g, (qubit_t)c, (qubit_t)and_anc, (qubit_t)ext_ctrl);
-    add_gate(circ, &g);
+    emit_ccx_or_clifford_t(circ, (qubit_t)c, (qubit_t)and_anc, (qubit_t)ext_ctrl, decompose);
 
     /* Step 1c: CCX(target=and_anc, ctrl1=a, ctrl2=b) -- uncompute AND */
-    memset(&g, 0, sizeof(gate_t));
-    ccx(&g, (qubit_t)and_anc, (qubit_t)a, (qubit_t)b);
-    add_gate(circ, &g);
+    emit_ccx_or_clifford_t(circ, (qubit_t)and_anc, (qubit_t)a, (qubit_t)b, decompose);
 
     /* Step 2: CCX(target=a, ctrl1=c, ctrl2=ext_ctrl) */
-    memset(&g, 0, sizeof(gate_t));
-    ccx(&g, (qubit_t)a, (qubit_t)c, (qubit_t)ext_ctrl);
-    add_gate(circ, &g);
+    emit_ccx_or_clifford_t(circ, (qubit_t)a, (qubit_t)c, (qubit_t)ext_ctrl, decompose);
 
     /* Step 3: CCX(target=b, ctrl1=a, ctrl2=ext_ctrl) */
-    memset(&g, 0, sizeof(gate_t));
-    ccx(&g, (qubit_t)b, (qubit_t)a, (qubit_t)ext_ctrl);
-    add_gate(circ, &g);
+    emit_ccx_or_clifford_t(circ, (qubit_t)b, (qubit_t)a, (qubit_t)ext_ctrl, decompose);
 }
 
 /**
@@ -245,11 +250,10 @@ void toffoli_mul_qq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bit
              *
              * LSB-first: ret[n-1] = MSB of ret, self[0] = LSB of self,
              *            other[j] = multiplier bit with weight 2^j.
-             * For j = n-1: adds self[0] (LSB) into ret[n-1] (MSB). */
-            gate_t g;
-            memset(&g, 0, sizeof(gate_t));
-            ccx(&g, ret_qubits[n - 1], self_qubits[0], other_qubits[j]);
-            add_gate(circ, &g);
+             * For j = n-1: adds self[0] (LSB) into ret[n-1] (MSB).
+             * Phase 74-04: decompose CCX to Clifford+T when toffoli_decompose=1. */
+            emit_ccx_or_clifford_t(circ, ret_qubits[n - 1], self_qubits[0], other_qubits[j],
+                                   circ->toffoli_decompose);
         } else {
             /* General case: AND-decomposed controlled addition of width bits.
              *
@@ -421,34 +425,28 @@ void toffoli_cmul_qq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bi
         if (width == 1) {
             /* 1-bit controlled multiplication: ret[n-1] ^= self[0] AND other[j] AND ext_ctrl.
              * Phase 74-03: Decompose MCX(3) into 3 CCX via AND-ancilla.
+             * Phase 74-04: Each CCX decomposed to Clifford+T when toffoli_decompose=1.
              *   CCX(and_anc, self[0], other[j])       -- compute partial AND
              *   CCX(ret[n-1], and_anc, ext_ctrl)      -- apply
              *   CCX(and_anc, self[0], other[j])       -- uncompute AND */
-            gate_t g;
+            int decompose = circ->toffoli_decompose;
 
             /* Compute AND */
-            memset(&g, 0, sizeof(gate_t));
-            ccx(&g, and_anc, self_qubits[0], other_qubits[j]);
-            add_gate(circ, &g);
+            emit_ccx_or_clifford_t(circ, and_anc, self_qubits[0], other_qubits[j], decompose);
 
             /* Apply via AND-ancilla */
-            memset(&g, 0, sizeof(gate_t));
-            ccx(&g, ret_qubits[n - 1], and_anc, ext_ctrl);
-            add_gate(circ, &g);
+            emit_ccx_or_clifford_t(circ, ret_qubits[n - 1], and_anc, ext_ctrl, decompose);
 
             /* Uncompute AND */
-            memset(&g, 0, sizeof(gate_t));
-            ccx(&g, and_anc, self_qubits[0], other_qubits[j]);
-            add_gate(circ, &g);
+            emit_ccx_or_clifford_t(circ, and_anc, self_qubits[0], other_qubits[j], decompose);
         } else {
             /* General case: AND-ancilla pattern for controlled addition.
              *
              * Step 1: Compute AND: and_anc = other[j] AND ext_ctrl
-             *         CCX(target=and_anc, ctrl1=other_qubits[j], ctrl2=ext_ctrl) */
-            gate_t g;
-            memset(&g, 0, sizeof(gate_t));
-            ccx(&g, and_anc, other_qubits[j], ext_ctrl);
-            add_gate(circ, &g);
+             *         CCX(target=and_anc, ctrl1=other_qubits[j], ctrl2=ext_ctrl)
+             * Phase 74-04: decompose CCX to Clifford+T when toffoli_decompose=1. */
+            emit_ccx_or_clifford_t(circ, and_anc, other_qubits[j], ext_ctrl,
+                                   circ->toffoli_decompose);
 
             /* Step 2: Build tqa for toffoli_cQQ_add(width) with and_anc as control.
              * Phase 74-03: cQQ_add now expects AND-ancilla at [2*width+2].
@@ -490,10 +488,10 @@ void toffoli_cmul_qq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bi
             allocator_free(circ->allocator, inner_and, 1);
 
             /* Step 3: Uncompute AND: and_anc = 0 (CCX is self-inverse).
-             * Safe because other[j] and ext_ctrl are preserved by cQQ_add. */
-            memset(&g, 0, sizeof(gate_t));
-            ccx(&g, and_anc, other_qubits[j], ext_ctrl);
-            add_gate(circ, &g);
+             * Safe because other[j] and ext_ctrl are preserved by cQQ_add.
+             * Phase 74-04: decompose CCX to Clifford+T when toffoli_decompose=1. */
+            emit_ccx_or_clifford_t(circ, and_anc, other_qubits[j], ext_ctrl,
+                                   circ->toffoli_decompose);
         }
     }
 
