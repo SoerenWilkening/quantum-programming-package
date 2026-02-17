@@ -1308,10 +1308,13 @@ sequence_t *toffoli_CQ_add_bk(int bits, int64_t value) {
     }
     int phase_e_layers = phase_a_layers; /* Same simplification as Phase A */
 
-    /* Phases B, C, D, F layer counts from original QQ BK formula */
-    int phase_bcdf_layers = 4 * num_merges + (n_carries) + (2 * n - 1);
+    /* Phases B, C, D layer counts from original QQ BK formula */
+    int phase_bcd_layers = 4 * num_merges + n_carries;
 
-    int num_layers = phase_a_layers + phase_bcdf_layers + phase_e_layers + x_count;
+    /* Phase F (simplified): X(self[i]) for bit[i]=1 + CX(self[i], c[i-1]) for i>=1 */
+    int phase_f_layers = x_count + (n - 1);
+
+    int num_layers = phase_a_layers + phase_bcd_layers + phase_e_layers + phase_f_layers;
 
     sequence_t *seq = alloc_sequence(num_layers);
     if (seq == NULL) {
@@ -1414,36 +1417,22 @@ sequence_t *toffoli_CQ_add_bk(int bits, int64_t value) {
         }
     }
 
-    /* ===== Phase F: Copy from cached QQ BK sequence ===== */
-    {
-        int qq_phase_f_start = (int)seq_qq->num_layer - (2 * n - 1);
-        for (int l = qq_phase_f_start; l < (int)seq_qq->num_layer; l++) {
-            for (num_t g = 0; g < seq_qq->gates_per_layer[l]; g++) {
-                gate_t *src = &seq_qq->seq[l][g];
-                gate_t *dst = &seq->seq[layer][seq->gates_per_layer[layer]];
-                dst->Gate = src->Gate;
-                dst->Target = src->Target;
-                dst->GateValue = src->GateValue;
-                dst->NumControls = src->NumControls;
-                dst->NumBasisGates = src->NumBasisGates;
-                dst->large_control = NULL;
-                if (src->NumControls <= 2) {
-                    dst->Control[0] = src->Control[0];
-                    dst->Control[1] = src->Control[1];
-                }
-                seq->gates_per_layer[layer]++;
-            }
+    /* ===== Phase F (simplified): Sum extraction ===== */
+    /* Original Phase F: CX(self[i], temp[i]) for i=0..n-1, CX(self[i], c[i-1]) for i=1..n-1.
+     * After Phase E, temp[i]=|0>, so CX(self[i], temp[i]=|0>) is NOP.
+     * But we need self[i] ^= classical_bit[i] for the sum. So for bit=1: X(self[i]).
+     * CX(self[i], c[i-1]) is unchanged (carry addition). */
+    for (int i = 0; i < n; i++) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            x(&seq->seq[layer][seq->gates_per_layer[layer]++], n + i);
             layer++;
         }
     }
-
-    /* ===== Cleanup: X(temp[i]) for each bit=1 position ===== */
-    /* Note: Phase E already restored temp[i] for bit=1 via X gates in the
-     * generate uncompute step. However, CDKM preserves the a-register value.
-     * For BK CLA, the temp register value after Phase E uncompute depends on
-     * whether Phase A's X-init was undone in Phase E. Since we folded X-init
-     * into Phase A and X-cleanup into Phase E, temp should be back to |0>.
-     * No additional cleanup needed -- the X gates in Phase E handle it. */
+    for (int i = 1; i < n; i++) {
+        cx(&seq->seq[layer][seq->gates_per_layer[layer]++], n + i, carry_base + i - 1);
+        layer++;
+    }
 
     seq->used_layer = layer;
 
@@ -1702,10 +1691,14 @@ sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value) {
     }
     int phase_e_layers = phase_a_layers;
 
-    /* Phases B, C, D, F: same gate count as cQQ BK */
-    int phase_bcdf_layers = 4 * num_merges + n_carries + (2 * n - 1);
+    /* Phases B, C, D: same gate count as cQQ BK */
+    int phase_bcd_layers = 4 * num_merges + n_carries;
 
-    int num_layers = phase_a_layers + phase_bcdf_layers + phase_e_layers + x_count;
+    /* Phase F (simplified): CX(self[i], ext_ctrl) for bit[i]=1 + CCX(self[i], c[i-1], ext_ctrl) for
+     * i>=1 */
+    int phase_f_layers = x_count + (n - 1);
+
+    int num_layers = phase_a_layers + phase_bcd_layers + phase_e_layers + phase_f_layers;
 
     sequence_t *seq = alloc_sequence(num_layers);
     if (seq == NULL) {
@@ -1714,6 +1707,10 @@ sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value) {
     }
 
     int layer = 0;
+
+    /* Qubit index helpers (same as CQ BK / QQ BK) */
+    int tree_base = 3 * n - 1;
+    int carry_base = tree_base + num_merges;
 
     /* ===== Phase A (simplified): Initialize generate and propagate ===== */
     /* Generates: in cQQ BK, Phase A generate is MCX(g[i], [temp[i], self[i], ext_ctrl]) */
@@ -1796,40 +1793,25 @@ sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value) {
         }
     }
 
-    /* ===== Phase F: Copy from cached cQQ BK sequence ===== */
-    {
-        int cqq_phase_f_start = (int)seq_cqq->num_layer - (2 * n - 1);
-        for (int l = cqq_phase_f_start; l < (int)seq_cqq->num_layer; l++) {
-            for (num_t g = 0; g < seq_cqq->gates_per_layer[l]; g++) {
-                gate_t *src = &seq_cqq->seq[l][g];
-                gate_t *dst = &seq->seq[layer][seq->gates_per_layer[layer]];
-                dst->Gate = src->Gate;
-                dst->Target = src->Target;
-                dst->GateValue = src->GateValue;
-                dst->NumControls = src->NumControls;
-                dst->NumBasisGates = src->NumBasisGates;
-                dst->large_control = NULL;
-                if (src->NumControls <= 2) {
-                    dst->Control[0] = src->Control[0];
-                    dst->Control[1] = src->Control[1];
-                } else if (src->large_control != NULL) {
-                    dst->large_control = malloc(src->NumControls * sizeof(qubit_t));
-                    if (dst->large_control != NULL) {
-                        for (num_t c = 0; c < src->NumControls; c++)
-                            dst->large_control[c] = src->large_control[c];
-                        dst->Control[0] = src->Control[0];
-                        dst->Control[1] = src->Control[1];
-                    }
-                }
-                seq->gates_per_layer[layer]++;
-            }
+    /* ===== Phase F (simplified): Sum extraction ===== */
+    /* Original Phase F in cQQ: CCX(self[i], temp[i], ext_ctrl) for i=0..n-1,
+     *                          CCX(self[i], c[i-1], ext_ctrl) for i=1..n-1.
+     * After Phase E, temp[i]=|0>, so CCX(self[i], temp[i]=|0>, ext_ctrl) is NOP.
+     * But we need controlled self[i] ^= classical_bit[i].
+     * For bit=1: CX(self[i], ext_ctrl) (controlled X on self[i]).
+     * CCX(self[i], c[i-1], ext_ctrl) is unchanged (carry addition). */
+    for (int i = 0; i < n; i++) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            cx(&seq->seq[layer][seq->gates_per_layer[layer]++], n + i, (qubit_t)ext_ctrl);
             layer++;
         }
     }
-
-    /* ===== Cleanup: CX(temp[i], ext_ctrl) for each bit=1 position ===== */
-    /* Phase E already handles CX-cleanup as part of the generate uncompute.
-     * No additional cleanup needed. */
+    for (int i = 1; i < n; i++) {
+        ccx(&seq->seq[layer][seq->gates_per_layer[layer]++], n + i, carry_base + i - 1,
+            (qubit_t)ext_ctrl);
+        layer++;
+    }
 
     seq->used_layer = layer;
 
