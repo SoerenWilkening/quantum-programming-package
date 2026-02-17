@@ -96,6 +96,15 @@ void print_sequence(sequence_t *seq) {
                     case M:
                         printf("M");
                         break;
+                    case T_GATE:
+                        printf("T");
+                        break;
+                    case TDG_GATE:
+                        printf("t");
+                        break;
+                    default:
+                        printf("?");
+                        break;
                     }
                 } else if (qubit > min_qubit(g) && qubit < max_qubit(g)) {
                     printf("\xE2\x94\x82");
@@ -134,6 +143,12 @@ void print_gate(gate_t *g) {
         break;
     case M:
         printf("M->");
+        break;
+    case T_GATE:
+        printf("T->");
+        break;
+    case TDG_GATE:
+        printf("Tdg->");
         break;
     }
     printf("(%d,", g->Target);
@@ -236,6 +251,22 @@ void mcx(gate_t *g, qubit_t target, qubit_t *controls, num_t num_controls) {
             g->Control[1] = controls[1];
         }
     }
+}
+
+void t_gate(gate_t *g, qubit_t target) {
+    g->Gate = T_GATE;
+    g->Target = target;
+    g->NumControls = 0;
+    g->GateValue = M_PI / 4.0;
+    g->large_control = NULL;
+}
+
+void tdg_gate(gate_t *g, qubit_t target) {
+    g->Gate = TDG_GATE;
+    g->Target = target;
+    g->NumControls = 0;
+    g->GateValue = -M_PI / 4.0;
+    g->large_control = NULL;
 }
 
 sequence_t *cx_gate() {
@@ -449,6 +480,16 @@ bool gates_are_inverse(gate_t *G1, gate_t *G2) {
         return false;
     if (G1->NumControls != G2->NumControls)
         return false;
+
+    // T_GATE and TDG_GATE are inverses of each other (different Gate enum values)
+    if ((G1->Gate == T_GATE && G2->Gate == TDG_GATE) ||
+        (G1->Gate == TDG_GATE && G2->Gate == T_GATE)) {
+        for (int i = 0; i < G1->NumControls; ++i)
+            if (G1->Control[i] != G2->Control[i])
+                return false;
+        return true;
+    }
+
     if (G1->Gate != G2->Gate)
         return false;
     if (G1->Gate == P) {

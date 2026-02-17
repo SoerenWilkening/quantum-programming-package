@@ -61,7 +61,7 @@ typedef unsigned int num_t;
 // ======================================================
 // Gate Types
 // ======================================================
-typedef enum { X, Y, Z, R, H, Rx, Ry, Rz, P, M } Standardgate_t;
+typedef enum { X, Y, Z, R, H, Rx, Ry, Rz, P, M, T_GATE, TDG_GATE } Standardgate_t;
 
 typedef struct {
     qubit_t Control[MAXCONTROLS];

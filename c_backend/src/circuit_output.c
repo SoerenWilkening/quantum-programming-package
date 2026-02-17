@@ -152,6 +152,12 @@ void print_circuit(circuit_t *circ) {
                             break;
                         case Rz:
                             break;
+                        case T_GATE:
+                            printf("T");
+                            break;
+                        case TDG_GATE:
+                            printf("t");
+                            break;
                         }
                     } else if (qubit > min_qubit(&circ->sequence[layer_index][gate_index]) &&
                                qubit < max_qubit(&circ->sequence[layer_index][gate_index])) {
@@ -243,6 +249,12 @@ void circuit_visualize(circuit_t *circ) {
                         break;
                     case M:
                         printf(" M ");
+                        break;
+                    case T_GATE:
+                        printf(" T ");
+                        break;
+                    case TDG_GATE:
+                        printf("Tdg");
                         break;
                     default:
                         printf(" ? ");
@@ -364,6 +376,12 @@ static size_t _export_gate(gate_t *g, char *buffer, size_t buf_size, size_t offs
             break;
         case R:
             written = sprintf(buffer + offset, "reset q[%d];\n", g->Target);
+            break;
+        case T_GATE:
+            written = sprintf(buffer + offset, "t q[%d];\n", g->Target);
+            break;
+        case TDG_GATE:
+            written = sprintf(buffer + offset, "tdg q[%d];\n", g->Target);
             break;
         default:
             written = sprintf(buffer + offset, "// unknown gate %d\n", g->Gate);

@@ -80,6 +80,8 @@ typedef struct circuit_s {
 
     int qubit_saving; // 0 = off (use Kogge-Stone CLA), 1 = on (use Brent-Kung CLA)
 
+    int toffoli_decompose; // 0 = off (CCX gates in output), 1 = on (decompose CCX to Clifford+T)
+
     // Legacy fields (deprecated, kept for backward compatibility)
     qubit_t qubit_indices[MAXQUBITS];
     qubit_t used_qubit_indices;
