@@ -33,9 +33,10 @@ c_sources = [
     os.path.join(PROJECT_ROOT, "c_backend", "src", "IntegerMultiplication.c"),
     os.path.join(PROJECT_ROOT, "c_backend", "src", "LogicOperations.c"),
     os.path.join(PROJECT_ROOT, "c_backend", "src", "execution.c"),
-    # Hot path migrations (Phase 60)
+    # Hot path migrations (Phase 60, 74 split)
     os.path.join(PROJECT_ROOT, "c_backend", "src", "hot_path_mul.c"),
     os.path.join(PROJECT_ROOT, "c_backend", "src", "hot_path_add.c"),
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "hot_path_add_toffoli.c"),
     os.path.join(PROJECT_ROOT, "c_backend", "src", "hot_path_xor.c"),
     # Toffoli arithmetic (Phase 66, 68, 74 split)
     os.path.join(PROJECT_ROOT, "c_backend", "src", "ToffoliAdditionHelpers.c"),
