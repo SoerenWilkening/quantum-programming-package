@@ -63,7 +63,7 @@
 #define TOFFOLI_HARDCODED_MAX_WIDTH 8
 
 // ======================================================
-// PUBLIC API - 2 dispatch functions
+// PUBLIC API - Original dispatch functions
 // ======================================================
 
 // Returns pre-computed Toffoli QQ_add sequence for given bit width
@@ -81,5 +81,15 @@ const sequence_t *get_hardcoded_toffoli_CQ_inc(int bits);
 // Returns pre-computed Toffoli cCQ increment (controlled, value=1) sequence
 // Returns NULL if bits > TOFFOLI_HARDCODED_MAX_WIDTH or bits < 1
 const sequence_t *get_hardcoded_toffoli_cCQ_inc(int bits);
+
+// ======================================================
+// PUBLIC API - MCX-decomposed dispatch functions (Phase 74-05)
+// ======================================================
+
+// Returns pre-computed MCX-decomposed Toffoli cQQ_add sequence.
+// All gates are CCX (max 2 controls) -- zero MCX, zero dynamic allocation.
+// Uses AND-ancilla qubit at position [2*bits+2].
+// Returns NULL if bits > TOFFOLI_HARDCODED_MAX_WIDTH or bits < 1.
+const sequence_t *get_hardcoded_toffoli_decomp_cQQ_add(int bits);
 
 #endif // QUANTUM_TOFFOLI_SEQUENCES_H
