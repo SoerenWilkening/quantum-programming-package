@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-14)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 73 complete (2/2 plans)
+**Current focus:** v3.0 Fault-Tolerant Arithmetic -- Phase 74 in progress (1/5 plans complete)
 
 ## Current Position
 
-Phase: 73 of 73 (CQ/cCQ Classical-Bit Gate Reduction)
-Plan: 2 of 2 complete
-Status: Hardcoded CQ/cCQ increment sequences for widths 1-8. 14 new tests + 128 existing pass. Phase 73 complete.
-Last activity: 2026-02-17 -- Completed 73-02 (hardcoded CQ/cCQ increment + verification tests)
+Phase: 74 of 74 (MCX/CCX Gate Decomposition & Sequence Refactoring)
+Plan: 1 of 5 complete
+Status: T_GATE/TDG_GATE infrastructure, toffoli_decompose option, updated gate counting (T_gates/Tdg_gates). Plan 74-02 complete.
+Last activity: 2026-02-17 -- Completed 74-02 (gate infrastructure foundation)
 
-Progress: [########################] 100% (v3.0 phases -- 29/~29 plans)
+Progress: [########################] 100% (v3.0 phases -- 30/~34 plans)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 209 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 28)
+- Total plans completed: 210 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2 + 2 phase-level docs, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 29)
 - Average duration: ~13 min/plan
 - Total execution time: ~33.0 hours
 
@@ -77,10 +77,12 @@ Phase 72-03: AND-ancilla MCX decomposition for QQ multiplication. Each MCX(3-con
 Phase 72-02: Hardcoded Toffoli CDKM sequences wired into ToffoliAddition.c dispatch for widths 1-8. Lookup between cache check and dynamic generation (first call: hardcoded hit -> cache store; subsequent: cache hit). 9 Toffoli C files added to setup.py. 17 tests: T-count reporting (T=7*(CCX+MCX)), QQ correctness at widths 1-4, gate purity, controlled QQ, subtraction. Phase 72 complete.
 Phase 73-01: Inline CQ/cCQ CDKM + BK CLA generators with classical-bit gate simplification. CQ: skip MAJ at bit=0 (carry=|0>), fold X-init at bit=1. cCQ: CX-init + standard cMAJ at bit=1, skip at bit=0. BK CLA Phase F must be inlined (temp=|0> after Phase E makes copied CX a NOP). 39 exhaustive tests + 89 existing pass. BK Phase F bug found during testing and auto-fixed (Rule 1).
 Phase 73-02: Hardcoded CQ/cCQ increment (value=1) sequences for widths 1-8. CQ uses static const (no MCX), cCQ uses dynamic init with caching (MCX needs large_control). copy_hardcoded_sequence() deep-copies static to caller-owned memory. Early-return in toffoli_CQ_add/toffoli_cCQ_add for value=1. 14 new tests + 128 existing = 142 Toffoli tests pass. Phase 73 complete.
+Phase 74-02: T_GATE/TDG_GATE enum values, gate primitives (t_gate/tdg_gate), inverse recognition (T/Tdg as mutual inverses). toffoli_decompose field in circuit_t with Python API. Replaced mcx_gates with t_gates/tdg_gates in gate_counts_t. Dual T-count formula: actual when T present, 7*CCX estimate otherwise. QASM exports "t"/"tdg". Updated 4 test files (removed MCX references). 90+ tests pass.
 
 ### Roadmap Evolution
 
 - Phase 73 added: Toffoli CQ/cCQ Classical-Bit Gate Reduction
+- Phase 74 added: MCX/CCX Gate Decomposition & Sequence Refactoring
 
 ### Blockers/Concerns
 
@@ -103,9 +105,9 @@ Phase 73-02: Hardcoded CQ/cCQ increment (value=1) sequences for widths 1-8. CQ u
 ## Session Continuity
 
 Last session: 2026-02-17
-Stopped at: Completed 73-02-PLAN.md (hardcoded CQ/cCQ increment + verification tests). Phase 73 complete.
-Resume file: N/A
-Resume action: `/gsd:progress` to check status. Phase 73 is the last v3.0 phase.
+Stopped at: Completed 74-02-PLAN.md (gate infrastructure foundation). Phase 74 plan 1/5 complete.
+Resume file: .planning/phases/74-mcx-ccx-gate-decomposition-sequence-refactoring/74-01-PLAN.md (wave 1, parallel with 74-02)
+Resume action: Execute 74-01 (ancilla block allocator) or 74-03 (MCX decomposition, depends on 74-01+74-02).
 
 ---
-*State updated: 2026-02-17 -- Phase 73 plan 02 complete (hardcoded CQ/cCQ increment sequences + dispatch + tests)*
+*State updated: 2026-02-17 -- Phase 74 plan 02 complete (T_GATE/TDG_GATE infrastructure + toffoli_decompose option + gate counting)*
