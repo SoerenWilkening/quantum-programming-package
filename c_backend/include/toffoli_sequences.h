@@ -74,4 +74,12 @@ const sequence_t *get_hardcoded_toffoli_QQ_add(int bits);
 // Returns NULL if bits > TOFFOLI_HARDCODED_MAX_WIDTH or bits < 1
 const sequence_t *get_hardcoded_toffoli_cQQ_add(int bits);
 
+// Returns pre-computed Toffoli CQ increment (value=1) sequence
+// Returns NULL if bits > TOFFOLI_HARDCODED_MAX_WIDTH or bits < 1
+const sequence_t *get_hardcoded_toffoli_CQ_inc(int bits);
+
+// Returns pre-computed Toffoli cCQ increment (controlled, value=1) sequence
+// Returns NULL if bits > TOFFOLI_HARDCODED_MAX_WIDTH or bits < 1
+const sequence_t *get_hardcoded_toffoli_cCQ_inc(int bits);
+
 #endif // QUANTUM_TOFFOLI_SEQUENCES_H

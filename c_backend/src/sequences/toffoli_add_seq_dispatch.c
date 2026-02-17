@@ -11,7 +11,7 @@
 #include <stddef.h>
 
 // ============================================================================
-// FORWARD DECLARATIONS (conditionally compiled per width)
+// FORWARD DECLARATIONS - QQ/cQQ add (conditionally compiled per width)
 // ============================================================================
 
 #ifdef TOFFOLI_SEQ_WIDTH_1
@@ -52,6 +52,50 @@ const sequence_t *get_hardcoded_toffoli_cQQ_add_7(int bits);
 #ifdef TOFFOLI_SEQ_WIDTH_8
 const sequence_t *get_hardcoded_toffoli_QQ_add_8(int bits);
 const sequence_t *get_hardcoded_toffoli_cQQ_add_8(int bits);
+#endif
+
+// ============================================================================
+// FORWARD DECLARATIONS - CQ/cCQ increment (conditionally compiled per width)
+// ============================================================================
+
+#ifdef TOFFOLI_SEQ_WIDTH_1
+const sequence_t *get_hardcoded_toffoli_CQ_inc_1(int bits);
+const sequence_t *get_hardcoded_toffoli_cCQ_inc_1(int bits);
+#endif
+
+#ifdef TOFFOLI_SEQ_WIDTH_2
+const sequence_t *get_hardcoded_toffoli_CQ_inc_2(int bits);
+const sequence_t *get_hardcoded_toffoli_cCQ_inc_2(int bits);
+#endif
+
+#ifdef TOFFOLI_SEQ_WIDTH_3
+const sequence_t *get_hardcoded_toffoli_CQ_inc_3(int bits);
+const sequence_t *get_hardcoded_toffoli_cCQ_inc_3(int bits);
+#endif
+
+#ifdef TOFFOLI_SEQ_WIDTH_4
+const sequence_t *get_hardcoded_toffoli_CQ_inc_4(int bits);
+const sequence_t *get_hardcoded_toffoli_cCQ_inc_4(int bits);
+#endif
+
+#ifdef TOFFOLI_SEQ_WIDTH_5
+const sequence_t *get_hardcoded_toffoli_CQ_inc_5(int bits);
+const sequence_t *get_hardcoded_toffoli_cCQ_inc_5(int bits);
+#endif
+
+#ifdef TOFFOLI_SEQ_WIDTH_6
+const sequence_t *get_hardcoded_toffoli_CQ_inc_6(int bits);
+const sequence_t *get_hardcoded_toffoli_cCQ_inc_6(int bits);
+#endif
+
+#ifdef TOFFOLI_SEQ_WIDTH_7
+const sequence_t *get_hardcoded_toffoli_CQ_inc_7(int bits);
+const sequence_t *get_hardcoded_toffoli_cCQ_inc_7(int bits);
+#endif
+
+#ifdef TOFFOLI_SEQ_WIDTH_8
+const sequence_t *get_hardcoded_toffoli_CQ_inc_8(int bits);
+const sequence_t *get_hardcoded_toffoli_cCQ_inc_8(int bits);
 #endif
 
 // ============================================================================
@@ -134,6 +178,92 @@ const sequence_t *get_hardcoded_toffoli_cQQ_add(int bits) {
 #ifdef TOFFOLI_SEQ_WIDTH_8
     case 8:
         return get_hardcoded_toffoli_cQQ_add_8(bits);
+#endif
+    default:
+        return NULL;
+    }
+}
+
+// ============================================================================
+// UNIFIED TOFFOLI CQ_inc DISPATCH (hardcoded increment, value=1)
+// ============================================================================
+
+const sequence_t *get_hardcoded_toffoli_CQ_inc(int bits) {
+    switch (bits) {
+#ifdef TOFFOLI_SEQ_WIDTH_1
+    case 1:
+        return get_hardcoded_toffoli_CQ_inc_1(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_2
+    case 2:
+        return get_hardcoded_toffoli_CQ_inc_2(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_3
+    case 3:
+        return get_hardcoded_toffoli_CQ_inc_3(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_4
+    case 4:
+        return get_hardcoded_toffoli_CQ_inc_4(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_5
+    case 5:
+        return get_hardcoded_toffoli_CQ_inc_5(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_6
+    case 6:
+        return get_hardcoded_toffoli_CQ_inc_6(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_7
+    case 7:
+        return get_hardcoded_toffoli_CQ_inc_7(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_8
+    case 8:
+        return get_hardcoded_toffoli_CQ_inc_8(bits);
+#endif
+    default:
+        return NULL;
+    }
+}
+
+// ============================================================================
+// UNIFIED TOFFOLI cCQ_inc DISPATCH (hardcoded controlled increment, value=1)
+// ============================================================================
+
+const sequence_t *get_hardcoded_toffoli_cCQ_inc(int bits) {
+    switch (bits) {
+#ifdef TOFFOLI_SEQ_WIDTH_1
+    case 1:
+        return get_hardcoded_toffoli_cCQ_inc_1(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_2
+    case 2:
+        return get_hardcoded_toffoli_cCQ_inc_2(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_3
+    case 3:
+        return get_hardcoded_toffoli_cCQ_inc_3(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_4
+    case 4:
+        return get_hardcoded_toffoli_cCQ_inc_4(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_5
+    case 5:
+        return get_hardcoded_toffoli_cCQ_inc_5(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_6
+    case 6:
+        return get_hardcoded_toffoli_cCQ_inc_6(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_7
+    case 7:
+        return get_hardcoded_toffoli_cCQ_inc_7(bits);
+#endif
+#ifdef TOFFOLI_SEQ_WIDTH_8
+    case 8:
+        return get_hardcoded_toffoli_cCQ_inc_8(bits);
 #endif
     default:
         return NULL;

@@ -46,6 +46,11 @@ c_sources = [
         for i in range(1, 9)
     ],
     os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", "toffoli_add_seq_dispatch.c"),
+    # Hardcoded Toffoli CQ increment sequences: 8 per-width files
+    *[
+        os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"toffoli_cq_inc_seq_{i}.c")
+        for i in range(1, 9)
+    ],
     # Hardcoded QFT addition sequences: 16 per-width files + unified dispatch
     *[
         os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"add_seq_{i}.c")
