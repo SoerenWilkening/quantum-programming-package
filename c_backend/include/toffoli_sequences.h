@@ -92,4 +92,20 @@ const sequence_t *get_hardcoded_toffoli_cCQ_inc(int bits);
 // Returns NULL if bits > TOFFOLI_HARDCODED_MAX_WIDTH or bits < 1.
 const sequence_t *get_hardcoded_toffoli_decomp_cQQ_add(int bits);
 
+// ======================================================
+// PUBLIC API - Clifford+T hardcoded dispatch functions (Phase 75)
+// ======================================================
+
+// CDKM Clifford+T sequences (widths 1-8)
+const sequence_t *get_hardcoded_toffoli_clifft_QQ_add(int bits);
+const sequence_t *get_hardcoded_toffoli_clifft_cQQ_add(int bits);
+const sequence_t *get_hardcoded_toffoli_clifft_CQ_inc(int bits);
+const sequence_t *get_hardcoded_toffoli_clifft_cCQ_inc(int bits);
+
+// BK CLA Clifford+T sequences (widths 2-8, returns NULL for width 1)
+const sequence_t *get_hardcoded_toffoli_clifft_cla_QQ_add(int bits);
+const sequence_t *get_hardcoded_toffoli_clifft_cla_cQQ_add(int bits);
+const sequence_t *get_hardcoded_toffoli_clifft_cla_CQ_inc(int bits);
+const sequence_t *get_hardcoded_toffoli_clifft_cla_cCQ_inc(int bits);
+
 #endif // QUANTUM_TOFFOLI_SEQUENCES_H

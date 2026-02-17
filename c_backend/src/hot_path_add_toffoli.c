@@ -16,10 +16,26 @@
 #include "execution.h"
 #include "hot_path_add.h"
 #include "qubit_allocator.h"
+#include "toffoli_addition_internal.h"
 #include "toffoli_arithmetic_ops.h"
+#include "toffoli_sequences.h"
 
 /* CLA is used for widths >= this threshold */
 #define CLA_THRESHOLD 2
+
+// ============================================================================
+// Clifford+T sequence caches (Phase 75)
+// First call: dispatch returns static const pointer -> store in array
+// Subsequent calls: direct array lookup (O(1))
+// ============================================================================
+static const sequence_t *precompiled_toffoli_clifft_QQ_add[9] = {0};
+static const sequence_t *precompiled_toffoli_clifft_cQQ_add[9] = {0};
+static const sequence_t *precompiled_toffoli_clifft_CQ_inc[9] = {0};
+static const sequence_t *precompiled_toffoli_clifft_cCQ_inc[9] = {0};
+static const sequence_t *precompiled_toffoli_clifft_cla_QQ_add[9] = {0};
+static const sequence_t *precompiled_toffoli_clifft_cla_cQQ_add[9] = {0};
+static const sequence_t *precompiled_toffoli_clifft_cla_CQ_inc[9] = {0};
+static const sequence_t *precompiled_toffoli_clifft_cla_cCQ_inc[9] = {0};
 
 /**
  * @brief Compute Kogge-Stone CLA ancilla count.
@@ -70,7 +86,8 @@ static void toffoli_qq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
     int i;
 
     if (result_bits == 1) {
-        /* 1-bit: CNOT, symmetric XOR. Use original qubit array directly. */
+        /* 1-bit: CNOT, symmetric XOR. Use original qubit array directly.
+         * Phase 75: Clifford+T 1-bit QQ is also just a CX, same sequence. */
         toff_seq = toffoli_QQ_add(result_bits);
         if (toff_seq == NULL)
             return;
@@ -86,6 +103,49 @@ static void toffoli_qq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
     /* b-register [bits..2*bits-1] = self (target, gets sum) */
     for (i = 0; i < self_bits; i++) {
         tqa[result_bits + i] = self_qubits[i];
+    }
+
+    /* Phase 75: Clifford+T hardcoded dispatch (toffoli_decompose=1, widths 1-8).
+     * Same qubit layout as non-decomposed -- CCX expansion only adds gates, not qubits. */
+    if (circ->toffoli_decompose && result_bits <= TOFFOLI_HARDCODED_MAX_WIDTH) {
+        /* CLA Clifford+T path (forward only) */
+        if (!invert && circ->cla_override == 0 && result_bits >= CLA_THRESHOLD) {
+            int cla_ancilla_count = compute_cla_ancilla_count(circ, result_bits);
+            qubit_t cla_ancilla = allocator_alloc(circ->allocator, cla_ancilla_count, true);
+            if (cla_ancilla != (qubit_t)-1) {
+                for (i = 0; i < cla_ancilla_count; i++) {
+                    tqa[2 * result_bits + i] = cla_ancilla + i;
+                }
+                const sequence_t *seq = precompiled_toffoli_clifft_cla_QQ_add[result_bits];
+                if (!seq) {
+                    seq = get_hardcoded_toffoli_clifft_cla_QQ_add(result_bits);
+                    precompiled_toffoli_clifft_cla_QQ_add[result_bits] = seq;
+                }
+                if (seq) {
+                    run_instruction((sequence_t *)seq, tqa, invert, circ);
+                    allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count);
+                    return;
+                }
+                allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count);
+            }
+        }
+        /* RCA Clifford+T path */
+        qubit_t ct_ancilla = allocator_alloc(circ->allocator, 1, true);
+        if (ct_ancilla != (qubit_t)-1) {
+            tqa[2 * result_bits] = ct_ancilla;
+            const sequence_t *seq = precompiled_toffoli_clifft_QQ_add[result_bits];
+            if (!seq) {
+                seq = get_hardcoded_toffoli_clifft_QQ_add(result_bits);
+                precompiled_toffoli_clifft_QQ_add[result_bits] = seq;
+            }
+            if (seq) {
+                run_instruction((sequence_t *)seq, tqa, invert, circ);
+                allocator_free(circ->allocator, ct_ancilla, 1);
+                return;
+            }
+            allocator_free(circ->allocator, ct_ancilla, 1);
+        }
+        /* Clifford+T dispatch returned NULL -- fall through to non-decomposed */
     }
 
     /* CLA dispatch: forward only (BK CLA carry-copy not fully uncomputed).
@@ -140,10 +200,23 @@ static void toffoli_qq_cont(circuit_t *circ, const unsigned int *self_qubits, in
     int i;
 
     if (result_bits == 1) {
-        /* 1-bit controlled: CCX(target=a[0], ctrl1=b[0], ctrl2=control) */
+        /* 1-bit controlled: CCX(target=a[0], ctrl1=b[0], ctrl2=control).
+         * Phase 75: Clifford+T 1-bit cQQ is H+T+Tdg+CX sequence. */
         tqa[0] = self_qubits[0];
         tqa[1] = other_qubits[0];
         tqa[2] = control_qubit;
+
+        if (circ->toffoli_decompose) {
+            const sequence_t *seq = precompiled_toffoli_clifft_cQQ_add[1];
+            if (!seq) {
+                seq = get_hardcoded_toffoli_clifft_cQQ_add(1);
+                precompiled_toffoli_clifft_cQQ_add[1] = seq;
+            }
+            if (seq) {
+                run_instruction((sequence_t *)seq, tqa, invert, circ);
+                return;
+            }
+        }
 
         toff_seq = toffoli_cQQ_add(result_bits);
         if (toff_seq == NULL)
@@ -158,6 +231,56 @@ static void toffoli_qq_cont(circuit_t *circ, const unsigned int *self_qubits, in
     }
     for (i = 0; i < self_bits; i++) {
         tqa[result_bits + i] = self_qubits[i];
+    }
+
+    /* Phase 75: Clifford+T hardcoded dispatch for controlled QQ.
+     * Same qubit layout as non-decomposed (CCX expansion only adds gates, not qubits). */
+    if (circ->toffoli_decompose && result_bits <= TOFFOLI_HARDCODED_MAX_WIDTH) {
+        /* Controlled CLA Clifford+T path (forward only) */
+        if (!invert && circ->cla_override == 0 && result_bits >= CLA_THRESHOLD) {
+            int cla_ancilla_count = compute_cla_ancilla_count(circ, result_bits);
+            /* CLA ancilla + 1 AND-ancilla (same layout as non-decomposed controlled CLA) */
+            qubit_t cla_ancilla = allocator_alloc(circ->allocator, cla_ancilla_count + 1, true);
+            if (cla_ancilla != (qubit_t)-1) {
+                for (i = 0; i < cla_ancilla_count; i++) {
+                    tqa[2 * result_bits + i] = cla_ancilla + i;
+                }
+                tqa[2 * result_bits + cla_ancilla_count] = control_qubit;
+                tqa[2 * result_bits + cla_ancilla_count + 1] = cla_ancilla + cla_ancilla_count;
+
+                const sequence_t *seq = precompiled_toffoli_clifft_cla_cQQ_add[result_bits];
+                if (!seq) {
+                    seq = get_hardcoded_toffoli_clifft_cla_cQQ_add(result_bits);
+                    precompiled_toffoli_clifft_cla_cQQ_add[result_bits] = seq;
+                }
+                if (seq) {
+                    run_instruction((sequence_t *)seq, tqa, invert, circ);
+                    allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count + 1);
+                    return;
+                }
+                allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count + 1);
+            }
+        }
+        /* Controlled RCA Clifford+T path */
+        qubit_t ct_ancilla = allocator_alloc(circ->allocator, 2, true);
+        if (ct_ancilla != (qubit_t)-1) {
+            tqa[2 * result_bits] = ct_ancilla;         /* carry ancilla */
+            tqa[2 * result_bits + 1] = control_qubit;  /* ext_ctrl */
+            tqa[2 * result_bits + 2] = ct_ancilla + 1; /* AND-ancilla */
+
+            const sequence_t *seq = precompiled_toffoli_clifft_cQQ_add[result_bits];
+            if (!seq) {
+                seq = get_hardcoded_toffoli_clifft_cQQ_add(result_bits);
+                precompiled_toffoli_clifft_cQQ_add[result_bits] = seq;
+            }
+            if (seq) {
+                run_instruction((sequence_t *)seq, tqa, invert, circ);
+                allocator_free(circ->allocator, ct_ancilla, 2);
+                return;
+            }
+            allocator_free(circ->allocator, ct_ancilla, 2);
+        }
+        /* Clifford+T dispatch returned NULL -- fall through to non-decomposed */
     }
 
     /* Controlled CLA dispatch: forward only.
@@ -256,6 +379,76 @@ static void toffoli_cq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
         return;
     }
 
+    /* Phase 75: Clifford+T CQ increment dispatch (value==1, widths 1-8).
+     * CQ Clifford+T sequences are static const, need copy_hardcoded_sequence.
+     * For general values (value != 1) or width > 8: fall through to dynamic path
+     * (which already handles Clifford+T via inline CCX emission from Phase 74-04). */
+    if (circ->toffoli_decompose && classical_value == 1 &&
+        self_bits <= TOFFOLI_HARDCODED_MAX_WIDTH) {
+        /* CLA Clifford+T CQ increment (forward only) */
+        if (!invert && circ->cla_override == 0 && self_bits >= CLA_THRESHOLD) {
+            int cla_ancilla_count = compute_cla_ancilla_count(circ, self_bits);
+            int total_ancilla = self_bits + cla_ancilla_count;
+            qubit_t cq_cla_ancilla = allocator_alloc(circ->allocator, total_ancilla, true);
+            if (cq_cla_ancilla != (qubit_t)-1) {
+                unsigned int tqa[256];
+                for (i = 0; i < self_bits; i++) {
+                    tqa[i] = cq_cla_ancilla + i;
+                }
+                for (i = 0; i < self_bits; i++) {
+                    tqa[self_bits + i] = self_qubits[i];
+                }
+                for (i = 0; i < cla_ancilla_count; i++) {
+                    tqa[2 * self_bits + i] = cq_cla_ancilla + self_bits + i;
+                }
+                const sequence_t *seq = precompiled_toffoli_clifft_cla_CQ_inc[self_bits];
+                if (!seq) {
+                    seq = get_hardcoded_toffoli_clifft_cla_CQ_inc(self_bits);
+                    precompiled_toffoli_clifft_cla_CQ_inc[self_bits] = seq;
+                }
+                if (seq) {
+                    sequence_t *copy = copy_hardcoded_sequence(seq);
+                    if (copy) {
+                        run_instruction(copy, tqa, invert, circ);
+                        toffoli_sequence_free(copy);
+                        allocator_free(circ->allocator, cq_cla_ancilla, total_ancilla);
+                        return;
+                    }
+                }
+                allocator_free(circ->allocator, cq_cla_ancilla, total_ancilla);
+            }
+        }
+        /* RCA Clifford+T CQ increment */
+        qubit_t ct_temp = allocator_alloc(circ->allocator, self_bits + 1, true);
+        if (ct_temp != (qubit_t)-1) {
+            unsigned int tqa[256];
+            for (i = 0; i < self_bits; i++) {
+                tqa[i] = ct_temp + i;
+            }
+            for (i = 0; i < self_bits; i++) {
+                tqa[self_bits + i] = self_qubits[i];
+            }
+            tqa[2 * self_bits] = ct_temp + self_bits;
+
+            const sequence_t *seq = precompiled_toffoli_clifft_CQ_inc[self_bits];
+            if (!seq) {
+                seq = get_hardcoded_toffoli_clifft_CQ_inc(self_bits);
+                precompiled_toffoli_clifft_CQ_inc[self_bits] = seq;
+            }
+            if (seq) {
+                sequence_t *copy = copy_hardcoded_sequence(seq);
+                if (copy) {
+                    run_instruction(copy, tqa, invert, circ);
+                    toffoli_sequence_free(copy);
+                    allocator_free(circ->allocator, ct_temp, self_bits + 1);
+                    return;
+                }
+            }
+            allocator_free(circ->allocator, ct_temp, self_bits + 1);
+        }
+        /* Clifford+T dispatch returned NULL -- fall through to non-decomposed */
+    }
+
     /* CQ CLA dispatch: forward only */
     if (!invert && circ->cla_override == 0 && self_bits >= CLA_THRESHOLD) {
         int cla_ancilla_count = compute_cla_ancilla_count(circ, self_bits);
@@ -331,6 +524,80 @@ static void toffoli_cq_cont(circuit_t *circ, const unsigned int *self_qubits, in
         run_instruction(toff_seq, tqa, invert, circ);
         toffoli_sequence_free(toff_seq);
         return;
+    }
+
+    /* Phase 75: Clifford+T cCQ increment dispatch (value==1, widths 1-8).
+     * cCQ Clifford+T sequences are static const, need copy_hardcoded_sequence. */
+    if (circ->toffoli_decompose && classical_value == 1 &&
+        self_bits <= TOFFOLI_HARDCODED_MAX_WIDTH) {
+        /* Controlled CLA Clifford+T cCQ increment (forward only) */
+        if (!invert && circ->cla_override == 0 && self_bits >= CLA_THRESHOLD) {
+            int cla_ancilla_count = compute_cla_ancilla_count(circ, self_bits);
+            int total_cla_ancilla = self_bits + cla_ancilla_count + 1;
+            qubit_t cla_start = allocator_alloc(circ->allocator, total_cla_ancilla, true);
+            if (cla_start != (qubit_t)-1) {
+                unsigned int cla_qa[256];
+                for (i = 0; i < self_bits; i++) {
+                    cla_qa[i] = cla_start + i;
+                }
+                for (i = 0; i < self_bits; i++) {
+                    cla_qa[self_bits + i] = self_qubits[i];
+                }
+                for (i = 0; i < cla_ancilla_count; i++) {
+                    cla_qa[2 * self_bits + i] = cla_start + self_bits + i;
+                }
+                cla_qa[2 * self_bits + cla_ancilla_count] = control_qubit;
+                cla_qa[2 * self_bits + cla_ancilla_count + 1] =
+                    cla_start + self_bits + cla_ancilla_count;
+
+                const sequence_t *seq = precompiled_toffoli_clifft_cla_cCQ_inc[self_bits];
+                if (!seq) {
+                    seq = get_hardcoded_toffoli_clifft_cla_cCQ_inc(self_bits);
+                    precompiled_toffoli_clifft_cla_cCQ_inc[self_bits] = seq;
+                }
+                if (seq) {
+                    sequence_t *copy = copy_hardcoded_sequence(seq);
+                    if (copy) {
+                        run_instruction(copy, cla_qa, invert, circ);
+                        toffoli_sequence_free(copy);
+                        allocator_free(circ->allocator, cla_start, total_cla_ancilla);
+                        return;
+                    }
+                }
+                allocator_free(circ->allocator, cla_start, total_cla_ancilla);
+            }
+        }
+        /* Controlled RCA Clifford+T cCQ increment */
+        qubit_t ct_temp = allocator_alloc(circ->allocator, self_bits + 2, true);
+        if (ct_temp != (qubit_t)-1) {
+            unsigned int tqa[256];
+            for (i = 0; i < self_bits; i++) {
+                tqa[i] = ct_temp + i;
+            }
+            for (i = 0; i < self_bits; i++) {
+                tqa[self_bits + i] = self_qubits[i];
+            }
+            tqa[2 * self_bits] = ct_temp + self_bits;         /* carry ancilla */
+            tqa[2 * self_bits + 1] = control_qubit;           /* ext_ctrl */
+            tqa[2 * self_bits + 2] = ct_temp + self_bits + 1; /* AND-ancilla */
+
+            const sequence_t *seq = precompiled_toffoli_clifft_cCQ_inc[self_bits];
+            if (!seq) {
+                seq = get_hardcoded_toffoli_clifft_cCQ_inc(self_bits);
+                precompiled_toffoli_clifft_cCQ_inc[self_bits] = seq;
+            }
+            if (seq) {
+                sequence_t *copy = copy_hardcoded_sequence(seq);
+                if (copy) {
+                    run_instruction(copy, tqa, invert, circ);
+                    toffoli_sequence_free(copy);
+                    allocator_free(circ->allocator, ct_temp, self_bits + 2);
+                    return;
+                }
+            }
+            allocator_free(circ->allocator, ct_temp, self_bits + 2);
+        }
+        /* Clifford+T dispatch returned NULL -- fall through to non-decomposed */
     }
 
     /* Controlled CQ CLA dispatch: forward only.

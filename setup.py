@@ -60,6 +60,46 @@ c_sources = [
         os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"toffoli_cq_inc_seq_{i}.c")
         for i in range(1, 9)
     ],
+    # Hardcoded Clifford+T CDKM sequences: 32 per-width files + dispatch (Phase 75)
+    *[
+        os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"toffoli_clifft_qq_{i}.c")
+        for i in range(1, 9)
+    ],
+    *[
+        os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"toffoli_clifft_cqq_{i}.c")
+        for i in range(1, 9)
+    ],
+    *[
+        os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"toffoli_clifft_cq_inc_{i}.c")
+        for i in range(1, 9)
+    ],
+    *[
+        os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"toffoli_clifft_ccq_inc_{i}.c")
+        for i in range(1, 9)
+    ],
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", "toffoli_clifft_cdkm_dispatch.c"),
+    # Hardcoded Clifford+T BK CLA sequences: 28 per-width files + dispatch (Phase 75)
+    *[
+        os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"toffoli_clifft_cla_qq_{i}.c")
+        for i in range(2, 9)
+    ],
+    *[
+        os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"toffoli_clifft_cla_cqq_{i}.c")
+        for i in range(2, 9)
+    ],
+    *[
+        os.path.join(
+            PROJECT_ROOT, "c_backend", "src", "sequences", f"toffoli_clifft_cla_cq_inc_{i}.c"
+        )
+        for i in range(2, 9)
+    ],
+    *[
+        os.path.join(
+            PROJECT_ROOT, "c_backend", "src", "sequences", f"toffoli_clifft_cla_ccq_inc_{i}.c"
+        )
+        for i in range(2, 9)
+    ],
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", "toffoli_clifft_cla_dispatch.c"),
     # Hardcoded QFT addition sequences: 16 per-width files + unified dispatch
     *[
         os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"add_seq_{i}.c")
