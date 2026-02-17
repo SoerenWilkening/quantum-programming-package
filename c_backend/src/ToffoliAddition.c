@@ -1,6 +1,6 @@
 /**
  * @file ToffoliAddition.c
- * @brief CDKM ripple-carry adder implementation (Phase 66-67).
+ * @brief CDKM ripple-carry adder implementation (Phase 66-67, 73).
  *
  * Implements the Cuccaro-Draper-Kutin-Moulton (CDKM) ripple-carry adder
  * using MAJ (Majority) and UMA (UnMajority-and-Add) gate chains.
@@ -10,6 +10,10 @@
  *
  * Phase 66: Uncontrolled QQ and CQ adders.
  * Phase 67: Controlled variants (cQQ and cCQ) using CCX + MCX gates.
+ * Phase 73: Inline CQ/cCQ generators with classical-bit gate simplification.
+ *           Exploits known classical bit values (0 or 1) of temp register qubits
+ *           to eliminate/simplify gates at generation time. Also applies to
+ *           BK CLA CQ/cCQ variants (Phase A/E simplification).
  *
  * References:
  *   Cuccaro et al., "A new quantum ripple-carry addition circuit" (2004)
@@ -21,6 +25,7 @@
 #include "toffoli_arithmetic_ops.h"
 #include "toffoli_sequences.h"
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 // ============================================================================
@@ -172,6 +177,199 @@ static void emit_cUMA(sequence_t *seq, int *layer, int a, int b, int c, int ext_
 }
 
 // ============================================================================
+// CQ MAJ / UMA helper functions (Phase 73 - classical-bit gate simplification)
+// ============================================================================
+
+/**
+ * @brief Emit CQ-simplified MAJ gate sequence.
+ *
+ * Applies classical-bit gate simplification rules:
+ * - If classical_bit_c == 0: skip CX steps (control is |0>), emit CCX unless
+ *   a_known_zero (then entire MAJ is NOP since CCX has |0> control too).
+ * - If classical_bit_c == 1: fold X-init (emit X(c)), then X(b) instead of CX,
+ *   X(a) instead of CX, then CCX unchanged.
+ *
+ * @param seq             Sequence to emit gates into
+ * @param layer           Pointer to current layer index
+ * @param a               Qubit index for 'a' (carry-in / previous carry)
+ * @param b               Qubit index for 'b' (source bit)
+ * @param c               Qubit index for 'c' (temp bit with known classical value)
+ * @param classical_bit_c Known classical value of qubit c (0 or 1)
+ * @param a_known_zero    1 if qubit a is known to be |0> (first MAJ only)
+ */
+static void emit_CQ_MAJ(sequence_t *seq, int *layer, int a, int b, int c, int classical_bit_c,
+                        int a_known_zero) {
+    if (classical_bit_c == 0) {
+        /* temp[i] is known |0>: skip CX steps (control is |0>) */
+        /* Step 1: CX(b, c=|0>) -> NOP */
+        /* Step 2: CX(a, c=|0>) -> NOP */
+        if (a_known_zero) {
+            /* First MAJ: carry=|0> AND temp[0]=|0> -> CCX has |0> control -> NOP */
+            /* Entire MAJ eliminated */
+        } else {
+            /* Step 3: CCX(c, a, b) -> emit as-is (c is target, not simplified) */
+            ccx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], c, a, b);
+            (*layer)++;
+        }
+    } else {
+        /* temp[i] starts at |0>, fold X-init into MAJ */
+        /* X(c) to initialize temp to |1> */
+        x(&seq->seq[*layer][seq->gates_per_layer[*layer]++], c);
+        (*layer)++;
+        /* Step 1: CX(b, c=|1>) -> X(b) */
+        x(&seq->seq[*layer][seq->gates_per_layer[*layer]++], b);
+        (*layer)++;
+        /* Step 2: CX(a, c=|1>) -> X(a) */
+        x(&seq->seq[*layer][seq->gates_per_layer[*layer]++], a);
+        (*layer)++;
+        /* Step 3: CCX(c, a, b) -> emit as-is */
+        ccx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], c, a, b);
+        (*layer)++;
+    }
+}
+
+/**
+ * @brief Compute layer count for inline CQ CDKM adder.
+ *
+ * Precisely counts layers based on classical bit values:
+ * - First MAJ (i=0): if bit[0]==0, 0 layers (fully eliminated); if bit[0]==1, 4 layers
+ * - Subsequent MAJs (i>=1): if bit[i]==0, 1 layer (CCX only); if bit[i]==1, 4 layers
+ * - UMA chain: 3*bits layers (unchanged)
+ * - Cleanup: popcount(value) X gates
+ *
+ * @param bits Number of bits
+ * @param bin  Binary representation (MSB-first: bin[0]=MSB, bin[bits-1]=LSB)
+ * @return Total number of layers needed
+ */
+static int compute_CQ_layer_count(int bits, int *bin) {
+    int layers = 0;
+
+    /* Forward MAJ sweep */
+    int bit0 = bin[bits - 1]; /* LSB (bit position 0) */
+    if (bit0 == 0) {
+        /* First MAJ: entirely eliminated (carry=|0>, temp[0]=|0>) */
+        layers += 0;
+    } else {
+        /* First MAJ: X-init + 2X + 1CCX = 4 gates */
+        layers += 4;
+    }
+    for (int i = 1; i < bits; i++) {
+        int bit_i = bin[bits - 1 - i]; /* LSB-first: bit i */
+        if (bit_i == 0) {
+            /* Skip 2 CX, emit 1 CCX */
+            layers += 1;
+        } else {
+            /* X-init + 2X + 1CCX = 4 gates */
+            layers += 4;
+        }
+    }
+
+    /* Reverse UMA sweep: unchanged, 3 gates per UMA = 3*bits */
+    layers += 3 * bits;
+
+    /* Cleanup: 1 X per bit=1 position */
+    for (int i = 0; i < bits; i++) {
+        if (bin[bits - 1 - i] == 1)
+            layers++;
+    }
+
+    return layers;
+}
+
+// ============================================================================
+// cCQ cMAJ / cUMA helper functions (Phase 73 - classical-bit gate simplification)
+// ============================================================================
+
+/**
+ * @brief Emit cCQ-simplified controlled MAJ gate sequence.
+ *
+ * For cCQ, temp initialization uses CX(temp[i], ext_ctrl), which entangles
+ * temp[i] with ext_ctrl for bit=1 positions. Therefore:
+ * - bit=0 positions: temp[i]=|0> unconditionally -> can simplify
+ * - bit=1 positions: temp[i] is entangled -> fold CX-init, emit standard cMAJ
+ *
+ * @param seq             Sequence to emit gates into
+ * @param layer           Pointer to current layer index
+ * @param a               Qubit index for 'a' (carry-in / previous carry)
+ * @param b               Qubit index for 'b' (source bit)
+ * @param c               Qubit index for 'c' (temp bit)
+ * @param classical_bit_c Known classical value of qubit c (0 or 1)
+ * @param a_known_zero    1 if qubit a is known to be |0> (first cMAJ only)
+ * @param ext_ctrl        External control qubit index
+ */
+static void emit_cCQ_MAJ(sequence_t *seq, int *layer, int a, int b, int c, int classical_bit_c,
+                         int a_known_zero, int ext_ctrl) {
+    if (classical_bit_c == 0) {
+        /* temp[i] unconditionally |0>: skip CCX steps (one control is |0>) */
+        /* Step 1: CCX(b, c=|0>, ext_ctrl) -> NOP */
+        /* Step 2: CCX(a, c=|0>, ext_ctrl) -> NOP */
+        if (a_known_zero) {
+            /* First cMAJ: carry=|0> AND temp[0]=|0> -> MCX has |0> control -> NOP */
+            /* Entire cMAJ eliminated: 2 CCX + 1 MCX = 21T saved */
+        } else {
+            /* Step 3: MCX(c, [a, b, ext_ctrl]) -> emit as-is (c is target) */
+            qubit_t ctrls[3] = {(qubit_t)a, (qubit_t)b, (qubit_t)ext_ctrl};
+            mcx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], c, ctrls, 3);
+            (*layer)++;
+        }
+    } else {
+        /* temp[i] will be conditionally initialized: fold CX-init */
+        /* CX(c, ext_ctrl) to conditionally initialize temp */
+        cx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], c, ext_ctrl);
+        (*layer)++;
+        /* Steps 1-3: emit standard cMAJ (temp is entangled, cannot simplify) */
+        emit_cMAJ(seq, layer, a, b, c, ext_ctrl);
+    }
+}
+
+/**
+ * @brief Compute layer count for inline cCQ CDKM adder.
+ *
+ * - First cMAJ (i=0): if bit[0]==0, 0 layers; if bit[0]==1, 4 layers (CX-init + 3 cMAJ)
+ * - Subsequent cMAJs (i>=1): if bit[i]==0, 1 layer (MCX only); if bit[i]==1, 4 layers
+ * - cUMA chain: 3*bits layers (unchanged)
+ * - Cleanup: popcount(value) CX gates
+ *
+ * @param bits Number of bits
+ * @param bin  Binary representation (MSB-first)
+ * @return Total number of layers needed
+ */
+static int compute_cCQ_layer_count(int bits, int *bin) {
+    int layers = 0;
+
+    /* Forward cMAJ sweep */
+    int bit0 = bin[bits - 1]; /* LSB */
+    if (bit0 == 0) {
+        /* First cMAJ: entirely eliminated */
+        layers += 0;
+    } else {
+        /* First cMAJ: CX-init + 3 standard cMAJ gates = 4 layers */
+        layers += 4;
+    }
+    for (int i = 1; i < bits; i++) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 0) {
+            /* Skip 2 CCX, emit 1 MCX */
+            layers += 1;
+        } else {
+            /* CX-init + 3 standard cMAJ gates = 4 layers */
+            layers += 4;
+        }
+    }
+
+    /* Reverse cUMA sweep: unchanged, 3 gates per cUMA = 3*bits */
+    layers += 3 * bits;
+
+    /* Cleanup: 1 CX per bit=1 position */
+    for (int i = 0; i < bits; i++) {
+        if (bin[bits - 1 - i] == 1)
+            layers++;
+    }
+
+    return layers;
+}
+
+// ============================================================================
 // Sequence allocation helper
 // ============================================================================
 
@@ -306,9 +504,10 @@ sequence_t *toffoli_CQ_add(int bits, int64_t value) {
     //   [bits..2*bits-1]  = self register (target, modified: self += value)
     //   [2*bits]          = carry ancilla (bits >= 2 only)
     //
-    // Uses temp-register approach: initialize temp to classical value via X gates,
-    // run the proven QQ CDKM adder (which preserves temp), then undo the X gates.
-    // This avoids the buggy 2-qubit MAJ/UMA CQ simplification entirely.
+    // Phase 73: Inline CQ generator with classical-bit gate simplification.
+    // Instead of X-init + full QQ CDKM + X-cleanup, we emit simplified MAJ gates
+    // directly based on known classical bit values, then standard UMA gates,
+    // then X-cleanup for bit=1 positions.
 
     // Bounds check
     if (bits < 1 || bits > 64) {
@@ -321,7 +520,7 @@ sequence_t *toffoli_CQ_add(int bits, int64_t value) {
         return NULL;
     }
 
-    // 1-bit special case
+    // 1-bit special case (unchanged)
     if (bits == 1) {
         if (bin[0] == 1) {
             // X(target=0)
@@ -350,23 +549,13 @@ sequence_t *toffoli_CQ_add(int bits, int64_t value) {
         }
     }
 
-    // General case (bits >= 2): temp-register + QQ CDKM adder
+    // General case (bits >= 2): Inline CQ CDKM with classical-bit simplification
     //
-    // Phase 1: X-init temp register (x_count X gates)
-    // Phase 2: QQ CDKM adder (6*bits layers)
-    // Phase 3: X-cleanup temp register (x_count X gates)
-    //
-    // Total layers = 2 * x_count + 6 * bits
+    // Forward sweep: emit_CQ_MAJ for each position (simplified based on classical bits)
+    // Reverse sweep: emit_UMA for each position (standard, no simplification)
+    // Cleanup: X(temp[i]) for each bit=1 position
 
-    // Count number of 1-bits in classical value
-    int x_count = 0;
-    for (int i = 0; i < bits; i++) {
-        if (bin[bits - 1 - i] == 1) { // LSB-first: bit i
-            x_count++;
-        }
-    }
-
-    int num_layers = 2 * x_count + 6 * bits;
+    int num_layers = compute_CQ_layer_count(bits, bin);
 
     sequence_t *seq = alloc_sequence(num_layers);
     if (seq == NULL) {
@@ -377,33 +566,26 @@ sequence_t *toffoli_CQ_add(int bits, int64_t value) {
     int layer = 0;
     int carry = 2 * bits; // carry ancilla qubit index
 
-    // Phase 1: X-init temp register
-    // For each bit i (LSB-first), if classical bit is 1, apply X to temp qubit i
-    for (int i = 0; i < bits; i++) {
-        if (bin[bits - 1 - i] == 1) {
-            x(&seq->seq[layer][seq->gates_per_layer[layer]++], i);
-            layer++;
-        }
-    }
+    // Forward CQ MAJ sweep with classical-bit simplification
+    // First MAJ: a=carry (known |0>), b=self[0], c=temp[0]
+    emit_CQ_MAJ(seq, &layer, carry, bits + 0, 0, bin[bits - 1], /* classical bit[0] (LSB) */
+                1); /* a_known_zero = 1 (carry starts at |0>) */
 
-    // Phase 2: QQ CDKM adder on temp (a-register) and self (b-register)
-    // a-register = [0..bits-1] (temp), b-register = [bits..2*bits-1] (self)
-    // Same MAJ/UMA chain as toffoli_QQ_add
-
-    // Forward MAJ sweep
-    emit_MAJ(seq, &layer, carry, bits + 0, 0);
+    // Remaining MAJs: a=temp[i-1] (quantum after MAJ), b=self[i], c=temp[i]
     for (int i = 1; i < bits; i++) {
-        emit_MAJ(seq, &layer, i - 1, bits + i, i);
+        emit_CQ_MAJ(seq, &layer, i - 1, bits + i, i, bin[bits - 1 - i], /* classical bit[i] */
+                    0);                                                 /* a_known_zero = 0 */
     }
 
-    // Reverse UMA sweep
+    // Reverse UMA sweep (standard, no simplification)
     for (int i = bits - 1; i >= 1; i--) {
         emit_UMA(seq, &layer, i - 1, bits + i, i);
     }
     emit_UMA(seq, &layer, carry, bits + 0, 0);
 
-    // Phase 3: X-cleanup temp register (same X gates as Phase 1, X is self-inverse)
-    // CDKM preserves a-register, so temp still holds classical value -> X undoes it
+    // Cleanup: X(temp[i]) for each bit=1 position
+    // CDKM preserves temp register, so temp[i] still holds classical_bit[i].
+    // For bit=1 positions, temp[i]=|1> and needs X to restore to |0>.
     for (int i = 0; i < bits; i++) {
         if (bin[bits - 1 - i] == 1) {
             x(&seq->seq[layer][seq->gates_per_layer[layer]++], i);
@@ -412,6 +594,14 @@ sequence_t *toffoli_CQ_add(int bits, int64_t value) {
     }
 
     seq->used_layer = layer;
+
+#ifdef DEBUG
+    /* Assertion: verify layer count matches expectation */
+    if (layer != num_layers) {
+        fprintf(stderr, "CQ_add layer mismatch: expected %d, got %d (bits=%d, value=%ld)\n",
+                num_layers, layer, bits, (long)value);
+    }
+#endif
 
     free(bin);
     return seq;
@@ -509,8 +699,9 @@ sequence_t *toffoli_cCQ_add(int bits, int64_t value) {
     //   [2*bits]          = carry ancilla (bits >= 2 only)
     //   [2*bits+1]        = external control qubit
     //
-    // Uses controlled temp-register approach: CX(target=temp[i], control=ext_ctrl)
-    // for initialization, controlled CDKM adder core, then CX cleanup.
+    // Phase 73: Inline cCQ generator with classical-bit gate simplification.
+    // For bit=0 positions, temp[i]=|0> unconditionally -> eliminate CCX gates.
+    // For bit=1 positions, CX-init entangles temp[i] -> fold init, emit standard cMAJ.
     // NOT cached (value-dependent).
 
     // Bounds check
@@ -524,7 +715,7 @@ sequence_t *toffoli_cCQ_add(int bits, int64_t value) {
         return NULL;
     }
 
-    // 1-bit special case
+    // 1-bit special case (unchanged)
     if (bits == 1) {
         if (bin[0] == 1) {
             // CX(target=0, control=1) where [0]=self, [1]=ext_control
@@ -553,23 +744,13 @@ sequence_t *toffoli_cCQ_add(int bits, int64_t value) {
         }
     }
 
-    // General case (bits >= 2): controlled temp-register + controlled CDKM adder
+    // General case (bits >= 2): Inline cCQ CDKM with classical-bit simplification
     //
-    // Phase 1: CX-init temp register (x_count CX gates, conditioned on ext_ctrl)
-    // Phase 2: Controlled QQ CDKM adder (6*bits layers using cMAJ/cUMA)
-    // Phase 3: CX-cleanup temp register (x_count CX gates, same as Phase 1)
-    //
-    // Total layers = 2 * x_count + 6 * bits
+    // Forward sweep: emit_cCQ_MAJ for each position (simplified based on classical bits)
+    // Reverse sweep: emit_cUMA for each position (standard, no simplification)
+    // Cleanup: CX(temp[i], ext_ctrl) for each bit=1 position
 
-    // Count number of 1-bits in classical value
-    int x_count = 0;
-    for (int i = 0; i < bits; i++) {
-        if (bin[bits - 1 - i] == 1) { // LSB-first: bit i
-            x_count++;
-        }
-    }
-
-    int num_layers = 2 * x_count + 6 * bits;
+    int num_layers = compute_cCQ_layer_count(bits, bin);
     int ext_ctrl = 2 * bits + 1; // external control qubit
 
     sequence_t *seq = alloc_sequence(num_layers);
@@ -581,33 +762,28 @@ sequence_t *toffoli_cCQ_add(int bits, int64_t value) {
     int layer = 0;
     int carry = 2 * bits; // carry ancilla qubit index
 
-    // Phase 1: CX-init temp register (controlled by ext_ctrl)
-    // For each bit i (LSB-first), if classical bit is 1, emit CX(target=i, control=ext_ctrl)
-    for (int i = 0; i < bits; i++) {
-        if (bin[bits - 1 - i] == 1) {
-            cx(&seq->seq[layer][seq->gates_per_layer[layer]++], i, ext_ctrl);
-            layer++;
-        }
-    }
+    // Forward cCQ MAJ sweep with classical-bit simplification
+    // First cMAJ: a=carry (known |0>), b=self[0], c=temp[0]
+    emit_cCQ_MAJ(seq, &layer, carry, bits + 0, 0, bin[bits - 1], /* classical bit[0] (LSB) */
+                 1,                                              /* a_known_zero = 1 */
+                 ext_ctrl);
 
-    // Phase 2: Controlled QQ CDKM adder on temp (a-register) and self (b-register)
-    // a-register = [0..bits-1] (temp), b-register = [bits..2*bits-1] (self)
-    // Same cMAJ/cUMA chain as toffoli_cQQ_add, with ext_ctrl
-
-    // Forward cMAJ sweep
-    emit_cMAJ(seq, &layer, carry, bits + 0, 0, ext_ctrl);
+    // Remaining cMAJs: a=temp[i-1] (quantum after cMAJ), b=self[i], c=temp[i]
     for (int i = 1; i < bits; i++) {
-        emit_cMAJ(seq, &layer, i - 1, bits + i, i, ext_ctrl);
+        emit_cCQ_MAJ(seq, &layer, i - 1, bits + i, i, bin[bits - 1 - i], /* classical bit[i] */
+                     0,                                                  /* a_known_zero = 0 */
+                     ext_ctrl);
     }
 
-    // Reverse cUMA sweep
+    // Reverse cUMA sweep (standard, no simplification)
     for (int i = bits - 1; i >= 1; i--) {
         emit_cUMA(seq, &layer, i - 1, bits + i, i, ext_ctrl);
     }
     emit_cUMA(seq, &layer, carry, bits + 0, 0, ext_ctrl);
 
-    // Phase 3: CX-cleanup temp register (same CX gates as Phase 1, CX is self-inverse
-    // when temp has been preserved by CDKM)
+    // Cleanup: CX(temp[i], ext_ctrl) for each bit=1 position
+    // CDKM preserves temp register, so temp[i] is still entangled with ext_ctrl.
+    // CX undoes the conditional initialization.
     for (int i = 0; i < bits; i++) {
         if (bin[bits - 1 - i] == 1) {
             cx(&seq->seq[layer][seq->gates_per_layer[layer]++], i, ext_ctrl);
@@ -616,6 +792,14 @@ sequence_t *toffoli_cCQ_add(int bits, int64_t value) {
     }
 
     seq->used_layer = layer;
+
+#ifdef DEBUG
+    /* Assertion: verify layer count matches expectation */
+    if (layer != num_layers) {
+        fprintf(stderr, "cCQ_add layer mismatch: expected %d, got %d (bits=%d, value=%ld)\n",
+                num_layers, layer, bits, (long)value);
+    }
+#endif
 
     free(bin);
     return seq;
@@ -1041,10 +1225,11 @@ sequence_t *toffoli_QQ_add_ks(int bits) {
 /**
  * @brief Brent-Kung CLA CQ adder: self += classical_value.
  *
- * Uses the temp-register approach (same as toffoli_CQ_add):
- * 1. X-init temp register with classical value bits
- * 2. Copy gates from cached QQ BK sequence (same qubit indices)
- * 3. X-cleanup temp register
+ * Phase 73: Inline BK CLA CQ generator with classical-bit gate simplification.
+ * Applies simplification to Phase A and Phase E (generate/propagate init/uncompute):
+ * - If temp[i]=0: CCX(g[i], temp[i], self[i]) -> NOP, CX(self[i], temp[i]) -> NOP
+ * - If temp[i]=1: CCX -> CX(g[i], self[i]), CX -> X(self[i]); with X-init/cleanup
+ * Phases B, C, D, F: copied from cached QQ BK sequence unchanged.
  *
  * Qubit layout:
  *   [0..bits-1]       = temp register (initialized to classical value, cleaned to |0>)
@@ -1063,25 +1248,71 @@ sequence_t *toffoli_CQ_add_bk(int bits, int64_t value) {
     if (bits < 2 || bits > 64)
         return NULL;
 
-    /* Get cached QQ BK sequence */
+    /* Get cached QQ BK sequence to extract Phases B-D-F gate counts */
     sequence_t *seq_qq = toffoli_QQ_add_bk(bits);
     if (seq_qq == NULL)
         return NULL;
+
+    int n = bits;
+    int n_carries = n - 1;
 
     /* Convert value to binary (MSB-first: bin[0]=MSB, bin[bits-1]=LSB) */
     int *bin = two_complement(value, bits);
     if (bin == NULL)
         return NULL;
 
-    /* Count number of 1-bits in classical value */
+    /* Count 1-bits (popcount) */
     int x_count = 0;
     for (int i = 0; i < bits; i++) {
-        if (bin[bits - 1 - i] == 1) /* LSB-first: bit i */
+        if (bin[bits - 1 - i] == 1)
             x_count++;
     }
 
-    /* Allocate new sequence: X-init + QQ gates + X-cleanup */
-    int num_layers = 2 * x_count + (int)seq_qq->num_layer;
+    /* Compute merge list for BK tree */
+    bk_merge_t merges[128];
+    int num_merges = bk_compute_merges(n_carries, merges, 128);
+
+    /* Compute layer count for CQ BK:
+     * Phase A (simplified): for each of n-1 generate positions,
+     *   bit=0: 0 CCX + 0 CX = 0 layers; bit=1: X-init + CX(g,self) + X(self) = 3 layers
+     *   Plus for each of n propagate positions:
+     *   bit=0: 0 CX = 0 layers; bit=1: already counted X(self) in generate block
+     * Actually, simpler: Phase A has (n-1) CCX + n CX in the original.
+     * Simplified Phase A:
+     *   For generates (i=0..n-2):
+     *     bit[i]=0: skip CCX (1 saved)
+     *     bit[i]=1: X(temp[i]) + CX(g[i], self[i]) = 2 layers (instead of 1 CCX)
+     *   For propagates (i=0..n-1):
+     *     bit[i]=0: skip CX (1 saved)
+     *     bit[i]=1: X(self[i]) = 1 layer (instead of 1 CX)
+     *   Phase E (same as A reversed, same simplification)
+     * Phases B, C, D, F: same as QQ BK
+     * Cleanup: x_count X gates
+     */
+    int phase_a_layers = 0;
+    /* Generate part of Phase A */
+    for (int i = 0; i < n_carries; i++) {
+        int bit_i = bin[bits - 1 - i]; /* LSB-first */
+        if (bit_i == 1) {
+            phase_a_layers += 2; /* X-init(temp[i]) + CX(g[i], self[i]) */
+        }
+        /* bit=0: NOP, 0 layers */
+    }
+    /* Propagate part of Phase A */
+    for (int i = 0; i < n; i++) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            phase_a_layers += 1; /* X(self[i]) instead of CX(self[i], temp[i]) */
+        }
+        /* bit=0: NOP */
+    }
+    int phase_e_layers = phase_a_layers; /* Same simplification as Phase A */
+
+    /* Phases B, C, D, F layer counts from original QQ BK formula */
+    int phase_bcdf_layers = 4 * num_merges + (n_carries) + (2 * n - 1);
+
+    int num_layers = phase_a_layers + phase_bcdf_layers + phase_e_layers + x_count;
+
     sequence_t *seq = alloc_sequence(num_layers);
     if (seq == NULL) {
         free(bin);
@@ -1090,52 +1321,139 @@ sequence_t *toffoli_CQ_add_bk(int bits, int64_t value) {
 
     int layer = 0;
 
-    /* Phase 1: X-init temp register */
-    for (int i = 0; i < bits; i++) {
-        if (bin[bits - 1 - i] == 1) {
+    /* Qubit index helpers (same as QQ BK) */
+    int tree_base = 3 * n - 1;
+    int carry_base = tree_base + num_merges;
+
+    /* ===== Phase A (simplified): Initialize generate and propagate ===== */
+    /* For i=0 to n-2: CCX(target=g[i], ctrl1=a[i]=temp[i], ctrl2=b[i]=self[i]) */
+    for (int i = 0; i < n_carries; i++) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            /* temp[i]=1: X-init temp[i], then CX(g[i], self[i]) */
+            x(&seq->seq[layer][seq->gates_per_layer[layer]++], i); /* X(temp[i]) */
+            layer++;
+            cx(&seq->seq[layer][seq->gates_per_layer[layer]++], 2 * n + i,
+               n + i); /* CX(g[i], self[i]) */
+            layer++;
+        }
+        /* bit=0: CCX with |0> control -> NOP */
+    }
+    /* For i=0 to n-1: CX(target=b[i]=self[i], control=a[i]=temp[i]) */
+    for (int i = 0; i < n; i++) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            /* temp[i]=1: CX(self[i], temp[i]=|1>) -> X(self[i]) */
+            x(&seq->seq[layer][seq->gates_per_layer[layer]++], n + i); /* X(self[i]) */
+            layer++;
+        }
+        /* bit=0: CX with |0> control -> NOP */
+    }
+
+    /* ===== Phases B, C, D: Copy from cached QQ BK sequence ===== */
+    /* Phase B starts at layer (n-1) + n = 2n-1 in the QQ BK sequence.
+     * Phase B+C+D ends at the start of Phase E in QQ BK.
+     * In QQ BK: Phase A = 2n-1 layers, Phase E starts at 2n-1 + 4*num_merges + (n-1) layers.
+     *
+     * We need to copy layers from QQ BK starting at Phase B through Phase D end.
+     * Phase B: layers [2n-1 .. 2n-1+2*num_merges-1]
+     * Phase C: layers [2n-1+2*num_merges .. 2n-1+2*num_merges+n-2]
+     * Phase D: layers [2n-1+2*num_merges+n-1 .. 2n-1+4*num_merges+n-2]
+     */
+    {
+        int qq_phase_b_start = 2 * n - 1;
+        int qq_phase_d_end = 2 * n - 1 + 4 * num_merges + n_carries; /* exclusive */
+        for (int l = qq_phase_b_start; l < qq_phase_d_end; l++) {
+            for (num_t g = 0; g < seq_qq->gates_per_layer[l]; g++) {
+                gate_t *src = &seq_qq->seq[l][g];
+                gate_t *dst = &seq->seq[layer][seq->gates_per_layer[layer]];
+                dst->Gate = src->Gate;
+                dst->Target = src->Target;
+                dst->GateValue = src->GateValue;
+                dst->NumControls = src->NumControls;
+                dst->NumBasisGates = src->NumBasisGates;
+                dst->large_control = NULL;
+                if (src->NumControls <= 2) {
+                    dst->Control[0] = src->Control[0];
+                    dst->Control[1] = src->Control[1];
+                } else if (src->large_control != NULL) {
+                    dst->large_control = malloc(src->NumControls * sizeof(qubit_t));
+                    if (dst->large_control != NULL) {
+                        for (num_t c = 0; c < src->NumControls; c++)
+                            dst->large_control[c] = src->large_control[c];
+                        dst->Control[0] = src->Control[0];
+                        dst->Control[1] = src->Control[1];
+                    }
+                }
+                seq->gates_per_layer[layer]++;
+            }
+            layer++;
+        }
+    }
+
+    /* ===== Phase E (simplified): Uncompute propagates and generates ===== */
+    /* Reverse of Phase A: first CX (propagate uncompute), then CCX (generate uncompute) */
+    /* For i=n-1 down to 0: CX(target=self[i], control=temp[i]) */
+    for (int i = n - 1; i >= 0; i--) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            /* temp[i]=1: X(self[i]) */
+            x(&seq->seq[layer][seq->gates_per_layer[layer]++], n + i);
+            layer++;
+        }
+    }
+    /* For i=n-2 down to 0: CCX(target=g[i], ctrl1=temp[i], ctrl2=self[i]) */
+    for (int i = n_carries - 1; i >= 0; i--) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            /* temp[i]=1: CX(g[i], self[i]) then X-cleanup(temp[i]) */
+            cx(&seq->seq[layer][seq->gates_per_layer[layer]++], 2 * n + i, n + i);
+            layer++;
             x(&seq->seq[layer][seq->gates_per_layer[layer]++], i);
             layer++;
         }
     }
 
-    /* Phase 2: Copy QQ BK gates (qubit indices match: temp=a, self=b, ancilla) */
-    for (num_t l = 0; l < seq_qq->num_layer; l++) {
-        for (num_t g = 0; g < seq_qq->gates_per_layer[l]; g++) {
-            gate_t *src = &seq_qq->seq[l][g];
-            gate_t *dst = &seq->seq[layer][seq->gates_per_layer[layer]];
-            /* Copy gate fields */
-            dst->Gate = src->Gate;
-            dst->Target = src->Target;
-            dst->GateValue = src->GateValue;
-            dst->NumControls = src->NumControls;
-            dst->NumBasisGates = src->NumBasisGates;
-            dst->large_control = NULL;
-            if (src->NumControls <= 2) {
-                dst->Control[0] = src->Control[0];
-                dst->Control[1] = src->Control[1];
-            } else if (src->large_control != NULL) {
-                dst->large_control = malloc(src->NumControls * sizeof(qubit_t));
-                if (dst->large_control != NULL) {
-                    for (num_t c = 0; c < src->NumControls; c++)
-                        dst->large_control[c] = src->large_control[c];
+    /* ===== Phase F: Copy from cached QQ BK sequence ===== */
+    {
+        int qq_phase_f_start = (int)seq_qq->num_layer - (2 * n - 1);
+        for (int l = qq_phase_f_start; l < (int)seq_qq->num_layer; l++) {
+            for (num_t g = 0; g < seq_qq->gates_per_layer[l]; g++) {
+                gate_t *src = &seq_qq->seq[l][g];
+                gate_t *dst = &seq->seq[layer][seq->gates_per_layer[layer]];
+                dst->Gate = src->Gate;
+                dst->Target = src->Target;
+                dst->GateValue = src->GateValue;
+                dst->NumControls = src->NumControls;
+                dst->NumBasisGates = src->NumBasisGates;
+                dst->large_control = NULL;
+                if (src->NumControls <= 2) {
                     dst->Control[0] = src->Control[0];
                     dst->Control[1] = src->Control[1];
                 }
+                seq->gates_per_layer[layer]++;
             }
-            seq->gates_per_layer[layer]++;
-        }
-        layer++;
-    }
-
-    /* Phase 3: X-cleanup temp register (X is self-inverse) */
-    for (int i = 0; i < bits; i++) {
-        if (bin[bits - 1 - i] == 1) {
-            x(&seq->seq[layer][seq->gates_per_layer[layer]++], i);
             layer++;
         }
     }
 
+    /* ===== Cleanup: X(temp[i]) for each bit=1 position ===== */
+    /* Note: Phase E already restored temp[i] for bit=1 via X gates in the
+     * generate uncompute step. However, CDKM preserves the a-register value.
+     * For BK CLA, the temp register value after Phase E uncompute depends on
+     * whether Phase A's X-init was undone in Phase E. Since we folded X-init
+     * into Phase A and X-cleanup into Phase E, temp should be back to |0>.
+     * No additional cleanup needed -- the X gates in Phase E handle it. */
+
     seq->used_layer = layer;
+
+#ifdef DEBUG
+    if (layer != num_layers) {
+        fprintf(stderr, "CQ_add_bk layer mismatch: expected %d, got %d (bits=%d)\n", num_layers,
+                layer, bits);
+    }
+#endif
+
     free(bin);
     return seq;
 }
@@ -1303,10 +1621,13 @@ sequence_t *toffoli_cQQ_add_ks(int bits) {
 /**
  * @brief Controlled Brent-Kung CLA CQ adder: self += classical_value, controlled.
  *
- * Combines CQ (X-init/cleanup) with controlled gates:
- * 1. Controlled X-init: CX(target=temp[i], control=ext_ctrl) for set bits
- * 2. Copy controlled QQ BK gates from cached cQQ sequence
- * 3. Controlled X-cleanup: same CX gates as init
+ * Phase 73: Inline BK CLA cCQ generator with classical-bit gate simplification.
+ * Same approach as CQ BK but using controlled variant:
+ * - Phase A: for bit=0, skip CCX+CX; for bit=1, fold CX-init + emit controlled gates
+ * - Phases B-D: copy from cached cQQ BK sequence unchanged
+ * - Phase E: same simplifications as Phase A
+ * - Phase F: unchanged
+ * - Cleanup: CX(temp[i], ext_ctrl) for each bit=1 position
  *
  * Qubit layout:
  *   [0..bits-1]           = temp register (controlled init to classical value)
@@ -1331,6 +1652,9 @@ sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value) {
     if (seq_cqq == NULL)
         return NULL;
 
+    int n = bits;
+    int n_carries = n - 1;
+
     /* ext_ctrl qubit index (same position as in cQQ) */
     int ext_ctrl = 2 * bits + bk_cla_ancilla_count(bits);
 
@@ -1346,8 +1670,43 @@ sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value) {
             x_count++;
     }
 
-    /* Allocate: CX-init + cQQ gates + CX-cleanup */
-    int num_layers = 2 * x_count + (int)seq_cqq->num_layer;
+    /* Compute merge list for BK tree */
+    bk_merge_t merges[128];
+    int num_merges = bk_compute_merges(n_carries, merges, 128);
+    (void)merges; /* Used only for count */
+
+    /* Compute layer count for cCQ BK:
+     * Phase A (simplified): same structure as CQ BK but controlled
+     *   For generates (i=0..n-2):
+     *     bit[i]=0: skip CCX (was MCX in controlled form) -> 0 layers
+     *     bit[i]=1: CX-init(temp[i], ext_ctrl) + CCX(g[i], self[i], ext_ctrl) = 2 layers
+     *   For propagates (i=0..n-1):
+     *     bit[i]=0: skip CX (was CCX in controlled form) -> 0 layers
+     *     bit[i]=1: CX(self[i], ext_ctrl) = 1 layer (controlled X)
+     * Phase E: same as Phase A
+     * Phases B, C, D, F: same as cQQ BK
+     * Cleanup: x_count CX gates
+     */
+    int phase_a_layers = 0;
+    for (int i = 0; i < n_carries; i++) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            phase_a_layers += 2; /* CX-init + CCX(g[i], self[i], ext_ctrl) */
+        }
+    }
+    for (int i = 0; i < n; i++) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            phase_a_layers += 1; /* CX(self[i], ext_ctrl) */
+        }
+    }
+    int phase_e_layers = phase_a_layers;
+
+    /* Phases B, C, D, F: same gate count as cQQ BK */
+    int phase_bcdf_layers = 4 * num_merges + n_carries + (2 * n - 1);
+
+    int num_layers = phase_a_layers + phase_bcdf_layers + phase_e_layers + x_count;
+
     sequence_t *seq = alloc_sequence(num_layers);
     if (seq == NULL) {
         free(bin);
@@ -1356,52 +1715,131 @@ sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value) {
 
     int layer = 0;
 
-    /* Phase 1: Controlled X-init temp register (CX with ext_ctrl) */
-    for (int i = 0; i < bits; i++) {
-        if (bin[bits - 1 - i] == 1) {
+    /* ===== Phase A (simplified): Initialize generate and propagate ===== */
+    /* Generates: in cQQ BK, Phase A generate is MCX(g[i], [temp[i], self[i], ext_ctrl]) */
+    for (int i = 0; i < n_carries; i++) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            /* CX-init: CX(temp[i], ext_ctrl) */
             cx(&seq->seq[layer][seq->gates_per_layer[layer]++], i, (qubit_t)ext_ctrl);
             layer++;
+            /* CCX(g[i], self[i], ext_ctrl) -- temp[i]=|1> when ext_ctrl=|1> */
+            ccx(&seq->seq[layer][seq->gates_per_layer[layer]++], 2 * n + i, n + i,
+                (qubit_t)ext_ctrl);
+            layer++;
         }
+        /* bit=0: MCX with |0> control -> NOP */
+    }
+    /* Propagates: in cQQ BK, Phase A propagate is CCX(self[i], temp[i], ext_ctrl) */
+    for (int i = 0; i < n; i++) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            /* temp[i]=|1> when ext_ctrl=|1>: CCX(self[i], temp[i]=|1>, ext_ctrl) -> CX(self[i],
+             * ext_ctrl) */
+            cx(&seq->seq[layer][seq->gates_per_layer[layer]++], n + i, (qubit_t)ext_ctrl);
+            layer++;
+        }
+        /* bit=0: CCX with |0> control -> NOP */
     }
 
-    /* Phase 2: Copy controlled QQ BK gates (qubit indices match) */
-    for (num_t l = 0; l < seq_cqq->num_layer; l++) {
-        for (num_t g = 0; g < seq_cqq->gates_per_layer[l]; g++) {
-            gate_t *src = &seq_cqq->seq[l][g];
-            gate_t *dst = &seq->seq[layer][seq->gates_per_layer[layer]];
-            /* Copy gate fields */
-            dst->Gate = src->Gate;
-            dst->Target = src->Target;
-            dst->GateValue = src->GateValue;
-            dst->NumControls = src->NumControls;
-            dst->NumBasisGates = src->NumBasisGates;
-            dst->large_control = NULL;
-            if (src->NumControls <= 2) {
-                dst->Control[0] = src->Control[0];
-                dst->Control[1] = src->Control[1];
-            } else if (src->large_control != NULL) {
-                dst->large_control = malloc(src->NumControls * sizeof(qubit_t));
-                if (dst->large_control != NULL) {
-                    for (num_t c = 0; c < src->NumControls; c++)
-                        dst->large_control[c] = src->large_control[c];
+    /* ===== Phases B, C, D: Copy from cached cQQ BK sequence ===== */
+    {
+        int cqq_phase_b_start = 2 * n - 1;
+        int cqq_phase_d_end = 2 * n - 1 + 4 * num_merges + n_carries;
+        for (int l = cqq_phase_b_start; l < cqq_phase_d_end; l++) {
+            for (num_t g = 0; g < seq_cqq->gates_per_layer[l]; g++) {
+                gate_t *src = &seq_cqq->seq[l][g];
+                gate_t *dst = &seq->seq[layer][seq->gates_per_layer[layer]];
+                dst->Gate = src->Gate;
+                dst->Target = src->Target;
+                dst->GateValue = src->GateValue;
+                dst->NumControls = src->NumControls;
+                dst->NumBasisGates = src->NumBasisGates;
+                dst->large_control = NULL;
+                if (src->NumControls <= 2) {
                     dst->Control[0] = src->Control[0];
                     dst->Control[1] = src->Control[1];
+                } else if (src->large_control != NULL) {
+                    dst->large_control = malloc(src->NumControls * sizeof(qubit_t));
+                    if (dst->large_control != NULL) {
+                        for (num_t c = 0; c < src->NumControls; c++)
+                            dst->large_control[c] = src->large_control[c];
+                        dst->Control[0] = src->Control[0];
+                        dst->Control[1] = src->Control[1];
+                    }
                 }
+                seq->gates_per_layer[layer]++;
             }
-            seq->gates_per_layer[layer]++;
+            layer++;
         }
-        layer++;
     }
 
-    /* Phase 3: Controlled X-cleanup temp register */
-    for (int i = 0; i < bits; i++) {
-        if (bin[bits - 1 - i] == 1) {
+    /* ===== Phase E (simplified): Uncompute propagates and generates ===== */
+    /* Propagate uncompute (reverse order) */
+    for (int i = n - 1; i >= 0; i--) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            cx(&seq->seq[layer][seq->gates_per_layer[layer]++], n + i, (qubit_t)ext_ctrl);
+            layer++;
+        }
+    }
+    /* Generate uncompute (reverse order) */
+    for (int i = n_carries - 1; i >= 0; i--) {
+        int bit_i = bin[bits - 1 - i];
+        if (bit_i == 1) {
+            ccx(&seq->seq[layer][seq->gates_per_layer[layer]++], 2 * n + i, n + i,
+                (qubit_t)ext_ctrl);
+            layer++;
+            /* CX-cleanup: CX(temp[i], ext_ctrl) */
             cx(&seq->seq[layer][seq->gates_per_layer[layer]++], i, (qubit_t)ext_ctrl);
             layer++;
         }
     }
 
+    /* ===== Phase F: Copy from cached cQQ BK sequence ===== */
+    {
+        int cqq_phase_f_start = (int)seq_cqq->num_layer - (2 * n - 1);
+        for (int l = cqq_phase_f_start; l < (int)seq_cqq->num_layer; l++) {
+            for (num_t g = 0; g < seq_cqq->gates_per_layer[l]; g++) {
+                gate_t *src = &seq_cqq->seq[l][g];
+                gate_t *dst = &seq->seq[layer][seq->gates_per_layer[layer]];
+                dst->Gate = src->Gate;
+                dst->Target = src->Target;
+                dst->GateValue = src->GateValue;
+                dst->NumControls = src->NumControls;
+                dst->NumBasisGates = src->NumBasisGates;
+                dst->large_control = NULL;
+                if (src->NumControls <= 2) {
+                    dst->Control[0] = src->Control[0];
+                    dst->Control[1] = src->Control[1];
+                } else if (src->large_control != NULL) {
+                    dst->large_control = malloc(src->NumControls * sizeof(qubit_t));
+                    if (dst->large_control != NULL) {
+                        for (num_t c = 0; c < src->NumControls; c++)
+                            dst->large_control[c] = src->large_control[c];
+                        dst->Control[0] = src->Control[0];
+                        dst->Control[1] = src->Control[1];
+                    }
+                }
+                seq->gates_per_layer[layer]++;
+            }
+            layer++;
+        }
+    }
+
+    /* ===== Cleanup: CX(temp[i], ext_ctrl) for each bit=1 position ===== */
+    /* Phase E already handles CX-cleanup as part of the generate uncompute.
+     * No additional cleanup needed. */
+
     seq->used_layer = layer;
+
+#ifdef DEBUG
+    if (layer != num_layers) {
+        fprintf(stderr, "cCQ_add_bk layer mismatch: expected %d, got %d (bits=%d)\n", num_layers,
+                layer, bits);
+    }
+#endif
+
     free(bin);
     return seq;
 }
