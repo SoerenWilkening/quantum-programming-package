@@ -49,6 +49,12 @@ c_sources = [
         for i in range(1, 9)
     ],
     os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", "toffoli_add_seq_dispatch.c"),
+    # Hardcoded MCX-decomposed Toffoli cQQ sequences: 8 per-width files + dispatch
+    *[
+        os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"toffoli_decomp_seq_{i}.c")
+        for i in range(1, 9)
+    ],
+    os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", "toffoli_decomp_seq_dispatch.c"),
     # Hardcoded Toffoli CQ increment sequences: 8 per-width files
     *[
         os.path.join(PROJECT_ROOT, "c_backend", "src", "sequences", f"toffoli_cq_inc_seq_{i}.c")

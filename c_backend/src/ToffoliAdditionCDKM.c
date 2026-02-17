@@ -623,9 +623,17 @@ sequence_t *toffoli_cQQ_add(int bits) {
         return precompiled_toffoli_cQQ_add[bits];
     }
 
-    // Phase 74-03: Skip hardcoded cQQ sequences (they contain MCX gates).
-    // Dynamic generator now produces MCX-free sequences via AND-ancilla decomposition.
-    // Hardcoded MCX-free cQQ sequences can be regenerated in a future plan.
+    // Phase 74-05: Use MCX-decomposed hardcoded cQQ sequences for widths 1-8.
+    // These contain only CCX (max 2 controls) via AND-ancilla decomposition.
+    // Static const arrays, zero dynamic allocation.
+    if (bits <= TOFFOLI_HARDCODED_MAX_WIDTH) {
+        const sequence_t *hardcoded = get_hardcoded_toffoli_decomp_cQQ_add(bits);
+        if (hardcoded != NULL) {
+            // SAFETY: Const cast is safe -- static sequences have program lifetime
+            precompiled_toffoli_cQQ_add[bits] = (sequence_t *)hardcoded;
+            return (sequence_t *)hardcoded;
+        }
+    }
 
     // 1-bit special case: single CCX, no ancilla
     if (bits == 1) {
