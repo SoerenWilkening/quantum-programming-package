@@ -1,6 +1,7 @@
 //
 // Created by Sören Wilkening on 09.11.24.
 //
+// Phase 74-03: MCX gates decomposed via AND-ancilla in equality comparisons.
 
 #include "Integer.h"
 #include "QPU.h"
@@ -9,6 +10,78 @@
 #include "gate.h"
 #include <stdint.h>
 #include <stdlib.h>
+
+// ======================================================
+// AND-ancilla MCX decomposition helpers (Phase 74-03)
+// ======================================================
+
+/**
+ * @brief Compute number of CCX layers for recursive MCX decomposition.
+ *
+ * @param num_controls Number of controls (>= 2)
+ * @return Number of CCX layers needed
+ */
+static int mcx_decomp_layers(int num_controls) {
+    if (num_controls <= 2)
+        return 1;
+    if (num_controls == 3)
+        return 3;
+    return 2 + mcx_decomp_layers(num_controls - 1);
+}
+
+/**
+ * @brief Emit recursive AND-ancilla MCX decomposition into a comparison sequence.
+ *
+ * @param seq         Sequence to emit into
+ * @param layer       Pointer to current layer index
+ * @param target      Target qubit
+ * @param controls    Array of control qubits
+ * @param num_controls Number of controls (>= 2)
+ * @param anc_start   First available AND-ancilla qubit index
+ */
+static void emit_mcx_decomp_seq(sequence_t *seq, int *layer, int target, const qubit_t *controls,
+                                int num_controls, int anc_start) {
+    if (num_controls == 2) {
+        ccx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], target, controls[0], controls[1]);
+        (*layer)++;
+        seq->used_layer++;
+    } else if (num_controls == 3) {
+        int and_anc = anc_start;
+        /* CCX(and_anc, c1, c2) -- compute AND */
+        ccx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], and_anc, controls[0], controls[1]);
+        (*layer)++;
+        seq->used_layer++;
+        /* CCX(target, and_anc, c3) -- apply */
+        ccx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], target, (qubit_t)and_anc,
+            controls[2]);
+        (*layer)++;
+        seq->used_layer++;
+        /* CCX(and_anc, c1, c2) -- uncompute AND */
+        ccx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], and_anc, controls[0], controls[1]);
+        (*layer)++;
+        seq->used_layer++;
+    } else {
+        int and_anc = anc_start;
+        /* Compute AND of first 2 controls */
+        ccx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], and_anc, controls[0], controls[1]);
+        (*layer)++;
+        seq->used_layer++;
+
+        /* Build reduced control list */
+        qubit_t reduced[128];
+        reduced[0] = (qubit_t)and_anc;
+        for (int i = 2; i < num_controls; i++)
+            reduced[i - 1] = controls[i];
+
+        /* Recurse */
+        emit_mcx_decomp_seq(seq, layer, target, reduced, num_controls - 1, anc_start + 1);
+
+        /* Uncompute AND */
+        ccx(&seq->seq[*layer][seq->gates_per_layer[*layer]++], and_anc, controls[0], controls[1]);
+        (*layer)++;
+        seq->used_layer++;
+    }
+}
 
 // ======================================================
 // Width-Parameterized Comparison Operations (Phase 7)
@@ -35,9 +108,10 @@ sequence_t *QQ_less_than(int bits) {
 sequence_t *CQ_equal_width(int bits, int64_t value) {
     // Classical-quantum equality comparison using XOR-based algorithm
     // Qubit layout: [0] = result qbool, [1:bits+1] = quantum operand
+    // For bits >= 3: [bits+1 .. bits+bits-2] = AND-ancilla (Phase 74-03)
     // Algorithm:
     // 1. Flip qubits where classical bit is 0 (so equal qubits become |1>)
-    // 2. Multi-controlled X to set result qubit (all must be |1> = equal)
+    // 2. Multi-controlled X to set result qubit (AND-ancilla decomposed for bits>=3)
     // 3. Uncompute: reverse the flips to restore original state
 
     // Validate input parameters
@@ -46,15 +120,10 @@ sequence_t *CQ_equal_width(int bits, int64_t value) {
     }
 
     // Check for overflow: if value doesn't fit in bits
-    // For unsigned interpretation: value must be in [0, 2^bits - 1]
-    // Handle negative values via two's complement
     uint64_t max_val = (bits == 64) ? UINT64_MAX : ((1ULL << bits) - 1);
     if (value < 0) {
-        // Negative values need two's complement conversion
-        // If |value| > 2^bits, it overflows
         int64_t min_val = -(1LL << (bits - 1));
         if (value < min_val) {
-            // Overflow: return empty sequence
             sequence_t *seq = malloc(sizeof(sequence_t));
             if (seq == NULL)
                 return NULL;
@@ -65,9 +134,7 @@ sequence_t *CQ_equal_width(int bits, int64_t value) {
             return seq;
         }
     } else {
-        // Positive value overflow check
         if ((uint64_t)value > max_val) {
-            // Overflow: return empty sequence
             sequence_t *seq = malloc(sizeof(sequence_t));
             if (seq == NULL)
                 return NULL;
@@ -94,10 +161,14 @@ sequence_t *CQ_equal_width(int bits, int64_t value) {
     }
 
     // Calculate number of layers needed:
-    // - num_x_gates layers for initial X gates (one per zero bit)
-    // - bits-1 layers for cascaded Toffoli gates (multi-controlled X)
-    // - num_x_gates layers for uncompute (reverse X gates)
-    int num_layers = num_x_gates + (bits > 1 ? bits - 1 : 1) + num_x_gates;
+    // Phase 74-03: MCX(bits) for bits >= 3 uses recursive decomposition
+    int mcx_layers;
+    if (bits <= 2) {
+        mcx_layers = 1; // CX or CCX
+    } else {
+        mcx_layers = mcx_decomp_layers(bits); // 2*bits - 3 CCX layers
+    }
+    int num_layers = num_x_gates + mcx_layers + num_x_gates;
 
     // Allocate sequence structure
     sequence_t *seq = malloc(sizeof(sequence_t));
@@ -127,7 +198,6 @@ sequence_t *CQ_equal_width(int bits, int64_t value) {
     for (int i = 0; i < num_layers; i++) {
         seq->seq[i] = calloc(bits + 1, sizeof(gate_t)); // Max bits+1 gates per layer
         if (seq->seq[i] == NULL) {
-            // Cleanup on failure
             for (int j = 0; j < i; j++) {
                 free(seq->seq[j]);
             }
@@ -144,7 +214,6 @@ sequence_t *CQ_equal_width(int bits, int64_t value) {
     // Phase 1: Apply X gates to qubits where classical bit is 0
     for (int i = 0; i < bits; i++) {
         if (bin[i] == 0) {
-            // Qubit i+1 (offset by result qubit at index 0)
             x(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], i + 1);
             seq->gates_per_layer[current_layer]++;
             current_layer++;
@@ -154,40 +223,25 @@ sequence_t *CQ_equal_width(int bits, int64_t value) {
 
     // Phase 2: Multi-controlled X to set result qubit
     if (bits == 1) {
-        // Single bit: just copy qubit[1] to qubit[0] (CX gate)
         cx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, 1);
         seq->gates_per_layer[current_layer]++;
         current_layer++;
         seq->used_layer++;
     } else if (bits == 2) {
-        // Two bits: single CCX with qubits[1] and qubits[2] controlling qubit[0]
         ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, 1, 2);
         seq->gates_per_layer[current_layer]++;
         current_layer++;
         seq->used_layer++;
     } else {
-        // Multi-bit (3+): Use n-controlled X gate via mcx()
-        // All operand qubits [1..bits] must be |1> to set result qubit[0] to |1>
-        qubit_t *controls = malloc(bits * sizeof(qubit_t));
-        if (controls == NULL) {
-            // Cleanup and return NULL
-            for (int i = 0; i < num_layers; i++) {
-                free(seq->seq[i]);
-            }
-            free(seq->seq);
-            free(seq->gates_per_layer);
-            free(bin);
-            free(seq);
-            return NULL;
-        }
+        // Multi-bit (3+): AND-ancilla decomposition (Phase 74-03)
+        // Controls: qubits [1..bits], target: qubit 0
+        // AND-ancilla: qubits [bits+1 .. bits+bits-2]
+        qubit_t controls[128];
         for (int i = 0; i < bits; i++) {
-            controls[i] = i + 1; // Operand qubits are at [1, bits]
+            controls[i] = i + 1;
         }
-        mcx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, controls, bits);
-        seq->gates_per_layer[current_layer]++;
-        current_layer++;
-        seq->used_layer++;
-        free(controls);
+        int anc_start = bits + 1; // First AND-ancilla qubit
+        emit_mcx_decomp_seq(seq, &current_layer, 0, controls, bits, anc_start);
     }
 
     // Phase 3: Uncompute - reverse the X gates to restore original state
@@ -207,20 +261,17 @@ sequence_t *CQ_equal_width(int bits, int64_t value) {
 sequence_t *cCQ_equal_width(int bits, int64_t value) {
     // Controlled classical-quantum equality comparison
     // Qubit layout: [0] = result qbool, [1:bits+1] = quantum operand, [bits+1] = control
-    // Same algorithm as CQ_equal_width but with controlled gates (CX instead of X)
-    // Control qubit at position bits+1 gates the entire operation
+    // For bits >= 2: [bits+2 .. ] = AND-ancilla (Phase 74-03)
+    // Same algorithm as CQ_equal_width but with controlled gates
 
-    // Validate input parameters
     if (bits <= 0 || bits > 64) {
-        return NULL; // Invalid bit width
+        return NULL;
     }
 
-    // Check for overflow (same as CQ_equal_width)
     uint64_t max_val = (bits == 64) ? UINT64_MAX : ((1ULL << bits) - 1);
     if (value < 0) {
         int64_t min_val = -(1LL << (bits - 1));
         if (value < min_val) {
-            // Overflow: return empty sequence
             sequence_t *seq = malloc(sizeof(sequence_t));
             if (seq == NULL)
                 return NULL;
@@ -232,7 +283,6 @@ sequence_t *cCQ_equal_width(int bits, int64_t value) {
         }
     } else {
         if ((uint64_t)value > max_val) {
-            // Overflow: return empty sequence
             sequence_t *seq = malloc(sizeof(sequence_t));
             if (seq == NULL)
                 return NULL;
@@ -244,13 +294,11 @@ sequence_t *cCQ_equal_width(int bits, int64_t value) {
         }
     }
 
-    // Convert value to binary
     int *bin = two_complement(value, bits);
     if (bin == NULL) {
         return NULL;
     }
 
-    // Count how many bits are 0 in classical value (need CX gates for those)
     int num_cx_gates = 0;
     for (int i = 0; i < bits; i++) {
         if (bin[i] == 0) {
@@ -258,10 +306,18 @@ sequence_t *cCQ_equal_width(int bits, int64_t value) {
         }
     }
 
-    // Calculate number of layers (same structure as uncontrolled version)
-    int num_layers = num_cx_gates + (bits > 1 ? bits - 1 : 1) + num_cx_gates;
+    // Phase 74-03: MCX decomposition for controlled equality
+    // For bits==1: CCX (1 layer)
+    // For bits==2: MCX(3) -> 3 CCX layers
+    // For bits>=3: MCX(bits+1) -> recursive decomposition layers
+    int mcx_layers;
+    if (bits == 1) {
+        mcx_layers = 1;
+    } else {
+        mcx_layers = mcx_decomp_layers(bits + 1); // bits+1 controls (operand + ext_ctrl)
+    }
+    int num_layers = num_cx_gates + mcx_layers + num_cx_gates;
 
-    // Allocate sequence structure
     sequence_t *seq = malloc(sizeof(sequence_t));
     if (seq == NULL) {
         free(bin);
@@ -285,11 +341,9 @@ sequence_t *cCQ_equal_width(int bits, int64_t value) {
         return NULL;
     }
 
-    // Allocate gate arrays for each layer
     for (int i = 0; i < num_layers; i++) {
-        seq->seq[i] = calloc(bits + 2, sizeof(gate_t)); // bits+2 for result, operand, control
+        seq->seq[i] = calloc(bits + 2, sizeof(gate_t));
         if (seq->seq[i] == NULL) {
-            // Cleanup on failure
             for (int j = 0; j < i; j++) {
                 free(seq->seq[j]);
             }
@@ -302,12 +356,11 @@ sequence_t *cCQ_equal_width(int bits, int64_t value) {
     }
 
     int current_layer = 0;
-    int control_qubit = bits + 1; // Control qubit position
+    int control_qubit = bits + 1;
 
     // Phase 1: Apply controlled X (CX) gates to qubits where classical bit is 0
     for (int i = 0; i < bits; i++) {
         if (bin[i] == 0) {
-            // Controlled X: target is qubit i+1, control is control_qubit
             cx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], i + 1, control_qubit);
             seq->gates_per_layer[current_layer]++;
             current_layer++;
@@ -315,43 +368,24 @@ sequence_t *cCQ_equal_width(int bits, int64_t value) {
         }
     }
 
-    // Phase 2: Controlled multi-controlled X to set result qubit
+    // Phase 2: Controlled multi-controlled X with AND-ancilla decomposition
     if (bits == 1) {
         // Single bit: CCX with control_qubit and qubit[1] controlling qubit[0]
         ccx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, control_qubit, 1);
         seq->gates_per_layer[current_layer]++;
         current_layer++;
         seq->used_layer++;
-    } else if (bits == 2) {
-        // Two bits: 3 controls (control_qubit, qubit[1], qubit[2]) -> qubit[0]
-        qubit_t controls[3] = {control_qubit, 1, 2};
-        mcx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, controls, 3);
-        seq->gates_per_layer[current_layer]++;
-        current_layer++;
-        seq->used_layer++;
     } else {
-        // Multi-bit (3+): n+1 controls (control_qubit + all operand qubits)
-        qubit_t *controls = malloc((bits + 1) * sizeof(qubit_t));
-        if (controls == NULL) {
-            // Cleanup and return NULL
-            for (int i = 0; i < num_layers; i++) {
-                free(seq->seq[i]);
-            }
-            free(seq->seq);
-            free(seq->gates_per_layer);
-            free(bin);
-            free(seq);
-            return NULL;
-        }
+        // Phase 74-03: MCX(bits+1) decomposed via AND-ancilla
+        // Controls: [control_qubit, 1, 2, ..., bits]
+        // AND-ancilla starts at qubit bits+2
+        qubit_t controls[128];
         controls[0] = control_qubit;
         for (int i = 0; i < bits; i++) {
-            controls[i + 1] = i + 1; // Operand qubits are at [1, bits]
+            controls[i + 1] = i + 1;
         }
-        mcx(&seq->seq[current_layer][seq->gates_per_layer[current_layer]], 0, controls, bits + 1);
-        seq->gates_per_layer[current_layer]++;
-        current_layer++;
-        seq->used_layer++;
-        free(controls);
+        int anc_start = bits + 2; // First AND-ancilla qubit
+        emit_mcx_decomp_seq(seq, &current_layer, 0, controls, bits + 1, anc_start);
     }
 
     // Phase 3: Uncompute - reverse the controlled X gates

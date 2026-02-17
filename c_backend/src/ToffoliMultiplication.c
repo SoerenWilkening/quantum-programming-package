@@ -419,25 +419,27 @@ void toffoli_cmul_qq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bi
             break;
 
         if (width == 1) {
-            /* 1-bit controlled multiplication: MCX with 3 controls.
-             * ret[n-1] ^= self[0] AND other[j] AND ext_ctrl.
-             *
-             * Emit a single MCX gate directly via add_gate.
-             * mcx() allocates large_control; circuit takes ownership. */
+            /* 1-bit controlled multiplication: ret[n-1] ^= self[0] AND other[j] AND ext_ctrl.
+             * Phase 74-03: Decompose MCX(3) into 3 CCX via AND-ancilla.
+             *   CCX(and_anc, self[0], other[j])       -- compute partial AND
+             *   CCX(ret[n-1], and_anc, ext_ctrl)      -- apply
+             *   CCX(and_anc, self[0], other[j])       -- uncompute AND */
             gate_t g;
+
+            /* Compute AND */
             memset(&g, 0, sizeof(gate_t));
-            qubit_t *large_control = malloc(3 * sizeof(qubit_t));
-            if (large_control == NULL) {
-                allocator_free(circ->allocator, and_anc, 1);
-                allocator_free(circ->allocator, carry, 1);
-                return;
-            }
-            large_control[0] = self_qubits[0];
-            large_control[1] = other_qubits[j];
-            large_control[2] = ext_ctrl;
-            mcx(&g, ret_qubits[n - 1], large_control, 3);
+            ccx(&g, and_anc, self_qubits[0], other_qubits[j]);
             add_gate(circ, &g);
-            /* Do NOT free large_control -- circuit takes ownership (Phase 67 pattern) */
+
+            /* Apply via AND-ancilla */
+            memset(&g, 0, sizeof(gate_t));
+            ccx(&g, ret_qubits[n - 1], and_anc, ext_ctrl);
+            add_gate(circ, &g);
+
+            /* Uncompute AND */
+            memset(&g, 0, sizeof(gate_t));
+            ccx(&g, and_anc, self_qubits[0], other_qubits[j]);
+            add_gate(circ, &g);
         } else {
             /* General case: AND-ancilla pattern for controlled addition.
              *

@@ -30,6 +30,8 @@
 		-----
 		qint == int: Uses C-level CQ_equal_width circuit.
 		qint == qint: Uses subtract-add-back pattern (a-=b, check a==0, a+=b).
+		Phase 74-03: AND-ancilla allocated for MCX decomposition (bits>=3 uncontrolled,
+		bits>=2 controlled).
 		"""
 		from .qbool import qbool
 		cdef sequence_t *seq
@@ -37,10 +39,13 @@
 		cdef int self_offset
 		cdef int start
 		cdef int start_layer
+		cdef int num_and_anc
+		cdef unsigned int and_anc_start
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _circuit_initialized = _get_circuit_initialized()
 		cdef bint _controlled = _get_controlled()
 		cdef object _control_bool = _get_control_bool()
+		cdef qubit_allocator_t *alloc
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
@@ -134,9 +139,34 @@
 			# Add control qubit if controlled context
 			if _controlled:
 				qubit_array[start] = (<qint>_control_bool).qubits[63]
+				start += 1
+
+			# Phase 74-03: Allocate AND-ancilla for MCX decomposition
+			# Uncontrolled bits >= 3: needs (bits - 2) AND-ancilla at [bits+1 .. 2*bits-2]
+			# Controlled bits >= 2: needs (bits - 1) AND-ancilla at [bits+2 .. 2*bits]
+			num_and_anc = 0
+			and_anc_start = 0
+			if _controlled and self.bits >= 2:
+				num_and_anc = self.bits - 1
+			elif not _controlled and self.bits >= 3:
+				num_and_anc = self.bits - 2
+
+			if num_and_anc > 0 and _circuit_initialized:
+				alloc = circuit_get_allocator(<circuit_s*>_circuit)
+				if alloc != NULL:
+					and_anc_start = allocator_alloc(alloc, num_and_anc, True)
+					if and_anc_start != <unsigned int>(-1):
+						for i in range(num_and_anc):
+							qubit_array[start + i] = and_anc_start + i
 
 			arr = qubit_array
 			run_instruction(seq, &arr[0], False, _circuit)
+
+			# Free AND-ancilla after use
+			if num_and_anc > 0 and _circuit_initialized and and_anc_start != <unsigned int>(-1):
+				alloc = circuit_get_allocator(<circuit_s*>_circuit)
+				if alloc != NULL:
+					allocator_free(alloc, and_anc_start, num_and_anc)
 
 			# Track dependency on compared qint (classical doesn't need tracking)
 			result.add_dependency(self)
