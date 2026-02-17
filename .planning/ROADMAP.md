@@ -86,7 +86,7 @@
 - [x] **Phase 71: Carry Look-Ahead Adder** - O(log n) depth addition with Brent-Kung and Kogge-Stone prefix trees -- completed 2026-02-17
 - [x] **Phase 72: Performance Polish** - Hardcoded sequences, T-count reporting, controlled add-subtract optimization -- completed 2026-02-18
 - [x] **Phase 73: Toffoli CQ/cCQ Classical-Bit Gate Reduction** - Inline CQ/cCQ generators exploiting classical bit values, hardcoded increment sequences -- completed 2026-02-17
-- [ ] **Phase 74: MCX/CCX Gate Decomposition & Sequence Refactoring** - Decompose CCCX gates mandatory, opt-in CCX decomposition, fast decomposed sequence functions, file refactoring
+- [x] **Phase 74: MCX/CCX Gate Decomposition & Sequence Refactoring** - Decompose CCCX gates mandatory, opt-in CCX decomposition, fast decomposed sequence functions, file refactoring -- completed 2026-02-17
 
 ## Phase Details
 
@@ -278,7 +278,7 @@ Phases execute in numeric order: 65 -> 66 -> 67 -> 68 -> 69 -> 70 -> 71 -> 72 ->
 | 71. Carry Look-Ahead Adder | v3.0 | 6/6 | Complete | 2026-02-17 |
 | 72. Performance Polish | v3.0 | 3/3 | Complete | 2026-02-18 |
 | 73. Toffoli CQ/cCQ Classical-Bit Gate Reduction | v3.0 | 2/2 | Complete | 2026-02-17 |
-| 74. MCX/CCX Gate Decomposition & Sequence Refactoring | v3.0 | 0/5 | Not Started | - |
+| 74. MCX/CCX Gate Decomposition & Sequence Refactoring | v3.0 | 5/5 | Complete | 2026-02-17 |
 
 ### Phase 74: MCX/CCX Gate Decomposition & Sequence Refactoring
 **Goal**: All MCX gates (3+ controls) are automatically decomposed into CCX/CX/X gates, with an opt-in `toffoli_decompose` option to further decompose CCX into Clifford+T. Sequences containing CCX gates get dedicated fast-path functions. Large C files are refactored for maintainability.
@@ -293,11 +293,11 @@ Phases execute in numeric order: 65 -> 66 -> 67 -> 68 -> 69 -> 70 -> 71 -> 72 ->
 **Plans**: 5 plans
 
 Plans:
-- [ ] 74-01-PLAN.md -- Pure refactoring: split ToffoliAddition.c into CDKM/CLA/Helpers + extract Toffoli dispatch from hot_path_add.c
-- [ ] 74-02-PLAN.md -- Gate infrastructure: T_GATE/TDG_GATE enum, toffoli_decompose option, updated gate counts + QASM export
-- [ ] 74-03-PLAN.md -- MCX auto-decomposition: AND-ancilla decomposition at all 9 MCX emission points + gate purity tests
-- [ ] 74-04-PLAN.md -- CCX->Clifford+T: decomposition helper, inline integration, Clifford+T test suite
-- [ ] 74-05-PLAN.md -- Hardcoded decomposed cQQ sequences (widths 1-8) + dispatch + comprehensive verification
+- [x] 74-01-PLAN.md -- Pure refactoring: split ToffoliAddition.c into CDKM/CLA/Helpers + extract Toffoli dispatch from hot_path_add.c
+- [x] 74-02-PLAN.md -- Gate infrastructure: T_GATE/TDG_GATE enum, toffoli_decompose option, updated gate counts + QASM export
+- [x] 74-03-PLAN.md -- MCX auto-decomposition: AND-ancilla decomposition at all 9 MCX emission points + gate purity tests
+- [x] 74-04-PLAN.md -- CCX->Clifford+T: decomposition helper, inline integration, Clifford+T test suite
+- [x] 74-05-PLAN.md -- Hardcoded decomposed cQQ sequences (widths 1-8) + dispatch + comprehensive verification
 
 ---
 *Roadmap created: 2026-02-02*
