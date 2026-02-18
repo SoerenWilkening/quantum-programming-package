@@ -9,7 +9,7 @@
 - v2.1 Compile Enhancements -- Phases 52-54 (shipped 2026-02-05) -- See `milestones/v2.1-ROADMAP.md`
 - v2.2 Performance Optimization -- Phases 55-61 (shipped 2026-02-08) -- See `milestones/v2.2-ROADMAP.md`
 - v2.3 Hardcoding Right-Sizing -- Phases 62-64 (shipped 2026-02-08) -- See `milestones/v2.3-ROADMAP.md`
-- v3.0 Fault-Tolerant Arithmetic -- Phases 65-74 (in progress)
+- v3.0 Fault-Tolerant Arithmetic -- Phases 65-75 (shipped 2026-02-18) -- See `milestones/v3.0-ROADMAP.md`
 
 ## Phases
 
@@ -87,6 +87,7 @@
 - [x] **Phase 72: Performance Polish** - Hardcoded sequences, T-count reporting, controlled add-subtract optimization -- completed 2026-02-18
 - [x] **Phase 73: Toffoli CQ/cCQ Classical-Bit Gate Reduction** - Inline CQ/cCQ generators exploiting classical bit values, hardcoded increment sequences -- completed 2026-02-17
 - [x] **Phase 74: MCX/CCX Gate Decomposition & Sequence Refactoring** - Decompose CCCX gates mandatory, opt-in CCX decomposition, fast decomposed sequence functions, file refactoring -- completed 2026-02-17
+- [x] **Phase 75: Clifford+T Decomposed Sequence Generation** - Pre-computed Clifford+T hardcoded sequences for CDKM and BK CLA addition, exact T-count dispatch -- completed 2026-02-18
 
 ## Phase Details
 
@@ -241,7 +242,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 65 -> 66 -> 67 -> 68 -> 69 -> 70 -> 71 -> 72 -> 73 -> 74 -> 75
+Phases execute in numeric order: 65 -> 66 -> 67 -> 68 -> 69 -> 70 -> 71 -> 72 -> 73 -> 74 -> 75 (all complete)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -279,7 +280,7 @@ Phases execute in numeric order: 65 -> 66 -> 67 -> 68 -> 69 -> 70 -> 71 -> 72 ->
 | 72. Performance Polish | v3.0 | 3/3 | Complete | 2026-02-18 |
 | 73. Toffoli CQ/cCQ Classical-Bit Gate Reduction | v3.0 | 2/2 | Complete | 2026-02-17 |
 | 74. MCX/CCX Gate Decomposition & Sequence Refactoring | v3.0 | 5/5 | Complete | 2026-02-17 |
-| 75. Clifford+T Decomposed Sequence Generation | v3.0 | 0/3 | In Progress | |
+| 75. Clifford+T Decomposed Sequence Generation | v3.0 | 3/3 | Complete | 2026-02-18 |
 
 ### Phase 74: MCX/CCX Gate Decomposition & Sequence Refactoring
 **Goal**: All MCX gates (3+ controls) are automatically decomposed into CCX/CX/X gates, with an opt-in `toffoli_decompose` option to further decompose CCX into Clifford+T. Sequences containing CCX gates get dedicated fast-path functions. Large C files are refactored for maintainability.
@@ -313,9 +314,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 75-01-PLAN.md -- CDKM Clifford+T generation script + 32 per-width C files + dispatch
-- [ ] 75-02-PLAN.md -- BK CLA Clifford+T generation script + 28 per-width C files + dispatch
-- [ ] 75-03-PLAN.md -- Header + dispatch wiring + setup.py + comprehensive test suite
+- [x] 75-01-PLAN.md -- CDKM Clifford+T generation script + 32 per-width C files + dispatch
+- [x] 75-02-PLAN.md -- BK CLA Clifford+T generation script + 28 per-width C files + dispatch
+- [x] 75-03-PLAN.md -- Header + dispatch wiring + setup.py + comprehensive test suite
 
 ---
 *Roadmap created: 2026-02-02*
