@@ -170,6 +170,29 @@ void cy(gate_t *g, qubit_t target, qubit_t control) {
     g->NumControls = 1;
     g->Control[0] = control;
 }
+void ry(gate_t *g, qubit_t target, double angle) {
+    g->Gate = Ry;
+    g->Target = target;
+    g->GateValue = angle;
+    g->NumControls = 0;
+    g->large_control = NULL;
+}
+void cry(gate_t *g, qubit_t target, qubit_t control, double angle) {
+    g->Gate = Ry;
+    g->Target = target;
+    g->GateValue = angle;
+    g->NumControls = 1;
+    g->Control[0] = control;
+    g->large_control = NULL;
+}
+void ch(gate_t *g, qubit_t target, qubit_t control) {
+    g->Gate = H;
+    g->Target = target;
+    g->NumControls = 1;
+    g->Control[0] = control;
+    g->GateValue = 0;
+    g->large_control = NULL;
+}
 void z(gate_t *g, qubit_t target) {
     g->Gate = Z;
     g->Target = target;
