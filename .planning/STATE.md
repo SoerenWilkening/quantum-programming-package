@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v4.0 Grover's Algorithm — manual building blocks + high-level API + oracle compilation + amplitude estimation.
+**Current focus:** v4.0 Grover's Algorithm -- Phase 76 (Gate Primitive Exposure)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-19 — Milestone v4.0 started
+Phase: 76 of 81 (Gate Primitive Exposure)
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-02-19 -- Roadmap created for v4.0 milestone
 
-Progress: [░░░░░░░░░░░░░░░░░░░░░░░░] 0% (requirements phase)
+Progress: [##########################░░░░░░░░░░░░░░░░░░░░░░] 0/6 phases (v4.0)
 
 ## Performance Metrics
 
@@ -42,13 +42,19 @@ Progress: [░░░░░░░░░░░░░░░░░░░░░░░
 | v2.2 Performance Optimization | 55-61 | 22 | Complete (2026-02-08) |
 | v2.3 Hardcoding Right-Sizing | 62-64 | 4 | Complete (2026-02-08) |
 | v3.0 Fault-Tolerant Arithmetic | 65-75 | 35 | Complete (2026-02-18) |
+| v4.0 Grover's Algorithm | 76-81 | TBD | In Progress |
 
 ## Accumulated Context
 
 ### Decisions
 
 See PROJECT.md Key Decisions table for full history.
-v3.0: Toffoli arithmetic as default (DSP-03), CDKM before CLA, BK compute-copy-uncompute for CLA, AND-ancilla MCX decomposition, CCX->Clifford+T 15-gate sequence, inline CQ/cCQ classical-bit generators, ~120 hardcoded Clifford+T C files.
+v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude estimation (no QFT), X-MCZ-X diffusion pattern (zero ancilla).
+
+### Research Flags
+
+- Phase 77: Interaction between oracle scoping and existing dependency tracking needs design review
+- Phase 80: Compound predicate oracle synthesis may need /gsd:research-phase
 
 ### Blockers/Concerns
 
@@ -64,8 +70,8 @@ v3.0: Toffoli arithmetic as default (DSP-03), CDKM before CLA, BK compute-copy-u
 ## Session Continuity
 
 Last session: 2026-02-19
-Stopped at: Milestone v4.0 started. Defining requirements.
-Resume action: Continue with requirements definition and roadmap creation.
+Stopped at: Roadmap created for v4.0 Grover's Algorithm milestone (6 phases, 21 requirements)
+Resume action: `/gsd:plan-phase 76` to plan Gate Primitive Exposure phase
 
 ---
-*State updated: 2026-02-19 — Milestone v4.0 Grover's Algorithm started.*
+*State updated: 2026-02-19 -- Roadmap created for v4.0 milestone.*

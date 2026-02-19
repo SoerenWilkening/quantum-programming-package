@@ -10,6 +10,7 @@
 - v2.2 Performance Optimization -- Phases 55-61 (shipped 2026-02-08) -- See `milestones/v2.2-ROADMAP.md`
 - v2.3 Hardcoding Right-Sizing -- Phases 62-64 (shipped 2026-02-08) -- See `milestones/v2.3-ROADMAP.md`
 - v3.0 Fault-Tolerant Arithmetic -- Phases 65-75 (shipped 2026-02-18) -- See `milestones/v3.0-ROADMAP.md`
+- v4.0 Grover's Algorithm -- Phases 76-81 (in progress)
 
 ## Phases
 
@@ -90,6 +91,87 @@
 
 </details>
 
+### v4.0 Grover's Algorithm (In Progress)
+
+**Milestone Goal:** Enable users to implement Grover's search and amplitude amplification using both manual building blocks and high-level convenience APIs.
+
+- [ ] **Phase 76: Gate Primitive Exposure** - Expose H, Z, Ry gates at Python level via Cython bindings
+- [ ] **Phase 77: Oracle Infrastructure** - @ql.grover_oracle decorator with compute-phase-uncompute enforcement
+- [ ] **Phase 78: Diffusion Operator** - X-MCZ-X pattern with zero ancilla and O(n) gates
+- [ ] **Phase 79: Grover Search Integration** - ql.grover() API combining oracle + diffusion with auto iteration count
+- [ ] **Phase 80: Oracle Auto-Synthesis & Adaptive Search** - Lambda predicate oracles and exponential backoff for unknown M
+- [ ] **Phase 81: Amplitude Estimation (IQAE)** - ql.amplitude_estimate() with configurable precision and confidence
+
+## Phase Details
+
+### Phase 76: Gate Primitive Exposure
+**Goal**: Users can apply Hadamard-equivalent and rotation gates to qint/qbool via branch(theta) method
+**Depends on**: Nothing (first phase in milestone)
+**Requirements**: PRIM-01, PRIM-02, PRIM-03
+**Success Criteria** (what must be TRUE):
+  1. User can call `x.branch(theta)` on a qint to apply Ry(theta) rotation to all qubits
+  2. User can call `b.branch(theta)` on a qbool to apply Ry(theta) rotation
+  3. `branch(pi/2)` creates equal superposition verifiable via Qiskit simulation
+  4. H and Z gates are accessible internally for diffusion operator construction
+**Plans**: TBD
+
+### Phase 77: Oracle Infrastructure
+**Goal**: Users can create quantum oracles with correct phase-marking semantics that integrate with @ql.compile
+**Depends on**: Phase 76
+**Requirements**: ORCL-01, ORCL-02, ORCL-03, ORCL-04, ORCL-05
+**Success Criteria** (what must be TRUE):
+  1. User can pass any @ql.compile decorated function as oracle to Grover
+  2. @ql.grover_oracle decorator enforces compute-then-phase-then-uncompute ordering
+  3. Oracle exits with zero ancilla delta (validated, hard error on violation)
+  4. Bit-flip oracles are auto-wrapped with X-H-oracle-H-X phase kickback pattern
+  5. Oracle cached correctly under different arithmetic_mode settings (QFT vs Toffoli)
+**Plans**: TBD
+
+### Phase 78: Diffusion Operator
+**Goal**: Users can apply the Grover diffusion operator as a reusable building block
+**Depends on**: Phase 76
+**Requirements**: GROV-03, GROV-05
+**Success Criteria** (what must be TRUE):
+  1. Diffusion operator uses X-MCZ-X pattern with zero ancilla allocation
+  2. User can manually construct S_0 reflection via `with a == 0` for custom amplitude amplification
+  3. Diffusion operator accepts explicit qubit list (validated against search register width)
+  4. Phase flip on |0...0> state verifiable via Qiskit simulation for widths 1-8
+**Plans**: TBD
+
+### Phase 79: Grover Search Integration
+**Goal**: Users can execute Grover search with a single API call and get measured results
+**Depends on**: Phase 77, Phase 78
+**Requirements**: GROV-01, GROV-02, GROV-04
+**Success Criteria** (what must be TRUE):
+  1. `ql.grover(oracle, search_space)` executes search and returns measured Python value
+  2. Iteration count auto-calculated from N and M using floor(pi/4 * sqrt(N/M) - 0.5)
+  3. Multiple solutions (M > 1) produce correct iteration count and find any valid solution
+  4. End-to-end test with known-solution oracle achieves peak probability at calculated iteration count
+**Plans**: TBD
+
+### Phase 80: Oracle Auto-Synthesis & Adaptive Search
+**Goal**: Users can specify oracles as Python lambdas and search without knowing solution count
+**Depends on**: Phase 79
+**Requirements**: SYNTH-01, SYNTH-02, SYNTH-03, ADAPT-01, ADAPT-02
+**Success Criteria** (what must be TRUE):
+  1. User can pass Python predicate lambda as oracle (`ql.grover(lambda x: x > 5, x)`)
+  2. Compound predicates compile to valid oracles (`(x > 10) & (x < 50)`)
+  3. Predicate oracles work with all existing qint comparison operators
+  4. When M is unknown, Grover uses exponential backoff strategy
+  5. Adaptive search terminates when solution found or search space exhausted
+**Plans**: TBD
+
+### Phase 81: Amplitude Estimation (IQAE)
+**Goal**: Users can estimate success probability of an oracle using iterative quantum amplitude estimation
+**Depends on**: Phase 79
+**Requirements**: AMP-01, AMP-02, AMP-03
+**Success Criteria** (what must be TRUE):
+  1. `ql.amplitude_estimate(oracle, register)` returns estimated probability
+  2. Implementation uses IQAE variant (no QFT circuit required)
+  3. User can specify precision (epsilon) and confidence level as parameters
+  4. Estimated amplitude matches known oracle probability within specified epsilon
+**Plans**: TBD
+
 ## Progress
 
 | Phase | Milestone | Plans Complete | Status | Completed |
@@ -101,6 +183,12 @@
 | 55-61 | v2.2 | 22/22 | Complete | 2026-02-08 |
 | 62-64 | v2.3 | 4/4 | Complete | 2026-02-08 |
 | 65-75 | v3.0 | 35/35 | Complete | 2026-02-18 |
+| 76 | v4.0 | 0/TBD | Not started | - |
+| 77 | v4.0 | 0/TBD | Not started | - |
+| 78 | v4.0 | 0/TBD | Not started | - |
+| 79 | v4.0 | 0/TBD | Not started | - |
+| 80 | v4.0 | 0/TBD | Not started | - |
+| 81 | v4.0 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-02*
@@ -111,3 +199,4 @@
 *Milestone v2.2 shipped: 2026-02-08*
 *Milestone v2.3 shipped: 2026-02-08*
 *Milestone v3.0 shipped: 2026-02-18*
+*Milestone v4.0 started: 2026-02-19*

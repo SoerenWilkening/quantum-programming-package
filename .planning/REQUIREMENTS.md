@@ -43,7 +43,7 @@ Requirements for Grover's Algorithm milestone. Each maps to roadmap phases.
 ### Amplitude Estimation
 
 - [ ] **AMP-01**: `ql.amplitude_estimate(oracle, register)` returns estimated probability
-- [ ] **AMP-02**: Uses Iterative QAE (IQAE) variant — no QFT circuit required
+- [ ] **AMP-02**: Uses Iterative QAE (IQAE) variant -- no QFT circuit required
 - [ ] **AMP-03**: User can specify precision (epsilon) and confidence level
 
 ## Future Requirements
@@ -78,33 +78,33 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PRIM-01 | TBD | Pending |
-| PRIM-02 | TBD | Pending |
-| PRIM-03 | TBD | Pending |
-| ORCL-01 | TBD | Pending |
-| ORCL-02 | TBD | Pending |
-| ORCL-03 | TBD | Pending |
-| ORCL-04 | TBD | Pending |
-| ORCL-05 | TBD | Pending |
-| GROV-01 | TBD | Pending |
-| GROV-02 | TBD | Pending |
-| GROV-03 | TBD | Pending |
-| GROV-04 | TBD | Pending |
-| GROV-05 | TBD | Pending |
-| SYNTH-01 | TBD | Pending |
-| SYNTH-02 | TBD | Pending |
-| SYNTH-03 | TBD | Pending |
-| ADAPT-01 | TBD | Pending |
-| ADAPT-02 | TBD | Pending |
-| AMP-01 | TBD | Pending |
-| AMP-02 | TBD | Pending |
-| AMP-03 | TBD | Pending |
+| PRIM-01 | Phase 76 | Pending |
+| PRIM-02 | Phase 76 | Pending |
+| PRIM-03 | Phase 76 | Pending |
+| ORCL-01 | Phase 77 | Pending |
+| ORCL-02 | Phase 77 | Pending |
+| ORCL-03 | Phase 77 | Pending |
+| ORCL-04 | Phase 77 | Pending |
+| ORCL-05 | Phase 77 | Pending |
+| GROV-01 | Phase 79 | Pending |
+| GROV-02 | Phase 79 | Pending |
+| GROV-03 | Phase 78 | Pending |
+| GROV-04 | Phase 79 | Pending |
+| GROV-05 | Phase 78 | Pending |
+| SYNTH-01 | Phase 80 | Pending |
+| SYNTH-02 | Phase 80 | Pending |
+| SYNTH-03 | Phase 80 | Pending |
+| ADAPT-01 | Phase 80 | Pending |
+| ADAPT-02 | Phase 80 | Pending |
+| AMP-01 | Phase 81 | Pending |
+| AMP-02 | Phase 81 | Pending |
+| AMP-03 | Phase 81 | Pending |
 
 **Coverage:**
 - v4.0 requirements: 21 total
-- Mapped to phases: 0
-- Unmapped: 21
+- Mapped to phases: 21
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-19*
-*Last updated: 2026-02-19 after initial definition*
+*Last updated: 2026-02-19 after roadmap creation*
