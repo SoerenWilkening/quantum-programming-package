@@ -1,279 +1,397 @@
-# Feature Landscape: Pixel-Art Circuit Visualization
+# Feature Research: Grover's Algorithm and Amplitude Amplification
 
-**Domain:** Quantum circuit visualization (compact pixel-art rendering)
-**Researched:** 2026-02-03
-**Confidence:** MEDIUM-HIGH
+**Domain:** Quantum search algorithms for high-level quantum programming framework
+**Researched:** 2026-02-19
+**Confidence:** HIGH
 
 ## Executive Summary
 
-Quantum circuit visualization is a solved problem for small circuits (under 20 qubits) -- Qiskit's matplotlib drawer, Cirq's SVG renderer, and PennyLane's text drawer all handle this well. However, **visualization breaks down at scale**: Qiskit's `mpl` drawer becomes unreadable above ~40 qubits and unusable above ~60. The existing ASCII `circuit_visualize` in this framework caps display at 60 layers and skips rendering entirely above 2000 gates. Pixel-art rendering fills a genuine gap -- compact, scalable visualization of circuits with 100-200+ qubits and thousands of gates, where each gate occupies only 2-3 pixels and the full circuit structure remains visible.
+Grover's algorithm and amplitude amplification are foundational quantum algorithms providing quadratic speedup for unstructured search problems. This research identifies features required to add Grover/amplitude amplification capabilities to the existing Quantum Assembly framework, which already provides `qint`, `qarray`, quantum conditionals (`with cond:`), comparison operators, and the `@ql.compile` decorator.
 
-The key insight from Quantivine (IEEE TVCG 2023) is that large-circuit visualization requires **semantic abstraction** -- not just shrinking the same diagram. For a pixel-art approach, this translates to two zoom levels: an overview mode showing circuit structure/density and a detail mode showing individual gates. This is the project's core differentiator.
+The implementation challenge is **oracle compilation** -- automatically converting user-defined Python predicates (e.g., `lambda x: x > 5`) into reversible quantum circuits that mark solutions via phase flip. The framework's existing `@ql.compile` decorator provides a foundation for this by capturing gate sequences, but oracles require additional phase-marking logic.
 
-## Table Stakes
+The second challenge is **iteration count determination** -- Grover requires approximately (pi/4) * sqrt(N/M) iterations where M is the number of solutions. When M is unknown, either quantum counting or exponential search strategies are needed.
 
-Features users expect from any graphical circuit visualization. Missing any of these makes the output confusing or incomplete.
+## Feature Landscape
+
+### Table Stakes (Users Expect These)
+
+Features users assume exist when a quantum framework claims to support Grover's algorithm. Missing these makes the feature feel incomplete or broken.
 
 | Feature | Why Expected | Complexity | Dependencies | Notes |
 |---------|--------------|------------|--------------|-------|
-| **Horizontal qubit wires** | Universal convention -- qubits are horizontal lines, time flows left-to-right | **Low** | PIL ImageDraw lines | Every circuit diagram ever uses this layout |
-| **Distinct gate symbols per type** | Users must tell X from H from P at a glance | **Medium** | Pixel icon design (2-3px shapes) | Color + shape combination needed at small scale |
-| **Control-target connections** | Multi-qubit gates shown with vertical lines connecting control dot to target | **Medium** | Vertical line drawing between qubit rows | CNOT = filled dot + target circle/plus, connected by vertical line |
-| **Qubit labels** | Users need to know which wire is which qubit | **Low** | Text rendering at left margin | `q0`, `q1`, ... at start of each wire |
-| **Save to PNG** | Standard image output format | **Low** | `PIL.Image.save()` | Trivial with Pillow |
-| **Return PIL Image object** | Programmatic access for Jupyter display, embedding, further processing | **Low** | Return `Image` from render function | `_repr_png_` enables Jupyter inline display |
-| **Measurement gates** | Measurement is a distinct operation users must see | **Low** | Distinct icon (meter symbol or M box) | Standard circuit element |
-| **Layer/time axis indication** | Users need to understand temporal ordering | **Low** | Optional column numbers or tick marks | Can be subtle at pixel scale |
-| **Wire continuity** | Qubit wires must be continuous lines even when no gate is present | **Low** | Draw wire segments between gates | Empty columns get plain horizontal line |
-| **Color legend** | At 2-3px per gate, color is the primary distinguishing feature -- legend is essential | **Medium** | Separate legend region or optional overlay | Without legend, pixel art is meaningless to new users |
+| **Basic Grover search (`ql.grover`)** | Core algorithm -- users expect a function that finds marked elements | MEDIUM | Diffusion operator, oracle support | Main entry point: `ql.grover(oracle, n_qubits)` or `ql.grover(predicate, search_space)` |
+| **Manual oracle mode** | Users with custom circuits need direct control | LOW | None beyond existing qint/qarray | Accept user-provided oracle circuit that implements phase flip |
+| **Automatic iteration count (known M)** | Users shouldn't manually calculate iterations | LOW | Math only | `iterations = round(pi/4 * sqrt(N/M))` |
+| **Diffusion operator** | Core algorithm component -- reflection about mean | MEDIUM | Multi-controlled Z, Hadamard on search register | Standard construction: H-X-MCZ-X-H |
+| **Multi-qubit search support** | Must work beyond toy 2-3 qubit examples | MEDIUM | Existing qint width support (1-64 bits) | Framework already handles variable-width qints |
+| **Result measurement** | Must return actual found values, not just circuits | MEDIUM | Measurement integration, result parsing | Return measurement outcomes as Python values |
+| **Multiple solutions support** | Many real problems have multiple valid answers | LOW | Oracle marks multiple states | Same oracle can mark multiple states; affects iteration count |
+| **OpenQASM export** | Framework already supports this; must work with Grover circuits | LOW | Existing `to_openqasm()` | Already available -- ensure compatibility |
 
-## Differentiators
+### Differentiators (Competitive Advantage)
 
-Features that make pixel-art visualization uniquely valuable compared to Qiskit/Cirq/text approaches. These justify building a new renderer rather than wrapping an existing one.
+Features that set this framework apart from Qiskit/Cirq/PennyLane/Qrisp for Grover's algorithm. These justify building rather than wrapping existing implementations.
 
 | Feature | Value Proposition | Complexity | Dependencies | Notes |
 |---------|-------------------|------------|--------------|-------|
-| **Overview zoom level** (2-3px gates) | See the ENTIRE circuit structure at once for 100+ qubit circuits -- no other tool does this | **Medium** | NumPy array for fast pixel placement, PIL Image.fromarray() | Core differentiator. Qiskit folds at 25 layers; this shows all layers |
-| **Detail zoom level** (8-12px gates) | Readable gate labels for smaller circuits or selected regions | **Medium** | Larger icons with text labels | Matches what Qiskit/Cirq provide but in PIL format |
-| **Scalability to 200+ qubits** | No existing open-source tool renders 200-qubit circuits legibly | **High** | Efficient layout algorithm, NumPy array rendering | Quantivine handles 100 qubits; this targets 200+ |
-| **Color-coded gate categories** | Instant visual pattern recognition -- "where are all the phase gates?" | **Low** | Color palette definition per gate type | Qiskit supports this via style dict; pixel art makes it the PRIMARY identifier |
-| **Circuit density heatmap** (overview) | Show where the circuit is "busy" vs "sparse" -- reveals optimization opportunities | **Medium** | Gate count per region, color intensity mapping | Novel feature -- no existing tool does this as a built-in |
-| **Idle wire suppression** | Skip rendering unused qubit wires to compress vertical space | **Low** | Check `used_occupation_indices_per_qubit` from C backend | Already available: `circuit_visualize` skips unused qubits |
-| **Fast rendering** (NumPy backend) | Render 10,000+ gate circuits in under 1 second | **Medium** | NumPy array manipulation instead of PIL pixel-by-pixel | PIL putpixel is slow; NumPy array + Image.fromarray() is 10-100x faster |
-| **No matplotlib dependency** | Lighter weight than Qiskit's mpl drawer; PIL/Pillow only | **Low** | Pillow is the only dependency | Simpler install, no matplotlib/LaTeX |
+| **Automatic oracle synthesis from Python predicates** | User writes `lambda x: x > 5`, framework compiles to quantum oracle | HIGH | Boolean synthesis from comparisons, `@ql.compile` extension | Major differentiator -- most frameworks require manual oracle construction |
+| **Pythonic API matching framework style** | `ql.grover(lambda x: x == target, x_register)` feels natural with existing `qint` syntax | MEDIUM | Clean API design | Consistent with existing `with cond:`, `@ql.compile` patterns |
+| **Automatic uncomputation in oracles** | Framework's qubit-saving mode extends to oracle ancillas | MEDIUM | Existing uncomputation infrastructure in `@ql.compile` | Framework already has `f.inverse()` and auto-uncompute in compile.py |
+| **Integration with qarray** | Search over arrays: `ql.grover(lambda arr: arr.sum() == 10, my_array)` | HIGH | qarray as search space, element marking | Natural extension of existing qarray operations |
+| **Quantum counting for unknown M** | Estimate number of solutions before full search | HIGH | Phase estimation, eigenvalue estimation | Enables optimal iteration count without prior knowledge |
+| **Amplitude estimation** | Generalize beyond search to probability estimation | HIGH | IQAE (no QPE) variant preferred | Enables quantum speedup for Monte Carlo-style problems |
+| **Adaptive search (unknown M)** | Exponential search strategy when M unknown | MEDIUM | Loop over increasing iteration counts | Practical for real problems where M is unknown |
+| **Debug/visualization** | Show oracle circuit, iteration progress, amplitude evolution | MEDIUM | Existing circuit visualization | Help users understand what's happening |
 
-## Anti-Features
+### Anti-Features (Commonly Requested, Often Problematic)
 
-Features to explicitly NOT build. Common mistakes in circuit visualization tools.
+Features that seem good but create complexity without proportional value, or conflict with framework design.
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|--------------|-----------|-------------------|
-| **Interactive zoom/pan** | Requires GUI framework (tkinter/Qt), massive scope increase, out-of-scope per PROJECT.md | Generate static images at chosen zoom level; user can open in any image viewer |
-| **LaTeX rendering** | Requires LaTeX installation, slow, fragile; Qiskit already does this well | PIL-only rendering; recommend Qiskit for publication-quality output |
-| **SVG output** | Adds complexity for little benefit in the pixel-art paradigm; SVG is for vector graphics | PNG output only; pixel art is inherently raster |
-| **Animated circuits** | GIF/video of circuit execution is a different product entirely | Static circuit diagram is the deliverable |
-| **Gate parameter text at overview zoom** | At 2-3px per gate, text is illegible; forcing it creates visual noise | Use color/shape only at overview; show parameters only at detail zoom |
-| **Classical register / measurement outcome wires** | The framework has no classical registers; adding fake ones misleads | Show measurement gate (M icon) on qubit wire; no double-line classical wire |
-| **Custom gate definitions** | Framework decomposes everything to standard gates; custom boxes add confusion | Render only the standard gate types (X, Y, Z, H, P, Rx, Ry, Rz, M) |
-| **Matplotlib backend option** | Duplicates Qiskit's functionality; stick to PIL for uniqueness and simplicity | PIL/NumPy only; this IS the alternative to matplotlib |
-| **Real-time circuit building visualization** | Requires live rendering during `add_gate`; performance and architecture nightmare | Render complete circuit after construction; this is a snapshot tool |
-| **Folding/wrapping** (Qiskit-style) | Folding at N layers loses the "see entire circuit" advantage that is the core value proposition | Use horizontal scrolling (wide images) or overview zoom instead |
+| Feature | Why Requested | Why Problematic | Alternative |
+|---------|---------------|-----------------|-------------|
+| **Full quantum walk search** | Academic completeness | Different algorithm family; Grover handles unstructured search well | Document as future milestone if graph-structured problems are common |
+| **Arbitrary state preparation** | Generalized amplitude amplification | Framework focuses on computational basis states; arbitrary preparation requires different initialization | Support custom state_preparation parameter for advanced users |
+| **Real-time amplitude tracking** | Visualization request | Requires statevector simulation; doesn't work on real hardware | Provide theoretical amplitude plot based on iteration count |
+| **Automatic SAT/3-SAT solving** | Common benchmark | SAT-specific oracle construction is a separate problem domain | Document how to construct SAT oracles; don't auto-generate |
+| **Interactive parameter tuning** | UX request | Requires GUI framework; out of scope | Provide iteration count recommendations via function |
+| **Hybrid classical-quantum loop** | Variational algorithms | Grover is not variational; wrong paradigm | Document that Grover is fixed-iteration, not variational |
+| **Fault-tolerant Grover** | Production readiness | NISQ focus for now; fault-tolerant decomposition is separate concern | Framework already has T-gate decomposition; apply to Grover circuits |
 
 ## Feature Dependencies
 
-### Core Rendering Pipeline
+### Core Grover Implementation
 
 ```
-Circuit data access (from C backend via Cython)
-    |-- Already available: gate_count, depth, qubit_count, gate_counts
-    |-- Already available: used_occupation_indices_per_qubit (skip unused)
-    |-- NEEDED: layer-by-layer gate iteration from Python
-    |       |-- Option A: Expose circuit_t fields via Cython (preferred)
-    |       |-- Option B: Parse OpenQASM string (wasteful but works)
-    |       |-- Option C: New C function returning structured gate list
+ql.grover() function
+    |-- requires --> Diffusion operator
+    |                   |-- requires --> Multi-controlled Z gate
+    |                   |-- requires --> Hadamard on search qubits
     |
-    v
-Layout computation (Pure Python)
-    |-- Map each gate to (x, y) pixel coordinates
-    |-- Handle multi-qubit gate vertical spans
-    |-- Compute image dimensions
+    |-- requires --> Oracle (phase flip circuit)
+    |                   |-- Option A: User-provided circuit
+    |                   |-- Option B: Auto-synthesized from predicate
+    |                       |-- requires --> Boolean synthesis
+    |                       |-- requires --> Phase kickback pattern
+    |                       |-- uses --> @ql.compile capture
     |
-    v
-Pixel rendering (NumPy + PIL)
-    |-- Create NumPy array of correct size
-    |-- Draw qubit wires (horizontal lines)
-    |-- Draw gate icons at computed positions
-    |-- Draw control lines (vertical segments)
-    |-- Convert to PIL Image via Image.fromarray()
+    |-- requires --> Iteration count calculation
+    |                   |-- Option A: User-provided (known M)
+    |                   |-- Option B: Auto-calculated from N and M
+    |                   |-- Option C: Adaptive search (unknown M)
+    |                       |-- requires --> Exponential backoff loop
+    |                   |-- Option D: Quantum counting (unknown M)
+    |                       |-- requires --> Phase estimation
+    |                       |-- HIGH complexity
     |
-    v
-Output
-    |-- Return PIL Image object
-    |-- Optional: save to file path
-    |-- Optional: display in Jupyter via _repr_png_
+    |-- requires --> Measurement and result extraction
+                        |-- uses --> Existing measurement in qint
+                        |-- requires --> Result type conversion
 ```
 
-### Gate Icon Design Dependencies
+### Oracle Synthesis Pipeline
 
 ```
-Overview icons (2-3px) -- color is primary identifier
-    |-- Single-qubit: colored square (2x2 or 3x3)
-    |-- CNOT target: small plus or circle
-    |-- Control dot: single dark pixel
-    |-- Measurement: distinct color (e.g., gray)
-
-Detail icons (8-12px) -- shape + text label
-    |-- Single-qubit: colored box with 1-2 char label
-    |-- CNOT target: circle with plus inside
-    |-- Control dot: filled circle
-    |-- Measurement: meter symbol or "M" box
-    |-- Phase/rotation: box with angle indicator
-```
-
-### Zoom Level Dependencies
-
-```
-Overview mode (default for circuits > threshold)
-    |-- Requires: gate icon set at 2-3px
-    |-- Requires: color palette for gate categories
-    |-- Requires: wire drawing at 1px height
-    |-- Optional: density heatmap overlay
+Python predicate (lambda x: x > 5)
+    |-- captured by --> Modified @ql.compile
+    |                       |-- records --> Gate sequence for True branch
+    |                       |-- identifies --> Condition evaluation qubits
     |
-Detail mode (default for circuits <= threshold)
-    |-- Requires: gate icon set at 8-12px
-    |-- Requires: text rendering for gate labels
-    |-- Requires: wire drawing at 1-2px height
-    |-- Threshold suggestion: 30 qubits / 100 layers
+    |-- transformed to --> Phase oracle
+    |                       |-- Option A: Boolean oracle + phase kickback
+    |                       |   |-- requires --> Ancilla qubit in |-⟩ state
+    |                       |   |-- uses --> Existing comparison operators
+    |                       |
+    |                       |-- Option B: Phase oracle (direct)
+    |                           |-- requires --> Convert condition to multi-controlled Z
+    |                           |-- avoids --> Extra ancilla for phase kickback
+    |
+    |-- wrapped by --> Oracle function
+                        |-- applies --> Uncomputation of intermediate values
+                        |-- preserves --> Search register state
 ```
 
-## Gate Type Color Palette Recommendation
+### Amplitude Amplification Generalization
 
-Based on quantum computing conventions (Qiskit textbook style, Qniverse color categories).
+```
+Amplitude Amplification (general)
+    |-- specializes to --> Grover search (uniform superposition)
+    |
+    |-- requires --> State preparation operator A
+    |                   |-- Default: H-gates (uniform superposition)
+    |                   |-- Custom: User-provided circuit
+    |
+    |-- requires --> Oracle operator (marks good states)
+    |
+    |-- requires --> Grover operator Q = -A S_0 A^dag S_chi
+    |                   |-- S_0: Reflection about zero state
+    |                   |-- S_chi: Oracle (reflection about good states)
+    |
+    |-- extends to --> Amplitude Estimation
+                        |-- estimates --> Probability amplitude of good states
+                        |-- uses --> IQAE (iterative, no phase estimation)
+                                       or QAE (with phase estimation)
+```
 
-| Gate Category | Gates | Recommended Color | Hex | Rationale |
-|---------------|-------|-------------------|-----|-----------|
-| Pauli gates | X, Y, Z | Blue | `#4488CC` | Standard "basic operation" color |
-| Hadamard | H | Green | `#44AA66` | Distinct from Pauli, common gate deserves own color |
-| Phase/rotation | P, Rx, Ry, Rz | Orange | `#CC8844` | Parameterized gates grouped visually |
-| Control dot | (control qubit) | Black | `#222222` | Universal convention: filled circle = control |
-| CNOT target | (target of controlled-X) | Blue | `#4488CC` | Same as X gate (it IS an X gate) |
-| Measurement | M | Gray | `#888888` | Non-unitary, visually distinct from gates |
-| Wire | (qubit line) | Light gray | `#CCCCCC` | Background element, should not compete with gates |
-| Background | | White | `#FFFFFF` | Clean, maximizes contrast |
+### Dependency Notes
 
-Confidence: MEDIUM -- color choices are subjective; these follow established conventions from Qiskit's textbook theme and general UX principles for categorical color coding.
+- **Oracle requires comparison operators:** The framework already has <, >, ==, !=, <=, >= on qint. These produce qbool results that can control phase flips.
+- **Diffusion requires multi-controlled Z:** The framework has controlled operations via `with cond:`. Need efficient MCZ decomposition.
+- **Auto-oracle requires @ql.compile extension:** The existing compile decorator captures gates. Oracle synthesis needs to additionally track which qubits represent the "condition" result.
+- **Quantum counting conflicts with simple search:** If implemented, quantum counting uses different circuit structure. Can be separate function `ql.count_solutions()`.
 
-## MVP Recommendation
+## MVP Definition
 
-### Must Have (Phase 1: Core Renderer)
+### Launch With (v1 - Core Grover)
 
-1. **Circuit data extraction from C backend to Python**
-   - Iterate layers and gates from Python code
-   - Get gate type, target qubit, control qubits, gate value for each gate
-   - This is the critical dependency -- everything else is pure Python
+Minimum viable Grover implementation that provides real value.
 
-2. **Overview mode rendering** (2-3px gates)
-   - NumPy array-based rendering for performance
-   - Horizontal qubit wires, colored gate pixels, vertical control lines
-   - Color-coded by gate category
-   - Handles circuits up to 200 qubits, 10,000+ gates
+- [x] **`ql.grover()` basic search** -- Manual oracle mode with user-provided phase-flip circuit. Returns measurement result.
+  - Why essential: Core functionality; users can implement any search problem
 
-3. **Python API `ql.draw_circuit()`**
-   - Returns PIL Image
-   - Optional `filename` parameter for direct save
-   - Optional `zoom` parameter (`"overview"` or `"detail"`)
+- [x] **Diffusion operator** -- Built-in construction using MCZ + Hadamard.
+  - Why essential: Required for any Grover search
 
-4. **Color legend**
-   - Rendered as part of the image (bottom or side panel)
-   - Maps colors to gate type names
+- [x] **Automatic iteration count (known M)** -- Calculate optimal iterations when user specifies number of solutions.
+  - Why essential: Prevents user error in iteration selection
 
-### Should Have (Phase 2: Detail + Polish)
+- [x] **Multiple qubits support (1-64 bits)** -- Work with existing qint width range.
+  - Why essential: Framework already supports this; must not regress
 
-5. **Detail mode rendering** (8-12px gates)
-   - Gate label text inside boxes
-   - Better for circuits under 30 qubits / 100 layers
+- [x] **Integration with `@ql.compile`** -- Compiled oracles work with Grover.
+  - Why essential: Users expect existing compilation to work
 
-6. **Auto zoom selection**
-   - Automatically choose overview vs detail based on circuit size
-   - Threshold: ~30 qubits or ~200 layers switches to overview
+### Add After Validation (v1.x - Oracle Synthesis)
 
-7. **Qubit labels** at left margin
+Features to add once core Grover is working.
 
-### Nice to Have (Phase 3: Advanced)
+- [ ] **Automatic oracle from Python predicate** -- `ql.grover(lambda x: x > 5, x)` automatically generates phase oracle.
+  - Trigger: User demand for simpler API than manual oracle construction
 
-8. **Circuit density heatmap** in overview mode
-9. **Region-of-interest rendering** (render subset of qubits/layers at detail zoom)
-10. **Jupyter `_repr_png_` integration** on circuit object
+- [ ] **Adaptive search for unknown M** -- Exponential backoff when solution count unknown.
+  - Trigger: Real-world problems where M is not known in advance
 
-### Explicitly Deferred
+- [ ] **qarray integration** -- Search over quantum arrays, mark array states.
+  - Trigger: Array-based search problems
 
-- Interactive visualization (out of scope per PROJECT.md)
-- SVG or LaTeX output (not pixel-art's strength)
-- Animation or step-by-step rendering
-- Folding/wrapping (contradicts the "see everything" value proposition)
-- Custom color themes (hardcode a good default first)
+- [ ] **Debug visualization** -- Show oracle circuit structure, explain iteration count.
+  - Trigger: User confusion about oracle construction or iteration selection
 
-## Comparison With Existing Tools
+### Future Consideration (v2+ - Advanced Features)
 
-| Capability | Qiskit `mpl` | Cirq SVG | ASCII (current) | Pixel-Art (proposed) |
-|------------|-------------|----------|-----------------|---------------------|
-| Max practical qubits | ~40 | ~30 | ~20 (60 layers cap) | 200+ |
-| Max practical gates | ~500 | ~200 | ~2000 (skips rendering) | 10,000+ |
-| Output format | matplotlib Figure | SVG/HTML | stdout text | PIL Image (PNG) |
-| Dependencies | matplotlib, LaTeX (optional) | None (built-in) | None (C printf) | Pillow, NumPy |
-| Gate labeling | Full text + parameters | Text labels | 1-char symbols | Color + shape (overview), text (detail) |
-| Customization | Extensive (style dict) | Limited | None | Color palette only |
-| Rendering speed | Slow (>5s for large) | Fast | Fast | Fast (NumPy) |
-| Jupyter integration | Yes (inline) | Yes (SVG) | No (text only) | Yes (PIL _repr_png_) |
+Features to defer until core Grover is validated.
+
+- [ ] **Quantum counting** -- Estimate M using phase estimation.
+  - Why defer: Complex implementation; adaptive search is simpler alternative
+
+- [ ] **Amplitude estimation** -- Generalize to probability estimation problems.
+  - Why defer: Different use case than search; requires separate validation
+
+- [ ] **Fixed-point amplitude amplification** -- Avoid "overcooking" problem.
+  - Why defer: Advanced technique; standard Grover sufficient for MVP
+
+- [ ] **Custom state preparation** -- Non-uniform initial superposition.
+  - Why defer: Most problems use uniform superposition; edge case
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| Basic `ql.grover()` | HIGH | MEDIUM | P1 |
+| Diffusion operator | HIGH | MEDIUM | P1 |
+| Manual oracle mode | HIGH | LOW | P1 |
+| Auto iteration count (known M) | MEDIUM | LOW | P1 |
+| Result measurement | HIGH | LOW | P1 |
+| Auto oracle synthesis | HIGH | HIGH | P2 |
+| Adaptive search (unknown M) | MEDIUM | MEDIUM | P2 |
+| qarray integration | MEDIUM | MEDIUM | P2 |
+| Debug visualization | LOW | MEDIUM | P3 |
+| Quantum counting | MEDIUM | HIGH | P3 |
+| Amplitude estimation | MEDIUM | HIGH | P3 |
+| Fixed-point AA | LOW | HIGH | P3 |
+
+**Priority key:**
+- P1: Must have for launch (core functionality)
+- P2: Should have, add when possible (differentiators)
+- P3: Nice to have, future consideration (advanced features)
+
+## Competitor Feature Analysis
+
+| Feature | Qiskit | Cirq | PennyLane | QRISP | Our Approach |
+|---------|--------|------|-----------|-------|--------------|
+| **Basic Grover** | `Grover` class + `AmplificationProblem` | Manual construction | `qml.GroverOperator` | `grover()` function | `ql.grover()` -- single function, Python-native |
+| **Oracle construction** | `PhaseOracleGate`, DIMACS support | Manual | Manual | Oracle functions | Auto-synthesis from predicates (differentiator) |
+| **Iteration handling** | `iterations` parameter | Manual calculation | Manual | Auto-calculation | Auto with known M; adaptive with unknown M |
+| **Amplitude estimation** | `IterativeAmplitudeEstimation` | Not built-in | `AmplitudeEstimation` | `amplitude_estimation()` | Planned for v2 |
+| **Integration style** | Separate algorithms module | Low-level | QNode-based | High-level functions | Matches existing `qint`/`qarray` style |
+| **Uncomputation** | Manual | Manual | Automatic (adjoints) | Automatic | Automatic (existing `@ql.compile` infrastructure) |
+
+## Expected Behavior by Component
+
+### Oracle Compilation (Auto-Synthesis)
+
+**Input:** Python predicate using qint operations
+```python
+def is_solution(x):
+    return x > 5 and x < 10
+```
+
+**Expected Behavior:**
+1. Compile predicate to compute condition result into ancilla
+2. Apply phase flip (Z gate) controlled by condition
+3. Uncompute condition evaluation (restore ancilla to |0⟩)
+4. Net effect: Phase flip on states where predicate is True
+
+**Key Requirements:**
+- Predicate must use framework operations (qint comparisons, qarray methods)
+- All intermediate ancillas must be uncomputed
+- Phase flip must be reversible
+- Support for AND/OR combinations of conditions
+
+### Diffusion Operator
+
+**Expected Behavior:**
+Given n-qubit search register:
+1. Apply H to all qubits
+2. Apply X to all qubits
+3. Apply multi-controlled Z (or equivalent)
+4. Apply X to all qubits
+5. Apply H to all qubits
+
+**Mathematical effect:** Reflection about mean amplitude
+
+**Efficient implementation:** Use existing controlled operations; decompose MCZ efficiently
+
+### Grover Search Function
+
+**Signature:**
+```python
+def grover(
+    oracle,           # Callable or circuit that marks solutions
+    register,         # qint or qarray to search
+    *,
+    iterations=None,  # Number of iterations (auto-calc if None)
+    num_solutions=1,  # Expected number of solutions (for iteration calc)
+    measure=True,     # Whether to measure at end
+) -> Union[int, qint]:
+    ...
+```
+
+**Expected Behavior:**
+1. Initialize register to superposition (H-gates)
+2. For `iterations` times:
+   a. Apply oracle (phase flip on solutions)
+   b. Apply diffusion operator
+3. If `measure=True`: Measure and return classical value
+4. If `measure=False`: Return qint in amplified state
+
+### Amplitude Estimation
+
+**Signature:**
+```python
+def amplitude_estimation(
+    oracle,           # Marks "good" states
+    register,         # Search space
+    *,
+    epsilon=0.01,     # Target precision
+    confidence=0.95,  # Confidence level
+) -> float:
+    ...
+```
+
+**Expected Behavior:**
+1. Use IQAE (iterative, no phase estimation) for NISQ compatibility
+2. Return estimated probability of "good" states
+3. Provide error bounds
+
+### Quantum Counting (Advanced)
+
+**Signature:**
+```python
+def count_solutions(
+    oracle,           # Marks solutions
+    register,         # Search space
+    *,
+    precision=4,      # Number of precision qubits
+) -> int:
+    ...
+```
+
+**Expected Behavior:**
+1. Use phase estimation on Grover operator
+2. Estimate number of solutions M
+3. Return integer estimate
 
 ## Complexity Assessment
 
-| Feature | Effort | Risk | Priority |
-|---------|--------|------|----------|
-| **Circuit data extraction (Cython bridge)** | 2-3 days | Medium | P0 -- everything depends on this |
-| **Overview renderer (NumPy + PIL)** | 3-4 days | Low | P0 -- core feature |
-| **Gate icon design (2-3px)** | 1 day | Low | P0 -- simple pixel patterns |
-| **Color palette + legend** | 1 day | Low | P0 -- essential for readability |
-| **Python API (`ql.draw_circuit()`)** | 1 day | Low | P0 -- user-facing interface |
-| **Detail renderer (8-12px)** | 2-3 days | Low | P1 -- nice to have |
-| **Auto zoom selection** | 0.5 day | Low | P1 -- convenience |
-| **Qubit labels** | 0.5 day | Low | P1 -- expected |
-| **Density heatmap** | 2 days | Medium | P2 -- differentiator |
-| **Region-of-interest rendering** | 2-3 days | Medium | P2 -- advanced |
-| **Total MVP (P0)** | **8-10 days** | **Low-Medium** | -- |
-| **Total with P1** | **11-14 days** | **Low** | -- |
+| Feature | Implementation Effort | Risk | Notes |
+|---------|----------------------|------|-------|
+| **Diffusion operator** | 2-3 days | LOW | Standard construction, MCZ decomposition exists |
+| **Basic `ql.grover()`** | 3-4 days | LOW | Orchestration of existing components |
+| **Manual oracle mode** | 1 day | LOW | Accept user circuit, validate interface |
+| **Auto iteration count** | 0.5 day | LOW | Math only: `round(pi/4 * sqrt(N/M))` |
+| **Result measurement** | 1 day | LOW | Use existing measurement, parse results |
+| **Auto oracle synthesis** | 5-7 days | MEDIUM | Requires @ql.compile extension, boolean synthesis |
+| **Adaptive search** | 2-3 days | LOW | Loop with exponential backoff |
+| **qarray integration** | 3-4 days | MEDIUM | Extend search to array elements |
+| **Quantum counting** | 5-7 days | HIGH | Requires phase estimation implementation |
+| **Amplitude estimation (IQAE)** | 4-5 days | MEDIUM | Well-documented algorithm, no QPE needed |
+| **Total MVP (P1)** | **8-10 days** | **LOW** | -- |
+| **Total with P2** | **18-24 days** | **LOW-MEDIUM** | -- |
 
 **Risk factors:**
-- Circuit data extraction is the main risk -- need to expose C struct fields through Cython without breaking existing API
-- Very large images (200 qubits x 10,000 layers = 2M+ pixels) need memory management
-- PIL rendering performance for large images -- mitigated by NumPy array approach
+- Auto oracle synthesis is the main complexity -- requires understanding which qubits represent condition results
+- Quantum counting requires phase estimation not yet in framework
+- IQAE is simpler than QAE but still requires careful implementation
 
 ## Open Questions
 
-1. **How should circuit data be exposed to Python for rendering?**
-   - Option A: New Cython function returning list of dicts (cleanest API)
-   - Option B: Expose `circuit_t` fields directly (fastest, most fragile)
-   - Option C: Parse the existing OpenQASM export (wasteful but zero C changes)
-   - Recommendation: Option A -- new `circuit_to_gate_list()` Cython function
+1. **Oracle function signature:** Should oracle be a decorated function, a circuit object, or both?
+   - Recommendation: Support both. Decorated function for auto-synthesis, circuit for manual.
+   - Confidence: HIGH
+
+2. **How to handle predicates with side effects?** E.g., `lambda x: x += 1; return x > 5`
+   - Recommendation: Document that predicates must be pure (no state modification). Framework already tracks this in `@ql.compile`.
    - Confidence: MEDIUM
 
-2. **What is the gate-width threshold for switching zoom levels?**
-   - Suggestion: overview when `qubit_count > 30 OR depth > 200`
-   - Needs experimentation with real circuits
-   - Confidence: LOW
+3. **Should `ql.grover` return the found value or a qint?**
+   - Recommendation: Parameterize with `measure=True/False`. Default to measured value for ease of use.
+   - Confidence: HIGH
 
-3. **Should the image have a fixed width or scale with circuit depth?**
-   - Recommendation: Scale with circuit depth (proportional), cap at reasonable maximum (e.g., 16000px width)
-   - Very wide images are fine -- users can scroll/zoom in image viewers
+4. **How to report "no solution found"?**
+   - Recommendation: Return measurement result regardless. User can verify classically. Provide `iterations_used` in result object for debugging.
    - Confidence: MEDIUM
 
-4. **Should unused qubits be rendered?**
-   - Recommendation: No -- follow existing `circuit_visualize` pattern which skips unused qubits
-   - The C backend already tracks `used_occupation_indices_per_qubit`
+5. **Should amplitude estimation be same API or separate function?**
+   - Recommendation: Separate function `ql.amplitude_estimate()`. Different return type (float vs int).
    - Confidence: HIGH
 
 ## Sources
 
-### High Confidence (Official Documentation)
+### High Confidence (Official Documentation, Academic Papers)
 
-- [Qiskit circuit_drawer API](https://quantum.cloud.ibm.com/docs/en/api/qiskit/qiskit.visualization.circuit_drawer) -- Parameters, output formats, style customization
-- [Qiskit Visualize Circuits Guide](https://quantum.cloud.ibm.com/docs/en/guides/visualize-circuits) -- fold, scale, interactive, themes
-- [Pillow PixelAccess Documentation](https://pillow.readthedocs.io/en/stable/reference/PixelAccess.html) -- Performance characteristics of pixel-level access
-- [Pillow Image Module](https://pillow.readthedocs.io/en/stable/reference/Image.html) -- Image.fromarray(), save(), modes
-- [Azure Quantum Circuit Diagram Conventions](https://learn.microsoft.com/en-us/azure/quantum/concepts-circuits) -- Standard visual conventions
+- [Grover's algorithm - Wikipedia](https://en.wikipedia.org/wiki/Grover's_algorithm) -- Standard algorithm description
+- [IBM Quantum Documentation - Grover's Algorithm](https://quantum.cloud.ibm.com/docs/en/tutorials/grovers-algorithm) -- Oracle construction, `grover_operator()` API
+- [GroverOperator - IBM Quantum Documentation](https://docs.quantum.ibm.com/api/qiskit/qiskit.circuit.library.GroverOperator) -- Qiskit API reference
+- [Amplitude amplification - Wikipedia](https://en.wikipedia.org/wiki/Amplitude_amplification) -- Generalized framework
+- [Quantum counting algorithm - Wikipedia](https://en.wikipedia.org/wiki/Quantum_counting_algorithm) -- Phase estimation approach
+- [Iterative Quantum Amplitude Estimation (arXiv:1912.05559)](https://arxiv.org/abs/1912.05559) -- IQAE without phase estimation
 
-### Medium Confidence (Research / Multiple Sources)
+### Medium Confidence (Research Papers, Multiple Sources Agree)
 
-- [Quantivine: Large-scale Quantum Circuit Visualization (IEEE TVCG 2023)](https://arxiv.org/abs/2307.08969) -- Semantic abstraction for 100-qubit circuits
-- [Cirq SVG Rendering (GitHub)](https://github.com/quantumlib/Cirq/issues/4499) -- SVG circuit drawing features and limitations
-- [Qiskit Circuit Style Customization (Medium)](https://medium.com/qiskit/learn-how-to-customize-the-appearance-of-your-qiskit-circuits-with-accessibility-in-mind-b9b59fc039f3) -- Color, font, displaytext options
-- [Pillow ImageDraw.point Performance Issue #2450](https://github.com/python-pillow/Pillow/issues/2450) -- Why NumPy is preferred over putpixel for bulk operations
+- [Automated Quantum Oracle Synthesis (arXiv:2304.03829)](https://arxiv.org/abs/2304.03829) -- MustangQ oracle synthesis methods
+- [From Boolean functions to quantum circuits (EPFL)](https://infoscience.epfl.ch/bitstreams/166b9f23-2a7d-4321-a8ca-b4881342d9eb/download) -- Tweedledum/Caterpillar compilation flow
+- [Amplitude estimation without phase estimation](https://link.springer.com/article/10.1007/s11128-019-2565-2) -- NISQ-friendly amplitude estimation
+- [Complete 3-Qubit Grover search (Nature Communications)](https://www.nature.com/articles/s41467-017-01904-7) -- Boolean vs phase oracle implementation
+- [A concept of controlling Grover diffusion operator (Scientific Reports)](https://www.nature.com/articles/s41598-024-74587-y) -- Controlled diffusion for arbitrary Boolean problems
 
-### Low Confidence (Single Source)
+### Low Confidence (Single Source, Tutorials)
 
-- [Reso Pixel-Art Circuit Simulator](https://lynndotpy.dev/posts/reso-intro/) -- Pixel-art approach to boolean circuits (not quantum, but related aesthetic)
-- [Pixel-Oriented Data Visualization (FasterCapital)](https://fastercapital.com/content/Visualization-Techniques--Pixel-oriented-Techniques--Pixel-perfect--The-Art-of-Pixel-oriented-Data-Visualization.html) -- General pixel-oriented visualization principles
+- [Qiskit Algorithms - Grover Examples](https://qiskit-community.github.io/qiskit-algorithms/tutorials/07_grover_examples.html) -- API usage patterns
+- [QRISP Quantum Counting Documentation](https://qrisp.eu/reference/Algorithms/quantum_counting.html) -- Alternative API design
+- [PennyLane Amplitude Amplification Demo](https://pennylane.ai/qml/demos/tutorial_intro_amplitude_amplification) -- Educational explanation
 
 ---
 
-**Research complete.** This feature landscape provides clear prioritization for the v1.9 pixel-art circuit visualization milestone. The core value proposition is scalability: rendering circuits that are too large for any existing tool. NumPy-based pixel rendering keeps it fast, and two zoom levels bridge the gap between "see the whole circuit" and "read individual gates."
+*Feature research for: Grover's Algorithm and Amplitude Amplification milestone*
+*Researched: 2026-02-19*

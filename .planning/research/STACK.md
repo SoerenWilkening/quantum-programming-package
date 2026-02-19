@@ -1,432 +1,358 @@
-# Technology Stack
+# Stack Research: Grover's Algorithm & Amplitude Estimation
 
-**Project:** Quantum Assembly - Pixel-Art Circuit Visualization
-**Researched:** 2026-02-03
+**Domain:** Quantum search algorithms (Grover's algorithm, oracle compilation, amplitude estimation)
+**Researched:** 2026-02-19
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Pixel-art circuit visualization requires exactly one new dependency: Pillow (PIL). The existing project has no image dependencies. Pillow 12.1.0 provides everything needed for pixel-level rendering, text labeling, palette-mode PNG export, and nearest-neighbor upscaling. No other libraries are needed. NumPy (already a project dependency) accelerates bulk pixel operations when Pillow's per-pixel methods are too slow.
+Grover's Algorithm implementation in Quantum Assembly requires **zero new external dependencies**. The existing framework provides all necessary building blocks:
 
-The approach: build a compact pixel-art renderer entirely in Python, consuming circuit data exposed through existing Cython bindings. Each gate becomes a 2-3px colored block on qubit wire lines, with control connections as vertical pixel lines. Output is a small PNG (palette mode, lossless) that can be optionally upscaled with nearest-neighbor interpolation for display.
+1. **H gate** (Hadamard): Already implemented in `gate.h` as `h(gate_t*, qubit_t)`
+2. **MCX gate** (Multi-controlled X): Already implemented as `mcx()` with arbitrary controls
+3. **Conditional operations** (`with` statement): Working for single control via `qint.__enter__`/`__exit__`
+4. **`@ql.compile` decorator**: Gate capture/replay with automatic controlled variant derivation
+5. **Toffoli arithmetic**: Full suite working in fault-tolerant mode (`ql.option('fault_tolerant', True)`)
 
-## New Dependencies
+The implementation is fundamentally an **API/pattern layer** on top of existing capabilities, not a new technology stack. The main work is:
+- Exposing H gates at Python level (currently C-only)
+- Building diffusion operator pattern (H-X-MCZ-X-H)
+- Creating oracle compilation utilities that transform classical functions to phase oracles
+- Adding iteration count helpers (mathematical formulas)
 
-### Required: Pillow
+For amplitude estimation, the framework supports both **circuit-based QAE** (Grover operator powers + phase estimation) and **iterative variants** (multiple independent circuit runs), with no additional dependencies beyond existing Qiskit verification infrastructure.
 
-| Package | Version | Purpose | Why This Version |
-|---------|---------|---------|------------------|
-| Pillow | >=12.1.0 | Image creation, pixel drawing, PNG export | Latest stable (Jan 2, 2026). Python 3.10-3.14 support. Mature (status 6). MIT-CMU license. |
+## New Dependencies: NONE
 
-**Installation:**
+The existing stack is sufficient:
+
+| Category | Current Stack | Used For Grover |
+|----------|---------------|-----------------|
+| Core | C backend + Cython + Python | All algorithm components |
+| Gates | `h()`, `x()`, `z()`, `cx()`, `ccx()`, `mcx()` | Diffusion operator, oracles |
+| Arithmetic | Toffoli-based `+=`, `-=`, `*`, etc. | Oracle predicates |
+| Conditionals | `with flag:` controlled context | S_0 reflection via `with a == 0:` |
+| Compilation | `@ql.compile` decorator | Oracle compilation |
+| Verification | Qiskit (optional dependency) | Correctness verification |
+| Export | OpenQASM 3.0 | Interoperability |
+
+**No new pip packages, no new C libraries, no new build dependencies.**
+
+## Recommended Stack: Leverage Existing Infrastructure
+
+### Core Framework (Already Available)
+
+| Component | Location | Purpose for Grover | Status |
+|-----------|----------|-------------------|--------|
+| `h()` gate function | `c_backend/src/gate.c` | Hadamard in diffusion operator | **EXISTS** - needs Python exposure |
+| `mcx()` gate function | `c_backend/include/gate.h` | Multi-controlled Z in diffusion | **EXISTS** |
+| `z()` gate function | `c_backend/src/gate.c` | Phase flip for marked states | **EXISTS** - needs Python exposure |
+| `qint.__enter__/__exit__` | `src/quantum_language/qint.pyx` | S_0 via `with a == 0:` | **EXISTS** |
+| `@ql.compile` | `src/quantum_language/compile.py` | Oracle capture/replay | **EXISTS** |
+| `qarray` | `src/quantum_language/qarray.pyx` | Register manipulation | **EXISTS** |
+
+### Gate Exposure (Minimal New Code)
+
+The following gates need Python-level API exposure:
+
+```python
+# Proposed additions to quantum_language module
+def hadamard(qbit):
+    """Apply Hadamard gate to a qubit."""
+    # Calls h() via Cython binding
+
+def hadamard_all(register):
+    """Apply Hadamard to all qubits in a qint/qarray."""
+    # H^(otimes n) for uniform superposition
+
+def phase_flip(qbit):
+    """Apply Z gate (phase flip) to a qubit."""
+    # Calls z() via Cython binding
+```
+
+### Algorithm Components (New Pure Python)
+
+| Component | Implementation Approach | Dependencies |
+|-----------|------------------------|--------------|
+| `grover_iterate(oracle, n_qubits)` | Python function calling existing gates | h(), mcx(), oracle |
+| `diffusion_operator(register)` | H-X-MCZ-X-H pattern using existing gates | h(), x(), z(), mcx() |
+| `optimal_iterations(n_qubits, n_marked)` | Pure math: `floor(pi/4 * sqrt(N/M))` | math module only |
+| `grover_search(oracle, n_qubits, n_iter)` | Composition of above | iterate + diffusion |
+| `amplitude_estimate(problem, precision)` | Grover powers + measurement | grover_iterate |
+
+## Technology Decisions
+
+### Decision 1: Use Existing `with` Statement for S_0 Reflection
+
+**What:** The S_0 (reflection about zero) component of the diffusion operator can be implemented using the existing quantum conditional pattern.
+
+**Why:** The `with a == 0:` construct already generates controlled operations conditioned on all qubits being zero. Combined with a phase flip on an ancilla, this produces the required 2|0><0| - I reflection.
+
+**Alternative considered:** Dedicated `reflection_zero()` C function.
+**Why rejected:** Unnecessary duplication. The `with` conditional infrastructure is proven and handles controlled context stacking correctly.
+
+**Implementation pattern:**
+```python
+def reflection_zero(register, ancilla):
+    """S_0 = 2|0><0| - I reflection."""
+    with register == 0:  # Generates multi-controlled gate
+        ancilla.z()      # Phase flip only when all zero
+```
+
+### Decision 2: Oracle Compilation via @ql.compile
+
+**What:** User-defined oracle functions decorated with `@ql.compile` are automatically converted to controlled circuit blocks.
+
+**Why:** The `@ql.compile` decorator already:
+- Captures gate sequences on first call
+- Virtualizes qubit indices
+- Derives controlled variants automatically
+- Handles adjoint generation for uncomputation
+
+**How oracles work:**
+```python
+@ql.compile
+def oracle(x, target):
+    """Mark states where f(x) = 1."""
+    # User writes classical-style predicate
+    with x == search_value:
+        target.z()  # Phase flip marked states
+
+# Oracle automatically becomes phase oracle O_f
+```
+
+### Decision 3: MCX Decomposition Strategy Selection
+
+**What:** Multi-controlled X gates in the diffusion operator should use the existing MCX decomposition infrastructure.
+
+**Why:** The framework already has:
+- `emit_ccx_clifford_t()` for Toffoli decomposition
+- MCX -> Toffoli cascade for arbitrary controls
+- AND-ancilla decomposition for fault-tolerant mode
+
+**Configuration:** Use `ql.option('fault_tolerant', True)` to select Clifford+T decomposition, or leave default for native CCX/MCX.
+
+### Decision 4: No External Quantum Libraries for Core Algorithm
+
+**What:** Implement Grover's algorithm natively without importing Qiskit's `GroverOperator` or similar.
+
+**Why:**
+- Quantum Assembly's value proposition is native implementation, not a Qiskit wrapper
+- External library calls break the gate capture/replay model
+- Users already have Qiskit if they want that approach
+- Native implementation enables framework-specific optimizations
+
+**Qiskit role:** Verification only (via `ql.option('verification')` or test infrastructure).
+
+### Decision 5: Iterative Amplitude Estimation (Not Phase Estimation)
+
+**What:** For amplitude estimation, use Iterative QAE (IQAE) rather than canonical phase-estimation-based QAE.
+
+**Why:**
+- IQAE uses only Grover operators, no QFT required
+- Lower circuit depth (critical for NISQ devices)
+- Modular: runs multiple independent circuits
+- Same quadratic speedup, fewer qubits
+- [Research shows IQAE is "best candidate to demonstrate advantage"](https://www.nature.com/articles/s41534-021-00379-1)
+
+**What this means:** No new circuit components beyond Grover operator powers.
+
+## Supporting Libraries (Already Dependencies)
+
+| Library | Current Version | Purpose for Grover | Rationale |
+|---------|-----------------|-------------------|-----------|
+| NumPy | >=1.24 | Qubit array manipulation | Already in pyproject.toml |
+| Qiskit | >=1.0 (optional) | Verification | Already in [verification] extra |
+
+No version changes or additions required.
+
+## Installation
+
+**No changes to pyproject.toml needed.**
+
+The existing installation covers all requirements:
 ```bash
-pip install "Pillow>=12.1.0"
-```
-
-**Add to pyproject.toml:**
-```toml
-[project.optional-dependencies]
-viz = ["Pillow>=12.1.0"]
-# Or add to main dependencies if visualization is a core feature:
-# dependencies = [..., "Pillow>=12.1.0"]
-```
-
-**Rationale:** Pillow is the de facto standard for image manipulation in Python. It is a direct dependency (not test-only) because visualization is a user-facing feature. It has zero compiled sub-dependencies beyond its own C extensions (which are bundled in wheels).
-
-### Already Present: NumPy
-
-| Package | Current Spec | Purpose for Visualization |
-|---------|-------------|---------------------------|
-| numpy | >=1.24 | Fast bulk pixel array construction via `Image.fromarray()` |
-
-NumPy is already a project dependency. For pixel-art rendering, it provides a critical performance path: instead of calling `putpixel()` in loops (slow), construct a NumPy array of the full image and convert with `Image.fromarray(arr)`. This is 10-100x faster for images with thousands of pixels.
-
-## Pillow API Recommendations for Pixel-Art Rendering
-
-### Image Creation
-
-```python
-from PIL import Image, ImageDraw
-
-# For small pixel-art (direct rendering at 1:1 scale)
-# Use "P" (palette) mode for smallest file size with known color set
-img = Image.new("P", (width, height), 0)  # 0 = background palette index
-
-# For rendering with transparency support
-img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-```
-
-**Recommendation:** Use **RGB mode** during construction, then convert to **P (palette) mode** before saving. This gives full color flexibility during drawing while producing the smallest possible PNG output.
-
-```python
-# Construction phase
-img = Image.new("RGB", (width, height), (255, 255, 255))
-draw = ImageDraw.Draw(img)
-# ... draw circuit ...
-
-# Save phase - convert to palette for compact output
-img_p = img.quantize(colors=32)  # Our palette has ~15-20 colors max
-img_p.save("circuit.png", optimize=True)
-```
-
-### Drawing Methods (Ranked by Usefulness)
-
-| Method | Use Case in Circuit Rendering | Performance |
-|--------|-------------------------------|-------------|
-| `draw.rectangle(xy, fill)` | Gate blocks (2-3px squares) | Fast |
-| `draw.line(xy, fill, width)` | Qubit wires (horizontal lines), control connections (vertical lines) | Fast |
-| `draw.point(xy, fill)` | Individual control dots, single-pixel markers | Fast for few points |
-| `draw.text(xy, text, fill, font)` | Qubit labels (q0, q1...), gate labels if upscaled | Moderate |
-| `Image.fromarray(arr)` | Bulk construction of entire image from NumPy | Fastest for full image |
-
-**Performance hierarchy (fastest to slowest):**
-1. `Image.fromarray(numpy_array)` - construct entire image at once
-2. `Image.paste(color, box)` - fill rectangular regions
-3. `ImageDraw.rectangle()` / `ImageDraw.line()` - draw primitives
-4. `Image.putpixel(xy, color)` - individual pixels (AVOID in loops)
-
-### Recommended Approach: NumPy Array Construction
-
-For a compact pixel-art renderer where every pixel is deliberate, the fastest approach is:
-
-```python
-import numpy as np
-from PIL import Image
-
-def render_circuit(circuit_data, num_qubits, num_layers):
-    # Calculate dimensions
-    # Each gate cell: 3px wide x 3px tall
-    # Qubit wire spacing: 5px (3px gate + 2px gap)
-    # Layer spacing: 4px (3px gate + 1px gap)
-    CELL_W, CELL_H = 3, 3
-    WIRE_SPACING = 5
-    LAYER_SPACING = 4
-    MARGIN = 2
-
-    width = MARGIN + num_layers * LAYER_SPACING + MARGIN
-    height = MARGIN + num_qubits * WIRE_SPACING + MARGIN
-
-    # Create pixel array (RGB)
-    pixels = np.full((height, width, 3), 255, dtype=np.uint8)  # white bg
-
-    # Draw qubit wires (horizontal gray lines)
-    for q in range(num_qubits):
-        y = MARGIN + q * WIRE_SPACING + CELL_H // 2
-        pixels[y, MARGIN:width-MARGIN] = [180, 180, 180]  # gray wire
-
-    # Draw gates as colored blocks
-    for layer_idx, layer in enumerate(circuit_data):
-        for gate in layer:
-            x = MARGIN + layer_idx * LAYER_SPACING
-            y = MARGIN + gate.target * WIRE_SPACING
-            color = GATE_COLORS[gate.type]
-            pixels[y:y+CELL_H, x:x+CELL_W] = color
-
-    return Image.fromarray(pixels)
-```
-
-### Upscaling for Display
-
-Pixel art at 1:1 is tiny. Use **nearest-neighbor** resampling to upscale without blurring:
-
-```python
-# Scale up 4x for display (each pixel becomes 4x4 block)
-SCALE = 4
-display_img = img.resize(
-    (img.width * SCALE, img.height * SCALE),
-    resample=Image.Resampling.NEAREST  # Critical: preserves hard edges
-)
-display_img.save("circuit_display.png")
-```
-
-**Resampling options and when to use:**
-| Resampling | Effect | Use For |
-|------------|--------|---------|
-| `NEAREST` | Sharp pixel edges, no interpolation | Pixel art upscaling (USE THIS) |
-| `BILINEAR` | Smooth blending | Photos (DO NOT use for pixel art) |
-| `BICUBIC` | Smoother blending (default) | Photos (DO NOT use for pixel art) |
-| `LANCZOS` | Sharpest smooth scaling | High-quality photo downscaling |
-
-### Text Rendering for Labels
-
-For qubit labels and gate annotations at small sizes:
-
-```python
-from PIL import ImageFont
-
-# Option 1: Default bitmap font (always available, no file needed)
-font = ImageFont.load_default()  # ~11px, monospaced-ish
-
-# Option 2: Small TrueType font (if available)
-try:
-    font = ImageFont.truetype("DejaVuSansMono.ttf", size=8)
-except OSError:
-    font = ImageFont.load_default()
-
-# Anti-aliasing control for pixel art
-draw = ImageDraw.Draw(img)
-draw.fontmode = "1"  # Disable anti-aliasing (crisp pixel text)
-draw.text((x, y), "q0", fill=(0, 0, 0), font=font)
-```
-
-**Recommendation:** Use `ImageFont.load_default()` for the base pixel-art view. It requires no external font files and works everywhere. For upscaled views (4x+), consider a small monospace TrueType font at 8-10px for crisper labels.
-
-**Critical setting:** Set `draw.fontmode = "1"` to disable anti-aliasing. Anti-aliased text on a palette-mode image creates unwanted intermediate colors.
-
-## Image Format Recommendations
-
-### PNG (Primary Output)
-
-| Setting | Value | Why |
-|---------|-------|-----|
-| Format | PNG | Lossless, perfect for pixel art, universal support |
-| Mode | P (palette) | 1 byte/pixel instead of 3 (RGB), smallest files |
-| `optimize` | `True` | Enables maximum ZLIB compression |
-| `compress_level` | N/A (auto 9 with optimize) | optimize=True overrides to 9 |
-| Colors | 16-32 via `quantize()` | Our palette is small; fewer colors = smaller file |
-| `bits` | Auto (experimental if set) | Let Pillow choose based on palette size |
-
-**Typical file sizes for circuit images:**
-- 20 qubits x 50 layers, palette PNG: ~500 bytes to 2KB
-- 100 qubits x 200 layers, palette PNG: ~5-15KB
-- Same circuits upscaled 4x: ~2-8KB and ~20-60KB (PNG compresses repeated blocks well)
-
-### Save Implementation
-
-```python
-def save_circuit_image(img, path, scale=1):
-    """Save circuit image as optimized PNG."""
-    if scale > 1:
-        img = img.resize(
-            (img.width * scale, img.height * scale),
-            resample=Image.Resampling.NEAREST
-        )
-
-    # Convert to palette mode for smallest file
-    if img.mode != "P":
-        img = img.quantize(colors=32)
-
-    img.save(path, format="PNG", optimize=True)
-```
-
-### SVG (Do NOT Implement)
-
-**Why not SVG:**
-- The entire point is pixel-art aesthetic, not scalable vector graphics
-- SVG would be larger than PNG for pixel-level content
-- SVG rendering varies across viewers for sub-pixel content
-- Adds XML generation complexity with no benefit
-- If users want SVG, they want a different visualization style entirely (not this milestone)
-
-### JPEG (Do NOT Use)
-
-**Why not JPEG:**
-- Lossy compression destroys pixel-perfect rendering
-- Creates artifacts around sharp color boundaries (every gate edge)
-- Larger than palette PNG for this type of content
-- No transparency support
-
-### WebP (Optional Future Enhancement)
-
-WebP lossless can be smaller than PNG. Not worth adding now but note for future:
-```python
-img.save("circuit.webp", lossless=True)  # Pillow supports WebP natively
-```
-
-## Color Palette Design
-
-### Gate Color Scheme
-
-Design a compact palette where each gate type has a distinct, recognizable color. Use bold, saturated colors against white/light background for pixel-art readability.
-
-| Gate | RGB Color | Hex | Rationale |
-|------|-----------|-----|-----------|
-| H (Hadamard) | (66, 133, 244) | #4285F4 | Blue - most common single-qubit gate |
-| X (Pauli-X) | (234, 67, 53) | #EA4335 | Red - NOT gate, action/change |
-| Y (Pauli-Y) | (251, 188, 4) | #FBBC04 | Yellow - Pauli family, distinct from X/Z |
-| Z (Pauli-Z) | (52, 168, 83) | #34A853 | Green - Pauli family, distinct from X/Y |
-| P (Phase) | (171, 71, 188) | #AB47BC | Purple - phase rotation |
-| Rx | (255, 112, 67) | #FF7043 | Orange-red - rotation variant of X |
-| Ry | (255, 202, 40) | #FFCA28 | Gold - rotation variant of Y |
-| Rz | (102, 187, 106) | #66BB6A | Light green - rotation variant of Z |
-| M (Measure) | (69, 69, 69) | #454545 | Dark gray - terminal operation |
-| Control dot | (0, 0, 0) | #000000 | Black - control qubit marker |
-| Wire | (189, 189, 189) | #BDBDBD | Light gray - qubit wires |
-| Background | (255, 255, 255) | #FFFFFF | White - clean background |
-| CNOT target | (234, 67, 53) | #EA4335 | Red circle/cross - matches X |
-| CCX target | (234, 67, 53) | #EA4335 | Red - matches X family |
-
-**Total unique colors: 14** (fits comfortably in palette mode with 16-32 color slots)
-
-**Design principles:**
-1. Pauli gates (X, Y, Z) use primary colors (red, yellow, green)
-2. Rotation gates use lighter/warmer variants of their Pauli counterpart
-3. H is blue (most common, needs to stand out)
-4. Phase is purple (distinct from all Pauli colors)
-5. Measurement is gray (terminal, non-unitary)
-6. Control elements are black (maximum contrast)
-
-### Palette as Python Constant
-
-```python
-# Gate color palette - RGB tuples
-GATE_COLORS = {
-    "H":       (66, 133, 244),   # Blue
-    "X":       (234, 67, 53),    # Red
-    "Y":       (251, 188, 4),    # Yellow
-    "Z":       (52, 168, 83),    # Green
-    "P":       (171, 71, 188),   # Purple
-    "Rx":      (255, 112, 67),   # Orange-red
-    "Ry":      (255, 202, 40),   # Gold
-    "Rz":      (102, 187, 106),  # Light green
-    "M":       (69, 69, 69),     # Dark gray
-    "control": (0, 0, 0),        # Black
-    "wire":    (189, 189, 189),  # Light gray
-    "bg":      (255, 255, 255),  # White
-}
-
-# Map from C enum Standardgate_t values to color keys
-GATE_TYPE_MAP = {
-    0: "X",   # X = 0 in enum
-    1: "Y",   # Y = 1
-    2: "Z",   # Z = 2
-    3: "Rx",  # R = 3 (generic rotation, map to Rx)
-    4: "H",   # H = 4
-    5: "Rx",  # Rx = 5
-    6: "Ry",  # Ry = 6
-    7: "Rz",  # Rz = 7
-    8: "P",   # P = 8
-    9: "M",   # M = 9
-}
+pip install -e .                    # Core framework
+pip install -e ".[verification]"    # With Qiskit for testing
 ```
 
 ## What NOT to Add
 
-### 1. Do NOT add matplotlib
+### 1. Do NOT add Cirq, PennyLane, or other quantum frameworks
 
 **Why not:**
-- Massive dependency tree (50+ MB)
-- Designed for plots and charts, not pixel-art
-- Antialiases everything by default (opposite of what we want)
-- Pillow is 10x lighter and gives pixel-level control
-- matplotlib circuit drawing exists in Qiskit but produces a completely different aesthetic
+- Creates framework fragmentation
+- Different gate naming conventions
+- Quantum Assembly's goal is self-contained implementation
+- Users can export to OpenQASM for interoperability
 
-### 2. Do NOT add cairo / pycairo / cairocffi
-
-**Why not:**
-- Vector graphics library (we want raster pixel art)
-- Complex system dependency (requires libcairo C library)
-- Overkill for 3px gate blocks
-- Cross-platform installation headaches
-
-### 3. Do NOT add Pygame or arcade
+### 2. Do NOT add specialized Grover libraries (e.g., `grove`, `groveropt`)
 
 **Why not:**
-- Game engines, not image generation libraries
-- Require display server / windowing system
-- Cannot run headless (server/CI environments)
-- Pillow is headless-compatible
+- Niche packages with uncertain maintenance
+- Likely incompatible with Quantum Assembly's circuit model
+- The algorithm is simple enough to implement directly
 
-### 4. Do NOT add imageio or scikit-image
-
-**Why not:**
-- Scientific image processing libraries
-- Add heavy dependencies (scipy, etc.)
-- No drawing primitives (they process existing images)
-- We need to CREATE images, not process them
-
-### 5. Do NOT add wand (ImageMagick binding)
+### 3. Do NOT add symbolic math libraries (SymPy) for oracle analysis
 
 **Why not:**
-- Requires ImageMagick system installation
-- Heavier than Pillow for simple drawing
-- No advantage for pixel-art use case
+- Over-engineering for this use case
+- Oracle compilation doesn't need symbolic analysis
+- Classical Python evaluation + gate capture is sufficient
 
-### 6. Do NOT add any pixel-art-specific libraries (pixelart, pyxel, etc.)
-
-**Why not:**
-- Niche libraries with uncertain maintenance
-- Pillow + NumPy provides everything needed
-- Adding niche dependencies creates supply-chain risk
-- Our use case is simple enough for core Pillow
-
-### 7. Do NOT render in C backend
+### 4. Do NOT add SAT solvers for automatic oracle synthesis
 
 **Why not:**
-- C has no standard image library (would need libpng, zlib)
-- Adds complex build dependencies
-- Python/Pillow is fast enough (we're generating tiny images)
-- Keep C backend focused on quantum operations
-- Python layer has easier color/font/format handling
+- Scope creep - SAT-based synthesis is a research topic
+- Users provide oracles as Python functions, not logic formulas
+- Phase 1 should be manual oracle construction
+- Automatic synthesis is a potential future milestone (v5.0+)
 
-## Integration Architecture
+### 5. Do NOT add mid-circuit measurement infrastructure
 
-```
-Existing C Backend                    New Python Visualization Layer
-========================             ==============================
+**Why not:**
+- Measurement-based uncomputation (Gidney's trick) is deferred
+- Current framework uses coherent uncomputation
+- Mid-circuit measurement requires significant infrastructure changes
+- Grover works fine with standard measurement at end
 
-circuit_t                            circuit_to_pixel_art()
-  |-- used_layer                       |
-  |-- used_qubits                      |-- reads circuit data via Cython
-  |-- sequence[layer][gate]            |-- constructs NumPy pixel array
-       |-- Gate (enum)                 |-- converts to PIL Image
-       |-- Target (qubit_t)            |-- applies palette optimization
-       |-- Control[] (qubit_t)         |-- saves as PNG
-       |-- NumControls                 |
-       |-- GateValue (double)          |-- optional: upscale with NEAREST
-                                       |-- optional: add text labels
+### 6. Do NOT add QFT-based arithmetic for Grover oracles
 
-Data Flow:
-  circuit_t (C) --> Cython exposure --> Python dict/list --> NumPy array --> PIL Image --> PNG file
-```
+**Why not:**
+- Toffoli arithmetic is already implemented and fault-tolerant
+- QFT-based oracles would break fault-tolerant compilation goal
+- Existing bugs in QFT division (BUG-QFT-DIV) would propagate
 
-### Cython Data Extraction
+## Integration Points
 
-The visualization layer needs read access to circuit data. The existing Cython bindings expose `circuit_visualize()` (which prints to stdout), but for image rendering we need structured data. Options:
+### Existing API Extensions
 
-**Option A (Recommended): Add Cython method returning Python data**
+| Extension | Description | Implementation |
+|-----------|-------------|----------------|
+| `ql.hadamard(qbit)` | Single-qubit Hadamard | Cython wrapper to `h()` |
+| `ql.hadamard_all(register)` | H^n on register | Loop over qubits |
+| `ql.phase(qbit)` | Z gate | Cython wrapper to `z()` |
+| `ql.grover_iterate(oracle, reg)` | One Grover iteration | Oracle + diffusion |
+| `ql.optimal_iter(n, m=1)` | Iteration count formula | Pure Python math |
+| `ql.grover(oracle, n_qubits, iter=None)` | Full search | Compose above |
+
+### Oracle Interface
+
 ```python
-# In _core.pyx, add to circuit class:
-def get_circuit_data(self):
-    """Return circuit structure as Python dict for visualization."""
-    cdef circuit_t* circ = <circuit_t*>_circuit
-    layers = []
-    for layer_idx in range(circ.used_layer):
-        gates = []
-        for gate_idx in range(circ.used_gates_per_layer[layer_idx]):
-            g = circ.sequence[layer_idx][gate_idx]
-            gates.append({
-                'type': g.Gate,
-                'target': g.Target,
-                'controls': [g.Control[i] for i in range(g.NumControls)],
-                'value': g.GateValue,
-            })
-        layers.append(gates)
-    return {'layers': layers, 'num_qubits': circ.used_qubits + 1}
+# User-defined oracle pattern
+@ql.compile
+def my_oracle(x: qint, ancilla: qbool):
+    """Phase oracle: flip phase when x satisfies predicate."""
+    # Classical-style predicate using existing operations
+    with x == target_value:  # Or any comparison
+        ancilla.z()
+    # OR for arithmetic predicate:
+    with (x * x) == 4:  # Uses Toffoli multiplication
+        ancilla.z()
 ```
 
-**Option B: Parse text output of circuit_visualize()**
-Not recommended. Fragile, lossy (loses gate values), harder to maintain.
+### Amplitude Estimation Interface
+
+```python
+# Iterative amplitude estimation
+result = ql.amplitude_estimate(
+    oracle=my_oracle,
+    state_prep=default_hadamard,  # Optional custom
+    precision=0.01,               # Target accuracy
+    confidence=0.95               # Confidence level
+)
+# Returns: estimated amplitude, confidence interval
+```
+
+## Patterns by Use Case
+
+### Pattern A: Simple Search (Known Target)
+
+```python
+@ql.compile
+def search_oracle(x, target):
+    with x == target:
+        target.z()
+
+circuit = ql.circuit()
+x = ql.qint(0, width=4)  # 4-qubit search space (N=16)
+target = ql.qbool(True)  # Ancilla for phase flip
+
+ql.hadamard_all(x)       # Uniform superposition
+for _ in range(3):       # ~pi/4 * sqrt(16) = 3 iterations
+    ql.grover_iterate(search_oracle, x, target)
+```
+
+### Pattern B: Arithmetic Oracle
+
+```python
+@ql.compile
+def factor_oracle(x, y, n_target, ancilla):
+    """Mark (x,y) pairs where x*y == n_target."""
+    product = x * y
+    with product == n_target:
+        ancilla.z()
+    # product auto-uncomputed by @ql.compile
+
+# Used identically to simple search
+```
+
+### Pattern C: Amplitude Estimation
+
+```python
+# Count satisfying assignments
+problem = ql.EstimationProblem(
+    oracle=my_oracle,
+    n_qubits=8,
+    objective_qubits=[7]  # Ancilla qubit
+)
+
+result = ql.iterative_amplitude_estimate(problem, precision=0.01)
+n_solutions = result.amplitude * (2 ** 8)  # Estimated count
+```
+
+## Version Compatibility
+
+No new dependencies means no compatibility concerns beyond existing:
+
+| Current Constraint | Rationale |
+|--------------------|-----------|
+| Python >=3.11 | Type hints, async features |
+| NumPy >=1.24 | Stable API for qubit arrays |
+| Cython >=3.0.11,<4.0 | C extension compilation |
+| Qiskit >=1.0 (optional) | Verification only |
 
 ## Confidence Assessment
 
 | Area | Confidence | Source | Notes |
-|------|-----------|--------|-------|
-| Pillow version (12.1.0) | HIGH | [PyPI](https://pypi.org/project/pillow/), [Official docs](https://pillow.readthedocs.io/en/stable/) | Released Jan 2, 2026 |
-| Pillow drawing API | HIGH | [ImageDraw docs](https://pillow.readthedocs.io/en/stable/reference/ImageDraw.html) | Stable API, extensively documented |
-| NEAREST resampling | HIGH | [Image.resize docs](https://pillow.readthedocs.io/en/stable/reference/Image.html) | Core feature, always available |
-| PNG palette optimization | HIGH | [Image formats docs](https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html) | Well-documented save options |
-| NumPy integration | HIGH | [Image.fromarray docs](https://pillow.readthedocs.io/en/stable/reference/Image.html) | Standard NumPy interop |
-| Font rendering | HIGH | [ImageFont docs](https://pillow.readthedocs.io/en/stable/reference/ImageFont.html) | load_default() always available |
-| Color palette design | MEDIUM | Design decision, not verified externally | Based on accessibility best practices |
-| Gate enum mapping | HIGH | Codebase analysis of types.h line 64 | `enum { X, Y, Z, R, H, Rx, Ry, Rz, P, M }` |
+|------|------------|--------|-------|
+| Gate primitives | HIGH | Codebase analysis | `h()`, `z()`, `mcx()` all exist in gate.h/gate.c |
+| Conditional context | HIGH | Test suite | `with flag:` working for comparisons |
+| `@ql.compile` | HIGH | Extensive testing | Controlled variants, adjoint derivation proven |
+| Iteration formula | HIGH | [Wikipedia](https://en.wikipedia.org/wiki/Grover's_algorithm), [IBM](https://quantum.cloud.ibm.com/docs/en/tutorials/grovers-algorithm) | Standard result: floor(pi/4 * sqrt(N/M)) |
+| Amplitude estimation | MEDIUM | [Qiskit Finance tutorial](https://qiskit-community.github.io/qiskit-finance/tutorials/00_amplitude_estimation.html) | IQAE approach verified, implementation details need planning |
+| Oracle compilation | HIGH | `@ql.compile` analysis | Existing gate capture handles user functions |
 
 ## Sources
 
-- [Pillow 12.1.0 on PyPI](https://pypi.org/project/pillow/) - version and compatibility
-- [Pillow ImageDraw Documentation](https://pillow.readthedocs.io/en/stable/reference/ImageDraw.html) - drawing API
-- [Pillow Image Documentation](https://pillow.readthedocs.io/en/stable/reference/Image.html) - resize, fromarray, putpixel
-- [Pillow ImageFont Documentation](https://pillow.readthedocs.io/en/stable/reference/ImageFont.html) - font loading and text
-- [Pillow Image File Formats](https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html) - PNG save options
-- [Pillow GitHub Releases](https://github.com/python-pillow/Pillow/releases) - release history
-- [Pillow Concepts - Modes](https://pillow.readthedocs.io/en/stable/handbook/concepts.html) - image modes (P, RGB, RGBA)
+### Primary (HIGH confidence)
+- [Grover's Algorithm - IBM Quantum Documentation](https://quantum.cloud.ibm.com/docs/en/tutorials/grovers-algorithm) - Standard implementation pattern
+- [Grover's Algorithm - Wikipedia](https://en.wikipedia.org/wiki/Grover's_algorithm) - Iteration formula: r = floor(pi/4 * sqrt(N/M))
+- [Azure Quantum - Grover Theory](https://learn.microsoft.com/en-us/azure/quantum/concepts-grovers) - Mathematical foundations
+- [Iterative QAE - npj Quantum Information](https://www.nature.com/articles/s41534-021-00379-1) - IQAE as preferred variant
+- [Qiskit Amplitude Estimation Tutorial](https://qiskit-community.github.io/qiskit-finance/tutorials/00_amplitude_estimation.html) - EstimationProblem interface
+
+### Secondary (MEDIUM confidence)
+- [grover_operator - IBM Quantum](https://docs.quantum.ibm.com/api/qiskit/qiskit.circuit.library.grover_operator) - Reference implementation (deprecated class, function preferred)
+- [Automated Oracle Synthesis - arXiv:2304.03829](https://arxiv.org/abs/2304.03829) - Future direction for automatic oracle generation
+- [PennyLane Amplitude Amplification](https://pennylane.ai/qml/demos/tutorial_intro_amplitude_amplification) - Alternative framework reference
+
+### Codebase Analysis
+- `c_backend/include/gate.h` - Gate function declarations (h, z, mcx exist)
+- `src/quantum_language/qint.pyx` lines 584-679 - Conditional context implementation
+- `src/quantum_language/compile.py` - Gate capture and controlled variant derivation
+
+---
+*Stack research for: Grover's Algorithm & Amplitude Estimation*
+*Researched: 2026-02-19*
+*Conclusion: Zero new dependencies. Build on existing infrastructure.*
