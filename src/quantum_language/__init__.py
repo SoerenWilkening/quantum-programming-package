@@ -47,6 +47,7 @@ from ._core import (
     reverse_instruction_range,
 )
 from .compile import compile
+from .diffusion import diffusion
 from .openqasm import to_openqasm
 from .oracle import grover_oracle
 from .profiler import profile
@@ -179,6 +180,7 @@ __all__ = [
     "circuit",
     # Utilities
     "compile",
+    "diffusion",
     "grover_oracle",
     "array",
     "option",
