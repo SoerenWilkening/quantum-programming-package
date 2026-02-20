@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 Phase: 78 of 81 (Diffusion Operator) -- COMPLETE
 Plan: 2 of 2 complete
 Status: Phase Complete
-Last activity: 2026-02-20 -- Completed 78-02-PLAN.md (diffusion operator tests)
+Last activity: 2026-02-20 - Completed quick task 16: Limit qiskit simulation to 4 threads in all simulation scripts
 
 Progress: [################░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 3/6 phases (v4.0)
 
@@ -90,6 +90,12 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 - BUG-QFT-DIV: QFT division/modulo pervasively broken at all tested widths
 - BUG-WIDTH-ADD: Mixed-width QFT addition off-by-one
 - 32-bit multiplication segfault (buffer overflow in C backend)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 16 | Limit qiskit simulation to 4 threads in all simulation scripts | 2026-02-20 | 6961944 | [16-limit-qiskit-simulation-to-4-threads-in-](./quick/16-limit-qiskit-simulation-to-4-threads-in-/) |
 
 ## Session Continuity
 
