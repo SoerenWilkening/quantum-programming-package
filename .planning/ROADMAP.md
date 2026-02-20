@@ -96,7 +96,7 @@
 **Milestone Goal:** Enable users to implement Grover's search and amplitude amplification using both manual building blocks and high-level convenience APIs.
 
 - [x] **Phase 76: Gate Primitive Exposure** - Expose H, Z, Ry gates at Python level via Cython bindings (6/6 plans complete) -- completed 2026-02-20
-- [ ] **Phase 77: Oracle Infrastructure** - @ql.grover_oracle decorator with compute-phase-uncompute enforcement
+- [ ] **Phase 77: Oracle Infrastructure** - @ql.grover_oracle decorator with compute-phase-uncompute enforcement (2 plans)
 - [ ] **Phase 78: Diffusion Operator** - X-MCZ-X pattern with zero ancilla and O(n) gates
 - [ ] **Phase 79: Grover Search Integration** - ql.grover() API combining oracle + diffusion with auto iteration count
 - [ ] **Phase 80: Oracle Auto-Synthesis & Adaptive Search** - Lambda predicate oracles and exponential backoff for unknown M
@@ -131,7 +131,10 @@
   3. Oracle exits with zero ancilla delta (validated, hard error on violation)
   4. Bit-flip oracles are auto-wrapped with X-H-oracle-H-X phase kickback pattern
   5. Oracle cached correctly under different arithmetic_mode settings (QFT vs Toffoli)
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 77-01-PLAN.md -- Oracle module implementation (emit_x, oracle.py, __init__.py export)
+- [ ] 77-02-PLAN.md -- Oracle integration and Qiskit simulation tests
 
 ### Phase 78: Diffusion Operator
 **Goal**: Users can apply the Grover diffusion operator as a reusable building block
