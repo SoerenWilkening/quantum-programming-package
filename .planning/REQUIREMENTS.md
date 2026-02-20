@@ -15,11 +15,11 @@ Requirements for Grover's Algorithm milestone. Each maps to roadmap phases.
 
 ### Oracle Infrastructure
 
-- [ ] **ORCL-01**: User can pass `@ql.compile` decorated function as oracle to Grover
-- [ ] **ORCL-02**: `@ql.grover_oracle` decorator enforces compute-phase-uncompute ordering
-- [ ] **ORCL-03**: Oracle decorator validates ancilla allocation delta is zero on exit
-- [ ] **ORCL-04**: Bit-flip oracles auto-wrapped with phase kickback pattern
-- [ ] **ORCL-05**: Oracle cache key includes `arithmetic_mode` (QFT vs Toffoli)
+- [x] **ORCL-01**: User can pass `@ql.compile` decorated function as oracle to Grover
+- [x] **ORCL-02**: `@ql.grover_oracle` decorator enforces compute-phase-uncompute ordering
+- [x] **ORCL-03**: Oracle decorator validates ancilla allocation delta is zero on exit
+- [x] **ORCL-04**: Bit-flip oracles auto-wrapped with phase kickback pattern
+- [x] **ORCL-05**: Oracle cache key includes `arithmetic_mode` (QFT vs Toffoli)
 
 ### Grover Search
 
@@ -81,11 +81,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PRIM-01 | Phase 76 | Complete |
 | PRIM-02 | Phase 76 | Complete |
 | PRIM-03 | Phase 76 | Complete |
-| ORCL-01 | Phase 77 | Pending |
-| ORCL-02 | Phase 77 | Pending |
-| ORCL-03 | Phase 77 | Pending |
-| ORCL-04 | Phase 77 | Pending |
-| ORCL-05 | Phase 77 | Pending |
+| ORCL-01 | Phase 77 | Complete |
+| ORCL-02 | Phase 77 | Complete |
+| ORCL-03 | Phase 77 | Complete |
+| ORCL-04 | Phase 77 | Complete |
+| ORCL-05 | Phase 77 | Complete |
 | GROV-01 | Phase 79 | Pending |
 | GROV-02 | Phase 79 | Pending |
 | GROV-03 | Phase 78 | Pending |

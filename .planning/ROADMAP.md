@@ -193,7 +193,7 @@ Plans:
 | 62-64 | v2.3 | 4/4 | Complete | 2026-02-08 |
 | 65-75 | v3.0 | 35/35 | Complete | 2026-02-18 |
 | 76 | v4.0 | Complete    | 2026-02-20 | 2026-02-20 |
-| 77 | v4.0 | 0/TBD | Not started | - |
+| 77 | 1/2 | In Progress|  | - |
 | 78 | v4.0 | 0/TBD | Not started | - |
 | 79 | v4.0 | 0/TBD | Not started | - |
 | 80 | v4.0 | 0/TBD | Not started | - |

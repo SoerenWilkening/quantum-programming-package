@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v4.0 Grover's Algorithm -- Phase 76 (Gate Primitive Exposure)
+**Current focus:** v4.0 Grover's Algorithm -- Phase 77 (Oracle Infrastructure)
 
 ## Current Position
 
-Phase: 76 of 81 (Gate Primitive Exposure) -- COMPLETE
-Plan: 6 of 6 complete
-Status: Phase Complete
-Last activity: 2026-02-20 -- Completed 76-06-PLAN.md (rebuild and UAT verification, all 3 gaps closed)
+Phase: 77 of 81 (Oracle Infrastructure) -- IN PROGRESS
+Plan: 1 of 2 complete
+Status: Executing
+Last activity: 2026-02-20 -- Completed 77-01-PLAN.md (oracle.py module with GroverOracle class)
 
-Progress: [##########░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 1/6 phases (v4.0)
+Progress: [##############░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 2/6 phases (v4.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 222 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 35, v4.0: 6)
+- Total plans completed: 223 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 35, v4.0: 7)
 - Average duration: ~13 min/plan
 - Total execution time: ~34.0 hours
 
@@ -45,6 +45,7 @@ Progress: [##########░░░░░░░░░░░░░░░░░░░�
 | v4.0 Grover's Algorithm | 76-81 | TBD | In Progress |
 | Phase 76 P05 | 1min | 2 tasks | 2 files |
 | Phase 76 P06 | 2min | 2 tasks | 0 files |
+| Phase 77 P01 | 34min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -59,6 +60,9 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 - [Phase 76]: Rotation gate inverse: Ry(theta)^-1 = Ry(-theta), same for Rx, Rz, P
 - [Phase 76]: Multi-call layer tracking: min/max accumulation instead of overwrite
 - [Phase 76]: All 31 tests passing after rebuild -- 3 UAT gaps fully closed (indexed branch, controlled CRY, double accumulation)
+- [Phase 77]: Oracle validation at circuit generation time (first call), not decoration time
+- [Phase 77]: validate=False bypasses ALL checks (ancilla delta + compute-phase-uncompute)
+- [Phase 77]: Phase gate detection: only Z-type gates targeting param qubits count as phase marking
 
 ### Research Flags
 
@@ -79,8 +83,8 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 76-06-PLAN.md (Phase 76 fully complete, all 6 plans done)
-Resume action: Begin Phase 77 (Oracle Infrastructure) planning
+Stopped at: Completed 77-01-PLAN.md (oracle.py module with GroverOracle class, emit_x, grover_oracle export)
+Resume action: Execute 77-02-PLAN.md (oracle tests)
 
 ---
-*State updated: 2026-02-20 -- Phase 76 complete (all 6 plans, all 3 UAT gaps closed)*
+*State updated: 2026-02-20 -- Phase 77 plan 01 complete (oracle.py created, grover_oracle exported)*
