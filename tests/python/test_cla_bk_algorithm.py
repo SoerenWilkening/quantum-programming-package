@@ -53,7 +53,7 @@ def _simulate_and_extract(qasm_str, num_qubits, result_start, result_width):
     circuit = qiskit.qasm3.loads(qasm_str)
     if not circuit.cregs:
         circuit.measure_all()
-    simulator = AerSimulator(method="statevector")
+    simulator = AerSimulator(method="statevector", max_parallel_threads=4)
     job = simulator.run(circuit, shots=1)
     result = job.result()
     counts = result.get_counts()
@@ -69,7 +69,7 @@ def _simulate_and_extract_mps(qasm_str, num_qubits, result_start, result_width):
     circuit = qiskit.qasm3.loads(qasm_str)
     if not circuit.cregs:
         circuit.measure_all()
-    simulator = AerSimulator(method="matrix_product_state")
+    simulator = AerSimulator(method="matrix_product_state", max_parallel_threads=4)
     job = simulator.run(circuit, shots=1)
     result = job.result()
     counts = result.get_counts()
@@ -456,7 +456,12 @@ class TestBKAncillaCleanup:
         num_qubits = _get_num_qubits_from_qasm(qasm_str)
         circuit = qiskit.qasm3.loads(qasm_str)
         circuit.save_statevector()
-        sv = AerSimulator(method="statevector").run(circuit).result().get_statevector()
+        sv = (
+            AerSimulator(method="statevector", max_parallel_threads=4)
+            .run(circuit)
+            .result()
+            .get_statevector()
+        )
         probs = np.abs(sv.data) ** 2
         state = np.argmax(probs)
 
@@ -516,7 +521,12 @@ class TestBKAncillaCleanup:
         num_qubits = _get_num_qubits_from_qasm(qasm_str)
         circuit = qiskit.qasm3.loads(qasm_str)
         circuit.save_statevector()
-        sv = AerSimulator(method="statevector").run(circuit).result().get_statevector()
+        sv = (
+            AerSimulator(method="statevector", max_parallel_threads=4)
+            .run(circuit)
+            .result()
+            .get_statevector()
+        )
         probs = np.abs(sv.data) ** 2
         state = np.argmax(probs)
 

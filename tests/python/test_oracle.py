@@ -28,7 +28,7 @@ def _simulate_qasm(qasm_str: str) -> dict:
     circuit = qiskit.qasm3.loads(qasm_str)
     if not circuit.cregs:
         circuit.measure_all()
-    simulator = AerSimulator()
+    simulator = AerSimulator(max_parallel_threads=4)
     transpiled = transpile(circuit, simulator)
     result = simulator.run(transpiled, shots=SHOTS).result()
     return result.get_counts()
@@ -807,7 +807,7 @@ class TestOraclePhaseSemantics:
         circuit = qiskit.qasm3.loads(qasm)
         if not circuit.cregs:
             circuit.measure_all()
-        simulator = AerSimulator()
+        simulator = AerSimulator(max_parallel_threads=4)
         transpiled = transpile(circuit, simulator)
         result = simulator.run(transpiled, shots=SHOTS).result()
         counts = result.get_counts()

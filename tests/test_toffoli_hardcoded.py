@@ -37,7 +37,7 @@ def _simulate_and_extract(qasm_str, num_qubits, result_start, result_width):
     circuit = qiskit.qasm3.loads(qasm_str)
     if not circuit.cregs:
         circuit.measure_all()
-    simulator = AerSimulator(method="statevector")
+    simulator = AerSimulator(method="statevector", max_parallel_threads=4)
     job = simulator.run(circuit, shots=1)
     result = job.result()
     counts = result.get_counts()

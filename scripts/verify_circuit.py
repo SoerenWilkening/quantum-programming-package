@@ -681,7 +681,7 @@ try:
         circuit.measure_all()
 
     # Simulate with 1 shot (deterministic)
-    simulator = AerSimulator(method='statevector')
+    simulator = AerSimulator(method='statevector', max_parallel_threads=4)
     job = simulator.run(circuit, shots=1)
     result = job.result()
     counts = result.get_counts()

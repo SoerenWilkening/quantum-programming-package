@@ -380,7 +380,7 @@ def _simulate_controlled_cq_add(width, init_val, add_val, ctrl_val):
     circuit = qiskit.qasm3.loads(qasm_str)
     if not circuit.cregs:
         circuit.measure_all()
-    simulator = AerSimulator(method="statevector")
+    simulator = AerSimulator(method="statevector", max_parallel_threads=4)
     job = simulator.run(circuit, shots=1)
     counts = job.result().get_counts()
     bitstring = list(counts.keys())[0]

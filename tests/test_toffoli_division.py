@@ -129,7 +129,7 @@ def _simulate_and_extract(qasm_str, num_qubits, result_start, result_width):
     basis_gates = ["cx", "u1", "u2", "u3", "x", "h", "ccx", "id"]
     transpiled = transpile(circuit, basis_gates=basis_gates, optimization_level=0)
 
-    simulator = AerSimulator(method="matrix_product_state")
+    simulator = AerSimulator(method="matrix_product_state", max_parallel_threads=4)
     job = simulator.run(transpiled, shots=1)
     result = job.result()
     counts = result.get_counts()

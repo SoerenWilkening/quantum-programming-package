@@ -57,7 +57,7 @@ def _run_mod(width, a_val, divisor):
     if not circuit.cregs:
         circuit.measure_all()
 
-    sim = AerSimulator(method="matrix_product_state")
+    sim = AerSimulator(method="matrix_product_state", max_parallel_threads=4)
     job = sim.run(circuit, shots=1)
     counts = job.result().get_counts()
     bitstring = list(counts.keys())[0]

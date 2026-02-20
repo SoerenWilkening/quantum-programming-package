@@ -14,17 +14,15 @@ Test coverage:
 - Inverse verification (branch + inverse restores |0>)
 """
 
-import math
 import gc
-import pytest
+import math
 
+import pytest
 import qiskit.qasm3
 from qiskit import transpile
 from qiskit_aer import AerSimulator
 
 import quantum_language as ql
-from quantum_language._core import current_scope_depth
-
 
 # Tolerance for probability comparison (user decision: 1e-6)
 TOLERANCE = 1e-6
@@ -37,7 +35,7 @@ def _simulate_qasm(qasm_str: str) -> dict:
     circuit = qiskit.qasm3.loads(qasm_str)
     if not circuit.cregs:
         circuit.measure_all()
-    simulator = AerSimulator()
+    simulator = AerSimulator(max_parallel_threads=4)
     transpiled = transpile(circuit, simulator)
     result = simulator.run(transpiled, shots=SHOTS).result()
     return result.get_counts()
@@ -47,7 +45,7 @@ def _counts_to_probabilities(counts: dict, num_qubits: int) -> dict:
     """Convert counts to probability dict with all basis states."""
     total = sum(counts.values())
     probs = {}
-    for i in range(2 ** num_qubits):
+    for i in range(2**num_qubits):
         bitstring = format(i, f"0{num_qubits}b")
         probs[bitstring] = counts.get(bitstring, 0) / total
     return probs
@@ -56,7 +54,7 @@ def _counts_to_probabilities(counts: dict, num_qubits: int) -> dict:
 def _run_branch_circuit(width: int, prob: float = 0.5) -> dict:
     """Create circuit with branch(prob), return Qiskit counts."""
     ql.circuit()
-    ql.option('fault_tolerant', True)  # Use Toffoli backend for consistent gates
+    ql.option("fault_tolerant", True)  # Use Toffoli backend for consistent gates
 
     x = ql.qint(0, width=width)
     x.branch(prob)
@@ -80,11 +78,12 @@ class TestBranchEqualSuperposition:
         probs = _counts_to_probabilities(counts, width)
 
         # Each basis state should have probability 1/2^width
-        expected_prob = 1.0 / (2 ** width)
+        expected_prob = 1.0 / (2**width)
 
         for state, prob in probs.items():
-            assert abs(prob - expected_prob) < 0.05, \
+            assert abs(prob - expected_prob) < 0.05, (
                 f"Width {width}, state {state}: expected {expected_prob:.4f}, got {prob:.4f}"
+            )
 
 
 class TestBranchProbabilities:
@@ -101,8 +100,7 @@ class TestBranchProbabilities:
 
         # Use wider tolerance for statistical sampling (3% for edge cases)
         tol = 0.03 if prob in (0.0, 1.0) else 0.05
-        assert abs(p1 - prob) < tol, \
-            f"branch({prob}): expected P(1)={prob}, got {p1:.4f}"
+        assert abs(p1 - prob) < tol, f"branch({prob}): expected P(1)={prob}, got {p1:.4f}"
 
     def test_probability_edge_case_zero(self):
         """branch(0) keeps qubit in |0> state."""
@@ -125,7 +123,7 @@ class TestBranchQbool:
     def test_qbool_branch_equal_superposition(self):
         """qbool.branch() creates equal superposition."""
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
         b = ql.qbool(False)
         b.branch()
@@ -147,7 +145,7 @@ class TestBranchIndexed:
     def test_indexed_branch_single_qubit(self):
         """x[0].branch(0.5) affects only that qubit."""
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
         x = ql.qint(0, width=4)
         x[0].branch(0.5)  # Branch only LSB
@@ -162,8 +160,9 @@ class TestBranchIndexed:
         p_0001 = counts.get("0001", 0) / total
 
         # These two states should have most of the probability
-        assert p_0000 + p_0001 > 0.95, \
+        assert p_0000 + p_0001 > 0.95, (
             f"Indexed branch should only affect LSB, got states: {counts}"
+        )
 
         # Each should be roughly 0.5
         assert abs(p_0000 - 0.5) < 0.05
@@ -172,7 +171,7 @@ class TestBranchIndexed:
     def test_multiple_indexed_branches(self):
         """Multiple indexed branches affect multiple qubits."""
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
         x = ql.qint(0, width=3)
         x[0].branch(0.5)  # LSB
@@ -188,8 +187,7 @@ class TestBranchIndexed:
 
         for state in expected_states:
             p = counts.get(state, 0) / total
-            assert abs(p - 0.25) < 0.06, \
-                f"State {state} should have P=0.25, got {p:.4f}"
+            assert abs(p - 0.25) < 0.06, f"State {state} should have P=0.25, got {p:.4f}"
 
 
 class TestBranchControlled:
@@ -198,7 +196,7 @@ class TestBranchControlled:
     def test_controlled_branch_cry(self):
         """branch() inside `with ctrl:` produces CRy gates."""
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
         ctrl = ql.qbool(True)  # Control qubit is |1>
         target = ql.qbool(False)
@@ -209,8 +207,9 @@ class TestBranchControlled:
         qasm = ql.to_openqasm()
 
         # Verify CRy gate appears in QASM
-        assert "cry" in qasm.lower() or "ry" in qasm.lower(), \
+        assert "cry" in qasm.lower() or "ry" in qasm.lower(), (
             f"Expected Ry gate in QASM, got:\n{qasm}"
+        )
 
         # Simulate: ctrl=|1>, so CRy should apply
         counts = _simulate_qasm(qasm)
@@ -232,16 +231,17 @@ class TestBranchCompile:
 
     def test_branch_in_compiled_function(self):
         """branch() works inside @ql.compile decorated function."""
+
         @ql.compile
         def create_superposition(x):
             x.branch(0.5)
             return x
 
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
         x = ql.qint(0, width=2)
-        result = create_superposition(x)
+        create_superposition(x)
 
         qasm = ql.to_openqasm()
         counts = _simulate_qasm(qasm)
@@ -249,8 +249,9 @@ class TestBranchCompile:
 
         # Equal superposition: each of 4 states has P=0.25
         for state, prob in probs.items():
-            assert abs(prob - 0.25) < 0.06, \
+            assert abs(prob - 0.25) < 0.06, (
                 f"Compiled branch: state {state} expected P=0.25, got {prob:.4f}"
+            )
 
 
 class TestBranchValidation:
@@ -286,7 +287,7 @@ class TestBranchAccumulation:
     def test_double_branch_accumulates(self):
         """Two branch(0.5) calls accumulate rotations."""
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
         x = ql.qbool(False)
         x.branch(0.5)  # Ry(pi/2)
@@ -309,7 +310,7 @@ class TestInternalGates:
         from quantum_language._gates import emit_h
 
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
         # Allocate a qubit and emit H
         x = ql.qbool(False)
@@ -329,10 +330,10 @@ class TestInternalGates:
 
     def test_emit_z_produces_phase_flip(self):
         """emit_z() emits Z gate visible in QASM."""
-        from quantum_language._gates import emit_z, emit_h
+        from quantum_language._gates import emit_h, emit_z
 
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
         x = ql.qbool(False)
         emit_h(x.qubits[63])  # Create |+>
@@ -351,11 +352,10 @@ class TestInternalGates:
 
     def test_emit_ry_produces_rotation(self):
         """emit_ry() emits Ry gate visible in QASM."""
-        import math
         from quantum_language._gates import emit_ry
 
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
         x = ql.qbool(False)
         # Ry(pi/2) = equal superposition
@@ -385,7 +385,7 @@ class TestInternalGates:
         from quantum_language._gates import emit_h, emit_mcz
 
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
         # Allocate 3 qubits
         q0 = ql.qbool(False)
@@ -410,7 +410,6 @@ class TestInternalGates:
 
         # Simulate and verify interference pattern
         counts = _simulate_qasm(qasm)
-        total = sum(counts.values())
 
         # The H-MCZ-H pattern creates specific interference:
         # |000> should have lower probability than without MCZ
@@ -421,23 +420,25 @@ class TestInternalGates:
         # Verify MCZ had an effect: at least one state should deviate
         # significantly from uniform 1/8 = 0.125
         max_deviation = max(abs(p - 0.125) for p in probs.values())
-        assert max_deviation > 0.05, \
+        assert max_deviation > 0.05, (
             f"MCZ should cause interference. Max deviation from uniform: {max_deviation:.4f}"
+        )
 
     def test_emit_mcz_two_controls(self):
         """emit_mcz() with 2 controls works correctly."""
         from quantum_language._gates import emit_mcz
 
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
         # Allocate qubits: 2 controls + 1 target
-        ctrl0 = ql.qbool(True)   # |1>
-        ctrl1 = ql.qbool(True)   # |1>
-        target = ql.qbool(False) # |0>
+        ctrl0 = ql.qbool(True)  # |1>
+        ctrl1 = ql.qbool(True)  # |1>
+        target = ql.qbool(False)  # |0>
 
         # Apply H to target to create |+>
         from quantum_language._gates import emit_h
+
         emit_h(target.qubits[63])
 
         # Apply MCZ: both controls are |1>, so Z should apply
@@ -453,18 +454,17 @@ class TestInternalGates:
         # Target should be |1> (both controls were |1>)
         # Full state: |11> for controls, |1> for target = |111>
         p_111 = counts.get("111", 0) / total
-        assert p_111 > 0.95, \
-            f"MCZ with both controls |1> should flip target. P(111)={p_111:.4f}"
+        assert p_111 > 0.95, f"MCZ with both controls |1> should flip target. P(111)={p_111:.4f}"
 
     def test_emit_mcz_single_control_fallback(self):
         """emit_mcz() with single control falls back to CZ."""
-        from quantum_language._gates import emit_mcz, emit_h
+        from quantum_language._gates import emit_h, emit_mcz
 
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
-        ctrl = ql.qbool(True)    # |1>
-        target = ql.qbool(False) # |0>
+        ctrl = ql.qbool(True)  # |1>
+        target = ql.qbool(False)  # |0>
 
         emit_h(target.qubits[63])  # |+>
         emit_mcz(target.qubits[63], [ctrl.qubits[63]])  # Single control = CZ
@@ -480,10 +480,10 @@ class TestInternalGates:
 
     def test_emit_mcz_no_controls_fallback(self):
         """emit_mcz() with no controls falls back to Z."""
-        from quantum_language._gates import emit_mcz, emit_h
+        from quantum_language._gates import emit_h, emit_mcz
 
         ql.circuit()
-        ql.option('fault_tolerant', True)
+        ql.option("fault_tolerant", True)
 
         target = ql.qbool(False)
 

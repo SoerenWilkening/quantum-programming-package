@@ -44,7 +44,7 @@ def _simulate_circuit():
     circuit = qiskit.qasm3.loads(qasm_str)
     if not circuit.cregs:
         circuit.measure_all()
-    simulator = AerSimulator(method="statevector")
+    simulator = AerSimulator(method="statevector", max_parallel_threads=4)
     job = simulator.run(circuit, shots=1)
     counts = job.result().get_counts()
     return list(counts.keys())[0]

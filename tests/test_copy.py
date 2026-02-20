@@ -174,7 +174,7 @@ def test_copy_uncomputation():
     if not circuit.cregs:
         circuit.measure_all()
 
-    sim = AerSimulator(method="statevector")
+    sim = AerSimulator(method="statevector", max_parallel_threads=4)
     job = sim.run(circuit, shots=1)
     counts = job.result().get_counts()
     bitstring = list(counts.keys())[0]

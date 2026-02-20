@@ -252,7 +252,7 @@ def _run_bitwise_pipeline(width, a, b, op_name, variant="qq"):
     circuit = qiskit.qasm3.loads(qasm_str)
     if not circuit.cregs:
         circuit.measure_all()
-    sim = AerSimulator(method="statevector")
+    sim = AerSimulator(method="statevector", max_parallel_threads=4)
     job = sim.run(circuit, shots=1)
     counts = job.result().get_counts()
     bitstring = list(counts.keys())[0]

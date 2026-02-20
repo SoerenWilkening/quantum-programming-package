@@ -28,7 +28,7 @@ def _simulate_statevector(qasm_str):
     """Run QASM through Qiskit Aer and return statevector."""
     circuit = qiskit.qasm3.loads(qasm_str)
     circuit.save_statevector()
-    sim = AerSimulator(method="statevector")
+    sim = AerSimulator(method="statevector", max_parallel_threads=4)
     result = sim.run(transpile(circuit, sim)).result()
     return result.get_statevector()
 
@@ -37,7 +37,7 @@ def _simulate_counts(qasm_str, shots=8192):
     """Run QASM through Qiskit Aer and return measurement counts."""
     circuit = qiskit.qasm3.loads(qasm_str)
     circuit.measure_all()
-    sim = AerSimulator()
+    sim = AerSimulator(max_parallel_threads=4)
     result = sim.run(transpile(circuit, sim), shots=shots).result()
     return result.get_counts()
 
