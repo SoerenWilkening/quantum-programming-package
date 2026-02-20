@@ -369,8 +369,15 @@ class TestPhaseProperty:
         ]
         assert len(lines) == 0, f"Uncontrolled phase should emit no gates, got: {lines}"
 
-    def test_phase_controlled_emits_cp(self):
-        """Controlled phase emits CP gate in QASM output."""
+    def test_phase_controlled_emits_p(self):
+        """Controlled phase emits P gate on control qubit in QASM output.
+
+        After the emit_p_raw fix (Phase 78-03), _PhaseProxy.__iadd__ emits
+        a plain P gate on the control qubit (not CP). P(theta) on the control
+        qubit in |1> state implements a controlled global phase via phase
+        kickback -- same quantum effect as CP but without the double-control
+        bug that produced cp(q[n], q[n]).
+        """
         ql.circuit()
         ql.option("fault_tolerant", True)
 
@@ -382,8 +389,8 @@ class TestPhaseProperty:
 
         qasm = ql.to_openqasm()
 
-        # Should contain CP gate
-        assert _gate_present(qasm, "cp"), f"Expected CP gate in controlled phase QASM:\n{qasm}"
+        # Should contain P gate (not CP) on the control qubit
+        assert _gate_present(qasm, "p("), f"Expected P gate in controlled phase QASM:\n{qasm}"
 
     def test_phase_mul_minus1(self):
         """phase *= -1 is equivalent to phase += pi."""
@@ -405,11 +412,11 @@ class TestPhaseProperty:
             y.phase *= -1
         qasm_mul = ql.to_openqasm()
 
-        # Both should produce the same CP(pi) gate
-        assert "cp" in qasm_add.lower(), f"Expected CP in += pi:\n{qasm_add}"
-        assert "cp" in qasm_mul.lower(), f"Expected CP in *= -1:\n{qasm_mul}"
+        # Both should produce P(pi) gate on control qubit
+        assert "p(" in qasm_add, f"Expected P gate in += pi:\n{qasm_add}"
+        assert "p(" in qasm_mul, f"Expected P gate in *= -1:\n{qasm_mul}"
 
-        # Extract the CP angle from both -- should be pi
+        # Both should have pi angle
         assert "3.14159" in qasm_add, f"Expected pi angle in += pi QASM:\n{qasm_add}"
         assert "3.14159" in qasm_mul, f"Expected pi angle in *= -1 QASM:\n{qasm_mul}"
 
@@ -435,7 +442,7 @@ class TestPhaseProperty:
             b.phase += math.pi
 
         qasm = ql.to_openqasm()
-        assert _gate_present(qasm, "cp"), f"Expected CP gate for qbool phase:\n{qasm}"
+        assert "p(" in qasm, f"Expected P gate for qbool phase:\n{qasm}"
 
     def test_phase_qarray(self):
         """Phase property works on qarray."""
@@ -449,60 +456,57 @@ class TestPhaseProperty:
             arr.phase += math.pi
 
         qasm = ql.to_openqasm()
-        assert _gate_present(qasm, "cp"), f"Expected CP gate for qarray phase:\n{qasm}"
+        assert "p(" in qasm, f"Expected P gate for qarray phase:\n{qasm}"
 
     def test_manual_s0_reflection_statevector(self):
-        """Manual S_0: with x == 0: x.phase += pi produces correct reflection.
+        """Manual S_0: with x == 0: x.phase += pi produces correct S_0 reflection.
 
-        The manual S_0 path uses comparison (ancilla-based), which gets
-        uncomputed on with-block exit. The X-MCZ-X diffusion operator
-        produces the same S_0 effect. We verify both produce equivalent
-        results via Qiskit statevector simulation.
-
-        Since the manual path's gates are invisible in QASM (uncomputed),
-        we compare the diffusion operator's statevector (known correct)
-        to confirm the mathematical equivalence.
+        Directly tests the manual path via Qiskit statevector simulation.
+        After branch() + manual S_0, the |00> amplitude should have opposite
+        sign from the other amplitudes (same effect as ql.diffusion()).
         """
-        # The X-MCZ-X diffusion operator produces the correct S_0 reflection
-        # (verified by test_diffusion_statevector_2qubit above).
-        # The manual path produces the same mathematical operation but through
-        # a different circuit mechanism (comparison + controlled phase).
-        #
-        # Rather than trying to export the manual path through QASM (which
-        # loses gates to uncomputation), we verify the X-MCZ-X path IS the
-        # correct S_0, confirming that BOTH paths achieve the same result.
-
         ql.circuit()
         ql.option("fault_tolerant", True)
 
         x = ql.qint(0, width=2)
         x.branch()
-        ql.diffusion(x)
+        with x == 0:
+            x.phase += math.pi
 
         qasm = ql.to_openqasm()
         sv = _simulate_statevector(qasm)
 
-        # Verify S_0 reflection: |00> has opposite sign
-        amps = [complex(sv[i]) for i in range(4)]
-        amp_00 = amps[0].real
-        amp_others = [a.real for a in amps[1:]]
+        # Extract search register amplitudes (first 2^width entries,
+        # where all ancilla qubits are in |0> state)
+        search_width = 2
+        n_search_states = 2**search_width
+        amps = [complex(sv[i]).real for i in range(n_search_states)]
 
-        # |00> amplitude should be negative (others positive)
-        assert amp_00 < 0, f"|00> should be negative: {amp_00:.4f}"
-        assert all(a > 0 for a in amp_others), f"Other amps should be positive: {amp_others}"
+        # After branch() (equal superposition) + S_0 reflection:
+        # |00> amplitude should have opposite sign from others
+        amp_00 = amps[0]
+        amp_others = amps[1:]
 
-        # Verify magnitudes are equal (uniform distribution was input)
+        assert amp_00 < 0, (
+            f"|00> should be negative after S_0 reflection: {amp_00:.6f}\n"
+            f"All amps: {amps}\nQASM:\n{qasm}"
+        )
+        assert all(a > 0 for a in amp_others), (
+            f"Non-|00> amps should be positive: {amp_others}\nAll amps: {amps}\nQASM:\n{qasm}"
+        )
+
+        # Verify magnitudes are equal (uniform was input)
         assert np.isclose(abs(amp_00), abs(amp_others[0]), atol=1e-6), (
-            f"Amplitudes should have equal magnitude: |00|={abs(amp_00):.4f}, "
-            f"|01|={abs(amp_others[0]):.4f}"
+            f"Amplitudes should have equal magnitude: "
+            f"|00|={abs(amp_00):.6f}, |01|={abs(amp_others[0]):.6f}"
         )
 
     def test_phase_register_agnostic(self):
-        """Phase is register-agnostic: y.phase += pi inside with x == 0 block.
+        """Phase is register-agnostic: y.phase += pi inside with flag block.
 
         Inside a controlled context, the phase operation depends only on
         the control, not which register's .phase is used. Both x.phase
-        and y.phase should produce the same CP gate in the same context.
+        and y.phase should produce the same P gate in the same context.
         """
         # Test that different registers produce the same phase gate
         # in the same controlled context
@@ -522,10 +526,87 @@ class TestPhaseProperty:
             y.phase += math.pi
         qasm_y = ql.to_openqasm()
 
-        # Both should produce CP(pi) -- same gate regardless of register
-        assert "cp" in qasm_x.lower(), f"Expected CP in x.phase:\n{qasm_x}"
-        assert "cp" in qasm_y.lower(), f"Expected CP in y.phase:\n{qasm_y}"
+        # Both should produce P(pi) on control qubit -- same gate regardless of register
+        assert "p(" in qasm_x, f"Expected P gate in x.phase:\n{qasm_x}"
+        assert "p(" in qasm_y, f"Expected P gate in y.phase:\n{qasm_y}"
 
-        # The CP angle should be pi in both cases
+        # The P angle should be pi in both cases
         assert "3.14159" in qasm_x
         assert "3.14159" in qasm_y
+
+    def test_manual_s0_direct_statevector(self):
+        """Manual S_0 on 3-qubit register verified via Qiskit statevector.
+
+        Independently verifies that with x == 0: x.phase += pi produces
+        the same S_0 reflection as ql.diffusion(x) for width=3.
+        """
+        # First, get reference statevector from ql.diffusion()
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        x_ref = ql.qint(0, width=3)
+        x_ref.branch()
+        ql.diffusion(x_ref)
+        qasm_ref = ql.to_openqasm()
+        sv_ref = _simulate_statevector(qasm_ref)
+        ref_amps = [complex(sv_ref[i]).real for i in range(8)]
+
+        # Now test manual S_0 path
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        x = ql.qint(0, width=3)
+        x.branch()
+        with x == 0:
+            x.phase += math.pi
+        qasm_manual = ql.to_openqasm()
+        sv_manual = _simulate_statevector(qasm_manual)
+
+        # Extract search register amplitudes (first 2^3 = 8 entries)
+        manual_amps = [complex(sv_manual[i]).real for i in range(8)]
+
+        # Both should produce same S_0 reflection pattern
+        # |000> negative, all others positive
+        assert manual_amps[0] < 0, (
+            f"|000> should be negative: {manual_amps[0]:.6f}\n"
+            f"All manual amps: {manual_amps}\nQASM:\n{qasm_manual}"
+        )
+        assert all(a > 0 for a in manual_amps[1:]), (
+            f"Non-|000> amps should be positive: {manual_amps[1:]}"
+        )
+
+        # Compare magnitudes with reference (should match within tolerance)
+        for i in range(8):
+            assert np.isclose(abs(manual_amps[i]), abs(ref_amps[i]), atol=1e-6), (
+                f"Amplitude mismatch at index {i}: "
+                f"manual={manual_amps[i]:.6f}, ref={ref_amps[i]:.6f}"
+            )
+
+    def test_manual_s0_qasm_shows_p_gate(self):
+        """Manual S_0 path emits visible P gate in QASM (not self-controlled CP)."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        x = ql.qint(0, width=2)
+        x.branch()
+        with x == 0:
+            x.phase += math.pi
+        qasm = ql.to_openqasm()
+
+        # After the fix, QASM should contain a P gate (not cp q[n], q[n])
+        # The P gate applies phase to the comparison ancilla qubit
+        lines = qasm.strip().split("\n")
+        p_lines = [ln for ln in lines if ln.strip().startswith("p(")]
+        assert len(p_lines) > 0, (
+            f"Expected P gate in QASM for manual S_0 path, got none.\nQASM:\n{qasm}"
+        )
+
+        # Should NOT have self-controlled CP (cp q[n], q[n])
+        for line in lines:
+            stripped = line.strip()
+            if stripped.startswith("cp("):
+                # Extract qubit arguments
+                parts = stripped.split(" ", 1)
+                if len(parts) > 1:
+                    qubit_args = parts[1].rstrip(";").split(",")
+                    qubit_args = [q.strip() for q in qubit_args]
+                    assert len(set(qubit_args)) > 1, (
+                        f"Found self-controlled CP (same qubit for target and control): {stripped}"
+                    )
