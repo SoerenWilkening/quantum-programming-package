@@ -97,7 +97,7 @@
 
 - [x] **Phase 76: Gate Primitive Exposure** - Expose H, Z, Ry gates at Python level via Cython bindings (6/6 plans complete) -- completed 2026-02-20
 - [x] **Phase 77: Oracle Infrastructure** - @ql.grover_oracle decorator with compute-phase-uncompute enforcement (2 plans) (completed 2026-02-20)
-- [ ] **Phase 78: Diffusion Operator** - X-MCZ-X pattern with zero ancilla and O(n) gates
+- [x] **Phase 78: Diffusion Operator** - X-MCZ-X pattern with zero ancilla and O(n) gates (completed 2026-02-20)
 - [ ] **Phase 79: Grover Search Integration** - ql.grover() API combining oracle + diffusion with auto iteration count
 - [ ] **Phase 80: Oracle Auto-Synthesis & Adaptive Search** - Lambda predicate oracles and exponential backoff for unknown M
 - [ ] **Phase 81: Amplitude Estimation (IQAE)** - ql.amplitude_estimate() with configurable precision and confidence
@@ -197,7 +197,7 @@ Plans:
 | 65-75 | v3.0 | 35/35 | Complete | 2026-02-18 |
 | 76 | v4.0 | Complete    | 2026-02-20 | 2026-02-20 |
 | 77 | 2/2 | Complete    | 2026-02-20 | - |
-| 78 | 1/2 | In Progress|  | - |
+| 78 | 2/2 | Complete   | 2026-02-20 | - |
 | 79 | v4.0 | 0/TBD | Not started | - |
 | 80 | v4.0 | 0/TBD | Not started | - |
 | 81 | v4.0 | 0/TBD | Not started | - |

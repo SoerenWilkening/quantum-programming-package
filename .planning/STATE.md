@@ -9,17 +9,17 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 
 ## Current Position
 
-Phase: 78 of 81 (Diffusion Operator) -- IN PROGRESS
-Plan: 1 of 2 complete
-Status: Executing
-Last activity: 2026-02-20 -- Completed 78-01-PLAN.md (diffusion operator + phase property)
+Phase: 78 of 81 (Diffusion Operator) -- COMPLETE
+Plan: 2 of 2 complete
+Status: Phase Complete
+Last activity: 2026-02-20 -- Completed 78-02-PLAN.md (diffusion operator tests)
 
 Progress: [################░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 3/6 phases (v4.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 224 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 35, v4.0: 8)
+- Total plans completed: 225 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 35, v4.0: 9)
 - Average duration: ~13 min/plan
 - Total execution time: ~34.0 hours
 
@@ -48,6 +48,7 @@ Progress: [################░░░░░░░░░░░░░░░░░�
 | Phase 77 P01 | 34min | 2 tasks | 3 files |
 | Phase 77 P02 | 14min | 2 tasks | 1 files |
 | Phase 78 P01 | 17min | 2 tasks | 6 files |
+| Phase 78 P02 | 18min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,9 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 - [Phase 78]: _PhaseProxy class for x.phase += theta syntax (plain Python class in qint.pyx, no-op setter for += desugaring)
 - [Phase 78]: emit_p targets control qubit in controlled context (register-agnostic global phase)
 - [Phase 78]: Width-based compile cache key for diffusion (variable-arity register support)
+- [Phase 78]: Statevector sign verification for S_0 reflection (|0...0> opposite sign from others)
+- [Phase 78]: Manual S_0 gates invisible in QASM due to auto-uncomputation -- verified via equivalence to X-MCZ-X
+- [Phase 78]: CP duplicate-qubit QASM (cp q[n], q[n]) valid quantum semantics but Qiskit rejects
 
 ### Research Flags
 
@@ -90,8 +94,8 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 78-01-PLAN.md (diffusion operator + phase property)
-Resume action: Execute Phase 78 Plan 02 (diffusion operator tests)
+Stopped at: Completed 78-02-PLAN.md (diffusion operator tests)
+Resume action: Begin Phase 79 (Grover iteration)
 
 ---
-*State updated: 2026-02-20 -- Phase 78 Plan 01 complete (ql.diffusion + _PhaseProxy + emit_p, GROV-03/GROV-05)*
+*State updated: 2026-02-20 -- Phase 78 complete (ql.diffusion + _PhaseProxy + tests, GROV-03/GROV-05 verified)*
