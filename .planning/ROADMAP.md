@@ -189,7 +189,7 @@
 | 55-61 | v2.2 | 22/22 | Complete | 2026-02-08 |
 | 62-64 | v2.3 | 4/4 | Complete | 2026-02-08 |
 | 65-75 | v3.0 | 35/35 | Complete | 2026-02-18 |
-| 76 | 4/6 | In Progress|  | - |
+| 76 | 5/6 | In Progress|  | - |
 | 77 | v4.0 | 0/TBD | Not started | - |
 | 78 | v4.0 | 0/TBD | Not started | - |
 | 79 | v4.0 | 0/TBD | Not started | - |

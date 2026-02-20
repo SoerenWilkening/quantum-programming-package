@@ -52,8 +52,11 @@ Progress: [##########░░░░░░░░░░░░░░░░░░░�
 See PROJECT.md Key Decisions table for full history.
 v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude estimation (no QFT), X-MCZ-X diffusion pattern (zero ancilla).
 76-05: Bounds check added to __getitem__ for clear IndexError on invalid qubit indices. Qiskit little-endian convention: ctrl=q[0] is rightmost bit in bitstrings.
+76-04: Task 1 gate.c fix pre-existing from plan 01 (4bae694). Layer accumulation uses 0/0 sentinel for first-call detection.
 - [Phase 76]: Bounds check added to __getitem__ for clear IndexError on invalid qubit indices
 - [Phase 76]: Qiskit little-endian convention: ctrl=q[0] is rightmost bit in bitstrings
+- [Phase 76]: Rotation gate inverse: Ry(theta)^-1 = Ry(-theta), same for Rx, Rz, P
+- [Phase 76]: Multi-call layer tracking: min/max accumulation instead of overwrite
 
 ### Research Flags
 
@@ -74,8 +77,8 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 76-05-PLAN.md (fix indexed branch offset and controlled branch test)
+Stopped at: Completed 76-04-PLAN.md (branch accumulation bug fixes)
 Resume action: Execute 76-06-PLAN.md (rebuild and UAT verification) to close all three UAT gaps
 
 ---
-*State updated: 2026-02-20 -- Completed 76-05-PLAN.md*
+*State updated: 2026-02-20 -- Completed 76-04-PLAN.md (plans 04 and 05 both done)*
