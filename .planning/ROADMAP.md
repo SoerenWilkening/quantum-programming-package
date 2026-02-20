@@ -145,7 +145,10 @@ Plans:
   2. User can manually construct S_0 reflection via `with a == 0` for custom amplitude amplification
   3. Diffusion operator accepts explicit qubit list (validated against search register width)
   4. Phase flip on |0...0> state verifiable via Qiskit simulation for widths 1-8
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 78-01-PLAN.md -- Phase property + diffusion module implementation (emit_p, PhaseProxy, diffusion.py, exports)
+- [ ] 78-02-PLAN.md -- Diffusion and phase property tests with Qiskit simulation verification
 
 ### Phase 79: Grover Search Integration
 **Goal**: Users can execute Grover search with a single API call and get measured results
