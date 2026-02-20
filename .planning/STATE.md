@@ -9,10 +9,10 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 
 ## Current Position
 
-Phase: 77 of 81 (Oracle Infrastructure) -- IN PROGRESS
-Plan: 1 of 2 complete
-Status: Executing
-Last activity: 2026-02-20 -- Completed 77-01-PLAN.md (oracle.py module with GroverOracle class)
+Phase: 77 of 81 (Oracle Infrastructure) -- COMPLETE
+Plan: 2 of 2 complete
+Status: Phase Complete
+Last activity: 2026-02-20 -- Completed 77-02-PLAN.md (oracle integration tests)
 
 Progress: [##############░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 2/6 phases (v4.0)
 
@@ -46,6 +46,7 @@ Progress: [##############░░░░░░░░░░░░░░░░░░�
 | Phase 76 P05 | 1min | 2 tasks | 2 files |
 | Phase 76 P06 | 2min | 2 tasks | 0 files |
 | Phase 77 P01 | 34min | 2 tasks | 3 files |
+| Phase 77 P02 | 14min | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -63,6 +64,8 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 - [Phase 77]: Oracle validation at circuit generation time (first call), not decoration time
 - [Phase 77]: validate=False bypasses ALL checks (ancilla delta + compute-phase-uncompute)
 - [Phase 77]: Phase gate detection: only Z-type gates targeting param qubits count as phase marking
+- [Phase 77]: Direct (non-compiled) oracle tests for QASM-visible phase verification; compiled oracles tested via allocator stats
+- [Phase 77]: bit_flip=True mismatch is expected for standard comparison oracles (ancilla independence)
 
 ### Research Flags
 
@@ -83,8 +86,8 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 ## Session Continuity
 
 Last session: 2026-02-20
-Stopped at: Completed 77-01-PLAN.md (oracle.py module with GroverOracle class, emit_x, grover_oracle export)
-Resume action: Execute 77-02-PLAN.md (oracle tests)
+Stopped at: Completed 77-02-PLAN.md (oracle integration tests -- 37 tests, all 5 ORCL requirements)
+Resume action: Begin Phase 78 (diffusion operator)
 
 ---
-*State updated: 2026-02-20 -- Phase 77 plan 01 complete (oracle.py created, grover_oracle exported)*
+*State updated: 2026-02-20 -- Phase 77 complete (oracle.py + 37 integration tests, all ORCL requirements verified)*
