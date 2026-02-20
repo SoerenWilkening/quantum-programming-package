@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-19)
 ## Current Position
 
 Phase: 76 of 81 (Gate Primitive Exposure)
-Plan: 3 of 3 complete
-Status: Phase Complete
-Last activity: 2026-02-19 -- Completed 76-03-PLAN.md (branch/MCZ test suite)
+Plan: 5 of 6 complete
+Status: Executing
+Last activity: 2026-02-20 -- Completed 76-05-PLAN.md (fix indexed branch offset and controlled branch test)
 
 Progress: [##########░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 1/6 phases (v4.0)
 
@@ -43,6 +43,7 @@ Progress: [##########░░░░░░░░░░░░░░░░░░░�
 | v2.3 Hardcoding Right-Sizing | 62-64 | 4 | Complete (2026-02-08) |
 | v3.0 Fault-Tolerant Arithmetic | 65-75 | 35 | Complete (2026-02-18) |
 | v4.0 Grover's Algorithm | 76-81 | TBD | In Progress |
+| Phase 76 P05 | 1min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -50,6 +51,9 @@ Progress: [##########░░░░░░░░░░░░░░░░░░░�
 
 See PROJECT.md Key Decisions table for full history.
 v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude estimation (no QFT), X-MCZ-X diffusion pattern (zero ancilla).
+76-05: Bounds check added to __getitem__ for clear IndexError on invalid qubit indices. Qiskit little-endian convention: ctrl=q[0] is rightmost bit in bitstrings.
+- [Phase 76]: Bounds check added to __getitem__ for clear IndexError on invalid qubit indices
+- [Phase 76]: Qiskit little-endian convention: ctrl=q[0] is rightmost bit in bitstrings
 
 ### Research Flags
 
@@ -69,9 +73,9 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 
 ## Session Continuity
 
-Last session: 2026-02-19
-Stopped at: Completed Phase 76 (Gate Primitive Exposure) - all 3 plans complete
-Resume action: `/gsd:plan-phase 77` to continue with Oracle Scope phase
+Last session: 2026-02-20
+Stopped at: Completed 76-05-PLAN.md (fix indexed branch offset and controlled branch test)
+Resume action: Execute 76-06-PLAN.md (rebuild and UAT verification) to close all three UAT gaps
 
 ---
-*State updated: 2026-02-19 -- Completed Phase 76 (Gate Primitive Exposure)*
+*State updated: 2026-02-20 -- Completed 76-05-PLAN.md*
