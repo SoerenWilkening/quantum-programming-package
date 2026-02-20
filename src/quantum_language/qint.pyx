@@ -590,9 +590,17 @@ cdef class qint(circuit):
 			emit_ry(self.qubits[self_offset + i], theta)
 
 		# Capture end layer for uncomputation support
-		# (enables scope-based automatic inverse via reverse_circuit_range)
-		self._start_layer = start_layer
-		self._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+		# Accumulate range across multiple branch() calls so _do_uncompute()
+		# reverses ALL rotation gates, not just the last call.
+		end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+		if self._start_layer == 0 and self._end_layer == 0:
+			# First branch() call on this qint
+			self._start_layer = start_layer
+			self._end_layer = end_layer
+		else:
+			# Subsequent calls: expand tracked range
+			self._start_layer = min(self._start_layer, start_layer)
+			self._end_layer = max(self._end_layer, end_layer)
 
 		# Return None per user decision (mutation, no chaining)
 		return None
