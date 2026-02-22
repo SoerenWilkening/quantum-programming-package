@@ -31,9 +31,9 @@ Requirements for Grover's Algorithm milestone. Each maps to roadmap phases.
 
 ### Oracle Auto-Synthesis
 
-- [ ] **SYNTH-01**: User can pass Python predicate lambda as oracle (`ql.grover(lambda x: x > 5, x)`)
-- [ ] **SYNTH-02**: Compound predicates compile to valid oracles (`(x > 10) & (x < 50)`)
-- [ ] **SYNTH-03**: Predicate oracles work with existing qint comparison operators
+- [x] **SYNTH-01**: User can pass Python predicate lambda as oracle (`ql.grover(lambda x: x > 5, x)`)
+- [x] **SYNTH-02**: Compound predicates compile to valid oracles (`(x > 10) & (x < 50)`)
+- [x] **SYNTH-03**: Predicate oracles work with existing qint comparison operators
 
 ### Adaptive Search
 
@@ -91,9 +91,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | GROV-03 | Phase 78 | Complete |
 | GROV-04 | Phase 79 | Complete |
 | GROV-05 | Phase 78 | Complete |
-| SYNTH-01 | Phase 80 | Pending |
-| SYNTH-02 | Phase 80 | Pending |
-| SYNTH-03 | Phase 80 | Pending |
+| SYNTH-01 | Phase 80 | Complete |
+| SYNTH-02 | Phase 80 | Complete |
+| SYNTH-03 | Phase 80 | Complete |
 | ADAPT-01 | Phase 80 | Pending |
 | ADAPT-02 | Phase 80 | Pending |
 | AMP-01 | Phase 81 | Pending |

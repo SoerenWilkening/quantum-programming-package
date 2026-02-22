@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v4.0 Grover's Algorithm -- Phase 79 COMPLETE, ready for Phase 80
+**Current focus:** v4.0 Grover's Algorithm -- Phase 80 Plan 01 COMPLETE, continuing to Plan 02
 
 ## Current Position
 
-Phase: 79 of 81 (Grover Search Integration) -- COMPLETE
-Plan: 2 of 2 complete
-Status: Phase Complete
-Last activity: 2026-02-22 - Completed 79-02-PLAN.md (Grover search testing)
+Phase: 80 of 81 (Oracle Auto-Synthesis & Adaptive Search)
+Plan: 1 of 2 complete
+Status: In Progress
+Last activity: 2026-02-22 - Completed 80-01-PLAN.md (Predicate-to-oracle synthesis)
 
 Progress: [####################░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 4/6 phases (v4.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 228 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 35, v4.0: 12)
+- Total plans completed: 229 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 35, v4.0: 13)
 - Average duration: ~13 min/plan
 - Total execution time: ~34.0 hours
 
@@ -52,6 +52,7 @@ Progress: [####################░░░░░░░░░░░░░░░░�
 | Phase 78 P03 | 10min | 2 tasks | 3 files |
 | Phase 79 P01 | 12min | 2 tasks | 2 files |
 | Phase 79 P02 | 33min | 2 tasks | 3 files |
+| Phase 80 P01 | 31min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -87,11 +88,15 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 - [Phase 79-02]: Oracle phase marking requires `with flag: x.phase += math.pi` (not `pass` which is no-op after compile optimization)
 - [Phase 79-02]: GroverOracle cache replay must allocate ancilla qubits for virtual indices beyond search register
 - [Phase 79-02]: Auto-wrapped oracles in grover() use validate=False (P gate targets comparison ancilla, not search register)
+- [Phase 80]: Tracing approach for predicate-to-oracle synthesis (not AST parsing) -- call predicate with real qint objects
+- [Phase 80]: validate=False on synthesized predicate oracles (P gate targets comparison ancilla)
+- [Phase 80]: m=None defaults to m=1 in Plan 01 (backwards-compatible placeholder for Plan 02 BBHT)
+- [Phase 80]: Closure variable values in lambda cache key to distinguish closures with different captured values
 
 ### Research Flags
 
 - Phase 77: Interaction between oracle scoping and existing dependency tracking needs design review
-- Phase 80: Compound predicate oracle synthesis may need /gsd:research-phase
+- Phase 80: Compound predicate oracle synthesis RESOLVED -- tracing approach reuses existing qbool operators
 
 ### Blockers/Concerns
 
@@ -113,8 +118,8 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 79-02-PLAN.md (Grover search testing)
-Resume action: Begin Phase 80 (Compound Oracle) or Phase 81 (Amplitude Estimation)
+Stopped at: Completed 80-01-PLAN.md (Predicate-to-oracle synthesis)
+Resume action: Execute 80-02-PLAN.md (BBHT adaptive search and end-to-end testing)
 
 ---
-*State updated: 2026-02-22 -- Phase 79 complete (2/2 plans: ql.grover() API + 21-test suite with oracle cache and validate fixes)*
+*State updated: 2026-02-22 -- Phase 80 plan 01 complete (1/2 plans: predicate-to-oracle synthesis via tracing, grover() *registers + predicate detection)*
