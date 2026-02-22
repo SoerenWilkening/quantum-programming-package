@@ -136,6 +136,19 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - ✓ BBHT adaptive search for unknown solution count — v4.0
 - ✓ `ql.amplitude_estimate()` with IQAE, configurable epsilon and confidence — v4.0
 
+## Current Milestone: v4.1 Quality & Efficiency
+
+**Goal:** Fix all carry-forward bugs, address codebase concerns (tech debt, security, fragility), improve binary size and efficiency, and close test coverage gaps.
+
+**Target features:**
+- Fix all 7 carry-forward bugs (BUG-MOD-REDUCE, BUG-COND-MUL-01, BUG-DIV-02, BUG-WIDTH-ADD, 32-bit segfault, BUG-CQQ-QFT, BUG-QFT-DIV)
+- Fix additional bugs from codebase mapping (qarray `*=` segfault, qiskit_aer dependency)
+- Address tech debt (duplicate qint_preprocessed.pyx, dead QPU stubs, optimizer linear scan, nested with-blocks, sequence docs)
+- Security/fragility hardening (circuit pointer validation, qubit_array bounds checking)
+- Performance improvements (optimizer binary search, compile replay overhead)
+- Binary size reduction (right-size hardcoded sequences, reduce .so size)
+- Close test coverage gaps (nested with-blocks, circuit reset, qiskit-aer import, C tests in pytest)
+
 ### Active
 
 **Deferred bugs (carry forward):**
@@ -320,4 +333,4 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | BUG-CMP-MSB fix: comp_width-1 MSB indexing | Pre-existing bug — hardcoded qubit 63 for all widths | ✓ Good — inequality operators work for all widths |
 
 ---
-*Last updated: 2026-02-22 after v4.0 milestone completion*
+*Last updated: 2026-02-22 after v4.1 milestone start*

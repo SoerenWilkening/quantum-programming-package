@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v4.0 complete. Next milestone planning via `/gsd:new-milestone`.
+**Current focus:** v4.1 Quality & Efficiency — bug fixes, tech debt, efficiency, test coverage.
 
 ## Current Position
 
-Phase: 81 of 81 (Amplitude Estimation - IQAE)
-Plan: 2 of 2 complete
-Status: Milestone v4.0 COMPLETE
-Last activity: 2026-02-22 - Milestone v4.0 archived
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-22 — Milestone v4.1 started
 
-Progress: [##################################################] 6/6 phases (v4.0)
+Progress: [                                                  ] 0/? phases (v4.1)
 
 ## Performance Metrics
 
@@ -70,8 +70,8 @@ See PROJECT.md Key Decisions table for full history.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Milestone v4.0 archived
-Resume action: Start next milestone via `/gsd:new-milestone`
+Stopped at: Milestone v4.1 requirements definition
+Resume action: Continue requirements definition
 
 ---
-*State updated: 2026-02-22 -- Milestone v4.0 complete and archived*
+*State updated: 2026-02-22 -- Milestone v4.1 started*
