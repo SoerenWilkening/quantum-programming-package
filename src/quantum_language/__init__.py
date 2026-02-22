@@ -48,6 +48,7 @@ from ._core import (
 )
 from .compile import compile
 from .diffusion import diffusion
+from .grover import grover
 from .openqasm import to_openqasm
 from .oracle import grover_oracle
 from .profiler import profile
@@ -181,6 +182,7 @@ __all__ = [
     # Utilities
     "compile",
     "diffusion",
+    "grover",
     "grover_oracle",
     "array",
     "option",
