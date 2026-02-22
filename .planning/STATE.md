@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v4.0 Grover's Algorithm -- Phase 80 COMPLETE (2/2 plans), ready for Phase 81
+**Current focus:** v4.0 Grover's Algorithm -- Phase 80 COMPLETE (3/3 plans), ready for Phase 81
 
 ## Current Position
 
 Phase: 80 of 81 (Oracle Auto-Synthesis & Adaptive Search)
-Plan: 2 of 2 complete
+Plan: 3 of 3 complete
 Status: Phase Complete
-Last activity: 2026-02-22 - Completed 80-02-PLAN.md (BBHT adaptive search + predicate tests)
+Last activity: 2026-02-22 - Completed 80-03-PLAN.md (BUG-CMP-MSB fix + inequality predicate tests)
 
 Progress: [#########################░░░░░░░░░░░░░░░░░░░░░░░░░] 5/6 phases (v4.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 230 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 35, v4.0: 14)
+- Total plans completed: 231 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 35, v4.0: 15)
 - Average duration: ~13 min/plan
 - Total execution time: ~34.0 hours
 
@@ -54,6 +54,7 @@ Progress: [#########################░░░░░░░░░░░░░░�
 | Phase 79 P02 | 33min | 2 tasks | 3 files |
 | Phase 80 P01 | 31min | 2 tasks | 2 files |
 | Phase 80 P02 | 19min | 2 tasks | 2 files |
+| Phase 80 P03 | 25min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,8 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 - [Phase 80]: BBHT growth factor LAMBDA=6/5, default max_attempts=ceil(2*log2(N))
 - [Phase 80]: _run_grover_attempt refactors circuit building for reuse in adaptive and exact paths
 - [Phase 80]: BUG-CMP-MSB discovered: inequality operators (<,>,<=,>=) access qubit 63 for MSB (pre-existing)
+- [Phase 80-03]: BUG-CMP-MSB FIXED: temp_self[63] -> temp_self[comp_width - 1] in __lt__, temp_other[63] -> temp_other[comp_width - 1] in __gt__
+- [Phase 80-03]: Adaptive path for compound inequality Grover tests (BBHT auto-selects iterations for complex predicates)
 
 ### Research Flags
 
@@ -113,7 +116,7 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 - BUG-QFT-DIV: QFT division/modulo pervasively broken at all tested widths
 - BUG-WIDTH-ADD: Mixed-width QFT addition off-by-one
 - 32-bit multiplication segfault (buffer overflow in C backend)
-- BUG-CMP-MSB: Inequality comparison operators (<,>,<=,>=) access qubit index 63 for MSB, fails for small-width qints in fault-tolerant mode
+- ~~BUG-CMP-MSB~~: FIXED in 80-03 (b53bc44) -- inequality operators now use comp_width-1 MSB indexing
 
 ### Quick Tasks Completed
 
@@ -124,8 +127,8 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 80-02-PLAN.md (BBHT adaptive search + predicate tests)
+Stopped at: Completed 80-03-PLAN.md (BUG-CMP-MSB fix + inequality predicate tests)
 Resume action: Plan Phase 81 or next milestone task
 
 ---
-*State updated: 2026-02-22 -- Phase 80 complete (2/2 plans: BBHT adaptive search, 17 new tests, predicate synthesis end-to-end)*
+*State updated: 2026-02-22 -- Phase 80 complete (3/3 plans: predicate synthesis, BBHT adaptive search, BUG-CMP-MSB fix + inequality tests)*
