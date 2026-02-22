@@ -5,21 +5,21 @@
 See: .planning/PROJECT.md (updated 2026-02-19)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v4.0 Grover's Algorithm -- Phase 78 (Diffusion Operator)
+**Current focus:** v4.0 Grover's Algorithm -- Phase 79 (Grover Search Integration)
 
 ## Current Position
 
-Phase: 78 of 81 (Diffusion Operator) -- COMPLETE
-Plan: 3 of 3 complete (gap closure plan 03 added and completed)
-Status: Phase Complete
-Last activity: 2026-02-20 - Completed 78-03-PLAN.md (gap closure: manual S_0 path fix)
+Phase: 79 of 81 (Grover Search Integration) -- IN PROGRESS
+Plan: 1 of 2 complete
+Status: Executing
+Last activity: 2026-02-22 - Completed 79-01-PLAN.md (ql.grover() API implementation)
 
-Progress: [################░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 3/6 phases (v4.0)
+Progress: [####################░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] 4/6 phases (v4.0)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 226 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 35, v4.0: 10)
+- Total plans completed: 227 (v1.0: 41, v1.1: 13, v1.2: 10, v1.3: 16, v1.4: 6, v1.5: 33, v1.6: 5, v1.7: 2, v1.8: 7, v1.9: 7, v2.0: 8, v2.1: 6, v2.2: 22, v2.3: 4, v3.0: 35, v4.0: 11)
 - Average duration: ~13 min/plan
 - Total execution time: ~34.0 hours
 
@@ -50,6 +50,7 @@ Progress: [################░░░░░░░░░░░░░░░░░�
 | Phase 78 P01 | 17min | 2 tasks | 6 files |
 | Phase 78 P02 | 18min | 1 tasks | 1 files |
 | Phase 78 P03 | 10min | 2 tasks | 3 files |
+| Phase 79 P01 | 12min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -78,6 +79,10 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 - [Phase 78-03]: emit_p_raw bypasses _get_controlled() to prevent double-control bug in _PhaseProxy.__iadd__
 - [Phase 78-03]: Layer floor save/restore in __iadd__ keeps P gate outside comparison layer range during compute-P-uncompute
 - [Phase 78-03]: Manual S_0 path now produces observable P gate in QASM and correct statevector reflection
+- [Phase 79]: emit_h for H-sandwich in Grover iterations (not branch(0.5)) because H^2=I while Ry(pi/2)^2!=I
+- [Phase 79]: branch(0.5) only for initial superposition on |0> (Ry(pi/2)|0> = H|0>)
+- [Phase 79]: fault_tolerant=True set by default inside grover() for oracle comparison support
+- [Phase 79]: width/widths keyword args for register width (qint annotations lack width info)
 
 ### Research Flags
 
@@ -103,9 +108,9 @@ v4.0: `branch(theta)` = Ry rotation (not Hadamard), IQAE preferred for amplitude
 
 ## Session Continuity
 
-Last session: 2026-02-20
-Stopped at: Completed 78-03-PLAN.md (gap closure: manual S_0 path fix)
-Resume action: Begin Phase 79 (Grover iteration)
+Last session: 2026-02-22
+Stopped at: Completed 79-01-PLAN.md (ql.grover() API implementation)
+Resume action: Execute 79-02-PLAN.md (Grover search testing)
 
 ---
-*State updated: 2026-02-20 -- Phase 78 gap closure complete (emit_p_raw fix for manual S_0 path, GROV-05 fully verified with direct statevector tests)*
+*State updated: 2026-02-22 -- Phase 79 plan 01 complete (ql.grover() API with oracle+diffusion composition, auto iteration count, Qiskit simulation)*

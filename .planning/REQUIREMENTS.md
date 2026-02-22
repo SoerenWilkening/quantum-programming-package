@@ -23,10 +23,10 @@ Requirements for Grover's Algorithm milestone. Each maps to roadmap phases.
 
 ### Grover Search
 
-- [ ] **GROV-01**: `ql.grover(oracle, search_space)` API executes search and returns measured value
-- [ ] **GROV-02**: Automatic iteration count calculated from search space size N and solution count M
+- [x] **GROV-01**: `ql.grover(oracle, search_space)` API executes search and returns measured value
+- [x] **GROV-02**: Automatic iteration count calculated from search space size N and solution count M
 - [x] **GROV-03**: Diffusion operator uses X-MCZ-X pattern (zero ancilla, O(n) gates)
-- [ ] **GROV-04**: Multiple solutions supported (iteration formula accounts for M > 1)
+- [x] **GROV-04**: Multiple solutions supported (iteration formula accounts for M > 1)
 - [x] **GROV-05**: User can manually construct S_0 reflection via `with a == 0` for custom amplitude amplification
 
 ### Oracle Auto-Synthesis
@@ -86,10 +86,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ORCL-03 | Phase 77 | Complete |
 | ORCL-04 | Phase 77 | Complete |
 | ORCL-05 | Phase 77 | Complete |
-| GROV-01 | Phase 79 | Pending |
-| GROV-02 | Phase 79 | Pending |
+| GROV-01 | Phase 79 | Complete |
+| GROV-02 | Phase 79 | Complete |
 | GROV-03 | Phase 78 | Complete |
-| GROV-04 | Phase 79 | Pending |
+| GROV-04 | Phase 79 | Complete |
 | GROV-05 | Phase 78 | Complete |
 | SYNTH-01 | Phase 80 | Pending |
 | SYNTH-02 | Phase 80 | Pending |

@@ -202,7 +202,7 @@ Plans:
 | 76 | v4.0 | Complete    | 2026-02-20 | 2026-02-20 |
 | 77 | 2/2 | Complete    | 2026-02-20 | - |
 | 78 | 3/3 | Complete    | 2026-02-20 | - |
-| 79 | v4.0 | 0/2 | Planning complete | - |
+| 79 | 1/2 | In Progress|  | - |
 | 80 | v4.0 | 0/TBD | Not started | - |
 | 81 | v4.0 | 0/TBD | Not started | - |
 
