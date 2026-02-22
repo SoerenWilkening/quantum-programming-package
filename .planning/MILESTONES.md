@@ -1,5 +1,33 @@
 # Project Milestones: Quantum Assembly
 
+## v4.0 Grover's Algorithm (Shipped: 2026-02-22)
+
+**Delivered:** Complete Grover's search implementation — gate primitives (Ry rotation, MCZ), oracle infrastructure with compute-phase-uncompute validation, zero-ancilla diffusion operator, end-to-end `ql.grover()` API, lambda predicate oracle auto-synthesis with BBHT adaptive search, and Iterative Quantum Amplitude Estimation with configurable precision.
+
+**Phases completed:** 76-81 (18 plans total)
+
+**Key accomplishments:**
+
+- Ry rotation gate primitives with `branch(prob)` for creating superposition on qint/qbool
+- Oracle infrastructure with `@ql.grover_oracle` decorator enforcing compute-phase-uncompute ordering and ancilla validation
+- Zero-ancilla diffusion operator (X-MCZ-X pattern) and `x.phase += theta` phase syntax
+- End-to-end `ql.grover()` API with auto iteration count for known and unknown solution counts
+- Lambda predicate oracle auto-synthesis via tracing and BBHT adaptive search for unknown M
+- Iterative Quantum Amplitude Estimation (`ql.amplitude_estimate()`) with Clopper-Pearson CIs
+
+**Stats:**
+
+- 83 commits, 104 files changed (+16,181 lines)
+- 6 phases, 18 plans, ~27 tasks
+- 4 days (2026-02-19 → 2026-02-22)
+- 157 new tests (31 branch + 37 oracle + 22 diffusion + 21 grover + 22 predicate + 24 IQAE)
+
+**Git range:** `2eca659` → `a8f56fa`
+
+**What's next:** TBD — next milestone planning via `/gsd:new-milestone`
+
+---
+
 ## v3.0 Fault-Tolerant Arithmetic (Shipped: 2026-02-18)
 
 **Delivered:** Complete Toffoli-based fault-tolerant arithmetic backend — CDKM ripple-carry adder, Brent-Kung carry look-ahead adder, schoolbook multiplication, restoring division, all with controlled variants and Clifford+T gate decomposition. Toffoli arithmetic is the default mode with QFT available via opt-out.
@@ -413,5 +441,4 @@
 **What's next:** v1.1 — QPU State Removal
 
 ---
-
 

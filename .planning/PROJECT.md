@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A quantum programming framework that enables writing quantum algorithms using standard programming constructs — operator overloading on variable-width quantum integers (qint, 1-64 bits) and quantum booleans (qbool), with Python's `with` statement implementing quantum conditionals. Operations compile to optimized quantum circuits via a C backend with Cython bindings. Supports dual arithmetic backends: QFT-based (phase rotations) and Toffoli-based (fault-tolerant, Clifford+T decomposable) with CDKM ripple-carry and Brent-Kung carry look-ahead adders. Includes `@ql.compile` for function-level compilation with gate capture/replay/optimization, circuit optimization, pixel-art circuit visualization scaling to 200+ qubits, T-count reporting, statistics, OpenQASM 3.0 export, and Qiskit-based verification.
+A quantum programming framework that enables writing quantum algorithms using standard programming constructs — operator overloading on variable-width quantum integers (qint, 1-64 bits) and quantum booleans (qbool), with Python's `with` statement implementing quantum conditionals. Operations compile to optimized quantum circuits via a C backend with Cython bindings. Supports dual arithmetic backends: QFT-based (phase rotations) and Toffoli-based (fault-tolerant, Clifford+T decomposable) with CDKM ripple-carry and Brent-Kung carry look-ahead adders. Includes `@ql.compile` for function-level compilation with gate capture/replay/optimization, Grover's search with `ql.grover()` (lambda predicate oracles, adaptive BBHT search), iterative quantum amplitude estimation via `ql.amplitude_estimate()`, circuit optimization, pixel-art circuit visualization scaling to 200+ qubits, T-count reporting, statistics, OpenQASM 3.0 export, and Qiskit-based verification.
 
 ## Core Value
 
@@ -127,18 +127,16 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - ✓ T_GATE/TDG_GATE enum, exact T-count reporting, QASM T/Tdg export — v3.0
 - ✓ ~120 Clifford+T hardcoded sequence C files for CDKM and BK CLA (widths 1-8) — v3.0
 
+- ✓ Ry rotation gate primitives with `branch(prob)` on qint/qbool — v4.0
+- ✓ `@ql.grover_oracle` decorator with compute-phase-uncompute validation and ancilla delta check — v4.0
+- ✓ Bit-flip oracle auto-wrapping with phase kickback pattern — v4.0
+- ✓ Zero-ancilla diffusion operator (X-MCZ-X) and `x.phase += theta` syntax — v4.0
+- ✓ `ql.grover(oracle, search_space)` API with auto iteration count — v4.0
+- ✓ Lambda predicate oracle auto-synthesis via tracing — v4.0
+- ✓ BBHT adaptive search for unknown solution count — v4.0
+- ✓ `ql.amplitude_estimate()` with IQAE, configurable epsilon and confidence — v4.0
+
 ### Active
-
-## Current Milestone: v4.0 Grover's Algorithm
-
-**Goal:** Enable users to implement Grover's search and general amplitude amplification using existing quantum primitives, plus provide high-level convenience APIs.
-
-**Target features:**
-- Manual Grover building blocks (S₀ via `with a == 0`, diffusion operator)
-- `ql.grover(oracle, search_space)` high-level API with measurement results
-- Automatic oracle compilation from Python functions (`f(*args) -> qbool`)
-- Amplitude estimation for unknown solution counts
-- Both manual and automatic oracle modes with escape hatch
 
 **Deferred bugs (carry forward):**
 - Fix _reduce_mod result corruption (BUG-MOD-REDUCE) — needs fundamentally different circuit structure
@@ -159,6 +157,11 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - Multi-threaded circuit building — ADV-OPT-04
 - Automatic depth/ancilla tradeoff (RCA vs CLA selection) — OPT-01
 - Modular arithmetic via Toffoli gates (for Shor's algorithm) — FTE-02
+- Quantum counting (`ql.count_solutions`) for exact M estimation — ADV-01
+- Fixed-point amplitude amplification — ADV-02
+- Custom state preparation (non-uniform initial superposition) — ADV-03
+- SAT/3-SAT oracle auto-generation from CNF formulas — SPEC-01
+- Database search oracle from classical data structure — SPEC-02
 
 ### Out of Scope
 
@@ -174,7 +177,7 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 **Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) -> Cython bindings -> Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
 
-**Current state:** v3.0 shipped — fault-tolerant Toffoli arithmetic complete. Dual arithmetic backends: QFT (phase rotations) and Toffoli (CCX/CX/X only), with Toffoli as default. CDKM ripple-carry adder and Brent-Kung carry look-ahead adder for all 4 variants (QQ/CQ/cQQ/cCQ). Schoolbook multiplication and restoring division via Toffoli add/sub. MCX gates auto-decomposed via AND-ancilla pattern. CCX->Clifford+T decomposition with ~120 hardcoded sequence C files. T-count reporting (exact when Clifford+T active, 7*CCX estimate otherwise). Cross-backend verification suite proves Toffoli/QFT equivalence. Inline CQ/cCQ generators exploit classical bit values for gate reduction. `@ql.compile` supports ancilla tracking, inverse/adjoint generation, auto-uncompute, and `ql.qarray` arguments. Pixel-art circuit visualization scaling to 200+ qubits. Exhaustive verification suite with 8,365+ tests. Clean modular C backend with Toffoli modules (CDKM, CLA, Helpers, Multiplication). Variable-width quantum integers (1-64 bits). Automatic uncomputation with dependency tracking. CNOT-based quantum copy. Memory-safe Python-to-C bridge.
+**Current state:** v4.0 shipped — Grover's algorithm and amplitude estimation complete. Dual arithmetic backends: QFT (phase rotations) and Toffoli (CCX/CX/X only), with Toffoli as default. CDKM ripple-carry adder and Brent-Kung carry look-ahead adder for all 4 variants (QQ/CQ/cQQ/cCQ). Schoolbook multiplication and restoring division via Toffoli add/sub. MCX gates auto-decomposed via AND-ancilla pattern. CCX->Clifford+T decomposition with ~120 hardcoded sequence C files. T-count reporting (exact when Clifford+T active, 7*CCX estimate otherwise). Cross-backend verification suite proves Toffoli/QFT equivalence. `@ql.compile` supports ancilla tracking, inverse/adjoint generation, auto-uncompute, and `ql.qarray` arguments. `ql.grover()` with lambda predicate auto-synthesis, BBHT adaptive search, and `@ql.grover_oracle` decorator. `ql.amplitude_estimate()` with IQAE variant (no QFT). Pixel-art circuit visualization scaling to 200+ qubits. 157 new Grover/AE tests on top of exhaustive verification suite (8,365+ tests). Variable-width quantum integers (1-64 bits). Automatic uncomputation with dependency tracking. CNOT-based quantum copy. Memory-safe Python-to-C bridge.
 
 **Codebase:**
 - ~1,059,000 lines of code (604K C, 395K Python, 60K Cython)
@@ -305,4 +308,16 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Division via Python-level composition | Reuse existing restoring division with Toffoli add/sub underneath | ✓ Good — no new C division code needed |
 
 ---
-*Last updated: 2026-02-19 after v4.0 milestone start*
+| branch(prob) = Ry(2*arcsin(sqrt(prob))) | Probability-to-angle conversion for intuitive API | ✓ Good — branch(0.5) = H gate equivalent |
+| Tracing approach for predicate-to-oracle | Call predicate with real qint objects, reuse existing operators | ✓ Good — no AST parsing needed |
+| BBHT adaptive search with LAMBDA=6/5 | Standard exponential backoff for unknown M | ✓ Good — O(sqrt(N)) expected queries |
+| IQAE over QPE-based amplitude estimation | No QFT circuit required, lower depth | ✓ Good — practical for NISQ |
+| X-MCZ-X diffusion pattern | Zero ancilla, O(n) gates, reusable building block | ✓ Good — matches literature standard |
+| emit_p_raw for manual S_0 path | Avoids double-control bug in PhaseProxy.__iadd__ | ✓ Good — both manual and API paths work |
+| Oracle validation at circuit generation time | First call validates compute-phase-uncompute ordering | ✓ Good — fails fast with clear error |
+| Clopper-Pearson CI for IQAE | Tighter than Chernoff-Hoeffding bounds | ✓ Good — accurate confidence intervals |
+| H gate (emit_h) for Grover iterations | H^2=I exact self-inverse; Ry(pi/2)^2 != I | ✓ Good — correct interference pattern |
+| BUG-CMP-MSB fix: comp_width-1 MSB indexing | Pre-existing bug — hardcoded qubit 63 for all widths | ✓ Good — inequality operators work for all widths |
+
+---
+*Last updated: 2026-02-22 after v4.0 milestone completion*
