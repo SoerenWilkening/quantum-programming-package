@@ -25,6 +25,8 @@ Supports three calling styles:
 
 import inspect
 import math
+import random
+import warnings
 
 from ._core import circuit, option
 from ._gates import emit_h
@@ -296,6 +298,129 @@ def _verify_classically(predicate, measured_values):
 
 
 # ---------------------------------------------------------------------------
+# BBHT adaptive search helpers
+# ---------------------------------------------------------------------------
+
+
+def _run_grover_attempt(oracle, register_widths, j):
+    """Build a fresh circuit, run *j* Grover iterations, and simulate.
+
+    Each call creates a completely fresh ``circuit()`` to avoid stale state
+    between BBHT attempts.  The oracle is applied *j* times with H-diffusion-H
+    interleaved (the standard Grover iterate).
+
+    Parameters
+    ----------
+    oracle : GroverOracle
+        The oracle marking target states.
+    register_widths : list[int]
+        Width of each search register.
+    j : int
+        Number of Grover iterations to apply.
+
+    Returns
+    -------
+    tuple[int, ...]
+        Measured integer value for each register.
+    """
+    from .qint import qint as qint_type
+
+    # Fresh circuit for each attempt (required: circuit state not resettable)
+    circuit()
+    option("fault_tolerant", True)
+
+    # Allocate registers
+    registers = [qint_type(0, width=w) for w in register_widths]
+
+    # Initialize equal superposition
+    for reg in registers:
+        reg.branch(0.5)
+
+    # Apply j Grover iterations
+    for _ in range(j):
+        oracle(*registers)
+        _apply_hadamard_layer(registers)
+        diffusion(*registers)
+        _apply_hadamard_layer(registers)
+
+    # Export and simulate single shot
+    qasm = to_openqasm()
+    return _simulate_single_shot(qasm, register_widths)
+
+
+def _bbht_search(oracle, register_widths, max_attempts, predicate=None):
+    """BBHT adaptive Grover search for unknown solution count.
+
+    Implements the Boyer-Brassard-Hoyer-Tapp (1998) algorithm.  For each
+    attempt *m*, choose a random iteration count *j* in ``[0, upper)`` where
+    ``upper = min(LAMBDA^m, sqrt(N))`` and ``LAMBDA = 6/5`` (the BBHT
+    growth factor).  Run *j* Grover iterations, measure, and classically
+    verify the result.
+
+    Expected total query complexity is O(sqrt(N)) even without knowing the
+    number of solutions *M*.
+
+    Parameters
+    ----------
+    oracle : GroverOracle
+        The oracle marking target states.
+    register_widths : list[int]
+        Width of each search register.
+    max_attempts : int or None
+        Maximum number of BBHT attempts.  If ``None``, defaults to
+        ``ceil(2 * log2(N))``.
+    predicate : callable or None
+        Original predicate for classical verification.  When ``None``
+        (decorated oracle), the first measurement is returned without
+        verification.
+
+    Returns
+    -------
+    tuple or None
+        ``(*values, total_iterations)`` if a valid solution is found, or
+        ``None`` if all attempts are exhausted.
+    """
+    LAMBDA = 6 / 5  # BBHT growth factor from the paper
+
+    N = 1
+    for w in register_widths:
+        N *= 2**w
+    sqrt_N = math.sqrt(N)
+
+    if max_attempts is None:
+        max_attempts = math.ceil(2 * math.log2(N))
+
+    # Warn when approaching the 17-qubit simulator limit
+    total_register_width = sum(register_widths)
+    if total_register_width > 14:
+        warnings.warn(
+            f"Search register width sum ({total_register_width} qubits) is close to "
+            f"the 17-qubit simulator limit.  Ancilla overhead from predicate "
+            f"evaluation may exceed the budget.",
+            stacklevel=3,
+        )
+
+    total_iterations = 0
+    for attempt in range(max_attempts):
+        upper = min(LAMBDA**attempt, sqrt_N)
+        j = random.randint(0, max(1, int(upper)) - 1)
+
+        values = _run_grover_attempt(oracle, register_widths, j)
+        total_iterations += j
+
+        # Classical verification
+        if predicate is not None:
+            if _verify_classically(predicate, values):
+                return (*values, total_iterations)
+        else:
+            # No predicate (decorated oracle) -- trust the measurement
+            return (*values, total_iterations)
+
+    # Exhausted all attempts without finding a valid solution
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -337,20 +462,25 @@ def grover(oracle, *registers, width=None, widths=None, m=None, iterations=None,
     widths : list[int], optional
         Per-register widths (for multi-register oracles).
     m : int, optional
-        Number of marked solutions.  When ``None`` (default), defaults
-        to ``m=1`` for now.
-        # TODO: Plan 02 will add BBHT adaptive search when m is None
+        Number of marked solutions.  When ``None`` (default), BBHT
+        adaptive search is used (no knowledge of M required).  When
+        provided, the exact optimal iteration count is computed from
+        ``floor(pi/4 * sqrt(N/M) - 0.5)``.
     iterations : int, optional
-        Explicit iteration count (overrides auto-calculation).
+        Explicit iteration count (overrides auto-calculation from *m*).
     max_attempts : int, optional
-        Maximum BBHT attempts (Plan 02).  Currently unused.
+        Maximum BBHT attempts when ``m`` is ``None``.  Defaults to
+        ``ceil(2 * log2(N))``.  Ignored when ``m`` is provided.
 
     Returns
     -------
-    tuple
+    tuple or None
         ``(value, iterations)`` for single-register oracles, or
         ``(x_val, y_val, ..., iterations)`` for multi-register oracles.
         The last element is always the iteration count used.
+
+        When ``m`` is ``None`` and adaptive search exhausts all attempts
+        without finding a classically verified solution, returns ``None``.
 
     Raises
     ------
@@ -380,13 +510,12 @@ def grover(oracle, *registers, width=None, widths=None, m=None, iterations=None,
 
     >>> x_val, y_val, k = ql.grover(lambda x, y: x + y == 10, widths=[4, 4])
     """
-    from .qint import qint as qint_type
 
     # 0. Detect if oracle is a predicate (raw callable, not GroverOracle/CompiledFunc)
     is_predicate = not isinstance(oracle, GroverOracle | CompiledFunc) and callable(oracle)
 
-    # Save the original predicate callable for classical verification (Plan 02 BBHT)
-    predicate = oracle if is_predicate else None  # noqa: F841
+    # Save the original predicate callable for classical verification (BBHT)
+    predicate = oracle if is_predicate else None
 
     # 1. Resolve register widths from *registers or width/widths kwargs
     if registers:
@@ -413,12 +542,18 @@ def grover(oracle, *registers, width=None, widths=None, m=None, iterations=None,
     else:
         oracle = _ensure_oracle(oracle)
 
-    # 3. Default m to 1 when None (Plan 01 backwards-compatibility placeholder)
-    # TODO: Plan 02 will add BBHT adaptive search when m is None
+    # 3. Dispatch: adaptive (m is None) vs exact (m provided)
+    if m is None and predicate is not None:
+        # BBHT adaptive search -- unknown solution count, predicate available
+        # for classical verification
+        return _bbht_search(oracle, register_widths, max_attempts, predicate)
+
     if m is None:
+        # Decorated oracle without predicate -- no classical verification
+        # possible, fall back to m=1 for backwards compatibility
         m = 1
 
-    # 4. Calculate total search space size and iteration count
+    # 4. Exact path -- known solution count M
     N = 1
     for w in register_widths:
         N *= 2**w
@@ -427,32 +562,8 @@ def grover(oracle, *registers, width=None, widths=None, m=None, iterations=None,
     else:
         k = _grover_iterations(N, m)
 
-    # 5. Build circuit
-    circuit()
-    option("fault_tolerant", True)
+    # Use _run_grover_attempt for circuit building and simulation
+    values = _run_grover_attempt(oracle, register_widths, k)
 
-    # 6. Create fresh registers (all initialized to |0>)
-    # Even if explicit *registers were passed, we always build a fresh circuit
-    # and allocate fresh qints inside grover(). The explicit registers were
-    # only used to extract widths above.
-    registers = [qint_type(0, width=w) for w in register_widths]
-
-    # 7. Initialize equal superposition (branch(0.5) on |0> is correct)
-    for reg in registers:
-        reg.branch(0.5)
-
-    # 8. Apply k Grover iterations
-    for _ in range(k):
-        # Oracle application -- phase flip marked states
-        oracle(*registers)
-        # Diffusion: H^n - S_0 - H^n
-        _apply_hadamard_layer(registers)
-        diffusion(*registers)
-        _apply_hadamard_layer(registers)
-
-    # 9. Export and simulate
-    qasm = to_openqasm()
-    values = _simulate_single_shot(qasm, register_widths)
-
-    # 10. Return flat tuple with iteration count last
+    # Return flat tuple with iteration count last
     return (*values, k)
