@@ -211,7 +211,7 @@ Plans:
 | 78 | 3/3 | Complete    | 2026-02-20 | - |
 | 79 | 2/2 | Complete    | 2026-02-22 | - |
 | 80 | 3/3 | Complete    | 2026-02-22 | - |
-| 81 | v4.0 | 0/2 | Not started | - |
+| 81 | 1/2 | In Progress|  | - |
 
 ---
 *Roadmap created: 2026-02-02*

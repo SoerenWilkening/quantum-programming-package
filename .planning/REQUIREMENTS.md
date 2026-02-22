@@ -42,9 +42,9 @@ Requirements for Grover's Algorithm milestone. Each maps to roadmap phases.
 
 ### Amplitude Estimation
 
-- [ ] **AMP-01**: `ql.amplitude_estimate(oracle, register)` returns estimated probability
-- [ ] **AMP-02**: Uses Iterative QAE (IQAE) variant -- no QFT circuit required
-- [ ] **AMP-03**: User can specify precision (epsilon) and confidence level
+- [x] **AMP-01**: `ql.amplitude_estimate(oracle, register)` returns estimated probability
+- [x] **AMP-02**: Uses Iterative QAE (IQAE) variant -- no QFT circuit required
+- [x] **AMP-03**: User can specify precision (epsilon) and confidence level
 
 ## Future Requirements
 
@@ -96,9 +96,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYNTH-03 | Phase 80 | Complete |
 | ADAPT-01 | Phase 80 | Complete |
 | ADAPT-02 | Phase 80 | Complete |
-| AMP-01 | Phase 81 | Pending |
-| AMP-02 | Phase 81 | Pending |
-| AMP-03 | Phase 81 | Pending |
+| AMP-01 | Phase 81 | Complete |
+| AMP-02 | Phase 81 | Complete |
+| AMP-03 | Phase 81 | Complete |
 
 **Coverage:**
 - v4.0 requirements: 21 total
