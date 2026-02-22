@@ -5,168 +5,140 @@
 ## Naming Patterns
 
 **Files:**
-- Python source: `snake_case.py` (e.g., `amplitude_estimation.py`, `grover.py`, `oracle.py`)
-- Cython extension source: `snake_case.pyx` / `snake_case.pxd` (e.g., `_core.pyx`, `qint.pyx`, `openqasm.pyx`)
-- Cython include splits: `snake_case.pxi` (e.g., `qint_arithmetic.pxi`, `qint_bitwise.pxi`, `qint_comparison.pxi`, `qint_division.pxi`)
-- C source: `PascalCase.c` for domain modules (e.g., `IntegerAddition.c`, `ToffoliMultiplication.c`, `LogicOperations.c`); `snake_case.c` for infrastructure (e.g., `qubit_allocator.c`, `circuit_stats.c`, `gate.c`)
-- C headers: `snake_case.h` for infrastructure; `PascalCase.h` for domain (e.g., `qubit_allocator.h`, `circuit.h`, `Integer.h`, `QPU.h`)
-- Test files Python: `test_<feature>.py` or `test_phase<N>_<feature>.py` (e.g., `test_grover.py`, `test_phase15_initialization.py`)
-- Test files C: `test_<target>.c` (e.g., `test_allocator_block.c`, `test_reverse_circuit.c`)
+- Python source modules: `snake_case.py` (e.g., `amplitude_estimation.py`, `compile.py`)
+- Cython extension modules: `snake_case.pyx` / `snake_case.pxd` (e.g., `_core.pyx`, `qint.pyx`)
+- Private Cython includes: `snake_case.pxi` (e.g., `qint_arithmetic.pxi`)
+- Internal/private modules prefixed with `_`: `_core.pyx`, `_gates.pyx`, `_core.pxd`
+- C source files: `PascalCase.c` for domain objects (e.g., `ToffoliAdditionCLA.c`, `IntegerAddition.c`), `snake_case.c` for utilities (e.g., `circuit_allocations.c`, `qubit_allocator.c`)
+- C headers: `PascalCase.h` for domain objects, `snake_case.h` for utilities (mirroring `.c` naming)
+- Test files: `test_<feature_or_phase>.py` (e.g., `test_grover.py`, `test_phase15_initialization.py`)
 
-**Functions (Python/Cython):**
-- Public API functions: `snake_case` (e.g., `amplitude_estimate`, `grover_oracle`, `to_openqasm`, `diffusion`)
-- Private helpers: `_snake_case` with leading underscore (e.g., `_grover_iterations`, `_resolve_widths`, `_bbht_search`, `_simulate_single_shot`, `_parse_bitstring`)
-- Private helpers reused across modules are imported explicitly: `from .grover import _apply_hadamard_layer, _ensure_oracle, _parse_bitstring`
+**Functions:**
+- Python: `snake_case` for all public and private functions
+- Private/internal Python functions: leading underscore `_function_name` (e.g., `_grover_iterations`, `_resolve_widths`, `_simulate_single_shot`)
+- C: `UPPER_CASE` for allocation/constructor functions that match the type name (e.g., `QINT`, `QBOOL`, `INT`)
+- C helper functions: `snake_case` or `PascalCase_operation` (e.g., `allocator_alloc`, `CQ_add`, `QQ_add`)
 
-**Functions (C):**
-- Domain operations: `OperandType_operation(args)` (e.g., `CQ_add`, `QQ_mul`, `allocator_create`, `allocator_free`, `allocator_alloc`)
-- Static internal helpers: `static void helper_name(void)` with `static` keyword
-- C test functions: `static void test_description(void)` (e.g., `test_block_alloc_contiguous`, `test_coalesce_three_way`)
+**Variables:**
+- Python: `snake_case` throughout (e.g., `register_widths`, `num_oracle_calls`, `theta_interval`)
+- Constants: `UPPER_CASE` (e.g., `LAMBDA`, `SHOTS`, `HARDCODED_MAX_WIDTH`)
+- C: `snake_case` for locals and struct fields (e.g., `quantum_int_t`, `circuit_t`, `qubit_t`)
+- C macros: `UPPER_CASE` (e.g., `QINT_DEFAULT`, `M_PI`, `DEBUG_OWNERSHIP`)
 
-**Variables (Python):**
-- Local variables: `snake_case` (e.g., `register_widths`, `oracle_func`, `qasm_str`)
-- Constants: `UPPER_SNAKE_CASE` (e.g., `LAMBDA = 6 / 5`, `FREED_BLOCKS_INITIAL_SIZE = 32`)
-- Private instance fields: `_snake_case` (e.g., `self._estimate`, `self._num_oracle_calls`, `self._confidence_interval`)
+**Classes:**
+- Python: `PascalCase` (e.g., `CompiledFunc`, `CompiledBlock`, `AncillaRecord`, `AmplitudeEstimationResult`, `GroverOracle`)
+- Private helper classes: leading underscore (e.g., `_InverseCompiledFunc`, `_AncillaInverseProxy`)
+- C structs/typedefs: `snake_case_t` suffix (e.g., `quantum_int_t`, `circuit_t`, `qubit_t`, `sequence_t`)
+- C header guards: `CQ_BACKEND_IMPROVED_<NAME>_H`
 
-**Types (Python):**
-- Classes: `PascalCase` (e.g., `AmplitudeEstimationResult`, `CompiledFunc`, `GroverOracle`)
-- Public quantum types use lowercase by design: `qint`, `qbool`, `qarray`, `qint_mod`
-
-**Types (C):**
-- Struct typedefs: `snake_case_t` suffix (e.g., `qubit_allocator_t`, `allocator_stats_t`, `qubit_block_t`, `gate_t`, `circuit_t`)
-- Primitive typedefs: `qubit_t`, `num_t`
-- Enum typedef: `Standardgate_t`
-- Macros and constants: `UPPER_SNAKE_CASE` (e.g., `ALLOCATOR_MAX_QUBITS`, `FREED_BLOCKS_INITIAL_SIZE`)
+**Type Annotations:**
+- Python functions use `type: return_type` in NumPy-style docstrings, not inline type hints
+- Cython files (`.pyx`) use Cython's typed declarations (`cdef`, `cpdef`)
+- Public API functions in pure Python use no inline annotations beyond occasional hints for documentation clarity
 
 ## Code Style
 
-**Formatting (Python/Cython):**
-- Tool: `ruff` (configured in `pyproject.toml`)
+**Formatting:**
+- Tool: Ruff (configured in `pyproject.toml`)
 - Line length: 100 characters
-- Target version: Python 3.11
-- Quote style: double quotes
-- Indent style: 4 spaces
-- Linting rules enabled: E (pycodestyle errors), F (pyflakes), W (pycode warnings), I (isort), B (bugbear), C4 (comprehensions), UP (pyupgrade)
-- E501 (line length) is ignored in linting — handled separately by `line-length` setting
+- Target Python version: 3.11+
+- String quotes: double quotes for all strings
+- Indentation: 4 spaces
+- Magic trailing comma: respected (skip-magic-trailing-comma = false)
 
-**Formatting (C):**
-- LLVM style (per `CLAUDE.md`)
-- Header guard pattern: `#ifndef MODULE_H` / `#define MODULE_H` / `#endif // MODULE_H`
-- Debug-conditional blocks: `#ifdef DEBUG` and `#ifdef DEBUG_OWNERSHIP` wrap optional instrumentation
+**Linting:**
+- Tool: Ruff with rule sets E, F, W, I, B, C4, UP
+- E501 (line-too-long) is ignored (length handled by line-length setting)
+- Import sorting enforced via `I` (isort-compatible)
+- Pyupgrade rules enforced via `UP` (modern Python idioms)
+
+**C Style:**
+- LLVM style (per CLAUDE.md)
+- Header guards use `#ifndef CQ_BACKEND_IMPROVED_<NAME>_H`
+- Ownership comments on allocation functions (e.g., `// OWNERSHIP: Caller owns returned quantum_int_t*, must call free_element() when done`)
+- `#ifdef DEBUG_OWNERSHIP` blocks for optional debug tracking
 
 ## Import Organization
 
-**Python import order (enforced by ruff isort):**
-1. Standard library (e.g., `import math`, `import gc`, `import inspect`, `import warnings`)
-2. Third-party (e.g., `import numpy as np`, `import pytest`, `import qiskit.qasm3`, `from qiskit_aer import AerSimulator`)
-3. Local package with relative imports (e.g., `from ._core import circuit, option`, `from .qint import qint`)
+**Order (Python):**
+1. Standard library (e.g., `import inspect`, `import math`, `import gc`)
+2. Third-party libraries (e.g., `import numpy as np`, `import pytest`, `import qiskit.qasm3`)
+3. Internal package imports (e.g., `from ._core import circuit`, `from .qint import qint`)
 
-**Path aliases:**
-- Package always imported as `import quantum_language as ql` in tests and downstream code
-- Internal imports use relative paths: `from ._core import ...`, `from .grover import _apply_hadamard_layer`
-
-**Test-specific patterns:**
-- Tests add `tests/` to `sys.path` when importing shared helpers across directories:
-  ```python
-  sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-  from verify_helpers import generate_exhaustive_pairs, generate_sampled_pairs
-  ```
-- Shared test helpers live in `tests/verify_helpers.py` and `tests/conftest.py` (root) and `tests/python/conftest.py`
-
-**C include order:**
-1. Implementation's own header (e.g., `#include "qubit_allocator.h"`)
-2. Other project headers (e.g., `#include "QPU.h"`)
-3. Standard library (e.g., `#include <stdlib.h>`, `#include <stdio.h>`, `#include <string.h>`)
+**Path Aliases:**
+- Package imported as `ql` in all user-facing code and tests: `import quantum_language as ql`
+- Internal imports use relative paths: `from ._core import ...`, `from .qint import qint`
+- Qiskit imported lazily inside functions that need it (not at module top-level), e.g., in `_simulate_single_shot` and `_simulate_multi_shot`
 
 ## Error Handling
 
-**Python patterns:**
-- `ValueError` for invalid parameters (e.g., width out of range 1-64, mismatched moduli, `widths` length mismatch, missing required `width`/`widths`)
-- `ZeroDivisionError` for division by zero
-- `TypeError` for wrong argument types
-- `NotImplementedError` with actionable message: `"qint_mod * int"` tells user correct form
-- `ImportError` with install instructions for optional dependencies (e.g., Pillow for visualization)
-- Simulation errors include QASM in message for debugging:
-  ```python
-  raise Exception(f"Simulation failed: {str(e)}\n\nOpenQASM 3.0:\n{qasm_str}") from e
-  ```
+**Patterns:**
+- `ValueError` for invalid arguments (width out of range, missing required params, ambiguous combinations)
+- `TypeError` for wrong argument types (e.g., unrecognized oracle types)
+- `RecursionError` for depth-limit violations in compiled function nesting
+- `ImportError` for optional dependency failures (e.g., Pillow for `draw_circuit`)
+- `warnings.warn(message, stacklevel=N)` for soft failures and limit proximity alerts (e.g., approaching 17-qubit simulator limit, epsilon too small)
+- Exception re-raise pattern in tests: `raise Exception(error_msg) from e` including QASM in message for debugging
 
-**Python warnings:**
-- `warnings.warn(..., stacklevel=N)` for non-fatal issues: qubit limit approach, value truncation overflow, IQAE `max_iterations` cap hit
-- Tests assert warnings with `pytest.warns(UserWarning, match="pattern")`
+**C Error Handling:**
+- Return `NULL` on allocation failure
+- Validate inputs at function entry with early return `NULL`
+- Never silently ignore allocation failures
 
-**C patterns:**
-- Return `NULL` on allocation failure; callers always check for `NULL` before use
-- Return `(qubit_t)-1` for invalid qubit allocation (sentinel value)
-- Return `0` on success, `-1` on error (e.g., `allocator_free` returns `-1` on double-free)
-- `assert()` for internal invariants; active in debug builds
-- Memory ownership documented inline:
-  ```c
-  // OWNERSHIP: Caller owns returned qubit_allocator_t*, must call allocator_destroy()
-  ```
+## Logging / Debug Output
 
-**Known bug tracking:**
-- Known bugs are tracked inline in comments and test code with codes like `BUG-QFT-DIV`, `BUG-CQQ-QFT`, `BUG-MOD-REDUCE`, `BUG-COND-MUL-01`
-- Corresponding test cases use `pytest.mark.xfail(reason="BUG-X: explanation", strict=False)` to document and track failures without blocking CI
-
-## Logging
-
-**Framework:** None (no structured logging framework in production code)
+**Framework:** `sys.stderr` via `print(..., file=sys.stderr)` for debug output
 
 **Patterns:**
-- C test suite uses `printf("test_name... ")` followed by `printf("PASS\n")` with `fflush(stdout)` for progress indication
-- Python production code has no `print()` or logging calls; debug information surfaces only via exception messages
-- No `logging` module usage observed
+- Debug output gated behind `debug=True` parameter on `CompiledFunc`
+- Debug stats exposed via `.stats` property, not printed unconditionally
+- `#ifdef DEBUG_OWNERSHIP` C preprocessor blocks for C-level debug (compile-time opt-in)
+- Production code produces no stdout output (only warnings via `warnings.warn`)
 
 ## Comments
 
-**Python docstrings:**
-- All public functions and classes have NumPy-style docstrings with `Parameters`, `Returns`, `Raises`, and `Examples` sections
-- Private helper functions also document parameters, returns, and raises
-- Module-level docstrings summarize purpose, calling styles, and usage examples with `>>>` code blocks
-- Test function docstrings: one-line explaining what is verified and the expected outcome (e.g., `"N=8, M=1 -> k=1 (floor(pi/4 * sqrt(8) - 0.5) = floor(1.72) = 1)."`)
+**When to Comment:**
+- Ownership semantics for C allocations (mandatory at every allocation site)
+- Non-obvious algorithm steps (e.g., Qiskit bitstring endianness, BBHT growth factor source)
+- Known limitations and workarounds (inline at the workaround location)
+- Phase/requirement tracking in C files (e.g., `// CC_add removed (Phase 11)`)
 
-**C documentation:**
-- Every C header function has Doxygen-style block comment with `@file`, `@brief`, `@param`, `@return`
-- Complex algorithm sections get inline comments explaining non-obvious logic
-- Phase/plan attribution in section dividers: `/* ------------------------------------------------------------------ */` with description
-- Known bugs documented inline: `// BUG-QFT-DIV: QFT division broken at width 3+`
+**Docstrings:**
+- All public Python functions and classes use NumPy-style docstrings
+- Docstring sections: summary line, blank line, Parameters, Returns, Raises, Examples
+- Module-level docstrings explain purpose, key algorithms, and usage examples
+- Private functions (`_prefix`) also get docstrings explaining parameters and returns
+- Cython files use module-level docstrings but lighter per-function docs
+
+**Section Separators:**
+- Long files use `# --- Section Name ---` (dashes) or `# ============ Name ============` (equals) comment banners
+- Consistent 75-80 character width for separators
 
 ## Function Design
 
-**Size:** Functions are focused; helper functions are extracted aggressively. `grover.py` has 8 private helpers before the public `grover()` function.
+**Size:** Functions stay focused; large files are organized into logical sections with banner comments
 
-**Parameters (Python):**
-- Use keyword-only arguments for optional configuration:
-  ```python
-  def grover(oracle, *registers, width=None, widths=None, m=None, iterations=None, max_attempts=None):
-  ```
-- `None` defaults handled explicitly with conditional dispatch
+**Parameters:**
+- Keyword-only parameters for optional configuration: `def grover(oracle, *registers, width=None, widths=None, m=None, ...)`
+- `*args` star-separator pattern used to force keyword-only arguments
 
-**Return Values (Python):**
-- Typed returns documented in docstring; no bare `None` returns from meaningful operations
-- Tuple returns documented: `Returns (actual, expected) tuple`, `Returns (*values, total_iterations)`
-- `AmplitudeEstimationResult` wraps float with metadata and supports arithmetic operators directly
-
-**Return Values (C):**
-- Return codes: `0` success, `-1` error
-- Sentinel values: `NULL`, `(qubit_t)-1`
-- Caller-owned allocations documented with `OWNERSHIP:` comment
+**Return Values:**
+- Prefer tuples for multi-value returns: `(value, iterations)`, `(lower, upper)`
+- `None` as explicit no-result (not omitted)
+- Typed return documented in docstring Returns section
 
 ## Module Design
 
-**Exports (Python):**
-- Explicit `__all__` in `src/quantum_language/__init__.py` listing all public API symbols
-- All quantum types and algorithms re-exported from `__init__.py`: `qint`, `qbool`, `qarray`, `qint_mod`, `circuit`, `grover`, `amplitude_estimate`, `compile`, `diffusion`, `to_openqasm`, etc.
-- Private internals (prefixed `_`) not in `__all__` but importable for tests
+**Exports:**
+- Explicit `__all__` list in `src/quantum_language/__init__.py`
+- Public API re-exported from submodules via `__init__.py` imports
+- Internal helpers prefixed with `_` and not included in `__all__`
 
-**Barrel file:**
-- `src/quantum_language/__init__.py` is the single barrel; all test code uses `import quantum_language as ql`
-
-**Cython module split:**
-- `_core.pyx`, `_gates.pyx` — low-level C bindings (underscore prefix indicates internal)
-- `qint.pyx`, `qbool.pyx`, `qarray.pyx`, `qint_mod.pyx`, `openqasm.pyx` — quantum type implementations
-- `qint_arithmetic.pxi`, `qint_bitwise.pxi`, `qint_comparison.pxi`, `qint_division.pxi` — `.pxi` include files split out of `qint.pyx` to keep file size manageable
+**Class Design:**
+- `__slots__` used on performance-critical data classes (`CompiledBlock`, `AncillaRecord`)
+- Properties used for computed/derived attributes (`estimate`, `num_oracle_calls`, `stats`)
+- `functools.update_wrapper(self, func)` on decorator wrappers for `__name__` propagation
+- `__repr__` defined on all wrapper classes
 
 ---
 

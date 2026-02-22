@@ -4,77 +4,62 @@
 
 ## Test Framework
 
-**Runner (Python):**
-- pytest 7.0+
-- Config: `pytest.ini` (root)
-- Default test path: `tests/python/`
-- Default flags: `-v --tb=short --strict-markers`
+**Runner:**
+- pytest >= 7.0
+- Config: `pytest.ini` at project root
 
-**Runner (C):**
-- Custom Makefile in `tests/c/Makefile`
-- Compiled with `gcc -Wall -Wextra -g`
-- Assertion: C standard `assert()` from `<assert.h>`
-- No CTest or external framework
-
-**Assertion Library (Python):**
-- pytest native assertions (`assert actual == expected`)
-- `pytest.approx` for floating-point comparisons
-- `pytest.raises` for exception assertions
-- `pytest.warns` for warning assertions
+**Assertion Library:**
+- pytest built-ins (`assert`, `pytest.raises`, `pytest.warns`, `pytest.approx`)
+- No external assertion library
 
 **Run Commands:**
 ```bash
-pytest tests/python/ -v                    # All Python tests
-pytest tests/python/ -v -m "not slow"     # Skip slow tests
-pytest tests/python/ -v -m integration    # Integration only
-pytest tests/python/test_grover.py -v     # Single file
-```
-
-```bash
-# C tests (from tests/c/)
-make test_allocator_block && ./test_allocator_block
-make test_reverse_circuit && ./test_reverse_circuit
-make test_hot_path_add && ./test_hot_path_add
-make test_hot_path_mul && ./test_hot_path_mul
-make test_allocator_block_debug && ./test_allocator_block_debug   # With DEBUG flag
+pytest tests/python/ -v              # Run all primary tests (verbose, short tracebacks)
+pytest tests/python/ -v -m "not slow"  # Skip slow tests
+pytest tests/python/ -v -m slow     # Run only slow tests
+pytest tests/python/ -v -m integration  # Run only integration tests
+pytest tests/ -v                     # Run all tests (includes legacy tests/ root files)
 ```
 
 ## Test File Organization
 
-**Python test location:**
-- Primary: `tests/python/` — all pytest-run tests (694 test functions across 30+ files)
-- Legacy root-level: `tests/test_*.py` — older verification tests run directly, not via pytest
+**Primary test location:**
+- `tests/python/` — canonical test suite (configured as `testpaths` in `pytest.ini`)
+- Each file covers a feature area or phase milestone (e.g., `test_grover.py`, `test_amplitude_estimation.py`, `test_phase15_initialization.py`)
+
+**Legacy test location:**
+- `tests/` root — older verification tests, not in `testpaths`; used for exhaustive simulation-backed verification (files like `test_add.py`, `test_mul.py`, `test_div.py`)
 
 **Naming:**
-- `test_<feature>.py` — feature-level tests (e.g., `test_grover.py`, `test_oracle.py`, `test_diffusion.py`)
-- `test_phase<N>_<feature>.py` — phase-gated tests tied to development milestones (e.g., `test_phase15_initialization.py`, `test_phase7_arithmetic.py`)
+- Files: `test_<feature_or_phase_name>.py`
+- Classes: `Test<FeatureName>` (e.g., `TestGroverIterations`, `TestAmplitudeEstimationEndToEnd`)
+- Functions: `test_<what_is_tested>` with detailed description (e.g., `test_grover_single_solution_3bit`, `test_init01_x_gates_applied`)
 
-**Structure:**
+**Structure within files:**
 ```
+tests/python/
+├── conftest.py              # Shared fixtures (clean_circuit, sample_qints, normalize_circuit_output)
+├── test_grover.py           # Unit tests + E2E integration tests for Grover's algorithm
+├── test_amplitude_estimation.py  # Unit tests + E2E integration tests for IQAE
+├── test_phase15_initialization.py  # Tests by requirement group (INIT-01, etc.)
+├── test_qint_operations.py  # Characterization tests, golden masters
+└── test_cross_backend.py    # Cross-backend equivalence tests
 tests/
-├── conftest.py              # verify_circuit fixture (Qiskit simulation pipeline)
-├── verify_helpers.py        # Shared: generate_exhaustive_pairs, generate_sampled_pairs
-├── python/
-│   ├── conftest.py          # clean_circuit, sample_qints fixtures; normalize_circuit_output()
-│   ├── test_grover.py
-│   ├── test_amplitude_estimation.py
-│   ├── test_cross_backend.py
-│   ├── test_phase15_initialization.py
-│   └── test_*.py            # 30+ test files
-└── c/
-    ├── Makefile
-    ├── test_allocator_block.c
-    ├── test_reverse_circuit.c
-    ├── test_hot_path_add.c
-    ├── test_hot_path_mul.c
-    ├── test_hot_path_xor.c
-    └── test_comparison.c
+├── conftest.py              # verify_circuit fixture (full simulation pipeline)
+├── verify_helpers.py        # Shared helpers: generate_exhaustive_pairs, generate_sampled_pairs
+└── test_add.py, test_mul.py, ...  # Legacy exhaustive verification tests
 ```
 
 ## Test Structure
 
-**Python suite organization (class-based):**
+**Suite Organization:**
+- Files typically grouped into two or three `Test*` classes:
+  1. Unit tests (no Qiskit needed) — fast, test helper functions and internal logic
+  2. Integration tests (with Qiskit simulation) — slower, verify quantum circuit behavior
+  3. Optional: edge case or requirements-coverage class
+
 ```python
+# --- Group 1: Unit Tests (no Qiskit) ---
 class TestGroverIterations:
     """Unit tests for _grover_iterations and _resolve_widths. No Qiskit needed."""
 
@@ -82,78 +67,41 @@ class TestGroverIterations:
         """N=8, M=1 -> k=1 (floor(pi/4 * sqrt(8) - 0.5) = floor(1.72) = 1)."""
         assert _grover_iterations(8, 1) == 1
 
-
+# --- Group 2: End-to-End Integration Tests ---
 class TestGroverEndToEnd:
     """Integration tests verifying ql.grover() finds correct solutions via Qiskit."""
 
-    def test_grover_single_solution_3bit(self):
-        """Oracle marks x=5 in 3-bit space. Expect value=5 with high probability."""
+    def test_grover_single_solution_2bit(self):
+        """Oracle marks x=3 in 2-bit space. N=4, M=1 -> k=1, P=1.0 (exact)."""
         ...
+        value, iters = ql.grover(mark_three, width=2)
+        assert value == 3, f"Expected 3, got {value}"
 ```
 
-**Pattern:** Each test file contains 2–5 classes. Classes group by:
-- Unit vs. integration (e.g., `TestGroverIterations` vs. `TestGroverEndToEnd`)
-- Feature area (e.g., `TestBasicInitialization`, `TestAutoWidthMode`, `TestBoundaryConditions`)
-- Requirements coverage (e.g., `TestRequirementsCoverage` mapping to spec IDs like `INIT-01`)
-
-**Parametrized tests:**
-```python
-@pytest.mark.parametrize(
-    "value,expected_width",
-    [
-        (1, 1),
-        (5, 3),
-        (8, 4),
-        (255, 8),
-    ],
-)
-def test_auto_width_parametrized(self, value, expected_width):
-    a = ql.qint(value)
-    assert a.width == expected_width, f"qint({value}) should have width {expected_width}, got {a.width}"
-```
-
-**C test structure:**
-```c
-static void test_block_reuse_after_free(void) {
-    printf("test_block_reuse_after_free... ");
-    fflush(stdout);
-
-    qubit_allocator_t *alloc = allocator_create(64);
-    assert(alloc != NULL);
-
-    qubit_t s1 = allocator_alloc(alloc, 4, false);
-    int rc = allocator_free(alloc, s1, 4);
-    assert(rc == 0);
-
-    qubit_t s2 = allocator_alloc(alloc, 4, false);
-    assert(s2 == s1 && "Freed block of 4 should be reused");
-
-    allocator_destroy(alloc);
-    printf("PASS\n");
-}
-
-int main(void) {
-    printf("=== block allocator unit tests ===\n\n");
-    test_block_reuse_after_free();
-    // ... more tests ...
-    printf("\n=== ALL N TESTS PASSED ===\n");
-    return 0;
-}
-```
+**Patterns:**
+- Module-level docstring states which requirements (e.g., `GROV-01`, `INIT-01`) the file covers
+- Section dividers `# --- Group N: Description ---` or `# === Section Name ===` separate logical groups
+- Each test has a one-line docstring stating what it verifies and expected values
+- Assertion messages always include `f"Expected {expected}, got {actual}"` format
 
 ## Mocking
 
-**Framework:** None — no `unittest.mock`, `pytest-mock`, or similar.
+**Framework:** No mocking framework used (no `unittest.mock`, no `pytest-mock`)
 
-**Patterns:** No mocking is used. Tests exercise real Cython/C backends directly.
+**Patterns:**
+- No mock objects; tests use real quantum circuits and real Qiskit simulation
+- Isolation achieved by calling `ql.circuit()` to reset global circuit state before each test
+- Garbage collection forced with `gc.collect()` before circuit reset to prevent ancilla corruption from stale qint destructors
 
-**What to Mock:** Nothing is currently mocked. All code paths are tested against the actual implementation.
+**What to Mock:**
+- Nothing currently mocked; all quantum behavior is tested against real simulation
 
-**What NOT to Mock:** The C backend, Qiskit simulation, and qubit allocator are never mocked — they are the primary subjects of testing.
+**What NOT to Mock:**
+- The C backend, Cython layer, or Qiskit simulator — these are the primary objects under test
 
 ## Fixtures and Factories
 
-**`tests/python/conftest.py` fixtures:**
+**Shared fixtures in `tests/python/conftest.py`:**
 
 ```python
 @pytest.fixture
@@ -165,7 +113,7 @@ def clean_circuit():
 
 @pytest.fixture
 def sample_qints():
-    """Provides sample quantum integers."""
+    """Provides sample quantum integers for testing."""
     return {
         "small": ql.qint(value=5, bits=4),
         "medium": ql.qint(value=100, bits=8),
@@ -173,104 +121,121 @@ def sample_qints():
     }
 ```
 
-**`tests/conftest.py` fixtures (Qiskit pipeline):**
+**Full verification pipeline fixture in `tests/conftest.py`:**
 
 ```python
 @pytest.fixture
 def verify_circuit():
-    """Full verification pipeline: build circuit -> export QASM -> Qiskit simulate -> extract result."""
+    """Returns callable _verify(circuit_builder, width, in_place=False).
 
+    Pipeline: ql.circuit() reset -> circuit_builder() -> ql.to_openqasm()
+    -> qiskit.qasm3.loads() -> AerSimulator(statevector, shots=1)
+    -> extract bitstring -> int -> return (actual, expected)
+    """
     def _verify(circuit_builder, width, in_place=False):
-        gc.collect()      # Prevent stale qint destructors from firing on new circuit
-        ql.circuit()      # Reset circuit state
-
+        gc.collect()  # Force GC before circuit reset
+        ql.circuit()
         result = circuit_builder()
         if isinstance(result, tuple):
-            expected, _keepalive = result   # keepalive prevents premature GC of qint refs
+            expected, _keepalive = result
         else:
             expected = result
-
         qasm_str = ql.to_openqasm()
         _keepalive = None
-
-        circuit = qiskit.qasm3.loads(qasm_str)
-        if not circuit.cregs:
-            circuit.measure_all()
-
-        simulator = AerSimulator(method="statevector", max_parallel_threads=4)
-        job = simulator.run(circuit, shots=1)
-        counts = job.result().get_counts()
-        bitstring = list(counts.keys())[0]
-        result_bits = bitstring[:width] if not in_place else bitstring
-        actual = int(result_bits, 2)
-
+        # ... Qiskit simulation ...
         return (actual, expected)
-
     return _verify
 ```
 
-**`tests/verify_helpers.py` (shared input generation):**
+**Test data generation (in `tests/verify_helpers.py`):**
 
 ```python
-def generate_exhaustive_pairs(width):
-    """All (a, b) pairs for width <= 4 (exhaustive)."""
-    return list(itertools.product(range(2**width), repeat=2))
-
-def generate_sampled_pairs(width, sample_size=50):
-    """Edge cases + seeded random pairs for width >= 5."""
-    max_val = (2**width) - 1
-    edge_values = [0, 1, max_val, max_val - 1]
-    edge_pairs = set(itertools.product(edge_values, repeat=2))
-    random.seed(42)  # Deterministic seed for reproducibility
-    random_pairs = {(random.randint(0, max_val), random.randint(0, max_val)) for _ in range(sample_size)}
-    return sorted(edge_pairs | random_pairs)
+generate_exhaustive_pairs(width)  # All (a, b) pairs for width <= 4
+generate_sampled_pairs(width, sample_size=50)  # Edge cases + random (seed=42) for width >= 5
+generate_exhaustive_values(width)  # All single values for width <= 4
+generate_sampled_values(width, sample_size=50)  # Edge cases + random for width >= 5
 ```
 
-**Location of fixtures:**
-- `tests/python/conftest.py` — `clean_circuit`, `sample_qints`, `normalize_circuit_output()`
-- `tests/conftest.py` — `verify_circuit` (full Qiskit simulation pipeline), `clean_circuit`
-- `tests/verify_helpers.py` — `generate_exhaustive_pairs`, `generate_sampled_pairs`, `format_failure_message`
+**Location:**
+- Shared fixtures: `tests/python/conftest.py` and `tests/conftest.py`
+- Data helpers: `tests/verify_helpers.py`
 
 ## Coverage
 
-**Requirements:** None enforced (no `--cov` or coverage threshold configured)
+**Requirements:** No coverage target enforced (no `pytest-cov` or `.coveragerc` detected)
+
+**Coverage approach:** Explicit requirement-tracing — test classes and functions reference requirement IDs (e.g., `GROV-01`, `INIT-01`, `ARTH-03`) in their docstrings and a `TestRequirementsCoverage` class verifies each requirement has a named test.
 
 **View Coverage:**
 ```bash
-# Not configured; would require: pip install pytest-cov
+# Not configured; would run as:
 pytest tests/python/ --cov=src/quantum_language --cov-report=html
 ```
 
-**Observed coverage strategy:** Exhaustive input coverage for small widths (1–4 bits), sampled for larger widths (5–8+ bits). Cross-backend equivalence tests (`test_cross_backend.py`) cover all arithmetic operation variants systematically.
-
 ## Test Types
 
-**Unit Tests (no Qiskit required):**
-- Pure Python/math logic: `TestGroverIterations`, `TestIQAEHelpers`, `TestAmplitudeEstimationResult`
-- API contract tests: `TestCircuitAPI`, `TestQintAPI`, `TestQboolAPI` in `test_api_coverage.py`
-- C allocator tests: `tests/c/test_allocator_block.c`
-- Scope: individual functions or classes, no simulation
+**Unit Tests:**
+- Scope: individual helper functions and internal algorithm logic (`_grover_iterations`, `_resolve_widths`, `_clopper_pearson_confint`, `_find_next_k`, `AmplitudeEstimationResult`)
+- No Qiskit required; fast execution
+- Located in `Test*` classes labeled "no Qiskit needed"
 
-**Integration Tests (Qiskit simulation required):**
-- End-to-end circuit verification: `TestGroverEndToEnd`, `TestAmplitudeEstimationEndToEnd`
-- Cross-backend equivalence: `TestCrossBackendAddition`, `TestCrossBackendMultiplication`, etc. in `test_cross_backend.py`
-- Marked with `@pytest.mark.integration` in some files
-- Use `AerSimulator(method="statevector", max_parallel_threads=4)` — max 4 threads enforced
-- Never exceed 17 qubits (project constraint from project memory)
+**Integration Tests (Qiskit simulation):**
+- Scope: end-to-end quantum circuit behavior via `ql.grover()`, `ql.amplitude_estimate()`, oracle decorator validation
+- Use `AerSimulator(method="statevector", max_parallel_threads=4)` — **always** `max_parallel_threads=4` per project constraint
+- Qubit limit: **never exceed 17 qubits** in any simulation (project hard constraint from memory)
+- Marked `@pytest.mark.integration` or grouped into `TestGroverEndToEnd` / `TestAmplitudeEstimationEndToEnd` classes
 
-**E2E Tests:**
-- `verify_circuit` fixture provides a full pipeline from Python API through C backend to Qiskit simulation and result extraction
-- Used in `test_phase7_arithmetic.py`, `test_phase13_equality.py`, `test_phase15_initialization.py`, etc.
+**Characterization Tests (golden masters):**
+- Scope: regression detection — captures current behavior, not specific gate sequences
+- Found in `test_qint_operations.py` and `test_circuit_generation.py`
+- These tests verify operations complete without error and return correct types, not specific output values
+
+**Cross-Backend Equivalence Tests:**
+- `tests/python/test_cross_backend.py` (1441 lines)
+- Uses `ql.option('fault_tolerant', True)` for Toffoli backend and `False` for QFT backend
+- Exhaustive for widths 1-4, sampled for widths 5+
+- Documents known failures in `KNOWN_DIV_FAILURES` dict to avoid false failures
+
+**Legacy Verification Tests:**
+- `tests/` root files (`test_add.py`, `test_mul.py`, etc.) — not in `testpaths`
+- Use `verify_circuit` fixture for full pipeline verification
 
 ## Common Patterns
 
-**Async Testing:**
-Not applicable — all code is synchronous.
-
-**Probabilistic test assertions:**
-Grover and amplitude estimation results are probabilistic. Tests use statistical bounds with explicit reasoning:
+**Simulator Invocation (always use this exact form):**
 ```python
-# Run 20 times, expect at least 7/20 hits
+from qiskit_aer import AerSimulator
+simulator = AerSimulator(method="statevector", max_parallel_threads=4)
+job = simulator.run(circuit, shots=1)
+result = job.result()
+counts = result.get_counts()
+```
+
+**Circuit Reset Pattern:**
+```python
+import gc
+gc.collect()   # Force GC before reset to prevent stale qint destructor interference
+ql.circuit()   # Reset global circuit state
+```
+
+**Qiskit Simulation Helper (from tests/python/test_oracle.py):**
+```python
+SHOTS = 8192
+
+def _simulate_qasm(qasm_str: str) -> dict:
+    """Run QASM through Qiskit Aer and return counts dict."""
+    circuit = qiskit.qasm3.loads(qasm_str)
+    if not circuit.cregs:
+        circuit.measure_all()
+    simulator = AerSimulator(max_parallel_threads=4)
+    transpiled = transpile(circuit, simulator)
+    result = simulator.run(transpiled, shots=SHOTS).result()
+    return result.get_counts()
+```
+
+**Async / Probabilistic Testing:**
+```python
+# Statistical threshold: run 20 times, expect at least 7 hits (35% threshold)
 found_count = 0
 for _ in range(20):
     value, iters = ql.grover(mark_five, width=3)
@@ -279,81 +244,48 @@ for _ in range(20):
 assert found_count >= 7, f"Expected >=7/20 hits, got {found_count}"
 ```
 
-**Error testing:**
+**Error Testing:**
 ```python
-def test_invalid_width_below_1(self):
-    with pytest.raises(ValueError, match="Width must be 1-64"):
-        ql.qint(5, width=0)
+with pytest.raises(ValueError, match="width or widths required"):
+    _resolve_widths(["x"], None, None)
 
-def test_overflow_emits_warning(self):
-    with pytest.warns(UserWarning, match="Value.*exceeds"):
-        a = ql.qint(1000, width=8)
-
-def test_max_iterations_cap(self):
-    with pytest.warns(UserWarning, match="max_iterations"):
-        result = ql.amplitude_estimate(lambda x: x == 3, width=3, epsilon=0.001, max_iterations=10)
+with pytest.warns(UserWarning, match="max_iterations"):
+    result = ql.amplitude_estimate(lambda x: x == 3, width=3, epsilon=0.001, max_iterations=10)
 ```
 
-**Known failure documentation (xfail):**
+**Parametrized Tests:**
 ```python
+@pytest.mark.parametrize("bits", [2, 4, 8, 16])
+def test_qint_creation_various_widths(bits):
+    a = ql.qint(value=0, bits=bits)
+    assert a is not None
+
 @pytest.mark.parametrize(
-    "width",
-    [
-        pytest.param(
-            2,
-            marks=pytest.mark.xfail(
-                reason="BUG-CQQ-QFT: QFT controlled QQ addition incorrect at width 2+ (CCP rotation angle errors)",
-                strict=False,
-            ),
-        ),
-    ],
+    "value,expected_width",
+    [(1, 1), (5, 3), (8, 4), (255, 8), (256, 9)],
 )
-def test_cqq_add(self, width):
-    ...
+def test_auto_width_parametrized(self, value, expected_width):
+    a = ql.qint(value)
+    assert a.width == expected_width, f"qint({value}) should have width {expected_width}, got {a.width}"
 ```
 
-**Slow test marking:**
+**float Approximate Comparisons (for IQAE):**
 ```python
-pytest.param(7, marks=pytest.mark.slow)   # Deselect with: -m "not slow"
-pytest.param(8, marks=pytest.mark.slow)
+# pytest.approx for arithmetic results
+assert result + 0.5 == pytest.approx(0.625)
+
+# Manual tolerance for probabilistic estimates
+assert abs(result.estimate - 0.125) < 0.15, f"Expected ~0.125, got {result.estimate}"
 ```
 
-**GC coordination for quantum state tests:**
-```python
-# Always call gc.collect() before ql.circuit() to prevent stale destructors
-# from injecting uncomputation gates into the new circuit
-gc.collect()
-ql.circuit()
-```
+## pytest Marks
 
-**keepalive pattern (prevent premature uncomputation):**
-```python
-def build():
-    a = ql.qint(5, width=4)
-    b = ql.qint(3, width=4)
-    c = a + b
-    return 8, [a, b, c]   # Return (expected, keepalive_refs)
-
-actual, expected = verify_circuit(build, width=4)
-```
-
-**Failure collection (no early exit on first failure):**
-Cross-backend tests collect all failures before asserting, producing detailed diagnostics:
-```python
-failures = []
-for a, b in pairs:
-    toffoli_result, qft_result = _compare_backends(build_fn, width)
-    if toffoli_result != qft_result:
-        failures.append(f"w={width} a={a} b={b}: toffoli={toffoli_result}, qft={qft_result}")
-
-assert not failures, f"{len(failures)} cross-backend mismatches:\n" + "\n".join(failures[:20])
-```
-
-**Trivial-pass guard:**
-```python
-# Guard against all-zero results masking a broken test
-assert saw_nonzero, f"All cQQ mul results were 0 at width {width} -- test may be trivially passing"
-```
+Defined in `pytest.ini`:
+- `@pytest.mark.slow` — marks tests that take a long time; deselect with `-m "not slow"`
+- `@pytest.mark.integration` — marks tests requiring Qiskit simulation
+- `@pytest.mark.parametrize(...)` — parametrized test variants (used heavily)
+- `@pytest.mark.skip(reason=...)` — known skips (e.g., unimplemented features)
+- `@pytest.mark.xfail(reason=..., strict=False)` — expected failures for known bugs
 
 ---
 

@@ -4,190 +4,169 @@
 
 ## Pattern Overview
 
-**Overall:** Layered Quantum Circuit Compiler with C Backend + Cython Bridge
+**Overall:** Layered quantum compiler with Cython FFI bridge
 
 **Key Characteristics:**
-- Python user-facing API (quantum types, algorithms) built atop compiled Cython extensions
-- Cython extensions (`.pyx`) act as an FFI bridge calling into a pure C gate-generation backend
-- Circuit state is process-global (one active circuit at a time), managed via module-level C pointers in `_core.pyx`
-- Operator overloading on `qint`/`qbool`/`qarray` drives implicit circuit construction — user writes arithmetic, gates emit automatically
-- Gate capture-and-replay (`@ql.compile`) virtualizes qubit indices for reusable compiled quantum subroutines
+- Python user-facing API compiled to native extensions via Cython (.pyx files)
+- C backend handles all circuit data structures and quantum gate arithmetic
+- Global circuit singleton owned by `_core.pyx`; all quantum types inherit from `circuit`
+- Gate sequences are pre-compiled and cached per bit-width; Python dispatches to C via `run_instruction`
+- Verification pipeline exports OpenQASM 3.0 from C then simulates via Qiskit Aer
 
 ## Layers
 
 **User API Layer:**
-- Purpose: Public Python API consumed by end users
+- Purpose: High-level quantum programming constructs exposed to end users
 - Location: `src/quantum_language/__init__.py`
-- Contains: Re-exports from all submodules, convenience wrappers (`array()`, `draw_circuit()`, `all()`, `any()`, `parity()`)
-- Depends on: Cython extension modules, pure Python modules
-- Used by: User scripts, tests
+- Contains: `qint`, `qbool`, `qint_mod`, `qarray`, `circuit`, `compile`, `grover`, `amplitude_estimate`, `to_openqasm`, `draw_circuit`, `option`, `profile`
+- Depends on: Cython extension layer
+- Used by: End-user scripts, test files, `src/demo.py`
 
-**Quantum Type Layer (Cython):**
-- Purpose: Quantum integer/boolean/array types with operator overloading that emit gates as side effects
-- Location: `src/quantum_language/qint.pyx`, `src/quantum_language/qbool.pyx`, `src/quantum_language/qarray.pyx`, `src/quantum_language/qint_mod.pyx`
-- Contains: `cdef class qint(circuit)`, `cdef class qbool(qint)`, `cdef class qarray`, `cdef class qint_mod`
-- Depends on: `_core.pyx` (global circuit state, C function declarations), `c_backend` C sources
-- Used by: User code, algorithm layer, `compile.py`
+**Cython Extension Layer:**
+- Purpose: Compiled Python/C bridge; implements quantum types as `cdef class` objects
+- Location: `src/quantum_language/*.pyx`, `src/quantum_language/*.pxi`
+- Contains:
+  - `_core.pyx` — Global circuit singleton, `circuit` base class, `option()`, module-level state accessors
+  - `qint.pyx` — Quantum integer (`cdef class qint(circuit)`), arithmetic/bitwise/comparison via included `.pxi` files
+  - `qbool.pyx` — Single-bit quantum boolean
+  - `qarray.pyx` — NumPy-style array of qint/qbool elements
+  - `qint_mod.pyx` — Modular arithmetic subclass of qint
+  - `openqasm.pyx` — Calls C `circuit_to_qasm_string()` and returns Python string
+  - `_gates.pyx` — Low-level gate emission primitives (`emit_x`, `emit_h`, `emit_mcz`, etc.)
+- Depends on: C backend (linked at build time), `_core.pyx` global state
+- Used by: User API layer
 
-**Core State Module (Cython):**
-- Purpose: Global circuit state keeper and C FFI declarations; single source of truth for circuit pointer
-- Location: `src/quantum_language/_core.pyx`, `src/quantum_language/_core.pxd`
-- Contains: `cdef circuit_t *_circuit`, control-flow globals (`_controlled`, `_control_bool`, `_list_of_controls`), `cdef class circuit`, `option()`, `extract_gate_range()`, `inject_remapped_gates()`, `reverse_instruction_range()`
-- Depends on: `c_backend` C sources (linked at compile time)
-- Used by: All other Cython modules via `cimport`; pure Python modules via `from ._core import`
+**Algorithm Layer:**
+- Purpose: Quantum algorithms built on top of the Cython types
+- Location: `src/quantum_language/` (pure Python)
+- Contains:
+  - `compile.py` — `@ql.compile` capture-and-replay decorator with gate-level optimization
+  - `oracle.py` — `@ql.grover_oracle` decorator (compute-phase-uncompute enforcement)
+  - `grover.py` — End-to-end Grover search (oracle + diffusion + Qiskit simulation)
+  - `diffusion.py` — Grover diffusion operator (X-MCZ-X pattern)
+  - `amplitude_estimation.py` — Iterative Quantum Amplitude Estimation (IQAE)
+  - `draw.py` — Pixel-art circuit visualization (requires Pillow)
+  - `profiler.py` — Gate-count and depth profiling decorator
+- Depends on: Cython extension layer, Qiskit (for simulation in `grover.py`, `amplitude_estimation.py`)
+- Used by: User API layer, test files
 
-**Gate Emission Layer (Cython):**
-- Purpose: Low-level gate emission primitives (H, X, P, MCZ, etc.) called by qint operations and algorithm modules
-- Location: `src/quantum_language/_gates.pyx`, `src/quantum_language/_gates.pxd`
-- Contains: `emit_h()`, `emit_x()`, `emit_p()`, `emit_mcz()`, etc.
-- Depends on: `_core.pyx` circuit state
-- Used by: `qint.pyx`, `diffusion.py`, `oracle.py`, `grover.py`
-
-**Algorithm Layer (Pure Python):**
-- Purpose: High-level quantum algorithm implementations built atop the type layer
-- Location: `src/quantum_language/compile.py`, `src/quantum_language/grover.py`, `src/quantum_language/oracle.py`, `src/quantum_language/diffusion.py`, `src/quantum_language/amplitude_estimation.py`
-- Contains: `@ql.compile` decorator, `ql.grover()`, `ql.grover_oracle()`, `ql.diffusion()`, `ql.amplitude_estimate()`
-- Depends on: `_core` (gate injection/extraction), `qint`/`qbool`/`qarray` types
-- Used by: User code
-
-**OpenQASM Export Layer (Cython):**
-- Purpose: Serialize current circuit to OpenQASM 3.0 string for simulation
-- Location: `src/quantum_language/openqasm.pyx`, `src/quantum_language/openqasm.pxd`
-- Contains: `to_openqasm()` — calls `circuit_to_qasm_string()` from C backend
-- Depends on: `c_backend/src/circuit_output.c`
-- Used by: `grover.py`, `amplitude_estimation.py` (for Qiskit simulation)
-
-**C Backend:**
-- Purpose: High-performance quantum gate sequence generation, circuit data structures, qubit allocation, optimization, and arithmetic
+**C Backend Layer:**
+- Purpose: Efficient circuit data structures, gate arithmetic sequences, and optimization
 - Location: `c_backend/src/`, `c_backend/include/`
-- Contains: `circuit_t` struct, `gate_t`, `qubit_allocator_t`, arithmetic operations (QFT-based and Toffoli-based), hardcoded gate sequences for widths 1-16, circuit optimizer
-- Depends on: Nothing (pure C, no external dependencies beyond libc)
-- Used by: All Cython extensions (linked via `setup.py`)
+- Contains: Circuit lifecycle, qubit allocator, QFT/Toffoli gate sequences, layer optimizer, OpenQASM exporter, Clifford+T decomposer
+- Depends on: Nothing (pure C, no external libraries beyond libc)
+- Used by: Cython extension layer (linked as compiled object files via `setup.py`)
 
-**Visualization Layer (Pure Python):**
-- Purpose: Render quantum circuits as pixel-art images
-- Location: `src/quantum_language/draw.py`
-- Contains: `render()` (overview mode), `render_detail()` (label mode), `draw_circuit()` (auto-zoom)
-- Depends on: PIL/Pillow, NumPy, `_core.circuit.draw_data()`
-- Used by: User code (optional; Pillow is an optional dependency)
+**Hardcoded Sequence Layer:**
+- Purpose: Pre-generated C gate sequences for specific bit widths (1-16); avoids runtime sequence construction overhead
+- Location: `c_backend/src/sequences/`
+- Contains: ~107 C files (QFT add, Toffoli CDKM, Toffoli CLA, Clifford+T variants), each encoding a fully unrolled gate sequence for one bit width
+- Depends on: `types.h`, C backend headers
+- Used by: Dispatch functions in `c_backend/src/` (e.g., `add_seq_dispatch.c`, `toffoli_add_seq_dispatch.c`)
 
 ## Data Flow
 
-**Circuit Construction (Typical User Operation):**
+**Quantum Operation (e.g., `a + b`):**
 
-1. User calls `ql.circuit()` — allocates a new `circuit_t` in C, resets all global state in `_core.pyx`
-2. User creates `qint(5, width=8)` — allocates 8 qubits via `qubit_allocator_t`, emits X gates for bit initialization into `circuit_t.sequence[][]`
-3. User writes `result = a + b` — `qint.__add__` dispatches to `QQ_add()` or `hot_path_add_qq()` (C function), which calls `add_gate()` for each gate
-4. Gates accumulate in `circuit_t.sequence[layer][gate_idx]` organized as a layered DAG (layers that can execute in parallel)
-5. User calls `ql.to_openqasm()` → `circuit_to_qasm_string()` in C serializes to OpenQASM 3.0 string
+1. User calls `a + b` on two `qint` objects in Python
+2. `qint.__add__` (in `qint.pyx`) checks arithmetic mode (`ARITH_QFT` or `ARITH_TOFFOLI`) and controlled context
+3. Calls the appropriate C function: `QQ_add(bits)` (QFT) or Toffoli equivalent; these return a cached `sequence_t*`
+4. `run_instruction(sequence, qubit_array, invert, circuit)` in `execution.c` maps logical qubit indices to physical and adds all gates to the circuit via `add_gate()`
+5. `add_gate()` in `optimizer.c` assigns each gate to the earliest available layer using occupancy tracking, merging commuting rotation gates where possible
+6. The gate is stored in `circuit_t.sequence[layer][]`
 
-**Grover Search Flow:**
+**Circuit Export and Simulation:**
 
-1. User calls `ql.grover(predicate, width=N)`
-2. `grover.py` synthesizes oracle from predicate via `_predicate_to_oracle()` (traces predicate on dummy qints)
-3. Creates fresh `circuit()`, allocates search registers, applies Hadamard layer (`branch(0.5)`)
-4. For each iteration: applies oracle gates, `_apply_hadamard_layer()`, `diffusion()`, `_apply_hadamard_layer()`
-5. Calls `to_openqasm()` → exports circuit to QASM string
-6. Passes QASM string to Qiskit `AerSimulator` (max 4 threads), single-shot measurement
-7. Parses bitstring → returns `(value, iterations)` tuple
+1. User calls `ql.to_openqasm()`
+2. `openqasm.pyx` retrieves the global `circuit_t*` pointer from `_core.pyx` and passes it to `circuit_to_qasm_string()` in `circuit_output.c`
+3. C function writes QASM 3.0 string (heap-allocated); Cython decodes and frees it
+4. Test fixtures in `tests/conftest.py` load the QASM into Qiskit via `qiskit.qasm3.loads()`, simulate with `AerSimulator(method="statevector")`, and extract measurement counts
 
-**Compile Decorator (Capture-Replay):**
+**Grover Search (`ql.grover()`):**
 
-1. First call: `@ql.compile` captures gate layer range via `extract_gate_range()`, virtualizes qubit indices into `CompiledBlock`, optimizes gate list (cancels inverses, merges rotations)
-2. Also derives controlled variant of the block by adding 1 control qubit to every gate
-3. Cache key: `(classical_args, widths_tuple, control_count, qubit_saving_mode)`
-4. Subsequent calls: `inject_remapped_gates()` replays virtual gate sequence with fresh physical qubit mapping — no Python re-execution
-
-**Uncomputation (Qubit-Saving Mode):**
-
-1. When `ql.option('qubit_saving', True)`, compiled functions auto-uncompute ancilla qubits after each call
-2. Temp ancillas are identified (not in return or input qubit sets), their adjoint gates are injected, qubits returned to allocator pool via `allocator_free()`
+1. `grover.py` accepts a predicate function or decorated oracle
+2. Optionally wraps predicate in `@grover_oracle` (from `oracle.py`)
+3. Calls `ql.circuit()` to reset global state, applies Hadamard layer via `emit_h`
+4. Iteratively applies oracle + `diffusion()` for `ceil(pi/4 * sqrt(N/M))` rounds
+5. Exports QASM, simulates via Qiskit, parses measured bitstring, verifies classically
 
 **State Management:**
-- Module-level `cdef circuit_t *_circuit` in `_core.pyx` is the live circuit pointer
-- All Python-level flags (`_controlled`, `_control_bool`, `_list_of_controls`, `_qubit_saving_mode`) are module globals in `_core.pyx` accessed via accessor functions by other modules
-- New `ql.circuit()` resets all state and clears compile caches via registered hooks
-- `contextvars.ContextVar` used for scope depth tracking (dependency cycle prevention)
+- Single global `circuit_t*` owned by `_core.pyx` as a C-level module variable
+- Python-level state (qubit counter, control context, scope stack) stored as module globals in `_core.pyx` with explicit getter/setter functions used by all other Cython modules
+- `ql.circuit()` resets all global state and frees the old circuit
 
 ## Key Abstractions
 
 **`circuit_t` (C struct):**
-- Purpose: Core circuit data structure — layered gate array + qubit allocator + occupancy tracking + mode flags
-- File: `c_backend/include/circuit.h`
-- Pattern: Pointer owned by `_core.pyx` module; crosses Python/C boundary as `unsigned long long` cast, never as value
+- Purpose: The central quantum circuit data structure
+- Location: `c_backend/include/circuit.h`
+- Contains: `gate_t**` sequence organized by layer, qubit occupancy matrix, `qubit_allocator_t*`, arithmetic mode flag, layer floor for gate placement
+- Pattern: Allocated via `init_circuit()`, freed via `free_circuit()`. Python holds pointer as `unsigned long long`
 
-**`gate_t` (C struct):**
-- Purpose: Single quantum gate with target qubit, up to 2 inline control qubits (or heap `large_control` for MCX), gate type enum, and rotation angle
-- File: `c_backend/include/types.h`
-- Pattern: Allocated per-gate in `circuit_t.sequence[layer]` array
+**`sequence_t` (C struct):**
+- Purpose: A pre-compiled gate sequence for one operation at one bit width
+- Location: `c_backend/include/types.h`
+- Pattern: Returned by functions like `CQ_add(bits, value)`, `QQ_mul(bits)`. Results are cached by width — DO NOT FREE the returned pointer. Applied to physical qubits via `run_instruction()`
 
 **`qint` (Cython cdef class):**
-- Purpose: Quantum integer with operator overloading; inherits from `circuit` to access global state accessors
-- File: `src/quantum_language/qint.pyx`
-- Pattern: `qint.__add__` calls C arithmetic function, returns new `qint` wrapping result qubits; `qint.__enter__`/`__exit__` set `_controlled = True` for controlled-context blocks
+- Purpose: Quantum integer; primary user-facing type; inherits from `circuit` to participate in context manager protocol
+- Location: `src/quantum_language/qint.pyx`
+- Pattern: Allocates contiguous qubits on construction via `allocator_alloc()`. Arithmetic operators call C backend functions, then `run_instruction()`. Destructor may inject uncomputation gates
 
-**`CompiledBlock` (Python class):**
-- Purpose: Cached virtualized gate sequence from `@ql.compile`
-- File: `src/quantum_language/compile.py`
-- Pattern: Virtual qubit indices (params first, then ancillas), stored in `OrderedDict` cache keyed by `(classical_args, widths, control_count, qubit_saving)`
+**`@ql.compile` decorator:**
+- Purpose: Capture gate sequences on first call, replay with qubit remapping on subsequent calls
+- Location: `src/quantum_language/compile.py`
+- Pattern: Uses `extract_gate_range()` and `inject_remapped_gates()` (C-level functions exposed via `_core.pyx`). Supports `inverse=True` variant and `key=` function for cache invalidation
 
 **`qubit_allocator_t` (C struct):**
-- Purpose: Block-based qubit pool with freed-qubit reuse (first-fit, sorted free list with coalescing)
-- File: `c_backend/include/qubit_allocator.h`
-- Pattern: Embedded in `circuit_t`, hard limit of 8192 qubits; tracks peak allocation and ancilla counts
-
-**`GroverOracle` (Python class):**
-- Purpose: Wraps a compiled quantum function with oracle semantics (compute-phase-uncompute validation)
-- File: `src/quantum_language/oracle.py`
-- Pattern: Layers on top of `@ql.compile`, validates oracle pattern (ORCL-02/03/04), caches keyed by source hash + arithmetic mode
+- Purpose: Centralized qubit lifecycle manager with freed-qubit reuse
+- Location: `c_backend/include/qubit_allocator.h`, `c_backend/src/qubit_allocator.c`
+- Pattern: Block-based free-list with adjacent-block coalescing. Prevents runaway allocation at `ALLOCATOR_MAX_QUBITS = 8192`
 
 ## Entry Points
 
-**User Circuit Entry:**
-- Location: `src/quantum_language/_core.pyx` — `circuit.__init__()`
-- Triggers: `ql.circuit()` call from user code
-- Responsibilities: Allocates `circuit_t` via `init_circuit()`, resets all Python globals, clears all compile caches via registered hooks, resets ancilla array
-
-**Package Import:**
+**Library Import:**
 - Location: `src/quantum_language/__init__.py`
-- Triggers: `import quantum_language as ql`
-- Responsibilities: Re-exports all types and functions; a `circuit()` is auto-created at module import (final line of `_core.pyx`: `circuit()`)
+- Triggers: Python `import quantum_language as ql`
+- Responsibilities: Re-exports all public API symbols from Cython extensions and pure-Python modules
 
-**Build Entry:**
+**Circuit Reset:**
+- Location: `src/quantum_language/_core.pyx`, `circuit.__init__()`
+- Triggers: `ql.circuit()` call
+- Responsibilities: Frees old `circuit_t*`, calls `init_circuit()`, resets all Python globals, clears `@ql.compile` caches
+
+**Build Entry Point:**
 - Location: `setup.py`
-- Triggers: `pip install -e .` or `python setup.py build_ext --inplace`
-- Responsibilities: Runs `build_preprocessor.py` to inline `.pxi` files, then `cythonize()` all `.pyx` files, compiles each as a shared extension with all C backend sources linked in
+- Triggers: `python setup.py build_ext --inplace`
+- Responsibilities: Runs `build_preprocessor.py` to preprocess `.pyx` files, then Cythonizes all `.pyx` modules, compiling them with all C backend sources as linked object files with `-O3 -pthread`
 
-**Test Entry:**
-- Location: `tests/python/` (pytest), `tests/c/Makefile` (C unit tests)
-- Triggers: `pytest tests/python/ -v`
-- Responsibilities: Integration and unit tests; verification tests use Qiskit simulation
+**Standalone C Entry Point (legacy/testing):**
+- Location: `main.c`
+- Triggers: Direct compilation with gcc/clang
+- Responsibilities: Runs raw C backend tests without Python layer (used with ASAN targets in `Makefile`)
 
 ## Error Handling
 
-**Strategy:** Raise Python exceptions at the Cython boundary; C functions return NULL or sentinel values.
+**Strategy:** Exceptions propagate from C to Cython to Python via return-value checks and explicit `RuntimeError`/`ValueError` raises
 
 **Patterns:**
-- C `init_circuit()` returns NULL on allocation failure → Cython checks and raises `MemoryError`
-- C `circuit_to_qasm_string()` returns NULL on failure → Cython raises `RuntimeError`
-- `_circuit_initialized` guard checked at start of every function requiring an active circuit; raises `RuntimeError("Circuit not initialized")`
-- Qubit allocator hard limit 8192 → `allocator_alloc()` returns `(qubit_t)-1`; callers propagate error
-- `@ql.compile` capture depth > 16 → raises `RecursionError`
-- Double-free of ancilla qubits → `allocator_free()` returns `-1` (double-free check in debug mode)
+- C functions returning `NULL` pointers trigger `RuntimeError` in the Cython layer (e.g., `openqasm.pyx` checks `c_str == NULL`)
+- `ql.option()` raises `ValueError` for unknown keys or wrong value types
+- `@ql.compile` raises `ValueError` if trying to invert a measurement gate
+- `ql.grover()` raises `ValueError` for invalid oracle types and warns if solution not found classically
+- Test verification pipeline (`tests/conftest.py`) includes QASM text in exception messages for debugging
 
 ## Cross-Cutting Concerns
 
-**Logging:** None — no logging framework. Debug output via `print(..., file=sys.stderr)` in `compile.py` when `debug=True` flag passed to `@ql.compile`.
+**Logging:** No structured logging; `print()` used in debug paths and some C `printf()` in circuit visualization (`circuit_output.c`)
 
-**Validation:** Input validation at Python API boundary (e.g., width 1-64 for qint, bool values for `option()`). C layer assumes valid inputs.
+**Validation:** Gate-level: `add_gate()` enforces qubit occupancy constraints and layer assignment. Python-level: `option()`, `qint.__init__()`, and oracle decorators perform argument validation.
 
-**Arithmetic Modes:** `circuit_t.arithmetic_mode` flag (`ARITH_QFT` or `ARITH_TOFFOLI`) routes arithmetic to different C implementations. `ARITH_TOFFOLI` uses only CCX/CX/X gates (fault-tolerant compatible). Controlled via `ql.option('fault_tolerant', True)`.
+**Authentication:** Not applicable (local library, no network layer)
 
-**Adder Selection:** `circuit_t.cla_override` and `circuit_t.qubit_saving` flags select CDKM Ripple-Carry Adder vs Brent-Kung CLA vs Kogge-Stone CLA for Toffoli additions. Controlled via `ql.option('cla', ...)` and `ql.option('qubit_saving', ...)`.
+**Controlled Context:** Cross-cutting pattern: when user code runs inside `with qbool_variable:`, the `_controlled` and `_control_bool` globals in `_core.pyx` are set. All gate emission functions in `_gates.pyx` check these to emit controlled variants (CX instead of X, etc.)
 
-**Controlled Context:** Python-level `_controlled` boolean in `_core.pyx` gates whether each emitted gate wraps with a control qubit. `with qbool_var:` sets `_controlled = True` and `_control_bool = qbool_var` for the block duration.
-
-**Toffoli Decomposition:** `circuit_t.toffoli_decompose` flag decomposes CCX to Clifford+T gates (T, Tdg, H, CX) for fault-tolerant circuit analysis. Controlled via `ql.option('toffoli_decompose', True)`.
+**Arithmetic Mode:** `ql.option('fault_tolerant', True/False)` and `ql.option('cla', True/False)` toggle between QFT-based rotations and Toffoli-based (CDKM ripple-carry or Brent-Kung CLA) arithmetic globally, stored in `circuit_t.arithmetic_mode` and `circuit_t.cla_override`
 
 ---
 
