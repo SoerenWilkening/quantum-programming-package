@@ -175,7 +175,10 @@ Plans:
   3. Predicate oracles work with all existing qint comparison operators
   4. When M is unknown, Grover uses exponential backoff strategy
   5. Adaptive search terminates when solution found or search space exhausted
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 80-01-PLAN.md -- Predicate-to-oracle synthesis and grover() signature update
+- [ ] 80-02-PLAN.md -- BBHT adaptive search and comprehensive testing
 
 ### Phase 81: Amplitude Estimation (IQAE)
 **Goal**: Users can estimate success probability of an oracle using iterative quantum amplitude estimation
