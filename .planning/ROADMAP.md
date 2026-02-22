@@ -190,7 +190,10 @@ Plans:
   2. Implementation uses IQAE variant (no QFT circuit required)
   3. User can specify precision (epsilon) and confidence level as parameters
   4. Estimated amplitude matches known oracle probability within specified epsilon
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 81-01-PLAN.md -- Core IQAE algorithm, AmplitudeEstimationResult class, and ql.amplitude_estimate() export
+- [ ] 81-02-PLAN.md -- Unit tests for helpers/result class and integration tests with Qiskit simulation
 
 ## Progress
 
@@ -208,7 +211,7 @@ Plans:
 | 78 | 3/3 | Complete    | 2026-02-20 | - |
 | 79 | 2/2 | Complete    | 2026-02-22 | - |
 | 80 | 3/3 | Complete    | 2026-02-22 | - |
-| 81 | v4.0 | 0/TBD | Not started | - |
+| 81 | v4.0 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-02*
