@@ -171,7 +171,11 @@ def _ensure_oracle(oracle):
     """
     if isinstance(oracle, GroverOracle):
         return oracle
-    return grover_oracle(oracle)
+    # Auto-wrap with validate=False because the standard phase oracle
+    # pattern (x.phase += pi inside `with flag:`) emits P gate on the
+    # comparison ancilla, not on search register qubits, which triggers
+    # a false positive in compute-phase-uncompute validation.
+    return grover_oracle(oracle, validate=False)
 
 
 def _apply_hadamard_layer(registers):

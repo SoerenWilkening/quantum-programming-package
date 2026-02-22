@@ -330,7 +330,22 @@ class GroverOracle:
             if search_register is not None:
                 for i in range(width):
                     virtual_to_real[i] = int(search_register.qubits[64 - width + i])
+            # Allocate fresh ancilla qubits for virtual indices beyond the
+            # search register (these were ancilla/temp qubits during capture)
+            max_virtual = max(
+                (max(g["target"], max(g["controls"]) if g["controls"] else -1) for g in gates),
+                default=-1,
+            )
+            ancilla_allocated = []
+            for v in range(width, max_virtual + 1):
+                if v not in virtual_to_real:
+                    real_q = _allocate_qubit()
+                    virtual_to_real[v] = real_q
+                    ancilla_allocated.append(real_q)
             inject_remapped_gates(gates, virtual_to_real)
+            # Deallocate ancilla qubits (oracle must have zero ancilla delta)
+            for real_q in ancilla_allocated:
+                _deallocate_qubits(real_q, 1)
             return cached_data.get("result")
 
         # Cache miss: execute oracle
