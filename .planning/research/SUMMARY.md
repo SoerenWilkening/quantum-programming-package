@@ -1,190 +1,230 @@
 # Project Research Summary
 
-**Project:** Grover's Algorithm and Amplitude Estimation
-**Domain:** Quantum search algorithms — oracle compilation, amplitude amplification, iterative amplitude estimation
-**Researched:** 2026-02-19
+**Project:** Quantum Assembly v4.1 Quality & Efficiency
+**Domain:** Bug fixes, tech debt cleanup, security hardening, performance optimization, binary size reduction, and test coverage for a C/Cython/Python quantum programming framework
+**Researched:** 2026-02-22
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Grover's algorithm integration into the Quantum Assembly framework is fundamentally an **API and pattern layer problem**, not a technology stack problem. All required gate primitives (H, Z, CZ, MCX) already exist in the C backend. The `@ql.compile` decorator already handles oracle capture, controlled-variant derivation, and adjoint generation. The `with` statement already implements controlled gate contexts. No new external dependencies are required. The primary implementation work is: exposing H and Z gates at the Python/Cython level, building the diffusion operator pattern (H-X-MCZ-X-H using the existing MCX decomposition path), creating an oracle wrapper that enforces correct phase-marking semantics, and composing these into a clean `ql.grover()` entry point.
+The v4.1 milestone is a consolidation milestone that addresses 9 known bugs, accumulated tech debt, security vulnerabilities, and test coverage gaps in the Quantum Assembly framework. Research across four domains (stack, features, architecture, pitfalls) confirms that the existing tool stack (Python 3.11+, Cython 3.x, C23 backend, pytest, ASan, Valgrind, py-spy, memray) is comprehensive — only 3 pip packages (pytest-cov, coverage, vulture) and 1 system tool (cppcheck) need to be added. The existing architecture is sound and does not change: all v4.1 work operates within the established three-layer design (C backend -> Cython bridge -> Python frontend), fixing from the bottom up and validating from the top down.
 
-The recommended approach is a strict bottom-up build order: gate primitive exposure first, then oracle infrastructure (the most critical and pitfall-dense phase), then diffusion operator, then the Grover loop, and finally amplitude estimation. This order is non-negotiable because the oracle infrastructure pitfalls (phase vs bit-flip confusion, premature uncomputation, garbage qubit entanglement, cache key incompleteness) must be solved before any higher-level components can be validated. The oracle phase is where the most silent failure modes live — circuits that run without error but return uniformly random results.
+The dominant risk is regression cascade from arithmetic bug fixes. The 7 carry-forward bugs all touch shared C backend code paths (IntegerAddition.c, IntegerComparison.c, ToffoliAddition*.c). The `sequence_t` cache and qubit offset mapping create non-obvious couplings: fixing `CQ_add` affects every operation that internally calls it (multiplication, division, comparisons). One additional critical finding emerged from direct code inspection: the optimizer's `smallest_layer_below_comp()` function contains a latent infinite-loop bug (`++i` where `--i` was intended) that works by accident in the common case but could cause buffer overreads under specific gate placement patterns. This bug must be fixed as part of the optimizer binary-search improvement, not separately.
 
-The key risk is oracle correctness. Four of the six critical pitfalls identified in research are oracle-specific and produce wrong results with no error signal. The mitigation is a dedicated `@ql.grover_oracle` decorator that enforces the compute-phase-uncompute structure, delays uncomputation until after phase kickback, includes `arithmetic_mode` in the cache key, and validates that ancilla qubit delta is zero on exit. Amplitude estimation is comparatively straightforward once the oracle infrastructure is solid, because the existing `_derive_controlled_gates` and `QFT_inverse` infrastructure in the C backend handles the QPE machinery. The recommended amplitude estimation variant is Iterative QAE (IQAE), which uses only Grover operator powers and avoids QFT entirely.
+The binary size opportunity is significant and low-risk. Seven compiled `.so` extension modules total approximately 134 MB because every module statically links all 105 hardcoded sequence C files (~344K lines). Compiler flags (`-ffunction-sections`, `-fdata-sections`, `-Wl,--gc-sections`, strip) can reduce this by 30-50% with zero code changes. A more impactful structural change — factoring the repeated 15-gate Clifford+T CCX decomposition into a shared helper — could reduce C source from 344K to ~200K lines and further reduce binary size. BUG-MOD-REDUCE is the most complex carry-forward bug: it requires a fundamentally different circuit topology (Beauregard-style modular reduction) rather than an incremental patch and is a strong candidate for deferral again.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack (C backend via Cython bindings to Python) requires zero new dependencies. All required gate primitives exist in `c_backend/src/gate.c` and `c_backend/include/gate.h`. The only gap between the current stack and a working Grover implementation is that the H gate (`h()`) and Z gate (`z()`) need Python-level exposure via Cython bindings — they exist in C but have no Python API. The `@ql.compile` decorator, existing `qint` comparison operators, and the `with` conditional context together already provide the complete oracle compilation foundation.
+The existing stack requires minimal additions. Three pip packages close specific gaps: `pytest-cov>=6.0` + `coverage[toml]>=7.4` for coverage measurement (enabling the Cython.Coverage plugin via the existing `QUANTUM_PROFILE=1` env var), and `vulture>=2.12` for dead code detection beyond what ruff F401/F841 catches. One system tool — `cppcheck>=2.14` — provides C static analysis that catches the specific buffer overrun and null dereference risks identified in the codebase audit. All other tooling (profiling, debugging, C testing) already exists. For binary size reduction no new tools are needed — the changes are compiler flags in `setup.py`.
 
-For amplitude estimation, the IQAE variant is strongly preferred over canonical QPE-based QAE. IQAE uses only Grover operator powers with no QFT circuit, lower depth, fewer qubits, and published evidence for practical quantum advantage on NISQ devices. The framework already has QFT sequences in `IntegerAddition.c` for future use if full QPE is ever needed, but it is not required for the IQAE path.
+**Core technologies (additions only):**
+- `pytest-cov>=6.0` + `coverage[toml]>=7.4`: Coverage measurement — enables data-driven test writing; Cython.Coverage plugin maps lines back to `.pyx` files via the existing `QUANTUM_PROFILE=1` build mode
+- `vulture>=2.12`: Dead code detection — finds unused functions, methods, and classes that ruff F401/F841 does not detect; confidence scoring (60-100%) reduces false positives
+- `cppcheck>=2.14`: C static analysis — detects buffer overruns, null dereference, and array bounds issues in `c_backend/src/` without running code; runs locally with no cloud upload
+- `qiskit-aer>=0.14` in `[verification]` optional extras: Declares the currently undeclared dependency; fixes bare `ModuleNotFoundError` for all users
 
-**Core technologies:**
-- `h()`, `z()`, `mcx()` in `gate.h/gate.c` — diffusion operator primitives — exist in C, need Python exposure via ~30 lines of Cython
-- `@ql.compile` in `compile.py` — oracle capture, adjoint derivation, controlled variants — exists, reused directly without modification
-- `qint.__eq__`, `__lt__`, etc. in `qint_comparison.pxi` — oracle predicate circuits — exist, unchanged
-- `with qbool:` conditional context in `qint.pyx` — controlled gate generation — exists, reused directly
-- `emit_ccx_clifford_t()` in `gate.c` — MCX decomposition for diffusion S_0 — exists, zero ancilla path
-- NumPy, Qiskit (optional for verification) — no version changes or additions required
+**What NOT to add:** pytest-xdist (global circuit state makes parallel tests corrupt), mypy (Cython `.pyx` unsupported), gcov/lcov (C code compiled into Cython extensions, not standalone), fuzz testing harness (out of scope), full LTO (previously disabled due to GCC bug — evaluate ThinLTO for Clang only with empirical testing).
 
 ### Expected Features
 
-**Must have (table stakes):**
-- `ql.grover(oracle, register)` — single entry point returning measured Python value
-- Diffusion operator built-in — H-X-MCZ-X-H using existing MCX decomposition, zero ancilla required
-- Manual oracle mode — accept user-provided `@ql.compile`-decorated function
-- Automatic iteration count for known M — `floor(pi/4 * sqrt(N/M) - 0.5)`
-- Result measurement returning Python values, search register only (not oracle ancilla)
-- Multiple-solution support — iteration formula accounts for M, same oracle marks multiple states
-- OpenQASM export compatibility — existing export infrastructure, must work with Grover circuits
+**Must have (table stakes — milestone incomplete without these):**
+- Fix BUG-CQQ-QFT — QFT controlled QQ addition emits incorrect CCP rotations at width 2+; blocks all controlled QFT arithmetic
+- Fix BUG-QFT-DIV — QFT division pervasively broken; cascades from BUG-CQQ-QFT and BUG-WIDTH-ADD
+- Fix BUG-COND-MUL-01 — Controlled multiplication corrupts result register via scope uncomputation; blocks oracle-based algorithms
+- Fix BUG-WIDTH-ADD — Off-by-one in mixed-width QFT addition; qubit offset calculation error in IntegerAddition.c
+- Fix BUG-DIV-02 — MSB comparison ancilla not cleaned up between division loop iterations; 9 failures per test file
+- Fix 32-bit multiplication segfault — `MAXLAYERINSEQUENCE` constant insufficient for 32-bit QFT multiply in IntegerMultiplication.c
+- Fix qarray `*=` segfault — In-place multiply on array elements crashes the process
+- Declare `qiskit-aer` dependency — Removes bare `ModuleNotFoundError` for all users (trivial, low-risk fix)
+- Test coverage measurement setup — Cannot improve coverage without measuring it first (pytest-cov + coverage config)
 
-**Should have (competitive differentiators):**
-- `@ql.grover_oracle` decorator — phase-marking wrapper around `@ql.compile`, enforces compute-phase-uncompute ordering
-- Automatic oracle synthesis from Python predicates — `ql.grover(lambda x: x > 5, x)` without manual oracle construction
-- Adaptive search for unknown M — exponential backoff when solution count not provided
-- `qarray` integration — search over quantum array elements as search space
+**Should have (meaningful quality improvement):**
+- Fix BUG-MOD-REDUCE — Requires Beauregard-style circuit redesign; HIGH complexity; strong candidate for deferral
+- Optimizer binary search — O(log L) vs O(L) per gate; also fixes the latent infinite-loop bug in `smallest_layer_below_comp()`
+- Binary size reduction via compiler flags — 30-50% reduction with zero code changes
+- Clifford+T sequence factoring — ~150K line source reduction, ~5-10 MB binary reduction
+- Dead code removal (QPU.c/QPU.h stubs) — Empty files since v1.1; mechanical removal
+- Automate `qint_preprocessed.pyx` generation — Enforce via `.gitignore` and pre-commit check
+- Circuit pointer validation — Add `_get_validated_circuit()` at all 15-20 raw cast sites in `_core.pyx`
+- `qubit_array` bounds checking — Validate slot count before writing into the 384-element scratch buffer
+- C test integration into pytest — Subprocess wrapper around existing C Makefile targets
 
-**Defer to v2+:**
-- Quantum counting (`ql.count_solutions`) — requires phase estimation infrastructure, high complexity; adaptive search covers the practical case
-- Full amplitude estimation with QPE — different use case than search, requires separate validation milestone
-- Fixed-point amplitude amplification — advanced technique; standard Grover covers all near-term needs
-- Custom state preparation — non-uniform initial superposition is an edge case not needed for MVP
-- SAT/3-SAT oracle auto-generation — separate problem domain; document how to construct SAT oracles manually
+**Defer to v4.2+:**
+- Full DAG-based circuit IR rewrite — Architectural change touching every layer; v5.0+ effort
+- BUG-MOD-REDUCE (if not feasible) — Document as requiring Beauregard redesign; track for dedicated milestone
+- Comprehensive mutation testing — Computationally prohibitive (millions of Qiskit simulation runs)
+- Coverage target enforcement (e.g., 90% line coverage) — Misleading metric for quantum circuit libraries; behavioral verification matters more
+- PyPy compatibility — `__del__`-based uncomputation depends on CPython GC ordering
 
 ### Architecture Approach
 
-The architecture follows the existing three-layer pattern with no structural changes. New components live entirely in the Python layer (`src/quantum_language/grover.py`, optionally `amplitude_estimation.py`) with minimal Cython additions (~30 lines in `_core.pyx` to expose H and Z gates as `_apply_h_gate` and `_apply_z_gate`) and zero C backend changes. The oracle wraps `@ql.compile` rather than replacing it; the diffusion operator calls exposed H/Z/MCX primitives; the Grover loop orchestrates oracle and diffusion. The estimated file footprint is 4 new files and 4 small modifications to existing files.
+The v4.1 milestone does not change the architecture. The three-layer design (C backend -> Cython bridge -> Python frontend) is validated and stays. All changes are in-place modifications within existing layers, following the "fix from the bottom up, validate from the top down" principle. The bug dependency graph is clear: BUG-WIDTH-ADD and BUG-CQQ-QFT are root causes; BUG-QFT-DIV is a compound bug that resolves when those are fixed; BUG-COND-MUL-01 is independent (scope/lifecycle issue in Cython); BUG-MOD-REDUCE requires algorithm redesign. The 32-bit segfault traces to `MAXLAYERINSEQUENCE` being a compile-time constant insufficient for wide multiplication.
 
-The single most important architectural decision documented in research is the diffusion S_0 implementation: use the explicit X-MCZ-X pattern via existing MCX decomposition rather than `with x == 0`. The comparison-based approach unnecessarily allocates ancilla qubits and generates O(n^2) gates; the direct MCX pattern uses O(n) gates and zero ancilla.
-
-**Major components:**
-1. `OracleWrapper` (Python) — wraps `@ql.compile` output, enforces compute-phase-uncompute ordering, validates ancilla delta is zero on exit
-2. `DiffusionOperator` (Python) — X-MCZ-X pattern using H/Z exposed via Cython, MCX from existing decomposition, zero ancilla
-3. `GroverSearch` (Python) — main loop: initialize superposition, iterate oracle + diffusion `optimal_iterations(N, M)` times, measure search register
-4. `grover_primitives.pxi` (Cython) — thin wrappers `hadamard_all(qarray)`, `apply_z(qbool)`, `multi_controlled_z(qarray, qbool)`
-5. `AmplitudeEstimator` (Python, later phase) — IQAE using controlled Grover iterates, no QFT required
+**Components modified in v4.1 (no new components):**
+1. **C backend (`c_backend/src/`)** — Bug fixes in IntegerAddition.c, IntegerMultiplication.c, IntegerComparison.c; optimizer binary search in optimizer.c; Clifford+T sequence factoring; no module structure changes
+2. **Cython bridge (`*.pyx`, `*.pxi`)** — Pointer validation, bounds checking, scope fix for BUG-COND-MUL-01 in qint_arithmetic.pxi; no API surface changes
+3. **Build system (`setup.py`, `pyproject.toml`)** — Compiler flag changes for binary size; new dependency groups; coverage config
+4. **Tests (`tests/python/`)** — One regression test per bug fix; C test subprocess integration; coverage-guided gap filling
 
 ### Critical Pitfalls
 
-1. **Phase oracle vs bit-flip oracle confusion** — Oracle sets a flag qubit (bit-flip) instead of multiplying marked state amplitude by -1 (phase). Algorithm runs without error but returns uniformly random results. Mitigation: `@ql.grover_oracle` decorator handles both types; auto-wraps bit-flip oracles with phase kickback (X-H-oracle-H-X on ancilla); user can specify `oracle_type='bitflip'` for automatic conversion. Address in Phase 2 (Oracle Infrastructure).
+1. **Arithmetic bug fix introduces regression cascade** — Fixing one shared code path breaks operations that internally call it. Fix one bug per commit; run the full exhaustive suite (test_add, test_sub, test_mul, test_div, test_mod, test_compare, test_bitwise) after each fix. Check all four variants (QQ, CQ, cQQ, cCQ) for every arithmetic change. The project history confirms this: v1.5 fix triggered BUG-CMP-01 in v1.6.
 
-2. **Uncomputation destroys phase information** — The existing `qubit_saving_mode` eagerly uncomputes ancillas. Inside an oracle, phase kickback must occur before any uncomputation. If intermediate computation qubits are uncomputed before phase is kicked back to the search register, the phase mark is silently lost. Oracle appears correct but Grover does nothing. Mitigation: oracle decorator explicitly enforces compute-then-phase-then-uncompute ordering; defers all uncomputation to end of oracle scope. Address in Phase 2.
+2. **Optimizer loop direction bug must be fixed before binary search** — `smallest_layer_below_comp()` at optimizer.c line 32 has `++i` where `--i` was intended. The function works in the common case only because the last occupied layer is typically less than `compar`. Fix the loop direction in a separate commit before implementing binary search. Do NOT combine these into one commit.
 
-3. **Garbage qubits cause destructive interference** — Oracle intermediate results left un-uncomputed entangle with the search register. Diffusion then operates on the entangled state, destroying amplitude amplification. Output is maximally mixed. Mitigation: oracle decorator validates ancilla allocation delta is zero on exit; treat any leak as a hard error, not a warning. Address in Phase 2.
+3. **Dead code removal breaking build or silently removing live code** — QPU.h is included by optimizer.c and 4 other files. KS CLA stubs that return NULL are intentionally called by the dispatch layer as the fallback to RCA. Grep for function names across all `.pxd`, `.pyx`, `.c`, `.h`, and `setup.py` before any removal. Rebuild and run full tests after each individual removal.
 
-4. **Iteration count calculation error** — Formula is `floor(pi/4 * sqrt(N/M) - 0.5)`, not `floor(pi/4 * sqrt(N))`. Too many iterations oscillates probability back down; results are wrong but the circuit runs fine. Mitigation: `optimal_iterations(N, M)` helper is the only exposed API; warn loudly on manual iteration count that deviates more than 2x from optimal; validate against known-solution test cases. Address in Phase 4.
+4. **BUG-MOD-REDUCE is an algorithm redesign, not a patch** — Current `_reduce_mod` hits duplicate-qubit errors at larger moduli because the circuit topology is wrong. Beauregard-style reduction requires ordered additions, comparisons, and conditional re-additions with careful ancilla management. Do NOT attempt an incremental patch. Either redesign from scratch or defer with clear documentation.
 
-5. **Diffusion operator applied to wrong qubit subset** — Applying diffusion to ancilla or oracle output qubits destroys superposition without amplifying the search register. Mitigation: `ql.grover(search_space=x, oracle=f)` makes search register explicit; diffusion operator takes explicit qubit list validated against search register width; assertion before every diffusion application. Address in Phase 3 and 4.
+5. **False test coverage masking real bugs** — Tests that verify "runs without error" provide no confidence in quantum correctness. Every new test for quantum operations must include Qiskit simulation verification (the `verify_circuit` fixture) or cross-backend differential testing. Do not convert xfail markers to skip — they represent the active bug backlog.
 
-6. **Arithmetic mode not in oracle cache key** — `compile.py` cache key includes `qubit_saving` mode but NOT `arithmetic_mode` (QFT vs Toffoli). Oracle compiled in QFT mode replayed in Toffoli mode produces wrong gate sequences with no error. Mitigation: add `ql.option('fault_tolerant')` to oracle cache key before any oracle caching is deployed. Must be fixed in Phase 2 before any other oracle work.
+6. **qint_preprocessed.pyx drift during refactoring** — Any edit to a `.pxi` file without regenerating the preprocessed version leaves a stale artifact. Run `python build_preprocessor.py` after every commit touching `.pyx` or `.pxi` files. Add `build_preprocessor.py --check` as a pre-commit hook. Never edit `qint_preprocessed.pyx` directly.
+
+7. **Binary size reduction breaking sequence dispatch** — Dispatch functions use width-indexed function calls into the sequence files. Removing a sequence file without updating dispatch causes linker failure. Start with strip and section GC (safe, no code changes); only then consider structural factoring. Always verify `import quantum_language` succeeds after each change, not just that the build completes.
 
 ## Implications for Roadmap
 
-Based on combined research, the implementation follows a strict dependency chain. Oracle infrastructure is the critical path — it is the most pitfall-dense phase, must be validated before Grover integration, and is a prerequisite for amplitude estimation. The suggested phase structure is:
+Based on combined research, suggested phase structure (8 phases):
 
-### Phase 1: Gate Primitive Exposure
-**Rationale:** H and Z gates exist in C but have no Python API. All higher-level components require them. This is the only gap between the current framework and a working Grover implementation. Zero risk, zero new dependencies, unblocks everything.
-**Delivers:** `_apply_h_gate()`, `_apply_z_gate()`, `_apply_cz_gate()` in `_core.pyx`; `hadamard_all(qarray)` in `grover_primitives.pxi`; unit tests verifying gate emission at the circuit level.
-**Uses:** Existing `h()`, `z()`, `cz()` C functions; existing Cython binding pattern from `_core.pyx`.
-**Avoids:** Nothing directly, but establishes the tested primitive layer that phases 2-5 depend on.
-**Research flag:** Standard patterns — no deeper research needed. Gate exposure is mechanical Cython work following existing patterns in `_core.pyx`.
+### Phase 1: Infrastructure & Quick Wins
+**Rationale:** Add measurement tooling before measuring anything; declare the qiskit-aer dependency before touching user-facing code; add C static analysis tool to catch bugs during subsequent fix work. None of these changes touch quantum logic.
+**Delivers:** pytest-cov + coverage config with Cython plugin; vulture installed and added to dev extras; cppcheck Makefile target; qiskit-aer declared in pyproject.toml with friendly ImportError wrappers in grover.py and amplitude_estimation.py.
+**Addresses:** qiskit-aer undeclared dependency, test coverage measurement setup, dead code scanner availability.
+**Avoids:** Pitfall 6 (false coverage confidence) — establishes measurement infrastructure before writing any tests; avoids discovering tooling gaps mid-milestone.
+**Standard patterns:** All items are installation and configuration tasks with official documentation. No phase-specific research needed.
 
-### Phase 2: Oracle Infrastructure
-**Rationale:** The most pitfall-dense phase in the project. Four of six critical pitfalls live here, all producing silent wrong results. Must be done before Grover loop work so that oracle correctness can be validated independently. Getting oracle semantics right first means the Grover loop can be tested by varying oracles rather than debugging oracle and loop simultaneously.
-**Delivers:** `@ql.grover_oracle` decorator enforcing compute-phase-uncompute structure; phase kickback wrapper for bit-flip oracles; `arithmetic_mode` added to compile.py cache key; ancilla delta validation on oracle exit; tests with equality, range, and compound predicates; tests verifying phase marks survive uncomputation.
-**Addresses:** Manual oracle mode (table stakes); `@ql.compile` integration (table stakes).
-**Avoids:** Phase vs bit-flip confusion (Pitfall 1), uncomputation destroying phase (Pitfall 2), garbage qubit interference (Pitfall 3), cache key incompleteness (Pitfall 6), external state capture.
-**Research flag:** Flag for design review before coding — the interaction between oracle scoping and the existing dependency tracking (`_start_layer`, `_end_layer`, `dependency_parents` in `qint.pyx`) needs explicit design before implementation. If that interaction proves complex, escalate to `/gsd:research-phase`.
+### Phase 2: Tech Debt Cleanup
+**Rationale:** Remove dead code and enforce preprocessor automation before bug fixes touch the same files. A simpler codebase is easier to debug and the preprocessor automation prevents drift from the start of the milestone.
+**Delivers:** QPU.c/QPU.h removed and replaced with direct `circuit.h` includes in 5 files; `qint_preprocessed.pyx` added to `.gitignore`; `build_preprocessor.py --check` pre-commit hook added; vulture scan results documented (dead code candidates identified for follow-up).
+**Addresses:** QPU.c/QPU.h dead stubs, qint_preprocessed.pyx automation, initial dead code inventory.
+**Avoids:** Pitfall 2 (dead code removal breaking build) — remove one item at a time, rebuild and run full tests after each. Pitfall 7 (preprocessed drift) — automation removes the manual sync requirement going forward.
+**Standard patterns:** Mechanical removal and build system enforcement. The QPU.h dependency chain is fully traced (5 files). No phase-specific research needed.
 
-### Phase 3: Diffusion Operator
-**Rationale:** Self-contained implementation requiring only Phase 1 primitives. Low risk, textbook circuit pattern, zero ancilla. No interaction with oracle pitfalls.
-**Delivers:** `DiffusionOperator` using X-MCZ-X pattern (zero ancilla, O(n) gates via existing MCX decomposition); explicit search qubit list parameter; validation assertion before every application; tests verifying phase flip on |0...0> state across widths 1-8.
-**Addresses:** Diffusion operator (table stakes P1).
-**Avoids:** Diffusion on wrong qubit subset (Pitfall 5 partial); comparison-based S_0 anti-pattern (O(n^2) gates, unnecessary ancilla).
-**Research flag:** Standard patterns — no deeper research needed. X-MCZ-X is documented across IBM, Azure Quantum, and Qiskit sources.
+### Phase 3: Security Hardening
+**Rationale:** Add safety nets before making algorithmic changes. Pointer validation and bounds checking convert opaque segfaults into clear Python exceptions during the subsequent bug fix phases. The performance cost is ~3 branch instructions per arithmetic operation — negligible against the 15% regression tolerance established in v2.3.
+**Delivers:** `_get_validated_circuit()` validated accessor replacing all ~15-20 raw pointer casts; `qubit_array` slot count validation before C calls; C allocator return-code propagation changed from void to int with error checking in optimizer.c.
+**Addresses:** Circuit pointer validation, qubit_array bounds checking, allocator error propagation.
+**Avoids:** Pitfall 3 (bounds checking killing hot paths) — validate once at Cython operation entry, never per-gate inside the inner loop. The `@cython.boundscheck(False)` decorators on hot-path functions remain untouched.
+**Standard patterns:** Well-understood defensive programming with explicit performance budget analysis. No phase-specific research needed.
 
-### Phase 4: Grover Search Integration
-**Rationale:** Composes Phases 2 and 3 into the complete algorithm. With oracle and diffusion independently validated, integration testing focuses on the iteration loop, measurement, and API surface.
-**Delivers:** `GroverSearch` class; `optimal_iterations(N, M)` with correct formula including -0.5 term; `ql.grover(oracle, register, iterations=None, num_solutions=1, measure=True)` public API; end-to-end tests with known-solution oracles verifying peak probability at calculated iteration count; warning when user-specified iteration count deviates significantly from optimal.
-**Addresses:** Basic `ql.grover()` (P1), automatic iteration count (P1), result measurement (P1), multiple solutions (P1), initial superposition auto-applied (eliminates Pitfall 12 from PITFALLS_GROVER.md).
-**Avoids:** Iteration count errors (Pitfall 4), measuring oracle output instead of search register (Pitfall 5), hardcoded iterations (technical debt).
-**Research flag:** Standard patterns — orchestration of validated components. No external research needed.
+### Phase 4: Optimizer Fix & Improvement
+**Rationale:** Fix the latent optimizer bug and convert to binary search before the heavy QFT bug fix work. Faster test execution improves iteration speed during Phase 5-6. The optimizer bug fix also removes a correctness hazard that could interfere with circuit layout verification.
+**Delivers:** Loop direction bug fixed in optimizer.c (one commit, separate from binary search); binary search replacing the buggy linear scan (second commit); `_optimize_gate_list` max_passes cap removed (unbounded iteration until stable); golden-master circuit snapshots captured before any change and verified identical after.
+**Addresses:** Latent optimizer infinite-loop bug, O(log L) gate placement, Python optimizer convergence.
+**Avoids:** Pitfall 4 (optimizer refactoring changing circuit semantics) — golden-master snapshots captured before any code change; binary search implemented alongside the linear scan with assertion of identical results before replacing.
+**Research flag:** MEDIUM risk. Needs investigation of how often the `++i` bug's common-case bypass fails (does ASan catch it in existing `make asan-test` runs?). Capture golden-master snapshots BEFORE any code change — if snapshots cannot be captured cleanly, escalate to phase-specific research.
 
-### Phase 5: Oracle Auto-Synthesis and Adaptive Search
-**Rationale:** Primary differentiator vs Qiskit/Cirq/PennyLane. Enables `ql.grover(lambda x: x > 5, x)` instead of manual oracle construction. Depends on Phase 2 oracle infrastructure being proven. Separated from Phase 4 because compound predicate synthesis has uncertain implementation complexity.
-**Delivers:** Predicate-to-oracle compilation for `qint` comparisons and compound conditions (`(x > 10) & (x < 50)`); adaptive search with exponential backoff for unknown M; `qarray` integration.
-**Addresses:** Automatic oracle synthesis (P2 differentiator), adaptive search for unknown M (P2), `qarray` integration (P2).
-**Avoids:** Multiple solutions unknown leading to wrong iteration count (Pitfall 9) — adaptive search handles this via exponential backoff.
-**Research flag:** Needs `/gsd:research-phase` — compound predicate oracle synthesis (how `@ql.compile` tracks which qubit represents the combined condition output of `(x > 10) & (x < 50)`) is not fully characterized from research alone and is the primary unknown in this phase.
+### Phase 5: QFT Bug Fixes (Root Causes First)
+**Rationale:** Fix the three root-cause bugs in dependency order; BUG-QFT-DIV should resolve as a side effect. Regenerate hardcoded sequences only after the C code is correct. C-level fixes precede the scope fix (Phase 6) because BUG-COND-MUL-01 internally uses controlled QFT addition.
+**Delivers:** Correct mixed-width QFT addition (BUG-WIDTH-ADD); correct controlled QFT addition (BUG-CQQ-QFT); correct MSB comparison cleanup in division (BUG-DIV-02); verified BUG-QFT-DIV resolution; regenerated QFT hardcoded sequences for widths 1-16; one regression test per bug fix.
+**Addresses:** BUG-WIDTH-ADD in IntegerAddition.c, BUG-CQQ-QFT in IntegerAddition.c, BUG-DIV-02 in IntegerComparison.c, BUG-QFT-DIV verification.
+**Avoids:** Pitfall 1 (regression cascade) — one bug per commit; full exhaustive suite after each (test_add, test_sub, test_mul, test_div, test_mod, test_compare, test_bitwise); cross-backend verification after each. Sequence regeneration happens AFTER C bugs are verified correct, never before.
+**Research flag:** HIGH risk. BUG-CQQ-QFT requires auditing the Draper QFT adder CCP decomposition against the Ruiz-Perez & Garcia-Escartin paper. BUG-WIDTH-ADD requires careful audit of the qubit offset formula for the mixed-width case. BUG-QFT-DIV may have independent bugs beyond the cascading effects. Phase-specific research is strongly recommended before implementation planning.
 
-### Phase 6: Amplitude Estimation (IQAE)
-**Rationale:** Different use case from search (probability estimation vs value finding). Depends on validated Grover iterate from Phase 4. IQAE avoids QFT entirely, keeping circuit depth and implementation complexity low. The controlled-oracle semantics pitfall (Pitfall 7: only the phase part should be controlled, not compute/uncompute) is easier to address correctly after oracle infrastructure is battle-tested.
-**Delivers:** `AmplitudeEstimator` using IQAE variant; `ql.amplitude_estimate(oracle, register, epsilon=0.01, confidence=0.95)` API; validation that oracle inverse access works; tests comparing estimated vs known amplitudes across precision settings.
-**Addresses:** Amplitude estimation (P3, after core validation).
-**Avoids:** No inverse access breaking amplitude estimation (Pitfall 5), wrong controlled-oracle semantics (Pitfall 7), QPE exponential depth trap.
-**Research flag:** IQAE algorithm is standard patterns (no research needed). However, controlled-oracle semantics design (Pitfall 7) needs explicit planning — only the phase part of the oracle should be controlled, not compute/uncompute — before coding begins.
+### Phase 6: Scope & Segfault Fixes
+**Rationale:** Fix remaining bugs after the QFT foundation is stable. BUG-COND-MUL-01 interacts with QFT addition internally — fixing QFT first isolates scope issues. 32-bit segfault and qarray `*=` are independent but complete the "no crashes at valid widths" guarantee.
+**Delivers:** Correct controlled multiplication (BUG-COND-MUL-01 — scope lifecycle fix in qint_arithmetic.pxi); no segfault at 32-bit multiplication (MAXLAYERINSEQUENCE fix in types.h); no segfault for qarray `*=` (fix in qarray.pyx); regression tests for all three. Explicit decision documented for BUG-MOD-REDUCE (fix or defer with Beauregard redesign documentation).
+**Addresses:** BUG-COND-MUL-01, 32-bit segfault, qarray `*=` segfault. BUG-MOD-REDUCE: fix if Beauregard redesign is feasible, else defer with documentation.
+**Avoids:** Pitfall 1 (regression cascade) — BUG-COND-MUL-01 touches `_scope_stack` in `_core.pyx` and `__exit__`/`__del__` in `qint.pyx`; must run all controlled operation tests after the fix.
+**Research flag:** MEDIUM risk for BUG-COND-MUL-01 (scope/GC interaction with two fix options — mark result as non-uncomputable vs restructure multiply). HIGH risk for BUG-MOD-REDUCE if attempted (needs Beauregard circuit topology research before any code is written).
+
+### Phase 7: Binary Size Reduction
+**Rationale:** Last code-change phase. All bug fixes and sequence regeneration from Phases 5-6 must be complete before applying size optimizations — earlier size work would be invalidated by sequence regeneration. Compiler flag changes should reflect the final code state.
+**Delivers:** `.so` files reduced by 30-50% via `-ffunction-sections`, `-fdata-sections`, `-Wl,--gc-sections`, and strip flags in setup.py; Clifford+T sequences factored from ~207K to ~60-80K lines via `emit_clifft_ccx()` shared helper; optional shared library investigation if size target is not met by flags alone.
+**Addresses:** Compiler flag changes, Clifford+T sequence source factoring, ThinLTO evaluation.
+**Avoids:** Pitfall 5 (dispatch breakage) — verify with `-Wl,--print-gc-sections` to confirm only dead sections are removed; never remove Toffoli CDKM sequences (no runtime fallback); verify `import quantum_language` baseline timing unchanged after each flag addition. ThinLTO must be tested on both macOS and Linux before committing.
+**Research flag:** MEDIUM risk for ThinLTO. Full LTO was disabled due to a GCC bug; ThinLTO (Clang-only) may avoid the same issue but needs empirical confirmation. If ThinLTO causes build failures, drop it — the section GC flags alone achieve significant reduction.
+
+### Phase 8: Test Coverage
+**Rationale:** Final phase validates all previous work. xfail conversions are only meaningful after bugs are fixed. Coverage measurement will now reveal the remaining gaps after organically adding regression tests in each previous phase.
+**Delivers:** pytest-cov HTML report showing current coverage baseline; C allocator tests integrated into pytest via subprocess; regression tests promoted from xfail to passing for all fixed bugs; targeted tests for nested `with`-blocks, circuit reset with live qints, `qiskit-aer` import failure, width-64 boundary conditions.
+**Addresses:** C test integration, nested with-block tests, circuit reset tests, qiskit-aer import tests, xfail-to-passing conversions, coverage-guided gap identification.
+**Avoids:** Pitfall 6 (false coverage) — every new test for quantum operations must include Qiskit simulation verification (the `verify_circuit` fixture) or cross-backend differential testing; no "runs without error" assertions; do not convert xfail to skip.
+**Standard patterns:** Well-understood pytest patterns. The `verify_circuit` fixture and cross-backend differential pattern are established in the existing test suite. No phase-specific research needed.
 
 ### Phase Ordering Rationale
 
-- Phases 1 through 4 form a strict dependency chain: primitives enable oracle enables diffusion enables integration. No phase can be meaningfully tested without its predecessors.
-- Phase 5 (auto-synthesis) is separated from Phase 4 (core Grover) because compound predicate synthesis has uncertain implementation complexity. Core Grover ships and delivers real value while Phase 5 is in progress.
-- Phase 6 (amplitude estimation) is last because it is a genuinely different feature, requires all previous phases, and controlled-oracle semantics (Pitfall 7) is easiest to address correctly after oracle infrastructure is proven in production.
-- All oracle pitfalls are concentrated in Phase 2, so Phase 4 integration testing is clean and debuggable.
-- The pitfall-to-phase mapping from PITFALLS_GROVER.md confirms this ordering: Phase 1 pitfalls map to Phase 2, Phase 2 pitfalls map to Phase 4, Phase 3 pitfalls map to Phase 6.
+- Infrastructure first because measurement tools and dependency fixes enable everything that follows without blocking anything
+- Tech debt before bug fixes because removing dead code simplifies the codebase that will be debugged
+- Security hardening before algorithmic bug fixes because pointer validation converts opaque segfaults to clear exceptions during Phase 5-6 work
+- Optimizer fix before QFT bug fixes because faster tests improve iteration speed during the heavy arithmetic debugging; also eliminates a latent correctness hazard from circuit layout verification
+- C-level QFT root causes (Phase 5) before scope/segfault fixes (Phase 6) because BUG-COND-MUL-01 uses controlled QFT addition internally — fixing QFT first isolates what is a scope issue vs a QFT issue
+- Binary size after all code changes because sequence regeneration in Phase 5 invalidates earlier size work; compiler flags should reflect the final code state
+- Test coverage last because it validates all previous work and xfail conversions are only meaningful once the corresponding bugs are fixed
 
 ### Research Flags
 
-Phases needing deeper research or design review during planning:
-- **Phase 2:** Interaction between oracle scoping and the existing `_start_layer`/`_end_layer`/`dependency_parents` dependency tracking in `qint.pyx`. Design before coding; escalate to `/gsd:research-phase` if interaction is complex.
-- **Phase 5:** Compound predicate oracle synthesis — how `@ql.compile` tracks multi-condition qubit outputs into a single phase-markable result. Likely needs `/gsd:research-phase`.
+Phases requiring deeper research or design review before implementation:
+- **Phase 5 (QFT Bug Fixes):** HIGH risk. BUG-CQQ-QFT requires auditing the Draper QFT adder CCP gate decomposition against the Ruiz-Perez & Garcia-Escartin 2017 paper. BUG-WIDTH-ADD requires mapping the qubit offset formula for the mixed-width asymmetric case. BUG-QFT-DIV may have independent bugs beyond cascading effects from its dependencies. Phase-specific research is strongly recommended before implementation planning begins.
+- **Phase 6 (BUG-COND-MUL-01):** MEDIUM risk. Two fix options (mark result as non-uncomputable vs restructure multiply circuit) have different trade-offs. The option evaluation should happen before the phase is planned.
+- **Phase 6 (BUG-MOD-REDUCE, if attempted):** HIGH risk. Beauregard-style circuit topology is substantially different from the current implementation. Needs circuit design research before any code is written. Deferral is the lower-risk option.
+- **Phase 7 (ThinLTO):** MEDIUM risk. Needs empirical testing on both macOS and Linux. Should be last flag tried, not first.
 
-Phases with standard patterns (skip research-phase):
-- **Phase 1:** Mechanical Cython gate exposure following existing patterns in `_core.pyx`.
-- **Phase 3:** X-MCZ-X diffusion is textbook, documented across IBM/Azure/Qiskit sources.
-- **Phase 4:** Orchestration of validated components; iteration formula is mathematically settled.
-- **Phase 6 (IQAE algorithm):** Published and well-documented. Only the controlled-oracle design needs a planning step, not external research.
+Phases with standard patterns (skip additional research):
+- **Phase 1 (Infrastructure):** Tool installation and configuration; all documentation is official and current.
+- **Phase 2 (Tech Debt):** Mechanical removal with fully traced dependency chain. No algorithmic decisions.
+- **Phase 3 (Security Hardening):** Defensive programming patterns are well-established; specific sites identified; performance cost bounded.
+- **Phase 4 (Optimizer Fix):** Binary search algorithm is textbook; primary risk is procedural (golden-master capture before changes), not algorithmic.
+- **Phase 8 (Test Coverage):** Standard pytest patterns; the `verify_circuit` fixture and cross-backend differential pattern are established.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Direct codebase analysis confirms `h()`, `z()`, `mcx()`, `cz()` in `gate.h/gate.c`; `@ql.compile` adjoint/controlled derivation in `compile.py`; zero new dependencies confirmed |
-| Features | HIGH | Table stakes derived from Qiskit/Cirq/PennyLane/Qrisp gap analysis; differentiators (auto-synthesis) validated against competitor APIs; IQAE vs QPE decision backed by published literature |
-| Architecture | HIGH | Three-layer integration pattern follows existing codebase conventions; new/modified file inventory explicit; MCX-based S_0 design decision backed by gate-count analysis |
-| Pitfalls | HIGH | Critical pitfalls verified from quantum computing literature (Tang & Wright 2025 for inverse requirement; Wikipedia/Azure Quantum for iteration formula); cache key gap verified from `compile.py` source code inspection |
+| Stack additions | HIGH | All tools verified on PyPI with release history; Cython.Coverage plugin documented in official Cython source; version constraints validated for compatibility |
+| Bug root causes | HIGH | All 9 bugs traced to specific files and line ranges via direct codebase inspection; fix pattern classified (A: buffer bounds, B: qubit mapping, C: scope lifecycle, D: algorithm redesign, E: compound bug) |
+| Bug fix complexity | MEDIUM | BUG-CQQ-QFT and BUG-MOD-REDUCE involve non-obvious quantum arithmetic circuit design; root causes are confirmed but fix implementation needs phase-specific research |
+| Optimizer latent bug | HIGH | The `++i` vs `--i` issue in optimizer.c line 32 confirmed via direct code review; common-case bypass mechanism documented; binary search fix design is complete |
+| Binary size reduction | MEDIUM | Compiler flags are well-documented and GCC/Clang standard; ThinLTO needs empirical testing because full LTO was previously disabled for a reason; sequence factoring is mechanically clear but needs generator script changes |
+| Security hardening | HIGH | All vulnerable sites identified; validation patterns are well-understood; performance impact bounded at ~3 branches per arithmetic operation, well within v2.3 regression tolerance |
+| Test coverage tooling | HIGH | pytest-cov + coverage.py is the standard Python ecosystem approach; Cython plugin support confirmed in official Cython source |
+| Phase ordering | HIGH | Each ordering decision has explicit dependency justification backed by project history (v1.5-v3.0 regression patterns) and dependency graph analysis |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Dependency tracking interaction:** How `_start_layer`/`_end_layer`/`dependency_parents` in `qint.pyx` interacts with oracle-scoped operations is not fully characterized from research alone. Address during Phase 2 planning by reading those sections of `qint.pyx` before designing the oracle decorator. May require explicit oracle epoch tracking.
-- **Compound predicate qubit tracking:** For auto-synthesis of `(x > 10) & (x < 50)` predicates, it is unclear how the framework currently tracks which final qubit represents the combined condition result. Address during Phase 5 planning; likely requires reading `@ql.compile` gate capture internals.
-- **IQAE circuit interface design:** IQAE algorithm is algorithmically clear, but the specific interface for repeated controlled Grover operator application within the framework's gate capture model has not been prototyped. Low risk — IQAE avoids the more complex QPE circuit — but needs a design pass before Phase 6 coding begins.
+- **BUG-QFT-DIV independence:** May have bugs beyond the cascading effects of BUG-CQQ-QFT and BUG-WIDTH-ADD. After fixing root causes, if division still fails, the QFT subtraction-in-loop structure has independent bugs. Phase 5 research should investigate this before assuming automatic resolution.
+- **BUG-MOD-REDUCE scope decision:** Whether to attempt Beauregard redesign in v4.1 or defer definitively needs a decision at the start of Phase 6 planning. If deferred, document the specific circuit topology required so future work can begin without re-research.
+- **optimizer.c `++i` full impact analysis:** Need to determine how often the common-case bypass fails in practice. Does ASan catch it in existing `make asan-test` runs? This determines whether it has been silently corrupting results or is genuinely safe in all current test scenarios.
+- **Cython coverage accuracy:** The Cython.Coverage plugin maps `.pyx` lines but cannot measure which C code paths are taken. Coverage numbers will undercount the true uncovered surface. Supplement with ASan in CI and targeted C-level testing for security-critical paths.
+- **ThinLTO macOS/Linux compatibility:** Full LTO was disabled due to a GCC-specific bug. ThinLTO is Clang-only and may not have the same issue, but this requires empirical confirmation on both platforms before committing the flag.
 
 ## Sources
 
-### Primary (HIGH confidence)
-- `c_backend/include/gate.h`, `c_backend/src/gate.c` — confirmed existence of `h()`, `z()`, `cz()`, `mcx()`, `emit_ccx_clifford_t()`
-- `src/quantum_language/compile.py` — confirmed `_derive_controlled_gates()`, `_InverseCompiledFunc`, cache key structure (missing `arithmetic_mode`)
-- `src/quantum_language/qint.pyx` lines 584-679 — confirmed `with` conditional context implementation
-- [Grover's Algorithm - IBM Quantum Documentation](https://quantum.cloud.ibm.com/docs/en/tutorials/grovers-algorithm) — standard implementation pattern
-- [Grover's Algorithm - Wikipedia](https://en.wikipedia.org/wiki/Grover's_algorithm) — iteration formula
-- [Azure Quantum - Grover Theory](https://learn.microsoft.com/en-us/azure/quantum/concepts-grovers) — mathematical foundations and iteration formula with -0.5 term
-- [Iterative QAE - npj Quantum Information](https://www.nature.com/articles/s41534-021-00379-1) — IQAE as preferred variant for NISQ
-- [Tang & Wright 2025, arXiv:2507.23787](https://arxiv.org/abs/2507.23787) — amplitude amplification and estimation require oracle inverse access
+### Primary (HIGH confidence — direct codebase inspection)
+- `.planning/codebase/CONCERNS.md` — Security vulnerabilities, performance bottlenecks, tech debt inventory
+- `.planning/codebase/ARCHITECTURE.md` — Three-layer architecture, component boundaries
+- `.planning/codebase/TESTING.md` — Test coverage gaps, xfail patterns, 8,365+ test inventory
+- `.planning/codebase/STACK.md` — Existing tool inventory (profiling, debugging, analysis)
+- `.planning/PROJECT.md` — Carry-forward bugs, milestone goals, key decisions
+- `c_backend/src/optimizer.c` — Linear scan bug and binary search opportunity (direct code review)
+- `c_backend/src/IntegerAddition.c` — QFT rotation mapping, controlled addition code paths
+- `c_backend/include/types.h` — `MAXLAYERINSEQUENCE` constant (32-bit segfault root cause)
+- `src/quantum_language/_core.pyx` — Circuit pointer casts, qubit_array scratch buffer
+- `setup.py` — Static C linking, compiler flags, LTO history
 
-### Secondary (MEDIUM confidence)
-- [Qiskit Grover Tutorial](https://qiskit-community.github.io/qiskit-algorithms/tutorials/06_grover.html) — phase kickback technique, oracle type classification
-- [Qrisp Uncomputation Documentation](https://qrisp.eu/reference/Core/Uncomputation.html) — uncomputation timing semantics in oracle context
-- [Iterative QAE arXiv:1912.05559](https://arxiv.org/abs/1912.05559) — IQAE without phase estimation, algorithm details
-- [Automated Oracle Synthesis arXiv:2304.03829](https://arxiv.org/abs/2304.03829) — oracle synthesis methods relevant to Phase 5
+### Secondary (MEDIUM confidence — verified external sources)
+- [pytest-cov 7.0.0 on PyPI](https://pypi.org/project/pytest-cov/) — version and compatibility verified
+- [coverage.py 7.13.4 documentation](https://coverage.readthedocs.io/) — Cython plugin configuration
+- [Cython.Coverage plugin source](https://github.com/cython/cython/blob/master/Cython/Coverage.py) — implementation details and `linetrace=True` requirement
+- [vulture 2.14 on PyPI](https://pypi.org/project/vulture/) — feature set and confidence scoring verified
+- [cppcheck 2.19.0 releases](https://github.com/danmar/cppcheck/releases) — C23 support confirmed
+- [GCC section GC](https://www.vidarholen.net/contents/blog/?p=729) — `-ffunction-sections` + `--gc-sections` effectiveness
+- [Link-Time Optimization techniques](https://markaicode.com/link-time-optimization-cpp26/) — ThinLTO vs full LTO comparison
+- [Running C unit tests with pytest](https://p403n1x87.github.io/running-c-unit-tests-with-pytest.html) — subprocess integration pattern
+- [Draper QFT adder (Ruiz-Perez & Garcia-Escartin 2017)](https://arxiv.org/pdf/1411.5949) — CCP rotation angles for BUG-CQQ-QFT analysis
+- [VOQC verified optimizer](https://www.cs.umd.edu/~mwh/papers/voqc.pdf) — commutation-aware optimization and circuit correctness patterns
 
-### Tertiary (LOW confidence)
-- [PennyLane Amplitude Amplification Demo](https://pennylane.ai/qml/demos/tutorial_intro_amplitude_amplification) — alternative framework API design for comparison
-- [QRISP Quantum Counting Documentation](https://qrisp.eu/reference/Algorithms/quantum_counting.html) — API design patterns for quantum counting (deferred feature)
+### Tertiary (MEDIUM confidence — general domain research)
+- [D-Linker: Shared library debloating](https://dl.acm.org/doi/10.1109/TCAD.2024.3446712) — binary size reduction techniques
+- [Cython memory safety limitations](https://pythonspeed.com/articles/cython-limitations/) — Cython-specific pitfalls and `boundscheck(False)` trade-offs
+- [Test coverage false confidence](https://hackernoon.com/misleading-test-coverage-and-how-to-avoid-false-confidence) — general testing practices
+- [QuteFuzz: Fuzzing Quantum Compilers](https://popl25.sigplan.org/details/planqc-2025-papers/12/QuteFuzz-Fuzzing-quantum-compilers-using-randomly-generated-circuits-with-control-fl) — quantum testing approaches and differential testing patterns
+- [Bounds checking performance overhead](https://chandlerc.blog/posts/2024/11/story-time-bounds-checking/) — 0.3% overhead characterization
 
 ---
-*Research completed: 2026-02-19*
+*Research completed: 2026-02-22*
 *Ready for roadmap: yes*
