@@ -42,6 +42,7 @@ from .grover import (
 )
 from .openqasm import to_openqasm
 from .oracle import GroverOracle, _predicate_to_oracle
+from .sim_backend import load_qasm, simulate
 
 # ---------------------------------------------------------------------------
 # Result class
@@ -179,16 +180,9 @@ def _simulate_multi_shot(qasm_str, shots):
     dict
         Qiskit counts dictionary ``{bitstring: count}``.
     """
-    import qiskit.qasm3
-    from qiskit import transpile
-    from qiskit_aer import AerSimulator
-
-    circuit_qk = qiskit.qasm3.loads(qasm_str)
-    if not circuit_qk.cregs:
-        circuit_qk.measure_all()
-    sim = AerSimulator(max_parallel_threads=4)
-    result = sim.run(transpile(circuit_qk, sim), shots=shots).result()
-    return result.get_counts()
+    circuit_qk = load_qasm(qasm_str)
+    counts = simulate(circuit_qk, shots=shots)
+    return counts
 
 
 def _count_good_states(counts, register_widths, predicate):

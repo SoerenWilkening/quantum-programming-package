@@ -34,6 +34,7 @@ from .compile import CompiledFunc
 from .diffusion import _collect_qubits, diffusion
 from .openqasm import to_openqasm
 from .oracle import GroverOracle, _predicate_to_oracle, grover_oracle
+from .sim_backend import load_qasm, simulate
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -255,16 +256,8 @@ def _simulate_single_shot(qasm_str, register_widths):
     tuple[int, ...]
         Integer value measured in each register.
     """
-    import qiskit.qasm3
-    from qiskit import transpile
-    from qiskit_aer import AerSimulator
-
-    circuit_qk = qiskit.qasm3.loads(qasm_str)
-    if not circuit_qk.cregs:
-        circuit_qk.measure_all()
-    sim = AerSimulator(max_parallel_threads=4)
-    result = sim.run(transpile(circuit_qk, sim), shots=1).result()
-    counts = result.get_counts()
+    circuit_qk = load_qasm(qasm_str)
+    counts = simulate(circuit_qk, shots=1)
     bitstring = list(counts.keys())[0]
     return _parse_bitstring(bitstring, register_widths)
 
