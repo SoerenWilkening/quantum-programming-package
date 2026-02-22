@@ -4,16 +4,23 @@ Provides ql.grover() that composes oracle + diffusion into a complete
 Grover search: creates circuit, initializes superposition, runs optimal
 iterations, simulates via Qiskit, and returns measured Python value(s).
 
-Usage
------
->>> import quantum_language as ql
->>> @ql.grover_oracle
-... @ql.compile
-... def mark_five(x: ql.qint):
-...     flag = (x == 5)
-...     with flag:
-...         pass
->>> value, iterations = ql.grover(mark_five, width=3)
+Supports three calling styles:
+
+1. Decorated oracle (Phase 79):
+   >>> value, k = ql.grover(mark_five, width=3)
+
+2. Lambda predicate (Phase 80):
+   >>> value, k = ql.grover(lambda x: x > 5, width=3)
+
+3. Compound predicate:
+   >>> value, k = ql.grover(lambda x: (x > 10) & (x < 50), width=6)
+
+4. Explicit registers:
+   >>> x = ql.qint(0, width=3)
+   >>> value, k = ql.grover(lambda x: x > 5, x)
+
+5. Multi-register predicate:
+   >>> x_val, y_val, k = ql.grover(lambda x, y: x + y == 10, widths=[4, 4])
 """
 
 import inspect
@@ -24,7 +31,7 @@ from ._gates import emit_h
 from .compile import CompiledFunc
 from .diffusion import _collect_qubits, diffusion
 from .openqasm import to_openqasm
-from .oracle import GroverOracle, grover_oracle
+from .oracle import GroverOracle, _predicate_to_oracle, grover_oracle
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -261,11 +268,39 @@ def _simulate_single_shot(qasm_str, register_widths):
 
 
 # ---------------------------------------------------------------------------
+# Classical verification helper
+# ---------------------------------------------------------------------------
+
+
+def _verify_classically(predicate, measured_values):
+    """Evaluate predicate with classical Python int values.
+
+    Used for post-measurement verification in adaptive BBHT search (Plan 02)
+    and can be used by user code for debugging.
+
+    Parameters
+    ----------
+    predicate : callable
+        The original predicate function (e.g. ``lambda x: x > 5``).
+    measured_values : tuple[int, ...]
+        Integer values measured from each search register.
+
+    Returns
+    -------
+    bool
+        Whether the measured values satisfy the predicate.
+    """
+    if len(measured_values) == 1:
+        return bool(predicate(measured_values[0]))
+    return bool(predicate(*measured_values))
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 
-def grover(oracle, *, width=None, widths=None, m=1, iterations=None):
+def grover(oracle, *registers, width=None, widths=None, m=None, iterations=None, max_attempts=None):
     """Execute Grover's search algorithm and return measured result.
 
     Composes oracle + diffusion into a complete Grover search: creates a
@@ -274,19 +309,41 @@ def grover(oracle, *, width=None, widths=None, m=1, iterations=None):
     oracle + diffusion iterations, simulates with Qiskit, and returns
     the measured value(s).
 
+    Supports three oracle styles:
+
+    1. **Decorated oracle** (Phase 79 -- existing):
+       Pass a ``@ql.grover_oracle`` or ``@ql.compile`` decorated function.
+
+    2. **Lambda/callable predicate** (Phase 80 -- new):
+       Pass a Python callable that accepts qint arguments and returns
+       a qbool via comparison operators.
+
+    3. **Explicit registers** (Phase 80 -- new):
+       Pass positional qint arguments after the oracle to use existing
+       registers instead of allocating new ones.
+
     Parameters
     ----------
     oracle : GroverOracle, CompiledFunc, or callable
-        The oracle marking target states.  If not already a
-        ``GroverOracle``, it is auto-wrapped.
+        The oracle marking target states.  If a plain callable (lambda,
+        named function, method), it is automatically synthesized into a
+        ``GroverOracle`` via tracing.
+    *registers : qint
+        Optional positional qint arguments.  If provided, their widths
+        are used instead of ``width``/``widths`` kwargs.  Cannot be
+        combined with ``width`` or ``widths``.
     width : int, optional
         Width (in qubits) for all search registers.
     widths : list[int], optional
         Per-register widths (for multi-register oracles).
     m : int, optional
-        Number of marked solutions (default 1).
+        Number of marked solutions.  When ``None`` (default), defaults
+        to ``m=1`` for now.
+        # TODO: Plan 02 will add BBHT adaptive search when m is None
     iterations : int, optional
         Explicit iteration count (overrides auto-calculation).
+    max_attempts : int, optional
+        Maximum BBHT attempts (Plan 02).  Currently unused.
 
     Returns
     -------
@@ -295,37 +352,73 @@ def grover(oracle, *, width=None, widths=None, m=1, iterations=None):
         ``(x_val, y_val, ..., iterations)`` for multi-register oracles.
         The last element is always the iteration count used.
 
+    Raises
+    ------
+    ValueError
+        If both ``registers`` and ``width``/``widths`` are provided, or
+        if width information cannot be determined.
+
     Examples
     --------
-    >>> import quantum_language as ql
-    >>> @ql.grover_oracle
-    ... @ql.compile
-    ... def mark_five(x: ql.qint):
-    ...     flag = (x == 5)
-    ...     with flag:
-    ...         pass
+    Decorated oracle (existing):
+
     >>> value, k = ql.grover(mark_five, width=3)
 
-    Multi-register oracle:
+    Lambda predicate:
 
-    >>> @ql.grover_oracle
-    ... @ql.compile
-    ... def mark_pair(x: ql.qint, y: ql.qint):
-    ...     flag = (x + y == 7)
-    ...     with flag:
-    ...         pass
-    >>> x_val, y_val, k = ql.grover(mark_pair, widths=[3, 3])
+    >>> value, k = ql.grover(lambda x: x > 5, width=3)
+
+    Compound predicate:
+
+    >>> value, k = ql.grover(lambda x: (x > 10) & (x < 50), width=6)
+
+    Explicit registers:
+
+    >>> value, k = ql.grover(lambda x: x > 5, x)
+
+    Multi-register:
+
+    >>> x_val, y_val, k = ql.grover(lambda x, y: x + y == 10, widths=[4, 4])
     """
     from .qint import qint as qint_type
 
-    # 1. Ensure oracle is wrapped
-    oracle = _ensure_oracle(oracle)
+    # 0. Detect if oracle is a predicate (raw callable, not GroverOracle/CompiledFunc)
+    is_predicate = not isinstance(oracle, GroverOracle | CompiledFunc) and callable(oracle)
 
-    # 2. Determine register count and widths
-    param_names = _get_quantum_params(_get_oracle_func(oracle))
-    register_widths = _resolve_widths(param_names, width, widths)
+    # Save the original predicate callable for classical verification (Plan 02 BBHT)
+    predicate = oracle if is_predicate else None  # noqa: F841
 
-    # 3. Calculate total search space size and iteration count
+    # 1. Resolve register widths from *registers or width/widths kwargs
+    if registers:
+        # Explicit qint registers provided as positional args
+        if width is not None or widths is not None:
+            raise ValueError(
+                "Cannot provide both positional register arguments and "
+                "width/widths keyword arguments (ambiguous)."
+            )
+        register_widths = [r.width for r in registers]
+    else:
+        # Use width/widths kwargs -- need oracle introspection for param count
+        if is_predicate:
+            # For predicates, use inspect.signature to find param count
+            param_names = list(inspect.signature(oracle).parameters.keys())
+        else:
+            # For decorated oracles, use existing introspection
+            param_names = _get_quantum_params(_get_oracle_func(oracle))
+        register_widths = _resolve_widths(param_names, width, widths)
+
+    # 2. Synthesize oracle from predicate if needed
+    if is_predicate:
+        oracle = _predicate_to_oracle(oracle, register_widths)
+    else:
+        oracle = _ensure_oracle(oracle)
+
+    # 3. Default m to 1 when None (Plan 01 backwards-compatibility placeholder)
+    # TODO: Plan 02 will add BBHT adaptive search when m is None
+    if m is None:
+        m = 1
+
+    # 4. Calculate total search space size and iteration count
     N = 1
     for w in register_widths:
         N *= 2**w
@@ -334,18 +427,21 @@ def grover(oracle, *, width=None, widths=None, m=1, iterations=None):
     else:
         k = _grover_iterations(N, m)
 
-    # 4. Build circuit
+    # 5. Build circuit
     circuit()
     option("fault_tolerant", True)
 
-    # 5. Create registers (all initialized to |0>)
+    # 6. Create fresh registers (all initialized to |0>)
+    # Even if explicit *registers were passed, we always build a fresh circuit
+    # and allocate fresh qints inside grover(). The explicit registers were
+    # only used to extract widths above.
     registers = [qint_type(0, width=w) for w in register_widths]
 
-    # 6. Initialize equal superposition (branch(0.5) on |0> is correct)
+    # 7. Initialize equal superposition (branch(0.5) on |0> is correct)
     for reg in registers:
         reg.branch(0.5)
 
-    # 7. Apply k Grover iterations
+    # 8. Apply k Grover iterations
     for _ in range(k):
         # Oracle application -- phase flip marked states
         oracle(*registers)
@@ -354,9 +450,9 @@ def grover(oracle, *, width=None, widths=None, m=1, iterations=None):
         diffusion(*registers)
         _apply_hadamard_layer(registers)
 
-    # 8. Export and simulate
+    # 9. Export and simulate
     qasm = to_openqasm()
     values = _simulate_single_shot(qasm, register_widths)
 
-    # 9. Return flat tuple with iteration count last
+    # 10. Return flat tuple with iteration count last
     return (*values, k)
