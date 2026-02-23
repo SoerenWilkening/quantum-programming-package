@@ -170,7 +170,11 @@ Plans:
   2. Gate placement in the optimizer uses binary search (O(log L)) instead of linear scan, verified by profiling a 10,000+ gate circuit showing measurable speedup
   3. `@ql.compile` replay overhead is reduced (profiled before/after), with dict iteration or gate injection optimized based on profiling data
   4. Golden-master circuit snapshots taken before any optimizer change match exactly after all changes are complete (zero semantic regression)
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 85-01-PLAN.md — Fix loop direction bug, create golden-master snapshot infrastructure
+- [ ] 85-02-PLAN.md — Replace linear scan with O(log L) binary search, create benchmarks
+- [ ] 85-03-PLAN.md — Profile and optimize @ql.compile replay overhead
 
 ### Phase 86: QFT Bug Fixes
 **Goal**: QFT-based arithmetic produces correct results for all tested widths, with root-cause fixes applied in dependency order
@@ -236,7 +240,7 @@ Phases execute in numeric order: 82 -> 83 -> 84 -> 85 -> 86 -> 87 -> 88 -> 89
 | 82. Infrastructure & Dependency Fixes | 2/2 | Complete    | 2026-02-23 | - |
 | 83. Tech Debt Cleanup | 2/2 | Complete   | 2026-02-23 | - |
 | 84. Security Hardening | 2/2 | Complete | 2026-02-23 | - |
-| 85. Optimizer Fix & Improvement | v4.1 | 0/? | Not started | - |
+| 85. Optimizer Fix & Improvement | v4.1 | 0/3 | Planned | - |
 | 86. QFT Bug Fixes | v4.1 | 0/? | Not started | - |
 | 87. Scope & Segfault Fixes | v4.1 | 0/? | Not started | - |
 | 88. Binary Size Reduction | v4.1 | 0/? | Not started | - |
