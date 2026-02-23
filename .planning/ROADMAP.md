@@ -141,7 +141,10 @@ Plans:
   2. Editing a .pxi file and running the pre-commit hook detects qint_preprocessed.pyx drift and fails the check
   3. `vulture` scan has been run and all confirmed dead code (confidence >= 80%) has been removed without breaking any tests
   4. A developer can regenerate all hardcoded sequence C files by following documented instructions in the codebase
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 83-01-PLAN.md — Remove QPU.c/QPU.h stubs, migrate to circuit.h, add preprocessor drift pre-commit hook
+- [ ] 83-02-PLAN.md — Vulture dead code scan and removal, sequence generator documentation and Makefile target
 
 ### Phase 84: Security Hardening
 **Goal**: Unsafe C pointer operations and buffer accesses at the Cython boundary are guarded with validation that converts crashes into clear Python exceptions
