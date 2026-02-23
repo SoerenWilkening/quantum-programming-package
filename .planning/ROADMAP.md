@@ -156,7 +156,10 @@ Plans:
   2. Attempting to write beyond the qubit_array scratch buffer (384 elements) raises an OverflowError with a message indicating the slot count exceeded
   3. `cppcheck` runs on all C backend source files with zero HIGH severity findings remaining
   4. The full test suite passes with no performance regression beyond 15% on the existing benchmark suite
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 84-01-PLAN.md — Pointer validation and buffer bounds checking at Cython boundary
+- [ ] 84-02-PLAN.md — cppcheck and clang-tidy static analysis, fix all findings
 
 ### Phase 85: Optimizer Fix & Improvement
 **Goal**: The circuit optimizer places gates correctly with O(log L) performance and no latent loop bugs
