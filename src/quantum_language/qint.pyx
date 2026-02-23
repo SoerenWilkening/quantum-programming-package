@@ -45,6 +45,7 @@ from ._core import (
     _get_ancilla, _increment_ancilla, _decrement_ancilla,
     qubit_array,
     current_scope_depth,
+    validate_circuit, validate_qubit_slots,
 )
 
 

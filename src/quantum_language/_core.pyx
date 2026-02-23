@@ -217,20 +217,24 @@ def option(key: str, value=None):
 			raise ValueError("qubit_saving option requires bool value")
 		_qubit_saving_mode = value
 		# Also set C-level qubit_saving for CLA variant selection (BK vs KS)
+		_validate_circuit()
 		(<circuit_s*><circuit_t*><unsigned long long>_get_circuit()).qubit_saving = 1 if value else 0
 	elif key == 'fault_tolerant':
+		_validate_circuit()
 		if value is None:
 			return (<circuit_s*><circuit_t*><unsigned long long>_get_circuit()).arithmetic_mode == 1
 		if not isinstance(value, bool):
 			raise ValueError("fault_tolerant option requires bool value")
 		(<circuit_s*><circuit_t*><unsigned long long>_get_circuit()).arithmetic_mode = 1 if value else 0
 	elif key == 'cla':
+		_validate_circuit()
 		if value is None:
 			return (<circuit_s*><circuit_t*><unsigned long long>_get_circuit()).cla_override == 0
 		if not isinstance(value, bool):
 			raise ValueError("cla option requires bool value")
 		(<circuit_s*><circuit_t*><unsigned long long>_get_circuit()).cla_override = 0 if value else 1
 	elif key == 'toffoli_decompose':
+		_validate_circuit()
 		if value is None:
 			return (<circuit_s*><circuit_t*><unsigned long long>_get_circuit()).toffoli_decompose == 1
 		if not isinstance(value, bool):
@@ -244,6 +248,30 @@ qubit_array = np.ndarray(4 * 64 + NUMANCILLY, dtype = np.uint32)  # Max width su
 ancilla = np.ndarray(NUMANCILLY, dtype = np.uint32)
 for i in range(NUMANCILLY):
 	ancilla[i] = i
+
+
+# Phase 84: Validation helpers for Cython/C boundary security
+cdef inline void _validate_circuit() except *:
+	"""Raise ValueError if circuit pointer is NULL or uninitialized."""
+	if not _circuit_initialized or _circuit == NULL:
+		raise ValueError(
+			"[Validation] error in circuit operation: circuit pointer is NULL"
+		)
+
+cdef inline void _validate_qubit_slots(int required, str func_name) except *:
+	"""Raise OverflowError if required qubit_array slots exceed 384."""
+	if required > 384:
+		raise OverflowError(
+			f"[Buffer] error in {func_name}: slot count exceeded, max 384"
+		)
+
+def validate_circuit():
+	"""Public wrapper for circuit pointer validation (Phase 84)."""
+	_validate_circuit()
+
+def validate_qubit_slots(int required, str func_name):
+	"""Public wrapper for qubit_array bounds validation (Phase 84)."""
+	_validate_qubit_slots(required, func_name)
 
 
 def array(dim: int | tuple[int, int] | list[int], dtype=None):
@@ -363,6 +391,7 @@ cdef class circuit:
 		q1   ------+--H--------...
 		...
 		"""
+		_validate_circuit()
 		circuit_visualize(<circuit_t*>_circuit)
 
 	@property
@@ -383,6 +412,7 @@ cdef class circuit:
 		>>> circuit().gate_count
 		42
 		"""
+		_validate_circuit()
 		return circuit_gate_count(<circuit_s*>_circuit)
 
 	@property
@@ -403,6 +433,7 @@ cdef class circuit:
 		>>> circuit().depth
 		12
 		"""
+		_validate_circuit()
 		return circuit_depth(<circuit_s*>_circuit)
 
 	@property
@@ -421,6 +452,7 @@ cdef class circuit:
 		>>> circuit().qubit_count
 		8
 		"""
+		_validate_circuit()
 		return circuit_qubit_count(<circuit_s*>_circuit)
 
 	@property
@@ -440,7 +472,9 @@ cdef class circuit:
 		>>> circuit().gate_counts
 		{'X': 3, 'H': 8, 'CNOT': 12, ...}
 		"""
-		cdef gate_counts_t counts = circuit_gate_counts(<circuit_s*>_circuit)
+		cdef gate_counts_t counts
+		_validate_circuit()
+		counts = circuit_gate_counts(<circuit_s*>_circuit)
 		return {
 			'X': counts.x_gates,
 			'Y': counts.y_gates,
@@ -477,7 +511,9 @@ cdef class circuit:
 		>>> data['num_qubits']
 		4
 		"""
-		cdef draw_data_t *data = circuit_to_draw_data(<circuit_t*>_circuit)
+		cdef draw_data_t *data
+		_validate_circuit()
+		data = circuit_to_draw_data(<circuit_t*>_circuit)
 		if data == NULL:
 			raise RuntimeError("Failed to extract draw data")
 		try:
@@ -560,6 +596,8 @@ cdef class circuit:
 
 		cdef circuit_s *opt_circ
 
+		_validate_circuit()
+
 		# Capture stats BEFORE optimization
 		before_stats = {
 			'gate_count': self.gate_count,
@@ -612,6 +650,7 @@ cdef class circuit:
 		>>> if c.can_optimize():
 		...     stats = c.optimize()
 		"""
+		_validate_circuit()
 		return circuit_can_optimize(<circuit_s*>_circuit) != 0
 
 	def __dealloc__(self):
@@ -643,8 +682,7 @@ def circuit_stats():
 	cdef qubit_allocator_t *alloc
 	cdef allocator_stats_t stats
 
-	if not _circuit_initialized:
-		return None
+	_validate_circuit()
 
 	alloc = circuit_get_allocator(<circuit_s*>_circuit)
 	if alloc == NULL:
@@ -680,8 +718,7 @@ def get_current_layer():
 	"""
 	cdef circuit_s *circ
 	global _circuit
-	if not _circuit_initialized:
-		return 0
+	_validate_circuit()
 	circ = <circuit_s*>_circuit
 	return circ.used_layer
 
@@ -715,11 +752,11 @@ def extract_gate_range(int start_layer, int end_layer):
 	>>> len(gates) > 0
 	True
 	"""
-	cdef circuit_s *circ = <circuit_s*>_circuit
+	cdef circuit_s *circ
 	cdef gate_t *g
 	cdef int layer, gi
-	if not _circuit_initialized:
-		raise RuntimeError("Circuit not initialized")
+	_validate_circuit()
+	circ = <circuit_s*>_circuit
 	gates = []
 	for layer in range(start_layer, end_layer):
 		for gi in range(circ.used_gates_per_layer[layer]):
@@ -761,10 +798,12 @@ def reverse_instruction_range(int start_layer, int end_layer):
 	>>> end = get_current_layer()
 	>>> reverse_instruction_range(start, end)
 	"""
+	cdef int rc
 	global _circuit
-	if not _circuit_initialized:
-		raise RuntimeError("Circuit not initialized")
-	reverse_circuit_range(_circuit, start_layer, end_layer)
+	_validate_circuit()
+	rc = validated_reverse_circuit_range(_circuit, start_layer, end_layer)
+	if rc == QV_NULL_CIRC:
+		raise ValueError("[Validation] error in reverse_instruction_range: circuit pointer is NULL")
 
 
 def inject_remapped_gates(list gates, dict qubit_map):
@@ -789,11 +828,11 @@ def inject_remapped_gates(list gates, dict qubit_map):
 	>>> identity_map = {g['target']: g['target'] for g in gates}
 	>>> inject_remapped_gates(gates, identity_map)
 	"""
-	cdef circuit_t *circ = <circuit_t*>_circuit
+	cdef circuit_t *circ
 	cdef gate_t *g
 	cdef int i
-	if not _circuit_initialized:
-		raise RuntimeError("Circuit not initialized")
+	_validate_circuit()
+	circ = <circuit_t*>_circuit
 	for gate_dict in gates:
 		g = <gate_t*>malloc(sizeof(gate_t))
 		if g == NULL:
@@ -827,9 +866,9 @@ def _get_layer_floor():
 	int
 		Current layer_floor from circuit_t.
 	"""
-	cdef circuit_s *circ = <circuit_s*>_circuit
-	if not _circuit_initialized:
-		return 0
+	cdef circuit_s *circ
+	_validate_circuit()
+	circ = <circuit_s*>_circuit
 	return <int>circ.layer_floor
 
 
@@ -842,9 +881,9 @@ def _set_layer_floor(int floor):
 		New layer_floor value. Gates added via add_gate() will not be placed
 		before this layer.
 	"""
-	cdef circuit_s *circ = <circuit_s*>_circuit
-	if not _circuit_initialized:
-		raise RuntimeError("Circuit not initialized")
+	cdef circuit_s *circ
+	_validate_circuit()
+	circ = <circuit_s*>_circuit
 	circ.layer_floor = <unsigned int>floor
 
 
@@ -858,8 +897,7 @@ def _allocate_qubit():
 	"""
 	cdef qubit_allocator_t *alloc
 	cdef unsigned int qubit_idx
-	if not _circuit_initialized:
-		raise RuntimeError("Circuit not initialized")
+	_validate_circuit()
 	alloc = circuit_get_allocator(<circuit_s*>_circuit)
 	if alloc == NULL:
 		raise RuntimeError("No allocator available")
@@ -878,8 +916,7 @@ def _deallocate_qubits(unsigned int start, unsigned int count):
 		Number of contiguous qubits to free.
 	"""
 	cdef qubit_allocator_t *alloc
-	if not _circuit_initialized:
-		raise RuntimeError("Circuit not initialized")
+	_validate_circuit()
 	alloc = circuit_get_allocator(<circuit_s*>_circuit)
 	if alloc == NULL:
 		raise RuntimeError("No allocator available")

@@ -95,6 +95,10 @@
 
 		# Handle qint == int case using C-level CQ_equal_width
 		if type(other) == int:
+			# Phase 84: Validate qubit_array bounds before writes
+			# eq uses up to 1 + self.bits + 1 + (self.bits - 1) slots
+			validate_qubit_slots(2 * self.bits + 2, "__eq__")
+
 			# Classical overflow check: if value doesn't fit in bits, not equal
 			# For unsigned interpretation: value must be in [0, 2^bits - 1]
 			max_val = (1 << self.bits) - 1 if self.bits < 64 else (1 << 63) - 1
@@ -265,6 +269,10 @@
 
 		# Handle qint operand
 		if type(other) == qint:
+			# Phase 84: Validate qubit_array bounds before writes
+			# lt uses 2 slots per CNOT copy (qubit_array[0], qubit_array[1])
+			validate_qubit_slots(2, "__lt__")
+
 			# a < b means (a - b) is negative in signed interpretation.
 			# To handle full unsigned range, use (n+1)-bit subtraction:
 			# extend both operands by 1 bit (MSB=0 = unsigned) so the sign bit
@@ -390,6 +398,9 @@
 
 		# Handle qint operand
 		if type(other) == qint:
+			# Phase 84: Validate qubit_array bounds before writes
+			validate_qubit_slots(2, "__gt__")
+
 			# a > b means (b - a) is negative in signed interpretation.
 			comp_width = max(self.bits, (<qint>other).bits) + 1
 			# Create widened copies (zero-extended to comp_width)

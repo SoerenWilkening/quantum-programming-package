@@ -65,6 +65,10 @@
 				(<circuit_s*>_circuit).layer_floor = _saved_floor_and
 			raise TypeError("Operand must be qint or int")
 
+		# Phase 84: Validate qubit_array bounds before writes
+		# AND uses up to 3*result_bits slots: [output:N], [self:N], [other:N]
+		validate_qubit_slots(3 * result_bits, "__and__")
+
 		# Allocate padding ancilla BEFORE result so result gets highest qubit indices
 		# (result must be last-allocated for bitstring[:width] extraction to work)
 		_self_pad_qint = None
@@ -229,6 +233,10 @@
 				(<circuit_s*>_circuit).layer_floor = _saved_floor_or
 			raise TypeError("Operand must be qint or int")
 
+		# Phase 84: Validate qubit_array bounds before writes
+		# OR uses up to 3*result_bits slots: [output:N], [self:N], [other:N]
+		validate_qubit_slots(3 * result_bits, "__or__")
+
 		# Allocate padding ancilla BEFORE result so result gets highest qubit indices
 		_self_pad_qint = None
 		_other_pad_qint = None
@@ -386,6 +394,10 @@
 			if _circuit_initialized:
 				(<circuit_s*>_circuit).layer_floor = _saved_floor_xor
 			raise TypeError("Operand must be qint or int")
+
+		# Phase 84: Validate qubit_array bounds before writes
+		# XOR uses up to 2*result_bits slots: [target:N], [source:N]
+		validate_qubit_slots(2 * result_bits, "__xor__")
 
 		# Allocate result (ancilla qubits)
 		result = qint(width=result_bits)
@@ -549,6 +561,10 @@
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
 
+		# Phase 84: Validate qubit_array bounds before writes
+		# NOT uses up to self.bits + 1 slots (controlled case)
+		validate_qubit_slots(self.bits + 1, "__invert__")
+
 		# Use width-parameterized NOT for multi-bit qints
 		self_offset = 64 - self.bits
 
@@ -610,6 +626,10 @@
 		cdef bint _circuit_initialized = _get_circuit_initialized()
 
 		self._check_not_uncomputed()
+
+		# Phase 84: Validate qubit_array bounds before writes
+		# copy uses 2*self.bits slots: [target:N], [source:N]
+		validate_qubit_slots(2 * self.bits, "copy")
 
 		# Capture start layer before any gates
 		start_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
@@ -691,6 +711,10 @@
 				f"Width mismatch: source has {self.bits} bits, "
 				f"target has {(<qint>target).bits} bits"
 			)
+
+		# Phase 84: Validate qubit_array bounds before writes
+		# copy_onto uses 2*self.bits slots: [target:N], [source:N]
+		validate_qubit_slots(2 * self.bits, "copy_onto")
 
 		# Apply CNOTs: source -> target
 		self_offset = 64 - self.bits
