@@ -24,12 +24,11 @@ static inline qubit_t get_control(gate_t *g, int i) {
 }
 
 layer_t smallest_layer_below_comp(circuit_t *circ, qubit_t qubit, layer_t compar) {
-    // TODO: improve with binary search
-    // maybe not necessary
+    // Scan backward through occupied layers to find the largest layer < compar
     int last_index = (int)circ->used_occupation_indices_per_qubit[qubit];
-    if (last_index < 0)
+    if (last_index <= 0)
         return 0;
-    for (int i = last_index; i > 0; ++i) {
+    for (int i = last_index; i > 0; --i) {
         if (circ->occupied_layers_of_qubit[qubit][i - 1] < compar) {
             return circ->occupied_layers_of_qubit[qubit][i - 1];
         }

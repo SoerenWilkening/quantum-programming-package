@@ -1,0 +1,113 @@
+{
+  "circuit_name": "add_2bit_toffoli",
+  "gates": [
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 0,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 2,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        0
+      ],
+      "num_controls": 1,
+      "target": 4,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        1
+      ],
+      "num_controls": 1,
+      "target": 5,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        2
+      ],
+      "num_controls": 1,
+      "target": 4,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        3
+      ],
+      "num_controls": 1,
+      "target": 5,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        2
+      ],
+      "num_controls": 1,
+      "target": 6,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        6,
+        4
+      ],
+      "num_controls": 2,
+      "target": 2,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        2
+      ],
+      "num_controls": 1,
+      "target": 5,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        6,
+        4
+      ],
+      "num_controls": 2,
+      "target": 2,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        2
+      ],
+      "num_controls": 1,
+      "target": 6,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        6
+      ],
+      "num_controls": 1,
+      "target": 4,
+      "type": 0
+    }
+  ],
+  "total_gates": 12,
+  "total_layers": 9
+}

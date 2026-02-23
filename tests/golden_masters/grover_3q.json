@@ -1,0 +1,166 @@
+{
+  "circuit_name": "grover_3q",
+  "gates": [
+    {
+      "angle": 1.5707963267948968,
+      "controls": [],
+      "num_controls": 0,
+      "target": 0,
+      "type": 6
+    },
+    {
+      "angle": 1.5707963267948968,
+      "controls": [],
+      "num_controls": 0,
+      "target": 1,
+      "type": 6
+    },
+    {
+      "angle": 1.5707963267948968,
+      "controls": [],
+      "num_controls": 0,
+      "target": 2,
+      "type": 6
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 1,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        2,
+        1
+      ],
+      "num_controls": 2,
+      "target": 4,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        4,
+        0
+      ],
+      "num_controls": 2,
+      "target": 3,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        2,
+        1
+      ],
+      "num_controls": 2,
+      "target": 4,
+      "type": 0
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 0,
+      "type": 4
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 1,
+      "type": 0
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 2,
+      "type": 4
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 0,
+      "type": 0
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 1,
+      "type": 4
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 2,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 1,
+      "type": 0
+    },
+    {
+      "angle": 0.0,
+      "controls": [
+        0,
+        1
+      ],
+      "num_controls": 2,
+      "target": 2,
+      "type": 2
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 0,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 1,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 2,
+      "type": 0
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 0,
+      "type": 4
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 1,
+      "type": 4
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 2,
+      "type": 4
+    }
+  ],
+  "total_gates": 21,
+  "total_layers": 11
+}

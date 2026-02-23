@@ -1,0 +1,531 @@
+{
+  "circuit_name": "add_8bit_toffoli",
+  "gates": [
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 2,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 5,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 6,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 9,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 12,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 13,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        0
+      ],
+      "num_controls": 1,
+      "target": 16,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        1
+      ],
+      "num_controls": 1,
+      "target": 17,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        2
+      ],
+      "num_controls": 1,
+      "target": 18,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        3
+      ],
+      "num_controls": 1,
+      "target": 19,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        4
+      ],
+      "num_controls": 1,
+      "target": 20,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        5
+      ],
+      "num_controls": 1,
+      "target": 21,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        6
+      ],
+      "num_controls": 1,
+      "target": 22,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        7
+      ],
+      "num_controls": 1,
+      "target": 23,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        8
+      ],
+      "num_controls": 1,
+      "target": 16,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        9
+      ],
+      "num_controls": 1,
+      "target": 17,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        10
+      ],
+      "num_controls": 1,
+      "target": 18,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        11
+      ],
+      "num_controls": 1,
+      "target": 19,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        12
+      ],
+      "num_controls": 1,
+      "target": 20,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        13
+      ],
+      "num_controls": 1,
+      "target": 21,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        14
+      ],
+      "num_controls": 1,
+      "target": 22,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        15
+      ],
+      "num_controls": 1,
+      "target": 23,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        8
+      ],
+      "num_controls": 1,
+      "target": 24,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        24,
+        16
+      ],
+      "num_controls": 2,
+      "target": 8,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        9
+      ],
+      "num_controls": 1,
+      "target": 8,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        8,
+        17
+      ],
+      "num_controls": 2,
+      "target": 9,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        10
+      ],
+      "num_controls": 1,
+      "target": 9,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        9,
+        18
+      ],
+      "num_controls": 2,
+      "target": 10,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        11
+      ],
+      "num_controls": 1,
+      "target": 10,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        10,
+        19
+      ],
+      "num_controls": 2,
+      "target": 11,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        12
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        11,
+        20
+      ],
+      "num_controls": 2,
+      "target": 12,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        13
+      ],
+      "num_controls": 1,
+      "target": 12,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        12,
+        21
+      ],
+      "num_controls": 2,
+      "target": 13,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        14
+      ],
+      "num_controls": 1,
+      "target": 13,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        13,
+        22
+      ],
+      "num_controls": 2,
+      "target": 14,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        14
+      ],
+      "num_controls": 1,
+      "target": 23,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        13,
+        22
+      ],
+      "num_controls": 2,
+      "target": 14,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        14
+      ],
+      "num_controls": 1,
+      "target": 13,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        13
+      ],
+      "num_controls": 1,
+      "target": 22,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        12,
+        21
+      ],
+      "num_controls": 2,
+      "target": 13,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        13
+      ],
+      "num_controls": 1,
+      "target": 12,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        12
+      ],
+      "num_controls": 1,
+      "target": 21,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        11,
+        20
+      ],
+      "num_controls": 2,
+      "target": 12,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        12
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        11
+      ],
+      "num_controls": 1,
+      "target": 20,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        10,
+        19
+      ],
+      "num_controls": 2,
+      "target": 11,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        11
+      ],
+      "num_controls": 1,
+      "target": 10,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        10
+      ],
+      "num_controls": 1,
+      "target": 19,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        9,
+        18
+      ],
+      "num_controls": 2,
+      "target": 10,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        10
+      ],
+      "num_controls": 1,
+      "target": 9,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        9
+      ],
+      "num_controls": 1,
+      "target": 18,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        8,
+        17
+      ],
+      "num_controls": 2,
+      "target": 9,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        9
+      ],
+      "num_controls": 1,
+      "target": 8,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        8
+      ],
+      "num_controls": 1,
+      "target": 17,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        24,
+        16
+      ],
+      "num_controls": 2,
+      "target": 8,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        8
+      ],
+      "num_controls": 1,
+      "target": 24,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        24
+      ],
+      "num_controls": 1,
+      "target": 16,
+      "type": 0
+    }
+  ],
+  "total_gates": 58,
+  "total_layers": 39
+}

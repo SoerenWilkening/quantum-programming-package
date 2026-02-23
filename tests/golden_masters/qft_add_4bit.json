@@ -1,0 +1,325 @@
+{
+  "circuit_name": "qft_add_4bit",
+  "gates": [
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 0,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 2,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 4,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 5,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        0
+      ],
+      "num_controls": 1,
+      "target": 8,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        1
+      ],
+      "num_controls": 1,
+      "target": 9,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        2
+      ],
+      "num_controls": 1,
+      "target": 10,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        3
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 0
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 11,
+      "type": 4
+    },
+    {
+      "angle": 1.5707963267948966,
+      "controls": [
+        10
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 8
+    },
+    {
+      "angle": 0.7853981633974483,
+      "controls": [
+        9
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 8
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 10,
+      "type": 4
+    },
+    {
+      "angle": 0.39269908169872414,
+      "controls": [
+        8
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 8
+    },
+    {
+      "angle": 1.5707963267948966,
+      "controls": [
+        9
+      ],
+      "num_controls": 1,
+      "target": 10,
+      "type": 8
+    },
+    {
+      "angle": 0.7853981633974483,
+      "controls": [
+        8
+      ],
+      "num_controls": 1,
+      "target": 10,
+      "type": 8
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 9,
+      "type": 4
+    },
+    {
+      "angle": 1.5707963267948966,
+      "controls": [
+        8
+      ],
+      "num_controls": 1,
+      "target": 9,
+      "type": 8
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 8,
+      "type": 4
+    },
+    {
+      "angle": 3.141592653589793,
+      "controls": [
+        4
+      ],
+      "num_controls": 1,
+      "target": 8,
+      "type": 8
+    },
+    {
+      "angle": 1.5707963267948966,
+      "controls": [
+        4
+      ],
+      "num_controls": 1,
+      "target": 9,
+      "type": 8
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 8,
+      "type": 4
+    },
+    {
+      "angle": 0.7853981633974483,
+      "controls": [
+        4
+      ],
+      "num_controls": 1,
+      "target": 10,
+      "type": 8
+    },
+    {
+      "angle": 3.141592653589793,
+      "controls": [
+        5
+      ],
+      "num_controls": 1,
+      "target": 9,
+      "type": 8
+    },
+    {
+      "angle": 0.39269908169872414,
+      "controls": [
+        4
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 8
+    },
+    {
+      "angle": 1.5707963267948966,
+      "controls": [
+        5
+      ],
+      "num_controls": 1,
+      "target": 10,
+      "type": 8
+    },
+    {
+      "angle": -1.5707963267948966,
+      "controls": [
+        8
+      ],
+      "num_controls": 1,
+      "target": 9,
+      "type": 8
+    },
+    {
+      "angle": 0.7853981633974483,
+      "controls": [
+        5
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 8
+    },
+    {
+      "angle": 3.141592653589793,
+      "controls": [
+        6
+      ],
+      "num_controls": 1,
+      "target": 10,
+      "type": 8
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 9,
+      "type": 4
+    },
+    {
+      "angle": 1.5707963267948966,
+      "controls": [
+        6
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 8
+    },
+    {
+      "angle": -0.7853981633974483,
+      "controls": [
+        8
+      ],
+      "num_controls": 1,
+      "target": 10,
+      "type": 8
+    },
+    {
+      "angle": 3.141592653589793,
+      "controls": [
+        7
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 8
+    },
+    {
+      "angle": -1.5707963267948966,
+      "controls": [
+        9
+      ],
+      "num_controls": 1,
+      "target": 10,
+      "type": 8
+    },
+    {
+      "angle": -0.39269908169872414,
+      "controls": [
+        8
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 8
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 10,
+      "type": 4
+    },
+    {
+      "angle": -0.7853981633974483,
+      "controls": [
+        9
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 8
+    },
+    {
+      "angle": -1.5707963267948966,
+      "controls": [
+        10
+      ],
+      "num_controls": 1,
+      "target": 11,
+      "type": 8
+    },
+    {
+      "angle": 0.0,
+      "controls": [],
+      "num_controls": 0,
+      "target": 11,
+      "type": 4
+    }
+  ],
+  "total_gates": 38,
+  "total_layers": 20
+}
