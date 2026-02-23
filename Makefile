@@ -120,6 +120,46 @@ check:
 	@echo "Running pre-commit checks..."
 	. $(VENV) && pre-commit run --all-files
 
+# === Static Analysis ===
+
+HAS_CPPCHECK := $(shell command -v cppcheck 2>/dev/null)
+HAS_CLANG_TIDY := $(shell command -v clang-tidy 2>/dev/null)
+
+.PHONY: cppcheck
+cppcheck:
+ifndef HAS_CPPCHECK
+	@echo "ERROR: cppcheck not found"
+	@echo "Install with: sudo apt-get install cppcheck"
+	@exit 1
+endif
+	@echo "Running cppcheck static analysis on C backend..."
+	cppcheck --enable=all --inconclusive \
+		--suppressions-list=c_backend/suppressions.txt \
+		--suppress=missingIncludeSystem \
+		-I c_backend/include \
+		--std=c11 \
+		--error-exitcode=1 \
+		c_backend/src/ c_backend/include/
+	@echo "cppcheck: PASSED (zero findings)"
+
+.PHONY: clang-tidy
+clang-tidy:
+ifndef HAS_CLANG_TIDY
+	@echo "ERROR: clang-tidy not found"
+	@echo "Install with: sudo apt-get install clang-tidy"
+	@exit 1
+endif
+	@echo "Running clang-tidy on C backend..."
+	clang-tidy \
+		--config-file=c_backend/.clang-tidy \
+		c_backend/src/*.c \
+		-- -I c_backend/include -std=c11
+	@echo "clang-tidy: complete"
+
+.PHONY: static-analysis
+static-analysis: cppcheck clang-tidy
+	@echo "All static analysis checks complete."
+
 # === Cleanup ===
 
 .PHONY: clean
@@ -239,6 +279,9 @@ help:
 	@echo "  memtest          - Run tests under Valgrind (requires valgrind)"
 	@echo "  asan-test        - Build and run C backend with AddressSanitizer"
 	@echo "  check            - Run pre-commit hooks on all files"
+	@echo "  cppcheck         - Run cppcheck static analysis on C backend"
+	@echo "  clang-tidy       - Run clang-tidy on C backend"
+	@echo "  static-analysis  - Run all static analysis (cppcheck + clang-tidy)"
 	@echo "  clean            - Remove test artifacts"
 	@echo ""
 	@echo "Coverage targets:"
@@ -264,3 +307,5 @@ help:
 	@echo "  py-spy:     $(if $(HAS_PYSPY),found,NOT FOUND)"
 	@echo "  memray:     $(if $(HAS_MEMRAY),found,NOT FOUND)"
 	@echo "  lcov:       $(if $(HAS_LCOV),found,NOT FOUND (C coverage unavailable))"
+	@echo "  cppcheck:   $(if $(HAS_CPPCHECK),found,NOT FOUND)"
+	@echo "  clang-tidy: $(if $(HAS_CLANG_TIDY),found,NOT FOUND)"
