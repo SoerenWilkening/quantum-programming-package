@@ -21,8 +21,8 @@ Requirements for v4.1 Quality & Efficiency milestone. Each maps to roadmap phase
 
 ### Tech Debt
 
-- [ ] **DEBT-01**: Remove dead QPU.c/QPU.h stubs and all references across C/Cython/Python layers
-- [ ] **DEBT-02**: Automate qint_preprocessed.pyx generation with build-time sync and CI drift check
+- [x] **DEBT-01**: Remove dead QPU.c/QPU.h stubs and all references across C/Cython/Python layers
+- [x] **DEBT-02**: Automate qint_preprocessed.pyx generation with build-time sync and CI drift check
 - [x] **DEBT-03**: Remove duplicate/dead code identified by vulture scan (unused Python functions, unreachable code)
 - [x] **DEBT-04**: Document hardcoded sequence generation process and regeneration instructions
 
@@ -111,8 +111,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BUG-07 | Phase 87 | Pending |
 | BUG-08 | Phase 86 | Pending |
 | BUG-09 | Phase 87 | Pending |
-| DEBT-01 | Phase 83 | Pending |
-| DEBT-02 | Phase 83 | Pending |
+| DEBT-01 | Phase 83 | Complete |
+| DEBT-02 | Phase 83 | Complete |
 | DEBT-03 | Phase 83 | Complete |
 | DEBT-04 | Phase 83 | Complete |
 | SEC-01 | Phase 84 | Pending |
