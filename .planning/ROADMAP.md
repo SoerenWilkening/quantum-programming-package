@@ -186,7 +186,11 @@ Plans:
   3. QFT division and modulo operations pass exhaustive tests at widths 2-6 with zero xfail markers remaining for QFT-DIV failures (BUG-QFT-DIV resolved)
   4. Division loop MSB comparison ancilla is properly cleaned up between iterations, with all 9 previously-failing cases per test file now passing (BUG-DIV-02 fixed)
   5. All previously-passing tests continue to pass (zero regressions across add, sub, mul, div, mod, compare, bitwise)
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 86-01-PLAN.md — Fix mixed-width QFT addition (BUG-WIDTH-ADD)
+- [ ] 86-02-PLAN.md — Fix controlled QQ addition rotation errors (BUG-CQQ-QFT)
+- [ ] 86-03-PLAN.md — Fix MSB comparison ancilla leak and QFT division failures (BUG-DIV-02, BUG-QFT-DIV)
 
 ### Phase 87: Scope & Segfault Fixes
 **Goal**: No crashes at valid operation widths and controlled multiplication produces correct results
