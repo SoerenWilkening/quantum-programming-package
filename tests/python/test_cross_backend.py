@@ -380,70 +380,13 @@ class TestCrossBackendAddition:
     @pytest.mark.parametrize(
         "width",
         [
-            pytest.param(
-                2,
-                marks=pytest.mark.xfail(
-                    reason="BUG-CQQ-QFT: QFT controlled QQ in-place addition produces "
-                    "incorrect results at width 2+ (CCP rotation angle errors)",
-                    strict=False,
-                ),
-            ),
-            pytest.param(
-                3,
-                marks=pytest.mark.xfail(
-                    reason="BUG-CQQ-QFT: QFT controlled QQ in-place addition produces "
-                    "incorrect results at width 2+ (CCP rotation angle errors)",
-                    strict=False,
-                ),
-            ),
-            pytest.param(
-                4,
-                marks=pytest.mark.xfail(
-                    reason="BUG-CQQ-QFT: QFT controlled QQ in-place addition produces "
-                    "incorrect results at width 2+ (CCP rotation angle errors)",
-                    strict=False,
-                ),
-            ),
-            pytest.param(
-                5,
-                marks=[
-                    pytest.mark.slow,
-                    pytest.mark.xfail(
-                        reason="BUG-CQQ-QFT: QFT controlled QQ in-place addition bug",
-                        strict=False,
-                    ),
-                ],
-            ),
-            pytest.param(
-                6,
-                marks=[
-                    pytest.mark.slow,
-                    pytest.mark.xfail(
-                        reason="BUG-CQQ-QFT: QFT controlled QQ in-place addition bug",
-                        strict=False,
-                    ),
-                ],
-            ),
-            pytest.param(
-                7,
-                marks=[
-                    pytest.mark.slow,
-                    pytest.mark.xfail(
-                        reason="BUG-CQQ-QFT: QFT controlled QQ in-place addition bug",
-                        strict=False,
-                    ),
-                ],
-            ),
-            pytest.param(
-                8,
-                marks=[
-                    pytest.mark.slow,
-                    pytest.mark.xfail(
-                        reason="BUG-CQQ-QFT: QFT controlled QQ in-place addition bug",
-                        strict=False,
-                    ),
-                ],
-            ),
+            2,  # BUG-CQQ-QFT fixed Phase 86-02
+            3,  # BUG-CQQ-QFT fixed Phase 86-02
+            4,  # BUG-CQQ-QFT fixed Phase 86-02
+            pytest.param(5, marks=pytest.mark.slow),  # BUG-CQQ-QFT fixed Phase 86-02
+            pytest.param(6, marks=pytest.mark.slow),  # BUG-CQQ-QFT fixed Phase 86-02
+            pytest.param(7, marks=pytest.mark.slow),  # BUG-CQQ-QFT fixed Phase 86-02
+            pytest.param(8, marks=pytest.mark.slow),  # BUG-CQQ-QFT fixed Phase 86-02
         ],
     )
     def test_cqq_add(self, width):
@@ -452,10 +395,9 @@ class TestCrossBackendAddition:
         Uses in-place qa += qb (not out-of-place qa + qb) because controlled
         out-of-place addition requires controlled XOR which is not yet supported.
 
-        BUG-CQQ-QFT: QFT backend produces incorrect results for controlled
-        quantum-quantum in-place addition at widths 2+. The CCP decomposition
-        has rotation angle errors. Toffoli backend is correct. Tests are xfail
-        at widths 2+ to document this discovered bug.
+        BUG-CQQ-QFT was fixed in Phase 86-02: cQQ_add source qubit mapping
+        corrected to match QQ_add convention. All widths now produce correct
+        results for controlled QQ addition.
         """
         if width <= 4:
             pairs = generate_exhaustive_pairs(width)
@@ -776,16 +718,16 @@ class TestCrossBackendMultiplication:
             pytest.param(
                 2,
                 marks=pytest.mark.xfail(
-                    reason="BUG-CQQ-QFT: QFT controlled operations produce incorrect "
-                    "results at width 2+ (CCP rotation angle errors in controlled mul)",
+                    reason="QFT controlled multiplication still fails at width 2+ "
+                    "(BUG-CQQ-QFT addition fix in Phase 86-02 did not resolve mul)",
                     strict=False,
                 ),
             ),
             pytest.param(
                 3,
                 marks=pytest.mark.xfail(
-                    reason="BUG-CQQ-QFT: QFT controlled operations produce incorrect "
-                    "results at width 2+ (CCP rotation angle errors in controlled mul)",
+                    reason="QFT controlled multiplication still fails at width 2+ "
+                    "(BUG-CQQ-QFT addition fix in Phase 86-02 did not resolve mul)",
                     strict=False,
                 ),
             ),
@@ -794,7 +736,7 @@ class TestCrossBackendMultiplication:
                 marks=[
                     pytest.mark.slow,
                     pytest.mark.xfail(
-                        reason="BUG-CQQ-QFT: QFT controlled mul incorrect at width 2+",
+                        reason="QFT controlled mul still incorrect at width 2+",
                         strict=False,
                     ),
                 ],
@@ -804,7 +746,7 @@ class TestCrossBackendMultiplication:
                 marks=[
                     pytest.mark.slow,
                     pytest.mark.xfail(
-                        reason="BUG-CQQ-QFT: QFT controlled mul incorrect at width 2+",
+                        reason="QFT controlled mul still incorrect at width 2+",
                         strict=False,
                     ),
                 ],
@@ -814,7 +756,7 @@ class TestCrossBackendMultiplication:
                 marks=[
                     pytest.mark.slow,
                     pytest.mark.xfail(
-                        reason="BUG-CQQ-QFT: QFT controlled mul incorrect at width 2+",
+                        reason="QFT controlled mul still incorrect at width 2+",
                         strict=False,
                     ),
                 ],
@@ -824,11 +766,11 @@ class TestCrossBackendMultiplication:
     def test_cqq_mul(self, width):
         """Controlled QQ multiplication (with ctrl: c = a * b) cross-backend.
 
-        BUG-CQQ-QFT: QFT backend produces incorrect results for controlled
-        quantum-quantum operations at widths 2+. The CCP decomposition has
-        rotation angle errors. Toffoli backend is correct. Tests are xfail
-        at widths 2+ to document this discovered bug (same root cause as
-        controlled QQ addition bug).
+        Note: BUG-CQQ-QFT addition fix (Phase 86-02) corrected cQQ_add source
+        qubit mapping, but controlled multiplication still fails at widths 2+.
+        This is a separate issue from the addition bug -- controlled mul has
+        additional CCP rotation angle errors not addressed by the Phase 86-02 fix.
+        Tests remain xfail to document this known limitation.
 
         Uses BUG-COND-MUL-01 scope workaround for BOTH backends.
         Toffoli backend uses MCX gates, so use_mps_toffoli=True.
@@ -951,16 +893,16 @@ class TestCrossBackendMultiplication:
             pytest.param(
                 2,
                 marks=pytest.mark.xfail(
-                    reason="BUG-CQQ-QFT: QFT controlled operations produce incorrect "
-                    "results at width 2+ (CCP rotation angle errors in controlled mul)",
+                    reason="QFT controlled CQ multiplication still fails at width 2+ "
+                    "(BUG-CQQ-QFT addition fix in Phase 86-02 did not resolve mul)",
                     strict=False,
                 ),
             ),
             pytest.param(
                 3,
                 marks=pytest.mark.xfail(
-                    reason="BUG-CQQ-QFT: QFT controlled operations produce incorrect "
-                    "results at width 2+ (CCP rotation angle errors in controlled mul)",
+                    reason="QFT controlled CQ multiplication still fails at width 2+ "
+                    "(BUG-CQQ-QFT addition fix in Phase 86-02 did not resolve mul)",
                     strict=False,
                 ),
             ),
@@ -969,7 +911,7 @@ class TestCrossBackendMultiplication:
                 marks=[
                     pytest.mark.slow,
                     pytest.mark.xfail(
-                        reason="BUG-CQQ-QFT: QFT controlled mul incorrect at width 2+",
+                        reason="QFT controlled CQ mul still incorrect at width 2+",
                         strict=False,
                     ),
                 ],
@@ -979,7 +921,7 @@ class TestCrossBackendMultiplication:
                 marks=[
                     pytest.mark.slow,
                     pytest.mark.xfail(
-                        reason="BUG-CQQ-QFT: QFT controlled mul incorrect at width 2+",
+                        reason="QFT controlled CQ mul still incorrect at width 2+",
                         strict=False,
                     ),
                 ],
@@ -989,7 +931,7 @@ class TestCrossBackendMultiplication:
                 marks=[
                     pytest.mark.slow,
                     pytest.mark.xfail(
-                        reason="BUG-CQQ-QFT: QFT controlled mul incorrect at width 2+",
+                        reason="QFT controlled CQ mul still incorrect at width 2+",
                         strict=False,
                     ),
                 ],
@@ -999,9 +941,10 @@ class TestCrossBackendMultiplication:
     def test_ccq_mul(self, width):
         """Controlled CQ multiplication (with ctrl: c = a * int) cross-backend.
 
-        BUG-CQQ-QFT: QFT backend produces incorrect results for controlled
-        operations at widths 2+. Same root cause as controlled QQ addition/mul.
-        Tests are xfail at widths 2+ to document this.
+        Note: BUG-CQQ-QFT addition fix (Phase 86-02) corrected cQQ_add, but
+        controlled CQ multiplication still fails at widths 2+. This is a known
+        limitation of the QFT controlled multiplication path, not addressed by
+        the Phase 86-02 fix. Tests remain xfail to document this.
 
         Uses BUG-COND-MUL-01 scope workaround for BOTH backends.
         Toffoli backend uses MCX gates, so use_mps_toffoli=True.
