@@ -17,7 +17,7 @@ Requirements for v4.1 Quality & Efficiency milestone. Each maps to roadmap phase
 - [ ] **BUG-06**: Fix MSB comparison leak in division (BUG-DIV-02, 9 cases per div/mod test file)
 - [ ] **BUG-07**: Fix controlled multiplication scope uncomputation corruption (BUG-COND-MUL-01)
 - [ ] **BUG-08**: Fix QFT division/modulo pervasive failures at all tested widths (BUG-QFT-DIV)
-- [ ] **BUG-09**: Fix _reduce_mod result corruption (BUG-MOD-REDUCE) or explicitly defer with documented rationale
+- [-] **BUG-09**: Fix _reduce_mod result corruption (BUG-MOD-REDUCE) -- **Explicitly deferred**: requires Beauregard-style algorithm redesign (see rationale in Future Requirements)
 
 ### Tech Debt
 
@@ -60,6 +60,7 @@ Deferred to future milestones. Tracked but not in current roadmap.
 ### Uncomputation Architecture Redesign
 - **BUG-06**: Fix MSB comparison leak in division (BUG-DIV-02) — requires `__lt__`/`__gt__` to explicitly uncompute widened comparison temporaries, or redesigning comparison to avoid them entirely
 - **BUG-08**: Fix QFT division/modulo pervasive failures (BUG-QFT-DIV) — likely resolves once BUG-06 ancilla leak is fixed; root cause: `>=` creates widened temps with `operation_type=None` and `creation_scope=0`, invisible to cascade uncomputation and lazy GC
+- **BUG-09**: Fix _reduce_mod result corruption (BUG-MOD-REDUCE) — **Explicitly deferred**. Root cause: `_reduce_mod` uses iterative `>=` comparison and conditional subtraction; each comparison allocates temporary widened qints that entangle with the value register; across multiple iterations, un-uncomputed comparison qbools accumulate entanglement, corrupting the remainder (Phase 38 research, Phase 86-03 findings). A simple fix is insufficient because the uncomputation architecture cannot handle orphan temporaries from comparison operators (`operation_type=None`, `creation_scope=0`, `_start_layer=_end_layer=0`) — these temporaries are invisible to both cascade uncomputation and lazy GC cleanup. Required approach: Beauregard-style modular arithmetic (2003) using a fundamentally different circuit topology: `(a+b) mod N` implemented as add(a,b), sub(N), add(N) controlled by sign bit, sub(b) controlled by sign bit, requiring careful ancilla management and purpose-built circuit structure. No specific future phase assigned.
 
 ### Parametric Compilation
 - **PAR-01**: Compile once for all classical values
@@ -114,7 +115,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | BUG-06 | Future (uncomputation redesign) | Deferred |
 | BUG-07 | Phase 87 | Pending |
 | BUG-08 | Future (uncomputation redesign) | Deferred |
-| BUG-09 | Phase 87 | Pending |
+| BUG-09 | Future (Beauregard redesign) | Explicitly deferred |
 | DEBT-01 | Phase 83 | Complete |
 | DEBT-02 | Phase 83 | Complete |
 | DEBT-03 | Phase 83 | Complete |
@@ -142,4 +143,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-22*
-*Last updated: 2026-02-22 after roadmap creation*
+*Last updated: 2026-02-24 after Phase 87 BUG-09 deferral*
