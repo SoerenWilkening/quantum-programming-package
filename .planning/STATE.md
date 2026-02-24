@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v4.1 Quality & Efficiency -- Phase 85 (Optimizer Fix & Improvement) COMPLETE
+**Current focus:** v4.1 Quality & Efficiency -- Phase 86 (QFT Bug Fixes) COMPLETE
 
 ## Current Position
 
-Phase: 85 of 89 (Optimizer Fix & Improvement) -- COMPLETE
+Phase: 86 of 89 (QFT Bug Fixes) -- COMPLETE
 Plan: 3 of 3 in current phase (all plans complete)
-Status: Phase 85 complete. PERF-01 (loop fix), PERF-02 (binary search), PERF-03 (replay optimization) all done.
-Last activity: 2026-02-23 -- Completed 85-03 (compile replay optimization)
+Status: Phase 86 complete. BUG-04 (mixed-width addition) fixed, BUG-05 (cQQ_add rotation) fixed, BUG-06/BUG-08 (division ancilla leak) investigated and deferred.
+Last activity: 2026-02-24 -- Completed 86-03 (division ancilla leak investigation)
 
-Progress: [===================                               ] 4/8 phases (v4.1)
+Progress: [========================                          ] 5/8 phases (v4.1)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 255 (v1.0-v4.1)
+- Total plans completed: 258 (v1.0-v4.1)
 - Average duration: ~13 min/plan
-- Total execution time: ~40.8 hours
+- Total execution time: ~43.3 hours
 
 **By Milestone:**
 
@@ -30,7 +30,7 @@ Progress: [===================                               ] 4/8 phases (v4.1)
 | v1.0-v2.3 | 1-64 | 166 | Complete |
 | v3.0 Fault-Tolerant | 65-75 | 35 | Complete (2026-02-18) |
 | v4.0 Grover's Algorithm | 76-81 | 18 | Complete (2026-02-22) |
-| v4.1 Quality & Efficiency | 82-89 | 9 | In progress |
+| v4.1 Quality & Efficiency | 82-89 | 12 | In progress |
 
 **v4.1 Plan Details:**
 
@@ -45,6 +45,9 @@ Progress: [===================                               ] 4/8 phases (v4.1)
 | 85 | 01 | 12min | 2 | 23 |
 | 85 | 02 | 10min | 2 | 3 |
 | 85 | 03 | 8min | 2 | 3 |
+| 86 | 01 | 15min | 2 | 2 |
+| 86 | 02 | 15min | 2 | 1 |
+| 86 | 03 | 120min | 2 | 2 |
 
 ## Accumulated Context
 
@@ -101,28 +104,42 @@ See PROJECT.md Key Decisions table for full history.
 - Profiling shows 93% of replay time is Python overhead; C inject is only 7%
 - Further optimization would require Cython-level _replay (larger scope)
 
+**Phase 86-01:**
+- Zero-extend narrower operand at Python level before C dispatch (not modify C QQ_add)
+- Applied to __add__, __radd__, __sub__, __rsub__ for QQ path; CQ path unaffected
+
+**Phase 86-02:**
+- Source qubit mapping in cQQ_add corrected to match QQ_add convention
+- Only hot_path_cadd_qqq needed fixing; QQ_add already correct
+
+**Phase 86-03:**
+- BUG-06 deep fix deferred: widened comparison temps have operation_type=None, creation_scope=0
+- Four approaches attempted (layer tracking, cascade deps, algorithm rewrite, separate ancilla) -- all failed
+- Known-failing sets updated: KNOWN_DIV_MSB_LEAK (14 cases), KNOWN_MOD_MSB_LEAK (80 cases)
+- Root cause: uncomputation architecture cannot handle orphan temporaries from operators returning derived results
+
 ### Blockers/Concerns
 
-**Carry forward (all addressed in v4.1 phases):**
-- BUG-CQQ-QFT -> Phase 86 (root cause, must fix before BUG-QFT-DIV)
-- BUG-WIDTH-ADD -> Phase 86 (root cause)
-- BUG-QFT-DIV -> Phase 86 (compound bug, resolves after root causes)
-- BUG-DIV-02 -> Phase 86 (MSB comparison leak)
+**Resolved in Phase 86:**
+- BUG-CQQ-QFT -> FIXED (86-02: cQQ_add source qubit mapping)
+- BUG-WIDTH-ADD -> FIXED (86-01: zero-extend narrower operand)
+
+**Carry forward:**
+- BUG-DIV-02/BUG-QFT-DIV -> Deferred from Phase 86 (requires uncomputation architecture redesign)
 - BUG-COND-MUL-01 -> Phase 87 (scope/lifecycle, after QFT stable)
 - BUG-MOD-REDUCE -> Phase 87 (may defer -- needs Beauregard redesign)
 - 32-bit segfault -> Phase 87 (MAXLAYERINSEQUENCE fix)
 
 ### Research Flags
 
-- Phase 86 (QFT Bug Fixes): HIGH risk -- CCP rotation audit needed
 - Phase 87 (BUG-MOD-REDUCE): HIGH risk if attempted -- algorithm redesign
-- Phase 85 (Optimizer): MEDIUM risk -- golden-master capture first
+- Phase 87 (BUG-DIV-02): Requires uncomputation architecture changes (deferred from Phase 86)
 
 ## Session Continuity
 
-Last session: 2026-02-23
-Stopped at: Phase 85 complete. Ready for Phase 86 (QFT Bug Fixes).
-Resume action: Plan and execute Phase 86
+Last session: 2026-02-24
+Stopped at: Phase 86 complete. Ready for Phase 87 (Scope & Segfault Fixes).
+Resume action: Plan and execute Phase 87
 
 ---
-*State updated: 2026-02-23 -- Completed Phase 85 (optimizer fix & improvement) -- 3 plans complete*
+*State updated: 2026-02-24 -- Completed Phase 86 (QFT bug fixes) -- 3 plans complete (BUG-04 fixed, BUG-05 fixed, BUG-06/BUG-08 deferred)*

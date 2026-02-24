@@ -111,7 +111,7 @@
 - [x] **Phase 83: Tech Debt Cleanup** - Remove dead code, automate preprocessor sync, document sequence generation (completed 2026-02-23)
 - [x] **Phase 84: Security Hardening** - Add pointer validation, bounds checking, and C static analysis across backend boundaries (completed 2026-02-23)
 - [x] **Phase 85: Optimizer Fix & Improvement** (3/3 plans) -- completed 2026-02-23
-- [ ] **Phase 86: QFT Bug Fixes** - Fix root-cause QFT arithmetic bugs in dependency order (WIDTH-ADD, CQQ-QFT, DIV-02, QFT-DIV)
+- [x] **Phase 86: QFT Bug Fixes** (3/3 plans) -- completed 2026-02-24 (BUG-04 fixed, BUG-05 fixed, BUG-06/BUG-08 deferred)
 - [ ] **Phase 87: Scope & Segfault Fixes** - Fix controlled multiplication corruption, 32-bit segfault, qarray crash, and resolve MOD-REDUCE
 - [ ] **Phase 88: Binary Size Reduction** - Apply compiler flags and strip symbols to reduce .so file sizes by 30-50%
 - [ ] **Phase 89: Test Coverage** - Add missing test scenarios, integrate C tests, convert xfail markers for fixed bugs
