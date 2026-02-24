@@ -13,19 +13,31 @@ LDFLAGS = -lm
 # Source files
 BACKEND_SRC = ../../c_backend/src
 
-# Minimal sources for comparison tests
+# Sources for comparison tests (gate.c now requires optimizer.c for add_gate
+# due to Clifford+T decomposition added in Phase 74)
 BACKEND_SRCS = $(BACKEND_SRC)/Integer.c \
                $(BACKEND_SRC)/IntegerComparison.c \
                $(BACKEND_SRC)/gate.c \
-               $(BACKEND_SRC)/qubit_allocator.c
+               $(BACKEND_SRC)/qubit_allocator.c \
+               $(BACKEND_SRC)/optimizer.c \
+               $(BACKEND_SRC)/circuit_allocations.c \
+               $(BACKEND_SRC)/circuit_output.c \
+               $(BACKEND_SRC)/circuit_stats.c \
+               $(BACKEND_SRC)/circuit_optimizer.c \
+               $(BACKEND_SRC)/execution.c
 
 # Full sources needed for hot_path_mul tests (includes multiplication,
 # addition for QFT, execution, optimizer, circuit allocations, sequences)
 SEQ_SRCS = $(wildcard $(BACKEND_SRC)/sequences/add_seq_*.c)
+TOFFOLI_SEQ_SRCS = $(wildcard $(BACKEND_SRC)/sequences/toffoli_*.c)
 
 MUL_SRCS = $(BACKEND_SRC)/Integer.c \
            $(BACKEND_SRC)/IntegerAddition.c \
            $(BACKEND_SRC)/IntegerMultiplication.c \
+           $(BACKEND_SRC)/ToffoliMultiplication.c \
+           $(BACKEND_SRC)/ToffoliAdditionCDKM.c \
+           $(BACKEND_SRC)/ToffoliAdditionCLA.c \
+           $(BACKEND_SRC)/ToffoliAdditionHelpers.c \
            $(BACKEND_SRC)/gate.c \
            $(BACKEND_SRC)/qubit_allocator.c \
            $(BACKEND_SRC)/execution.c \
@@ -35,11 +47,15 @@ MUL_SRCS = $(BACKEND_SRC)/Integer.c \
            $(BACKEND_SRC)/circuit_stats.c \
            $(BACKEND_SRC)/circuit_optimizer.c \
            $(BACKEND_SRC)/hot_path_mul.c \
-           $(SEQ_SRCS)
+           $(SEQ_SRCS) \
+           $(TOFFOLI_SEQ_SRCS)
 
-# Sources for hot_path_add tests (addition only, no multiplication)
+# Sources for hot_path_add tests (addition only, includes toffoli dispatch)
 ADD_SRCS = $(BACKEND_SRC)/Integer.c \
            $(BACKEND_SRC)/IntegerAddition.c \
+           $(BACKEND_SRC)/ToffoliAdditionCDKM.c \
+           $(BACKEND_SRC)/ToffoliAdditionCLA.c \
+           $(BACKEND_SRC)/ToffoliAdditionHelpers.c \
            $(BACKEND_SRC)/gate.c \
            $(BACKEND_SRC)/qubit_allocator.c \
            $(BACKEND_SRC)/execution.c \
@@ -49,7 +65,9 @@ ADD_SRCS = $(BACKEND_SRC)/Integer.c \
            $(BACKEND_SRC)/circuit_stats.c \
            $(BACKEND_SRC)/circuit_optimizer.c \
            $(BACKEND_SRC)/hot_path_add.c \
-           $(SEQ_SRCS)
+           $(BACKEND_SRC)/hot_path_add_toffoli.c \
+           $(SEQ_SRCS) \
+           $(TOFFOLI_SEQ_SRCS)
 
 # Sources for hot_path_xor tests (bitwise only, no arithmetic sequences needed)
 XOR_SRCS = $(BACKEND_SRC)/Integer.c \
