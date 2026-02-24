@@ -216,7 +216,10 @@ Plans:
   2. Release builds have symbols stripped (via `-s` or post-build `strip`), with total .so size reduced by at least 20% from the pre-Phase-88 baseline
   3. `-Os` vs `-O3` has been evaluated for sequence files with benchmark results documented; whichever is chosen shows no performance regression beyond 15%
   4. `import quantum_language` succeeds and the full test suite passes after all size optimization changes
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 88-01-PLAN.md — Add section GC and symbol stripping to Release builds (SIZE-01, SIZE-02)
+- [ ] 88-02-PLAN.md — Benchmark -Os vs -O3 and finalize optimization level (SIZE-03)
 
 ### Phase 89: Test Coverage
 **Goal**: All bugs fixed in this milestone have regression tests, coverage gaps are identified and addressed, and C tests run in CI
