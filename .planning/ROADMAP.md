@@ -226,7 +226,7 @@ Phases execute in numeric order: 90 -> 91 -> 92 -> 93 -> 94
 | 65-75 | v3.0 | 35/35 | Complete | 2026-02-18 |
 | 76-81 | v4.0 | 18/18 | Complete | 2026-02-22 |
 | 82-89 | v4.1 | 21/21 | Complete | 2026-02-24 |
-| 90. Quantum Counting | v5.0 | 0/? | Not started | - |
+| 90. Quantum Counting | 1/2 | In Progress|  | - |
 | 91. Arithmetic Bug Fixes | v5.0 | 0/? | Not started | - |
 | 92. Modular Toffoli Arithmetic | v5.0 | 0/? | Not started | - |
 | 93. Depth/Ancilla Tradeoff | v5.0 | 0/? | Not started | - |
