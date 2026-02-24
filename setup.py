@@ -73,8 +73,33 @@ c_sources = [
     f"{C_SEQ}/add_seq_dispatch.c",
 ]
 
-compiler_args = ["-O3", "-pthread"]  # Removed -flto due to GCC LTO bug
-linker_args = []
+# Build type: Release by default (optimized for size), Debug via BUILD_TYPE=Debug
+# Profiling/coverage modes force Debug-like flags (incompatible with stripping)
+build_type = os.environ.get("BUILD_TYPE", "Release")
+is_release = build_type.lower() == "release"
+
+# Override: profiling/coverage modes need debug-like flags (no stripping, no gc-sections)
+if os.environ.get("QUANTUM_PROFILE") or os.environ.get("QUANTUM_COVERAGE"):
+    is_release = False
+
+if is_release:
+    # SIZE-01: -ffunction-sections + -fdata-sections enable per-function/data section GC
+    # SIZE-03: -O3 for now (Plan 02 evaluates -Os vs -O3)
+    # Removed -flto due to GCC LTO bug
+    compiler_args = ["-O3", "-ffunction-sections", "-fdata-sections", "-pthread"]
+    if sys.platform == "darwin":
+        # macOS linker uses -dead_strip instead of --gc-sections
+        # SIZE-02: -Wl,-x strips local symbols (macOS equivalent of -s)
+        linker_args = ["-Wl,-dead_strip", "-Wl,-x"]
+    else:
+        # SIZE-01: -Wl,--gc-sections removes unreferenced sections
+        # SIZE-02: -s strips all symbols at link time
+        linker_args = ["-Wl,--gc-sections", "-s"]
+else:
+    # Debug/development: keep -O3 for speed, no stripping
+    # Removed -flto due to GCC LTO bug
+    compiler_args = ["-O3", "-pthread"]
+    linker_args = []
 
 # Profiling build mode - enables Cython function-level profiling
 profiling_directives = {}
