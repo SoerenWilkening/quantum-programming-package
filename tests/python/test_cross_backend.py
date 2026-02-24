@@ -29,7 +29,8 @@ from qiskit import transpile
 from qiskit_aer import AerSimulator
 
 import quantum_language as ql
-from quantum_language._core import current_scope_depth
+
+# BUG-COND-MUL-01 workaround removed: scope depth bypass now in production __mul__/__rmul__
 
 # Add tests/ directory to sys.path so verify_helpers can be imported
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -731,10 +732,7 @@ class TestCrossBackendMultiplication:
                 qb = ql.qint(b, width=w)
                 ctrl = ql.qint(1, width=1)
                 with ctrl:
-                    saved = current_scope_depth.get()
-                    current_scope_depth.set(0)
                     qc = qa * qb
-                    current_scope_depth.set(saved)
                 return qc, (a * b) % (1 << w), [qa, qb, ctrl, qc]
 
             toffoli_result, qft_result = _compare_backends(build_fn, width, use_mps_toffoli=True)
@@ -754,10 +752,7 @@ class TestCrossBackendMultiplication:
                 qb = ql.qint(b, width=w)
                 ctrl = ql.qint(0, width=1)
                 with ctrl:
-                    saved = current_scope_depth.get()
-                    current_scope_depth.set(0)
                     qc = qa * qb
-                    current_scope_depth.set(saved)
                 return qc, 0, [qa, qb, ctrl, qc]
 
             toffoli_result, qft_result = _compare_backends(
@@ -853,10 +848,7 @@ class TestCrossBackendMultiplication:
                 qb = ql.qint(b, width=w)
                 ctrl = ql.qint(1, width=1)
                 with ctrl:
-                    saved = current_scope_depth.get()
-                    current_scope_depth.set(0)
                     qc = qa * qb
-                    current_scope_depth.set(saved)
                 return qc, (a * b) % (1 << w), [qa, qb, ctrl, qc]
 
             toffoli_result, qft_result = _compare_backends(build_fn, width, use_mps_toffoli=True)
@@ -877,10 +869,7 @@ class TestCrossBackendMultiplication:
                     qb = ql.qint(b, width=w)
                     ctrl = ql.qint(0, width=1)
                     with ctrl:
-                        saved = current_scope_depth.get()
-                        current_scope_depth.set(0)
                         qc = qa * qb
-                        current_scope_depth.set(saved)
                     return qc, 0, [qa, qb, ctrl, qc]
 
                 toffoli_result, qft_result = _compare_backends(
@@ -919,10 +908,7 @@ class TestCrossBackendMultiplication:
                 qa = ql.qint(a, width=w)
                 ctrl = ql.qint(1, width=1)
                 with ctrl:
-                    saved = current_scope_depth.get()
-                    current_scope_depth.set(0)
                     qc = qa * b
-                    current_scope_depth.set(saved)
                 return qc, (a * b) % (1 << w), [qa, ctrl, qc]
 
             toffoli_result, qft_result = _compare_backends(build_fn, width, use_mps_toffoli=True)
@@ -941,10 +927,7 @@ class TestCrossBackendMultiplication:
                 qa = ql.qint(a, width=w)
                 ctrl = ql.qint(0, width=1)
                 with ctrl:
-                    saved = current_scope_depth.get()
-                    current_scope_depth.set(0)
                     qc = qa * b
-                    current_scope_depth.set(saved)
                 return qc, 0, [qa, ctrl, qc]
 
             toffoli_result, qft_result = _compare_backends(
@@ -1037,10 +1020,7 @@ class TestCrossBackendMultiplication:
                 qa = ql.qint(a, width=w)
                 ctrl = ql.qint(1, width=1)
                 with ctrl:
-                    saved = current_scope_depth.get()
-                    current_scope_depth.set(0)
                     qc = qa * b
-                    current_scope_depth.set(saved)
                 return qc, (a * b) % (1 << w), [qa, ctrl, qc]
 
             toffoli_result, qft_result = _compare_backends(build_fn, width, use_mps_toffoli=True)

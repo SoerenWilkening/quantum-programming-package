@@ -35,7 +35,8 @@ from qiskit_aer import AerSimulator
 from verify_helpers import format_failure_message
 
 import quantum_language as ql
-from quantum_language._core import current_scope_depth
+
+# BUG-COND-MUL-01 workaround removed: scope depth bypass now in production __mul__/__rmul__
 
 warnings.filterwarnings("ignore", message="Value .* exceeds")
 
@@ -517,11 +518,7 @@ class TestToffoliControlledQQMultiplication:
                     qb = ql.qint(b, width=w)
                     ctrl = ql.qint(1, width=1)  # control = |1>
                     with ctrl:
-                        # BUG-COND-MUL-01 workaround: prevent scope registration
-                        saved = current_scope_depth.get()
-                        current_scope_depth.set(0)
                         qc = qa * qb
-                        current_scope_depth.set(saved)
                     return ((a * b) % (1 << w), [qa, qb, ctrl, qc])
 
                 actual, expected = _verify_toffoli_cmul_qq(circuit_builder, width)
@@ -549,10 +546,7 @@ class TestToffoliControlledQQMultiplication:
                     qb = ql.qint(b, width=w)
                     ctrl = ql.qint(0, width=1)  # control = |0>
                     with ctrl:
-                        saved = current_scope_depth.get()
-                        current_scope_depth.set(0)
                         qc = qa * qb
-                        current_scope_depth.set(saved)
                     return (0, [qa, qb, ctrl, qc])  # expect 0 (no mul)
 
                 actual, expected = _verify_toffoli_cmul_qq(circuit_builder, width)
@@ -587,10 +581,7 @@ class TestToffoliControlledCQMultiplication:
                     qa = ql.qint(a, width=w)
                     ctrl = ql.qint(1, width=1)
                     with ctrl:
-                        saved = current_scope_depth.get()
-                        current_scope_depth.set(0)
                         qa *= b
-                        current_scope_depth.set(saved)
                     return ((a * b) % (1 << w), [qa, ctrl])
 
                 actual, expected = _verify_toffoli_cmul_cq(circuit_builder, width)
@@ -624,10 +615,7 @@ class TestToffoliControlledCQMultiplication:
                     qa = ql.qint(a, width=w)
                     ctrl = ql.qint(0, width=1)
                     with ctrl:
-                        saved = current_scope_depth.get()
-                        current_scope_depth.set(0)
                         qa *= b
-                        current_scope_depth.set(saved)
                     return (0, [qa, ctrl])  # result register stays 0
 
                 actual, expected = _verify_toffoli_cmul_cq(circuit_builder, width)
@@ -660,10 +648,7 @@ class TestToffoliControlledMultiplicationGatePurity:
         b = ql.qint(3, width=2)
         ctrl = ql.qint(1, width=1)
         with ctrl:
-            saved = current_scope_depth.get()
-            current_scope_depth.set(0)
             c = a * b
-            current_scope_depth.set(saved)
 
         qasm_str = ql.to_openqasm()
 
@@ -709,10 +694,7 @@ class TestToffoliControlledMultiplicationGatePurity:
         a = ql.qint(2, width=2)
         ctrl = ql.qint(1, width=1)
         with ctrl:
-            saved = current_scope_depth.get()
-            current_scope_depth.set(0)
             a *= 3
-            current_scope_depth.set(saved)
 
         qasm_str = ql.to_openqasm()
 

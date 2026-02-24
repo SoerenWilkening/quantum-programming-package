@@ -620,8 +620,17 @@
 				(<circuit_s*>_circ).layer_floor = _saved_floor_mul
 			raise TypeError("Multiplication requires qint or int")
 
+		# BUG-COND-MUL-01 fix: prevent result registration in scope frame.
+		# Multiplication results should never be auto-uncomputed by scope exit.
+		# The user explicitly assigns them; cleanup is handled by GC, not scope.
+		_saved_scope = current_scope_depth.get()
+		current_scope_depth.set(0)
+
 		# Allocate result with correct width
 		result = qint(width=result_width)
+
+		# Restore scope depth after result allocation
+		current_scope_depth.set(_saved_scope)
 
 		# Perform multiplication into result
 		self.multiplication_inplace(other, result)
@@ -677,7 +686,14 @@
 			# qint * qint should use __mul__, not __rmul__
 			result_width = max(self.bits, (<qint>other).bits)
 
+		# BUG-COND-MUL-01 fix: prevent result registration in scope frame
+		_saved_scope_rmul = current_scope_depth.get()
+		current_scope_depth.set(0)
+
 		result = qint(width=result_width)
+
+		current_scope_depth.set(_saved_scope_rmul)
+
 		self.multiplication_inplace(other, result)
 
 		# Phase 41: Layer tracking for uncomputation
