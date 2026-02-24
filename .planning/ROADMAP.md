@@ -122,7 +122,7 @@
 
 **Milestone Goal:** Fix all deferred arithmetic bugs and add modular Toffoli arithmetic, parametric compilation, automatic depth/ancilla tradeoff, and quantum counting.
 
-- [ ] **Phase 90: Quantum Counting** - `ql.count_solutions()` API wrapping IQAE for exact solution count estimation
+- [x] **Phase 90: Quantum Counting** - `ql.count_solutions()` API wrapping IQAE for exact solution count estimation (completed 2026-02-24)
 - [ ] **Phase 91: Arithmetic Bug Fixes** - Fix MSB comparison leak, QFT division failures, and modular reduction corruption
 - [ ] **Phase 92: Modular Toffoli Arithmetic** - Beauregard modular add/sub/mul at C level for Shor's algorithm building blocks
 - [ ] **Phase 93: Depth/Ancilla Tradeoff** - Policy-based CLA vs RCA adder selection via `ql.option('tradeoff', ...)`
@@ -226,7 +226,7 @@ Phases execute in numeric order: 90 -> 91 -> 92 -> 93 -> 94
 | 65-75 | v3.0 | 35/35 | Complete | 2026-02-18 |
 | 76-81 | v4.0 | 18/18 | Complete | 2026-02-22 |
 | 82-89 | v4.1 | 21/21 | Complete | 2026-02-24 |
-| 90. Quantum Counting | 1/2 | In Progress|  | - |
+| 90. Quantum Counting | 2/2 | Complete   | 2026-02-24 | - |
 | 91. Arithmetic Bug Fixes | v5.0 | 0/? | Not started | - |
 | 92. Modular Toffoli Arithmetic | v5.0 | 0/? | Not started | - |
 | 93. Depth/Ancilla Tradeoff | v5.0 | 0/? | Not started | - |

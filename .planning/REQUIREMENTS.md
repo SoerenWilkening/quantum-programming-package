@@ -26,7 +26,7 @@ Requirements for v5.0 Advanced Arithmetic & Compilation. Each maps to roadmap ph
 
 - [x] **CNT-01**: User can call ql.count_solutions(oracle, width=n) to get integer solution count M
 - [x] **CNT-02**: CountResult includes .count, .estimate, .count_interval, .search_space, .num_oracle_calls
-- [ ] **CNT-03**: Quantum counting verified against known-M oracles (M=1,2,3)
+- [x] **CNT-03**: Quantum counting verified against known-M oracles (M=1,2,3)
 
 ### Depth/Ancilla Tradeoff
 
@@ -102,7 +102,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MOD-05 | Phase 92 | Pending |
 | CNT-01 | Phase 90 | Complete |
 | CNT-02 | Phase 90 | Complete |
-| CNT-03 | Phase 90 | Pending |
+| CNT-03 | Phase 90 | Complete |
 | TRD-01 | Phase 93 | Pending |
 | TRD-02 | Phase 93 | Pending |
 | TRD-03 | Phase 93 | Pending |
