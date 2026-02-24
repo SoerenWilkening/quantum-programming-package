@@ -1,425 +1,424 @@
-# Domain Pitfalls: Pixel-Art Circuit Visualization
+# Pitfalls Research: v5.0 Advanced Arithmetic & Compilation
 
-**Domain:** PIL/Pillow-based compact pixel-art quantum circuit renderer
-**Researched:** 2026-02-03
-**Confidence:** HIGH (Pillow docs verified, circuit data structures inspected, domain patterns from quantum viz literature)
+**Domain:** Adding modular Toffoli arithmetic, parametric compilation, automatic depth/ancilla tradeoff, and quantum counting to an existing quantum programming framework
+**Researched:** 2026-02-24
+**Confidence:** HIGH for codebase-specific pitfalls (source inspected + existing bug context), MEDIUM for algorithmic pitfalls (literature-verified)
 
 ## Executive Summary
 
-Building a pixel-art circuit renderer for quantum circuits up to 200+ qubits and thousands of layers involves pitfalls in three categories: (1) PIL/Pillow performance and memory constraints that silently degrade or crash at scale, (2) circuit data extraction challenges specific to this project's C backend `circuit_s` structure, and (3) visual design mistakes that make large circuits unreadable despite being technically rendered. The most dangerous pitfalls are those that work fine during development with small test circuits (5-10 qubits) but fail catastrophically at production scale (100+ qubits, 1000+ layers).
+The v5.0 milestone combines four distinct feature tracks -- modular Toffoli arithmetic, parametric compilation, automatic depth/ancilla tradeoff, and quantum counting -- on top of an existing framework with three known deferred bugs (BUG-DIV-02, BUG-QFT-DIV, BUG-MOD-REDUCE) and two known architectural limitations (layer-based uncomputation unreliable under optimizer parallelization, BK CLA subtraction falling back to RCA). The primary danger is that these features interact through shared subsystems (the circuit optimizer, the uncomputation mechanism, the `@ql.compile` cache, and the qubit allocator) in ways that compound existing bugs rather than merely adding new ones. The pitfalls below are ordered by severity: the first six are critical (cause silent wrong results or require rewrites), the next five are moderate (cause specific failure modes or performance issues), and the remainder are minor but require awareness.
 
 ---
 
 ## Critical Pitfalls
 
-Mistakes that cause crashes, unusable output, or require architecture rewrites.
+### Pitfall 1: Beauregard Modular Addition Requires Comparison-on-Dirty-Ancilla -- Interacts with BUG-DIV-02
 
-### Pitfall 1: Pillow Decompression Bomb Limits on Generated Images
+**What goes wrong:**
+Beauregard's modular addition circuit (the standard for Shor's algorithm) works by: (1) add a+b, (2) subtract N, (3) check MSB to see if result went negative, (4) conditionally add N back, (5) reset the MSB flag qubit. Step 5 requires subtracting `a` from the register, checking the MSB, flipping the flag, and adding `a` back. This "reset the auxiliary" step is structurally identical to the pattern that causes BUG-DIV-02 (MSB comparison leak in division -- orphan temporaries not uncomputed). The existing `_reduce_mod` in `qint_mod.pyx` (line 107-131) uses `cmp = value >= self._modulus` followed by `with cmp: value -= self._modulus`, which creates a comparison qbool that becomes an orphan temporary after the `with` block exits.
 
-**What goes wrong:** Pillow has a built-in `MAX_IMAGE_PIXELS` limit (default ~178 million pixels) that raises `DecompressionBombError` when exceeded. A 200-qubit, 2000-layer circuit with even 3px-per-gate spacing easily produces images of 6000x600+ pixels at detail zoom -- this is fine. But at overview zoom with labels, margins, and legends, or if the spacing math is slightly wrong, the pixel count can exceed the threshold. More critically, if someone accidentally creates an image at the wrong zoom level (e.g., detail zoom on a massive circuit), the image dimensions can balloon to 200,000+ pixels wide.
+**Why it happens:**
+The existing modular reduction uses the high-level comparison operators which allocate comparison result qubits. These qubits are tracked by the layer-based uncomputation system, but when the optimizer parallelizes gates, the layer ranges become unreliable (known limitation from PROJECT.md). Beauregard's algorithm makes this worse because the auxiliary reset step requires a comparison, a conditional operation, AND correct uncomputation of the comparison result -- all three of which must succeed for the ancilla to be clean for the next iteration.
 
-**Why it happens:** The limit is designed to prevent loading malicious images, not to constrain generation. Developers test with small circuits during development and never hit the limit. The first time a user visualizes their 150-qubit QFT circuit, it crashes.
-
-**Consequences:**
-- `PIL.Image.DecompressionBombError` or `DecompressionBombWarning` at runtime
-- Users see a cryptic error unrelated to their quantum code
-- If bypassed naively with `Image.MAX_IMAGE_PIXELS = None`, memory exhaustion becomes possible
+**How to avoid:**
+1. Fix BUG-DIV-02 FIRST, before implementing Beauregard modular arithmetic. The same orphan-temporary pattern will appear in modular addition.
+2. Implement Beauregard's modular addition at the C level as a single atomic operation, not composed from Python-level `>=` and `with` blocks. This avoids the layer-tracking problems entirely because the C-level sequence handles all ancilla internally.
+3. The Beauregard circuit needs exactly one ancilla qubit (the MSB flag). Allocate it explicitly at the start and manage it through the entire sequence, never letting it escape to the Python-level uncomputation system.
+4. Test the complete modular add-subtract-compare-reset cycle exhaustively for widths 2-8 with all input pairs before composing into modular multiplication.
 
 **Warning signs:**
-- No explicit image size calculation before `Image.new()`
-- No maximum dimension capping logic
-- Tests only use circuits under 20 qubits
+- Modular addition works for single calls but produces wrong results when chained (e.g., `x += a mod N; x += b mod N` gives wrong result for the second addition)
+- The MSB flag qubit is not in |0> after the operation (measure it in debug mode)
+- `circuit_stats()['current_in_use']` grows with each modular operation call
 
-**Prevention:**
-- Calculate image dimensions BEFORE creating the `Image` object: `width = num_layers * px_per_layer + margins`, `height = num_qubits * px_per_qubit + margins`
-- If dimensions exceed a configurable cap (e.g., 32000x32000), automatically switch to overview mode or tile
-- Set `Image.MAX_IMAGE_PIXELS` explicitly to a known safe value rather than disabling it
-- Add a pre-check: `if width * height > MAX_SAFE_PIXELS: raise ValueError("Circuit too large for detail mode, use overview")`
-
-**Phase:** Address in the very first rendering phase (core renderer). Dimension calculation must be the first thing the renderer does.
-
-**Confidence:** HIGH -- verified from [Pillow limits documentation](https://pillow.readthedocs.io/en/stable/reference/limits.html) and [GitHub issue #5218](https://github.com/python-pillow/Pillow/issues/5218).
+**Phase to address:**
+Bug fix phase (BUG-DIV-02) must precede modular Toffoli arithmetic implementation. Attempting to build modular arithmetic on the broken comparison/uncomputation foundation will compound bugs.
 
 ---
 
-### Pitfall 2: ImageDraw Per-Call Overhead at Scale
+### Pitfall 2: Modular Reduction Iterative Subtraction Creates O(N) Garbage Qubits
 
-**What goes wrong:** Each `ImageDraw.rectangle()`, `ImageDraw.line()`, or `ImageDraw.point()` call incurs Python-to-C boundary crossing overhead. For a 100-qubit, 1000-layer circuit, you need approximately: 100 horizontal wire lines + 100,000 gate icons (rectangles/points) + 50,000 control lines = 150,000+ individual draw calls. At ~10-50 microseconds per call, this takes 1.5-7.5 seconds just for drawing -- unacceptable for an API that should feel instant for small-to-medium circuits.
+**What goes wrong:**
+The current `_reduce_mod` implementation (line 107-131 of `qint_mod.pyx`) uses a Python-level loop: `for _ in range(iterations): cmp = value >= self._modulus; with cmp: value -= self._modulus`. Each iteration creates a comparison qbool (`cmp`). In the current system, these comparison results persist without auto-uncompute (see Key Decision: "Comparison results persist without auto-uncompute"). This means each modular reduction creates `iterations` orphan qubits. For an n-bit modulus, `iterations = O(log(2^n / N))`, but for modular multiplication the reduction is called after each partial product addition, creating `O(n * log(2^n / N))` total orphan qubits across a single modular multiply.
 
-**Why it happens:** The natural approach is a nested loop: `for layer in layers: for qubit in qubits: draw.rectangle(...)`. This is clean code but slow code. Developers benchmark with 5-qubit circuits where 50 draw calls take <1ms, and never notice the O(qubits * layers) scaling problem.
+**Why it happens:**
+BUG-MOD-REDUCE was deferred specifically because the existing `_reduce_mod` has result corruption issues. The root cause is that the iterative conditional-subtraction pattern does not properly track which comparison qubits need uncomputation and in what order. Beauregard's algorithm solves this differently -- it uses a single ancilla qubit reset within the modular adder itself, rather than relying on external iterative reduction.
 
-**Consequences:**
-- `ql.draw_circuit()` takes 5-30 seconds for large circuits
-- Users perceive the framework as slow
-- Temptation to "optimize later" but the architecture locks in per-call patterns
+**How to avoid:**
+1. Replace the iterative `_reduce_mod` with Beauregard-style in-circuit modular reduction. This is NOT an optimization -- it is a correctness requirement. The iterative approach fundamentally cannot work correctly in a quantum circuit because each comparison creates entanglement that must be undone.
+2. Implement modular addition as a single C-level primitive: `toffoli_mod_add(bits, modulus, a_qubits, b_qubits, ancilla)`. The primitive internally handles: add, subtract N, check MSB, conditional add-back, reset ancilla.
+3. Do NOT compose modular operations from Python-level arithmetic operators. The Python-level composition creates intermediate qint/qbool objects whose lifetime management conflicts with the quantum requirement that all ancilla be returned to |0>.
 
 **Warning signs:**
-- Individual `draw.rectangle()` calls inside nested loops
-- No batching strategy in the design
-- No performance test with circuits >50 qubits
+- Qubit count for modular multiplication is orders of magnitude higher than expected
+- Modular multiplication works for 2-bit but fails for 3+ bit moduli
+- Qiskit verification shows non-zero probability on ancilla qubits after modular operations
 
-**Prevention:**
-- Use NumPy array operations for bulk pixel manipulation: create a NumPy array, use slice assignment (`arr[y1:y2, x1:x2] = color`) for filled rectangles, then convert to PIL Image with `Image.fromarray(arr)`
-- For horizontal wire lines: `arr[y, x1:x2] = wire_color` (single array slice per qubit)
-- For gate icons at 2-3px: pre-define gate patterns as small NumPy arrays and stamp them with slice assignment
-- Reserve `ImageDraw` only for operations that genuinely need it (e.g., anti-aliased text for labels, if any)
-- Benchmark target: <100ms for a 100-qubit, 1000-layer circuit
-
-**Phase:** Must be decided in architecture phase. Switching from ImageDraw to NumPy after the renderer is built requires rewriting all drawing code.
-
-**Confidence:** HIGH -- per-call overhead is a well-documented Pillow performance issue, confirmed by [Pillow issue #2450](https://github.com/python-pillow/Pillow/issues/2450) and the [Pillow performance page](https://python-pillow.github.io/pillow-perf/).
+**Phase to address:**
+BUG-MOD-REDUCE fix phase. This must be redesigned as a C-level primitive, not patched at the Python level.
 
 ---
 
-### Pitfall 3: No Python API to Iterate Circuit Gates from C Backend
+### Pitfall 3: Parametric Compilation Cache Key Must Include Arithmetic Mode AND CLA Override
 
-**What goes wrong:** The existing `circuit` class in `_core.pyx` exposes aggregate statistics (`gate_count`, `depth`, `gate_counts`) and text output (`visualize()`, OpenQASM export), but does NOT expose a Python-accessible API to iterate over individual gates at specific layers and positions. The `circuit_s.sequence[layer][gate_index]` data is only accessible from C/Cython code. Building a pure-Python renderer requires either: (a) adding a new Cython function to extract gate data into Python objects, or (b) building the renderer in Cython.
+**What goes wrong:**
+The `@ql.compile` decorator (compile.py) caches gate sequences keyed by `(classical_args, widths, control_count, qubit_saving)`. The v3.0 Toffoli arithmetic added `arithmetic_mode` (QFT vs Toffoli) and `cla_override` (auto CLA vs force RCA) as circuit-level options. The cache key does NOT include either of these. If a user compiles a function in Toffoli mode, switches to QFT mode, and replays the cached function, the Toffoli gate sequence is replayed into a QFT-mode context. The gates themselves will be emitted correctly (they are just X/CX/CCX/P gates), but the qubit layout assumptions are wrong: Toffoli sequences expect ancilla qubits that the QFT layout does not provide.
 
-**Why it happens:** The existing text-based `circuit_visualize()` and `circuit_to_qasm_string()` functions are implemented entirely in C, so they never needed to expose per-gate data to Python. A Python-based PIL renderer is the first consumer that needs gate-by-gate access from Python.
+More subtly: when the automatic depth/ancilla tradeoff feature is added (OPT-01), the adder selection (RCA vs CLA) may change per-call based on width and available qubit budget. If the compile cache stores a sequence that used RCA (width=4, below CLA threshold), and the function is later called with width=8 (above CLA threshold), the cache hit returns the wrong sequence.
 
-**Consequences:**
-- If not addressed upfront, the renderer cannot access the data it needs to render
-- Bolt-on solutions (parsing the text output of `visualize()`, parsing OpenQASM) are fragile and slow
-- Scope creep: what was "just a renderer" becomes "renderer + Cython bindings refactor"
+**Why it happens:**
+The compile.py cache was designed in v2.0 before the Toffoli backend existed. The v3.0 and v4.0 milestones did not update the cache key despite adding new circuit-level mode flags. The existing pitfall from PITFALLS-COMPILE-DECORATOR.md (Pitfall 8: QFT vs Toffoli mode) flagged this, but it was not fixed in v4.0 or v4.1.
+
+**How to avoid:**
+1. Extend the compile cache key immediately: `cache_key = (classical_args, widths, control_count, qubit_saving, arithmetic_mode, cla_override)`. This is a one-line change in `CompiledFunc.__call__` in compile.py.
+2. When adding automatic depth/ancilla tradeoff, the adder selection decision must be captured in the cache key or forced to be deterministic for a given cache key. If the tradeoff is dynamic (based on runtime qubit budget), then compiled functions CANNOT use automatic tradeoff -- they must use the mode that was active during capture.
+3. Add a regression test: compile a function in Toffoli mode, switch to QFT mode, call again, verify it recompiles (cache miss) and produces correct results.
 
 **Warning signs:**
-- Renderer design assumes gate data is available as Python lists/dicts
-- No Cython binding task in the plan
-- Design doc references `circuit.gates` or similar API that doesn't exist
+- Compiled function gate count changes when arithmetic mode changes (should trigger recompilation)
+- Circuit contains Toffoli gates when QFT mode is active, or vice versa
+- Segfault when replaying compiled function after mode change (qubit layout mismatch)
 
-**Prevention:**
-- First task must be creating a Cython function like `get_circuit_data()` that returns a Python-friendly structure:
-  ```python
-  # Returns list of layers, each layer is list of gate dicts
-  [
-    [{"type": "H", "target": 0, "controls": [], "value": 0.0}, ...],  # layer 0
-    [{"type": "CX", "target": 3, "controls": [1], "value": 0.0}, ...],  # layer 1
-    ...
-  ]
-  ```
-- This function walks `circuit_s.sequence` and `circuit_s.used_gates_per_layer` in Cython, converting `gate_t` structs to Python dicts
-- The `Standardgate_t` enum (`X, Y, Z, R, H, Rx, Ry, Rz, P, M`) maps to string names
-- Must handle `large_control` (when `NumControls > 2`) by reading the dynamically allocated control array
-- Keep the Cython binding minimal and stable; all rendering logic stays in pure Python
-
-**Phase:** This is a prerequisite -- must be the very first implementation task before any rendering code.
-
-**Confidence:** HIGH -- verified by reading `_core.pxd` (line 62-93), `_core.pyx` (line 302-344), `types.h` (line 64-82), and `circuit.h` (line 54-79). No per-gate Python API exists.
+**Phase to address:**
+Parametric compilation phase (PAR-01/PAR-02). Fix cache key BEFORE adding new mode flags.
 
 ---
 
-### Pitfall 4: Zoom Level Produces Unreadable Output at Wrong Scale
+### Pitfall 4: BK CLA Subtraction Fallback Breaks Modular Arithmetic Bidirectionality
 
-**What goes wrong:** Two zoom levels (overview and detail) sounds simple, but choosing the wrong one for a given circuit size makes the output useless. Detail mode on a 200-qubit circuit produces an image so wide/tall it's impractical. Overview mode on a 5-qubit circuit wastes the visual space and makes gates indistinguishable. Worse, if there's no automatic selection, users must manually pick -- and most won't know which to use.
+**What goes wrong:**
+Beauregard's modular addition requires both addition AND subtraction with the same circuit structure (subtraction = inverse of addition). The BK CLA adder currently falls back to RCA for subtraction because the carry-copy ancilla cannot be uncomputed in reverse (known limitation from PROJECT.md). This means: if automatic depth/ancilla tradeoff selects CLA for a modular addition, the addition uses CLA (O(log n) depth) but the internal subtraction falls back to RCA (O(n) depth). The modular addition circuit is now asymmetric -- the forward and reverse paths use different adder implementations with different qubit layouts and different ancilla counts. This breaks the Beauregard pattern where addition and subtraction are exact inverses.
 
-**Why it happens:** Developers implement both modes and test each with appropriate circuits. They never test detail mode on huge circuits or overview mode on tiny ones, because they know which to use. Users don't.
+**Why it happens:**
+The BK CLA compute-copy-uncompute pattern leaves carry-copy ancilla dirty (documented in tests/python/test_cla_bk_algorithm.py lines 7-12). Running the sequence in reverse (for subtraction) would require the carry-copy ancilla to start in the correct dirty state, which is impossible without computing it first -- creating a circular dependency.
 
-**Consequences:**
-- Users get a 50,000px wide image they can't view
-- Users get a 100x50px overview where everything is a dot
-- Complaints about "broken" visualization that's technically correct but practically useless
+**How to avoid:**
+1. For modular arithmetic, force RCA mode for all internal additions and subtractions. Do NOT allow automatic CLA selection within modular primitives. This ensures forward/reverse symmetry.
+2. OR: Implement a CLA subtractor that does not rely on inverting the CLA adder. The Draper-Kutin CLA paper (quant-ph/0406142) describes a direct subtraction circuit, but it requires different ancilla management.
+3. The automatic depth/ancilla tradeoff feature (OPT-01) must be aware of this constraint: when selecting an adder for use inside a modular arithmetic primitive, only RCA is safe unless a dedicated CLA subtractor is implemented.
+4. Document this constraint clearly in the API: `ql.option('cla', True)` may not apply to modular arithmetic internally.
 
 **Warning signs:**
-- No automatic mode selection logic
-- No maximum image dimension constraints
-- Tests don't verify mode switching behavior at boundary sizes
+- Modular addition gate count is asymmetric (forward path cheaper than reverse)
+- Modular addition works but modular subtraction fails
+- Automatic tradeoff selects CLA for modular operations but results are wrong
 
-**Prevention:**
-- Implement automatic mode selection based on circuit dimensions:
-  - Detail mode: `num_qubits <= 30 AND num_layers <= 200` (approximately)
-  - Overview mode: everything else
-  - Allow user override: `ql.draw_circuit(mode="overview")` / `ql.draw_circuit(mode="detail")`
-- Cap maximum image dimensions (e.g., 8192px in any direction for default output)
-- If the circuit exceeds even overview capacity, provide a clear error message with the circuit dimensions
-- Return image dimensions in the API response so users can make informed decisions
+**Phase to address:**
+Automatic depth/ancilla tradeoff phase (OPT-01). The tradeoff logic must exclude CLA from modular primitives unless a direct CLA subtractor exists.
 
-**Phase:** Design phase -- the mode selection thresholds affect all rendering code.
+---
+
+### Pitfall 5: Quantum Counting Sign Ambiguity Produces Wrong Solution Count
+
+**What goes wrong:**
+Quantum counting applies QPE to the Grover operator G = WV (diffusion * oracle). The eigenvalues of G are e^(+/-2i*theta) where sin^2(theta) = M/N. However, the standard implementation of the diffusion operator W = 2|s><s| - I has a global phase. The existing diffusion operator in `diffusion.py` implements W~ = -W (X-MCZ-X pattern), which is equivalent to -2|s><s| + I. This global phase is irrelevant for Grover search (measurement probabilities unchanged) but shifts the QPE eigenvalues from e^(+/-2i*theta) to -e^(+/-2i*theta) = e^(+/-2i*(theta +/- pi/2)). Using the standard formula M = N * sin^2(pi * j / 2^t) with the shifted eigenvalue produces the wrong solution count.
+
+As shown by Chung and Nepomechie (arXiv:2310.07428), using the wrong sign convention in quantum counting can yield m approximately 5 instead of the correct m approximately 3 for a specific example -- an error by almost a factor of 2.
+
+**Why it happens:**
+The existing `diffusion()` function was designed for Grover search where the sign does not matter. Quantum counting reuses this diffusion operator but applies QPE, where the sign matters critically.
+
+**How to avoid:**
+1. When implementing `ql.count_solutions`, use the corrected formula: `M = N * sin^2(pi * (j/2^t - 1/2))` if using the W~ = -W diffusion operator, NOT the standard `M = N * sin^2(pi * j / 2^t)`.
+2. OR: Modify the diffusion operator for quantum counting to include the correct global phase (add an extra global phase gate after the X-MCZ-X pattern).
+3. Add a parameter to `diffusion()`: `sign_convention='grover'` (default, omits phase) vs `sign_convention='counting'` (includes correct phase for QPE).
+4. Test with known solution counts: oracle that marks exactly k solutions out of N, verify `count_solutions` returns k.
+
+**Warning signs:**
+- `count_solutions` returns approximately correct but consistently off by a factor related to pi/2
+- Solution count is wrong by a symmetric amount (e.g., returns N-M instead of M)
+- QPE phase outputs cluster around unexpected values
+
+**Phase to address:**
+Quantum counting phase (GADV-01). Must be addressed in the core counting algorithm design, not as a post-hoc fix.
+
+---
+
+### Pitfall 6: Parametric Compilation Cannot Parameterize Toffoli CQ Sequences
+
+**What goes wrong:**
+Parametric compilation (PAR-01/PAR-02) aims to "compile once for all classical values." For QFT-based CQ operations, this is conceptually possible: `CQ_add(bits=8, value=V)` produces a sequence where the classical value `V` only affects rotation angles (gate values), not circuit topology. The topology (which qubits connect to which) is identical for all values of V at the same width. So a parametric version could store the topology once and patch rotation angles per-value.
+
+But for Toffoli-based CQ operations, this is NOT possible. `toffoli_CQ_add(bits=8, value=V)` generates a structurally different circuit for each value of V. The inline CQ generators (Phase 73) exploit known classical bit values to eliminate gates at zero-bit positions -- a value with 3 set bits produces fewer Toffoli gates than a value with 7 set bits. The circuit TOPOLOGY changes per value, not just gate parameters.
+
+**Why it happens:**
+The Toffoli CQ optimization (Phase 73) specifically designed the CQ path to be value-dependent for T-count reduction. This is correct for performance but fundamentally incompatible with parametric compilation's goal of compile-once-replay-many.
+
+**How to avoid:**
+1. Parametric compilation for Toffoli CQ must be explicitly scoped out or handled differently: either (a) use the non-optimized path (X-init temp, run QQ adder, X-cleanup) which has fixed topology per width, or (b) cache per-value as the current `@ql.compile` does (not truly parametric, but correct).
+2. Document clearly: "Parametric compilation parameterizes over QFT rotation angles. Toffoli CQ operations are value-dependent and require per-value compilation."
+3. If implementing parametric compilation, detect Toffoli mode and either fall back to per-value caching or use the unoptimized CQ path for parametric functions.
+4. The compile cache key already includes classical args, so per-value caching is the existing behavior. The new feature should NOT change this for Toffoli mode.
+
+**Warning signs:**
+- Parametric compiled function produces wrong results in Toffoli mode when classical argument changes
+- T-count is unexpectedly high (using unoptimized CQ path when optimized was expected)
+- Parametric compiled function works in QFT mode but fails in Toffoli mode
+
+**Phase to address:**
+Parametric compilation phase (PAR-01/PAR-02). Must design the parametric boundary carefully per backend.
 
 ---
 
 ## Moderate Pitfalls
 
-Mistakes that cause visual bugs, performance issues, or technical debt.
+### Pitfall 7: Automatic Depth/Ancilla Tradeoff Requires Qubit Budget Information Not Currently Available
 
-### Pitfall 5: Resampling Filter Destroys Pixel Art on Zoom
+**What goes wrong:**
+The automatic tradeoff (OPT-01) should select RCA (1 ancilla, O(n) depth) vs CLA (O(n) ancilla, O(log n) depth) based on the circuit's qubit budget. But the framework has no concept of a qubit budget. The `qubit_allocator.c` allocates qubits up to `ALLOCATOR_MAX_QUBITS` (8192) without any feedback about how many qubits are "affordable." The decision to use CLA vs RCA currently depends solely on width (`cla_override == 0 && result_bits >= CLA_THRESHOLD` in hot_path_add_toffoli.c line 112), not on available qubit headroom.
 
-**What goes wrong:** When scaling the rendered image (for overview mode or for display), using PIL's default `Resampling.BICUBIC` or `Resampling.LANCZOS` filter blurs the pixel-art gate icons into unrecognizable smudges. A carefully crafted 3px "H" gate icon becomes a blurry gray blob after downscaling with interpolation.
+**Why it happens:**
+The current architecture has no mechanism for the adder selection logic to query "how many ancilla qubits can I afford?" The allocator tracks `peak_allocated` and `current_in_use` but does not expose a "remaining budget" concept. Without this, the tradeoff cannot be truly automatic -- it can only be threshold-based (use CLA for width >= T, RCA otherwise).
 
-**Why it happens:** PIL's `Image.resize()` defaults to `Resampling.BICUBIC`. The developer calls `.resize()` without specifying the filter, or uses `LANCZOS` because it's "higher quality." For photographs, that's correct. For pixel art, it destroys the visual information.
-
-**Consequences:**
-- Gate icons become indistinguishable colored blobs
-- Control dots blur into wire lines
-- The "pixel art" aesthetic is lost entirely
-- Particularly bad at non-integer scale factors
+**How to avoid:**
+1. Start with the simple width-threshold approach (already implemented as `CLA_THRESHOLD`). This is sufficient for v5.0. Rename the feature from "automatic depth/ancilla tradeoff" to "configurable depth/ancilla tradeoff" if no qubit budget mechanism is added.
+2. If a true automatic selection is desired, add a `qubit_budget` option: `ql.option('qubit_budget', 1000)`. The adder selection checks `current_in_use + cla_ancilla_count <= qubit_budget` before selecting CLA.
+3. For modular arithmetic, the qubit budget is critical: a modular multiplication with CLA adders needs O(n^2) ancilla across all partial products vs O(n) with RCA. The tradeoff must consider the total operation, not just individual additions.
 
 **Warning signs:**
-- Any `.resize()` call without explicit `resample=Image.Resampling.NEAREST`
-- Any `.thumbnail()` call (defaults to BICUBIC)
-- Scale factors that aren't integers
+- CLA selected for large widths causes `ALLOCATOR_MAX_QUBITS` exceeded error
+- Automatic selection makes different choices for the same width in different contexts
+- Performance is worse with automatic selection than with manual RCA (CLA ancilla overhead exceeds depth benefit)
 
-**Prevention:**
-- ALWAYS use `Image.Resampling.NEAREST` for any scaling operation
-- Use only integer scale factors (2x, 3x, 4x) for upscaling -- never fractional
-- For downscaling in overview mode, render at the target resolution directly rather than rendering large and shrinking
-- Add a utility function that wraps resize with the correct filter to prevent mistakes:
-  ```python
-  def pixel_scale(img, factor):
-      return img.resize((img.width * factor, img.height * factor),
-                        resample=Image.Resampling.NEAREST)
-  ```
-
-**Phase:** Implement in the core renderer alongside any zoom/scale logic.
-
-**Confidence:** HIGH -- verified from [Pillow resampling documentation](https://pillow.readthedocs.io/en/stable/handbook/concepts.html) and [Pillow issue #6200](https://github.com/python-pillow/Pillow/issues/6200). Default is BICUBIC since Pillow 2.7.0.
+**Phase to address:**
+Automatic depth/ancilla tradeoff phase (OPT-01).
 
 ---
 
-### Pitfall 6: PNG Save Latency for Large Circuit Images
+### Pitfall 8: Quantum Counting QPE Precision vs Qubit Count for Practical Circuits
 
-**What goes wrong:** Pillow's PNG encoder uses zlib compression with a default compress level that prioritizes file size over speed. For a large circuit image (e.g., 8000x2000 RGB), saving to PNG can take 2-10 seconds. This is surprising when the rendering itself took <100ms.
+**What goes wrong:**
+Quantum counting uses QPE with `t` ancilla qubits to estimate the eigenvalue of the Grover operator. The precision of the solution count estimate scales as O(2^t). For a search space of N = 2^n, the counting ancilla register needs t = O(n) qubits to distinguish M solutions from M+1 solutions. This means quantum counting on an 8-qubit search space needs approximately 8 additional ancilla qubits for QPE, plus the search register (8 qubits), plus oracle ancilla. Total qubit count for even modest problems exceeds 20, approaching the Qiskit simulation limit of 17 qubits (from project memory constraints).
 
-**Why it happens:** PNG compression is the bottleneck, not rendering. Pillow's default PNG compression is more aggressive than OpenCV's (benchmarks show PIL is 4x slower than cv2.imwrite for PNG). Developers measure rendering time but not save time.
+**Why it happens:**
+The QPE-based quantum counting has inherent qubit overhead. The IQAE-based approach (already implemented in `amplitude_estimation.py`) avoids this by using iterative measurements instead of a QPE register, but IQAE estimates amplitude (probability), not solution count directly. Converting amplitude to count requires M = N * sin^2(theta), which introduces rounding errors for integer M.
 
-**Consequences:**
-- `ql.draw_circuit()` followed by `.save("circuit.png")` takes 5+ seconds
-- Users blame the renderer when the bottleneck is file I/O
-- In Jupyter notebooks, displaying the PIL Image is fast (no PNG encode), but saving is slow
+**How to avoid:**
+1. Implement `ql.count_solutions` using the IQAE infrastructure (already built) rather than QPE-based quantum counting. IQAE estimates sin^2(theta) = M/N with epsilon precision using O(1/epsilon) oracle calls and NO additional QPE ancilla qubits. Then M = round(N * estimate).
+2. For exact counting (when M must be an integer), use the IQAE estimate to narrow the range, then run a few Grover searches at nearby iteration counts to verify.
+3. Document the qubit limit: "Quantum counting with QPE requires n_search + t_precision + n_oracle_ancilla qubits. For Qiskit simulation, total must be <= 17."
+4. The project's simulation constraint (max 17 qubits) means QPE-based counting can only be tested for search spaces of 4-5 qubits. IQAE-based counting can handle larger spaces because it does not add QPE ancilla.
 
 **Warning signs:**
-- No `compress_level` parameter passed to `Image.save()`
-- Performance benchmarks that measure rendering but not saving
-- No guidance in docs about save performance
+- QPE-based counting exceeds simulation qubit limit for any non-trivial problem
+- IQAE-based counting gives M = 2.7 for a problem that should have exactly 3 solutions
+- Counting results are consistently off by +/- 1 due to rounding
 
-**Prevention:**
-- Return the PIL Image object from `ql.draw_circuit()` (don't auto-save)
-- When saving, use `compress_level=1` for speed: `img.save("circuit.png", compress_level=1)`
-- Document that Jupyter display is instant but PNG save may be slow for large circuits
-- For the `Image.save()` convenience wrapper, default to `compress_level=1` with an option for `compress_level=6` (smaller file)
-- Consider offering BMP output for maximum speed (no compression) during development/iteration
-
-**Phase:** Address when implementing the save/export functionality.
-
-**Confidence:** HIGH -- verified from [Pillow issue #5986](https://github.com/python-pillow/Pillow/issues/5986) and [Pillow issue #1211](https://github.com/python-pillow/Pillow/issues/1211).
+**Phase to address:**
+Quantum counting phase (GADV-01).
 
 ---
 
-### Pitfall 7: Multi-Qubit Gate Control Lines Overlap and Obscure Each Other
+### Pitfall 9: Layer-Based Uncomputation Breaks When Modular Operations Span Many Layers
 
-**What goes wrong:** Controlled gates (CX, CCX, MCX) require vertical lines connecting control qubits to target qubits. When multiple controlled gates in the same layer have overlapping qubit ranges (e.g., CX from qubit 3 to 7, and CX from qubit 5 to 10), their control lines cross and become indistinguishable. At 2-3px icon size, there's no room for visual disambiguation.
+**What goes wrong:**
+A modular multiplication `x *= a mod N` expands to O(n) modular additions, each of which expands to O(1) plain additions, subtractions, comparisons, and conditional operations. The total gate count for an 8-bit modular multiply is in the thousands. The existing `_start_layer` / `_end_layer` tracking records the layer range for uncomputation. But the known limitation -- "Layer-based uncomputation tracking unreliable when optimizer parallelizes gates" -- means the layer range may not bracket the correct gates after optimization. For modular arithmetic with thousands of gates across hundreds of layers, the optimizer has maximum freedom to reorder, making the layer range almost certainly wrong.
 
-**Why it happens:** In the `circuit_s` structure, a single layer can contain multiple gates that operate on overlapping qubit ranges (the optimizer packs gates into layers). The text-based `circuit_visualize()` handles this with multiple columns per layer, but a pixel renderer with fixed column width can't show overlapping lines clearly.
+**Why it happens:**
+The optimizer's `minimum_layer()` function schedules gates at the earliest possible layer where all operand qubits are available. For Toffoli circuits with many ancilla qubits (which have no prior occupancy), gates can be scheduled much earlier than expected. A comparison gate from modular operation B might be scheduled into a layer that is within the layer range of modular operation A.
 
-**Consequences:**
-- Users can't tell which control connects to which target
-- Multi-controlled gates (MCX with 5+ controls) become a vertical line indistinguishable from a wire
-- The visualization is technically correct but practically misleading
+**How to avoid:**
+1. For v5.0, do NOT rely on layer-based uncomputation for modular operations. Instead, implement modular operations as `@ql.compile`-wrapped functions where the compile decorator handles uncomputation via its own gate-list tracking (not layer indices).
+2. The compile decorator's `_partition_ancillas` and `_auto_uncompute` mechanism operates on the captured gate list (Python-level), not on layer indices, making it immune to optimizer reordering.
+3. Long-term: transition from layer-based to instruction-counter-based uncomputation tracking (noted as future work in PROJECT.md).
+4. Short-term: disable the optimizer for modular arithmetic sequences (emit all gates with sequential layer_floor advancement).
 
 **Warning signs:**
-- No logic to detect overlapping gate ranges within a layer
-- Single pixel column per layer with no sub-column support
-- Tests only use circuits with non-overlapping gates per layer
+- Modular operations work without optimizer but fail after optimization
+- `reverse_circuit_range` on a modular operation reverses wrong gates
+- Uncomputation of modular result corrupts other registers
 
-**Prevention:**
-- Detect overlapping gates within a layer (gate A's qubit range overlaps gate B's qubit range)
-- When overlap detected, use sub-columns within the layer (widen that layer's column)
-- Use distinct colors per gate type so overlapping lines are at least color-coded
-- For overview mode, accept that individual control lines are unreadable and render gates as colored dots only (no control lines)
-- For MCX gates with large_control (>2 controls), render as a colored vertical bar spanning the control range
-
-**Phase:** Address during multi-qubit gate rendering (not in initial single-qubit rendering).
-
-**Confidence:** HIGH -- verified from `types.h` lines 66-75 showing `gate_t` has `Control[MAXCONTROLS]`, `large_control`, and `NumControls` fields. The C `circuit_visualize()` code (circuit_output.c lines 104-120) already handles this complexity for text output.
+**Phase to address:**
+This is a cross-cutting concern that affects all phases. Modular arithmetic phase should use compile-decorator-based uncomputation from the start.
 
 ---
 
-### Pitfall 8: Gate Type Enum Mapping Incomplete or Incorrect
+### Pitfall 10: Controlled Modular Multiplication for Shor's Requires Controlled-Controlled Operations
 
-**What goes wrong:** The C backend defines gate types as `enum { X, Y, Z, R, H, Rx, Ry, Rz, P, M }` (10 types in `Standardgate_t`). The renderer must map each to a distinct visual representation. If the mapping is incomplete (e.g., missing `Ry` or `M`), those gates render as blank space or crash. If gates are added to the C backend later, the renderer silently breaks.
+**What goes wrong:**
+Shor's algorithm requires controlled modular exponentiation: for each qubit in the QPE register, apply a controlled modular multiplication. The modular multiplication internally uses conditional subtraction (controlled by comparison results). This creates controlled-controlled operations (the QPE control AND the comparison control). With Toffoli gates, this means some internal gates become CCCX (3-control X), which exceeds `MAXCONTROLS=2` and requires the `large_control` path or AND-ancilla decomposition. Each CCCX decomposes into 2 CCX + 1 ancilla, doubling the ancilla count for controlled modular arithmetic.
 
-**Why it happens:** The renderer developer maps the "common" gates (X, H, CX, P) and forgets the less common ones (Y, Ry, Rz, M). Or the enum values shift if a gate type is added to the C enum.
+**Why it happens:**
+The Toffoli adder uses CCX as its fundamental gate. Adding an external control (for QPE) turns every CCX into CCCX. The existing MCX decomposition handles this (Phase 74: AND-ancilla pattern), but the ancilla count doubles. For controlled modular multiplication with n partial products each containing O(n) adder gates, the total AND-ancilla count is O(n^2).
 
-**Consequences:**
-- Gates render as invisible (blank) or as the wrong icon
-- KeyError/IndexError at runtime for unmapped gate types
-- Silent incorrect visualization that looks plausible
+**How to avoid:**
+1. Pre-allocate a single AND-ancilla qubit for the entire controlled modular multiplication and reuse it across all CCCX decompositions. The AND-ancilla pattern (compute, use, uncompute) returns the ancilla to |0> after each use, so a single ancilla suffices.
+2. Verify that the `allocator_alloc()` count=1 reuse path (line 94 of qubit_allocator.c) correctly recycles the AND-ancilla. Currently, count=1 reuse works, so this should be fine.
+3. Track the AND-ancilla count in circuit stats to verify it stays at 1 (not growing linearly).
 
 **Warning signs:**
-- Gate type mapping uses string matching instead of enum values
-- No exhaustive test that renders every gate type
-- No fallback rendering for unknown gate types
+- Controlled modular multiply uses 2x or more ancilla than uncontrolled
+- `allocator_get_stats()` shows many more ancilla allocations than expected
+- Qubit count exceeds simulation limit for even small widths
 
-**Prevention:**
-- Map ALL 10 gate types explicitly: X, Y, Z, R, H, Rx, Ry, Rz, P, M
-- Add a fallback renderer for unknown types (render as "?" or generic colored square)
-- Write a test that creates a circuit with every gate type and verifies the image is non-empty at each gate position
-- Use the existing `gate_counts` property to verify: total rendered gates == sum of all gate type counts
-- Consider controlled variants: CX (1 control + X), CCX (2 controls + X), MCX (n controls + X), CP (1 control + P), etc. These aren't separate enum values -- they're X/P/etc. with NumControls > 0
-
-**Phase:** Core renderer -- gate icon definitions should be one of the first things implemented.
-
-**Confidence:** HIGH -- verified from `types.h` line 64: `typedef enum { X, Y, Z, R, H, Rx, Ry, Rz, P, M } Standardgate_t;`
+**Phase to address:**
+Modular Toffoli arithmetic phase (FTE-02), specifically when implementing controlled modular multiplication for Shor's.
 
 ---
 
-### Pitfall 9: Memory Explosion from Intermediate Python Objects
+### Pitfall 11: Parametric Compilation Interaction with Oracle Caching
 
-**What goes wrong:** Converting the entire C circuit into Python dicts/lists before rendering can consume excessive memory. A 200-qubit, 5000-layer circuit with 10 gates per layer = 50,000 gate dicts. Each dict has ~5 keys with string/list values. In CPython, a dict with 5 keys uses ~300-400 bytes. Total: ~15-20MB just for the intermediate representation. This is manageable, but if the conversion creates unnecessary copies or nested structures, it can balloon.
+**What goes wrong:**
+The existing `@ql.compile` and `@ql.grover_oracle` decorators both cache gate sequences. Parametric compilation (PAR-01/PAR-02) adds a new caching layer where classical parameters can vary without recompilation. If a Grover oracle uses arithmetic operations with classical parameters (e.g., `lambda x: x * a + b == target` where `a`, `b`, `target` are classical), the oracle's compiled form depends on these classical values. Parametric compilation might cache the oracle's gate sequence once and try to parameterize over `a`, `b`, `target`. But changing `a` changes the circuit topology (especially in Toffoli mode, per Pitfall 6), not just gate angles.
 
-**Why it happens:** The natural Cython binding approach (`get_circuit_data()` returning nested lists of dicts) creates all objects at once. For very large circuits, this is wasteful because the renderer processes gates layer-by-layer and doesn't need all data simultaneously.
+**Why it happens:**
+The oracle decorator delegates to `@ql.compile` for gate capture. Parametric compilation wraps `@ql.compile`. If parametric compilation is applied to an oracle without understanding which classical parameters are structural (change topology) vs parametric (change angles only), the cached oracle becomes invalid.
 
-**Consequences:**
-- Unnecessary memory spike during rendering
-- GC pressure from millions of small Python objects
-- For extremely large circuits (10,000+ layers), may cause memory issues
-
-**Warning signs:**
-- `get_circuit_data()` returns the entire circuit as a single Python object
-- No streaming/iterator-based access pattern
-- Memory profiling shows spike during data extraction
-
-**Prevention:**
-- For v1 (simplicity): accept the full-extraction approach, it works for circuits up to ~10,000 layers
-- Provide a `get_layer_data(layer_index)` function that extracts one layer at a time for future optimization
-- Use tuples instead of dicts for gate data (less memory overhead): `(gate_type, target, controls_tuple, value)`
-- Avoid string allocation for gate types -- use integer enum values and map to strings only at render time
-- Pre-calculate image dimensions from `circuit.depth` and `circuit.qubit_count` (already available) before extracting gate data
-
-**Phase:** Cython binding phase -- design the data extraction API with future streaming in mind even if v1 is bulk extraction.
-
----
-
-### Pitfall 10: Qubit Index Gaps Waste Vertical Space
-
-**What goes wrong:** The `circuit_s` structure uses qubit indices that may have gaps (not all indices from 0 to `used_qubits` are actually used). If the renderer naively allocates one pixel row per qubit index from 0 to max, unused qubits waste vertical space. For a circuit using qubits [0, 1, 2, 64, 65, 66] (common with the 64-bit right-aligned layout), the image would be 67 rows tall with 61 empty rows.
-
-**Why it happens:** The `quantum_int_t` structure uses right-aligned layout in a 64-element array: `q_address[64-width]` through `q_address[63]`. Qubit allocation via `allocator_alloc()` is sequential but integer widths vary. After allocation and deallocation of ancilla qubits, the active qubit indices may be sparse.
-
-**Consequences:**
-- Images are much taller than necessary
-- Most of the image is empty wire lines for unused qubits
-- Overview mode wastes resolution on empty rows
+**How to avoid:**
+1. Oracles must NEVER use parametric compilation for structural parameters. The `@ql.grover_oracle` decorator should force per-value caching for all classical arguments, regardless of whether parametric compilation is enabled globally.
+2. Parametric compilation should be opt-in per function, not global: `@ql.compile(parametric=['theta'])` explicitly names which parameters are angle-only.
+3. Document: "Parametric compilation only applies to parameters that affect gate angles, not circuit structure. For oracles with classical integer parameters, use standard per-value caching."
 
 **Warning signs:**
-- Renderer uses `circuit.qubit_count` as image height without checking occupancy
-- No qubit compaction/remapping logic
-- Tests use contiguous qubit indices (which hides the problem)
+- Oracle returns wrong results after classical parameter changes
+- Oracle cache hit when cache miss was expected (classical param changed)
+- Grover search finds wrong solutions after changing search target
 
-**Prevention:**
-- Extract the set of actually-used qubit indices from the circuit data
-- The C structure has `used_occupation_indices_per_qubit[qubit]` -- qubits with 0 occupation indices are unused
-- Create a qubit index remapping: map sparse indices to dense row indices
-- Show the original qubit index as a label but render only occupied rows
-- Alternatively, use `circuit_s.used_qubits` as a hint but still check per-qubit occupancy
-
-**Phase:** Core renderer layout phase -- qubit compaction affects all coordinate calculations.
-
-**Confidence:** HIGH -- verified from `circuit.h` lines 64-66 (`occupied_layers_of_qubit`, `used_occupation_indices_per_qubit`) and the right-aligned layout documented in `quantum_int_t`.
+**Phase to address:**
+Parametric compilation phase (PAR-01/PAR-02).
 
 ---
 
 ## Minor Pitfalls
 
-Mistakes that cause annoyance but are fixable without architecture changes.
+### Pitfall 12: Quantum Counting Requires Controlled Grover Operator -- Not Just Controlled Oracle
 
-### Pitfall 11: Color Palette Indistinguishable for Color-Blind Users
+**What goes wrong:**
+QPE-based quantum counting needs controlled-G^(2^k) where G = WV (diffusion * oracle). Implementers often provide controlled-V (controlled oracle) but forget that the diffusion W must also be controlled. A controlled diffusion operator requires a multi-controlled-Z on (n+1) qubits (n search qubits + 1 control), which is more expensive than the standard n-qubit MCZ.
 
-**What goes wrong:** Using red/green color pairs (common in "stoplight" palettes) makes gates indistinguishable for the ~8% of males with red-green color blindness. If the only way to distinguish H gates from X gates is color, those users can't read the circuit.
+**How to avoid:**
+- Implement `controlled_grover_operator(oracle, search_qubits, control_qubit)` as a single function that applies both controlled-oracle and controlled-diffusion.
+- If using IQAE-based counting (recommended per Pitfall 8), this is handled by the iterative protocol which already supports controlled Grover iterations.
 
-**Prevention:**
-- Use shape AND color as redundant encodings (X = square + red, H = diamond + blue)
-- Choose a colorblind-safe palette (blue/orange, blue/yellow)
-- At 2-3px, shapes are more important than colors anyway
-- Test with a colorblindness simulator
-
-**Phase:** Gate icon design phase.
+**Phase to address:** Quantum counting phase (GADV-01).
 
 ---
 
-### Pitfall 12: No Legend Makes Gates Unidentifiable
+### Pitfall 13: Automatic Tradeoff Width Threshold Interacts with Hardcoded Sequences
 
-**What goes wrong:** A pixel-art circuit with 2-3px gate icons is inherently cryptic. Without a color/shape legend, users can't identify gate types at all. The visualization becomes a pretty but useless abstract image.
+**What goes wrong:**
+Toffoli arithmetic has hardcoded sequences for widths 1-8 (CDKM and BK CLA, ~120 C files). If the automatic tradeoff selects a different adder than the hardcoded sequence assumes, the wrong sequence is dispatched. Currently, `CLA_THRESHOLD` controls which adder is used, and hardcoded sequences are generated for both CDKM and BK CLA. But if the threshold changes dynamically (based on qubit budget), the mapping from width to hardcoded sequence becomes ambiguous.
 
-**Prevention:**
-- Always include a legend region (right side or bottom) mapping gate icons to names
-- Legend should use the same pixel-art style as the circuit
-- For programmatic use, also provide a `gate_legend()` method that returns the mapping as a dict
+**How to avoid:**
+- Hardcoded sequences should be keyed by (width, adder_type), not just width. The existing separate caches (`precompiled_toffoli_QQ_add[]` for CDKM, `precompiled_toffoli_QQ_add_bk[]` for BK) already do this. The dispatch logic just needs to respect the tradeoff decision.
+- Verify: when tradeoff changes the adder selection at runtime, the correct cache array is accessed.
 
-**Phase:** Legend should be designed with the core renderer, implemented as a separate compositing step.
-
----
-
-### Pitfall 13: Wire Lines Vanish at Overview Zoom
-
-**What goes wrong:** In overview mode where each qubit row is 1px tall, the horizontal wire line IS the row. If gate icons are also 1px, the wire line, gate icon, and background all compete for the same pixel. The wire becomes invisible.
-
-**Prevention:**
-- In overview mode, skip wire rendering entirely -- just render gate positions as colored pixels on a dark background
-- The wire is implied by the row; don't try to draw it separately
-- Use a dark background (black or dark gray) with bright gate colors for maximum contrast at 1px scale
-
-**Phase:** Overview mode implementation.
+**Phase to address:** Automatic depth/ancilla tradeoff phase (OPT-01).
 
 ---
 
-### Pitfall 14: Phase/Rotation Gate Values Lost in Pixel Art
+### Pitfall 14: Modular Toffoli Multiplication Qubit Count May Exceed Simulation Limit
 
-**What goes wrong:** Phase gates (P) and rotation gates (Rx, Ry, Rz) have a continuous `GateValue` parameter (angle). In text/QASM output, this is rendered as a number. In 2-3px pixel art, there's no room for text. Users see a "P" gate but can't tell if it's P(pi/4) or P(pi/2).
+**What goes wrong:**
+An n-bit modular multiplication requires: n data qubits (x), n data qubits (result), 1 ancilla (Beauregard flag), plus adder ancilla per partial product. For CDKM RCA: 1 carry ancilla reusable = n+n+1+1 = 2n+2 qubits. But the comparison operations within modular reduction add more: each `>=` comparison creates a comparison result qubit. For n=8: minimum 18 qubits, more likely 25-30 with comparison temporaries. This approaches the simulation limit (17 qubits max for Qiskit).
 
-**Prevention:**
-- Accept this limitation in the pixel-art renderer -- it's a visual overview, not a detailed schematic
-- Use color intensity or hue variation to encode angle magnitude (e.g., brighter = larger angle)
-- For the few common angles (pi, pi/2, pi/4), use distinct icon variants
-- Document that for angle details, users should use `circuit.visualize()` (text) or OpenQASM export
-- In detail mode, consider adding tiny 1px text labels for common angles if font rendering works at that scale (it probably won't -- test first)
+**How to avoid:**
+- Test modular Toffoli arithmetic at widths 2-4 initially (well within 17-qubit limit)
+- Use `matrix_product_state` simulator for wider tests (already used for division tests at 44+ qubits)
+- Track qubit count during implementation and set expectations: modular multiplication at width 8+ requires MPS simulator, not statevector
 
-**Phase:** Gate icon refinement, after basic rendering works.
-
----
-
-### Pitfall 15: Pillow Not Installed as Required Dependency
-
-**What goes wrong:** Pillow is an optional dependency for this project (the core quantum framework doesn't need it). If `ql.draw_circuit()` is called without Pillow installed, the user gets `ModuleNotFoundError: No module named 'PIL'` -- an unhelpful error from inside the rendering code.
-
-**Prevention:**
-- Use a lazy import: `try: from PIL import Image; except ImportError: raise ImportError("Pillow is required for circuit visualization. Install with: pip install Pillow")`
-- List Pillow as an optional dependency in setup.py: `extras_require={"viz": ["Pillow>=9.0"]}`
-- Don't import Pillow at module level in `__init__.py` -- only when `draw_circuit()` is called
-- Test the error message by running without Pillow installed
-
-**Phase:** API integration phase (when `ql.draw_circuit()` is wired up).
+**Phase to address:** Modular Toffoli arithmetic phase (FTE-02) -- testing strategy.
 
 ---
 
-## Phase-Specific Warnings
+## Technical Debt Patterns
 
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Cython data extraction binding | Pitfall 3: No gate iteration API exists | Build `get_circuit_data()` first, before any rendering code |
-| Core renderer architecture | Pitfall 2: ImageDraw per-call overhead | Design for NumPy array operations from the start |
-| Image sizing / layout | Pitfall 1: Decompression bomb limits | Calculate dimensions first, cap maximums, auto-select mode |
-| Gate icon design | Pitfall 8: Incomplete gate type mapping | Map all 10 Standardgate_t values explicitly |
-| Multi-qubit gates | Pitfall 7: Overlapping control lines | Detect overlaps, use sub-columns or color coding |
-| Qubit layout | Pitfall 10: Sparse qubit index gaps | Compact/remap qubit indices before rendering |
-| Zoom / overview mode | Pitfall 4: Wrong zoom auto-selection | Threshold-based auto mode with user override |
-| Zoom / scaling | Pitfall 5: Wrong resampling filter | Always use NEAREST, integer scale factors only |
-| PNG export | Pitfall 6: Slow PNG save | Default to compress_level=1, return Image object |
-| API integration | Pitfall 15: Pillow not installed | Lazy import with helpful error message |
+Shortcuts that seem reasonable but create long-term problems.
 
----
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Python-level modular reduction (current `_reduce_mod`) | Works for QFT mode | Creates O(n) orphan qubits per reduction; BUG-MOD-REDUCE | Never for Toffoli mode; replace with C-level Beauregard |
+| Width-only threshold for RCA/CLA selection | Simple to implement | Ignores qubit budget; fails for nested operations | Acceptable for v5.0 as starting point |
+| Per-value caching for Toffoli CQ in parametric mode | Correct results | No compile-once benefit for Toffoli CQ | Acceptable if documented; true parametric only for QFT |
+| Using existing diffusion operator for quantum counting | Reuses code | Wrong sign convention yields wrong M estimate | Never -- must fix sign or use corrected formula |
+| Layer-based uncomputation for modular operations | Consistent with existing system | Unreliable under optimizer; known limitation | Never for large composite operations; use compile decorator |
+
+## Integration Gotchas
+
+Common mistakes when integrating these features with existing subsystems.
+
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| Modular arithmetic + optimizer | Assuming optimizer preserves modular operation boundaries | Disable optimizer for modular sequences or use compile decorator |
+| Parametric compilation + Toffoli mode | Assuming classical params only affect gate angles | Toffoli CQ topology depends on classical value; per-value cache required |
+| Quantum counting + existing diffusion | Assuming diffusion sign is irrelevant | Use corrected formula M = N*sin^2(pi*(j/2^t - 1/2)) for W~ = -W |
+| Automatic tradeoff + modular arithmetic | Allowing CLA inside modular primitives | Force RCA inside modular operations (CLA subtraction broken) |
+| Compile cache + new mode flags | Keeping old cache key | Add arithmetic_mode and cla_override to compile cache key |
+| BUG-DIV-02 fix + modular arithmetic | Fixing bugs independently | Modular arithmetic depends on the same MSB comparison pattern; fix together |
+
+## Performance Traps
+
+Patterns that work at small scale but fail as usage grows.
+
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Python-level modular reduction loop | Correct for 2-bit | O(n) orphan qubits per call | Width >= 4 |
+| CLA adder inside modular multiply | Faster single addition | O(n^2) ancilla across all partial products | Width >= 6 |
+| QPE-based quantum counting | Works for small N | Requires n+t qubits (exceeds 17) | Search space >= 5 qubits |
+| Controlled modular multiply without AND-ancilla reuse | Correct results | O(n^2) AND-ancilla qubits | Width >= 4 |
+| Parametric compile with Toffoli CQ | Cache hit appears to work | Wrong circuit topology | When classical value changes bit pattern |
+
+## "Looks Done But Isn't" Checklist
+
+Things that appear complete but are missing critical pieces.
+
+- [ ] **Modular addition:** Often missing the auxiliary reset step (step 5 of Beauregard) -- verify ancilla returns to |0> after each call
+- [ ] **Modular multiplication:** Often missing the controlled variant for Shor's -- verify controlled modular multiply works with external QPE control
+- [ ] **Parametric compilation:** Often missing Toffoli CQ handling -- verify classical value changes trigger recompilation in Toffoli mode
+- [ ] **Compile cache key:** Often missing new mode flags -- verify cache miss when arithmetic_mode or cla_override changes
+- [ ] **Quantum counting:** Often using wrong sign formula -- verify count matches known-solution oracle for M=1,2,3
+- [ ] **Automatic tradeoff:** Often allowing CLA inside modular ops -- verify modular arithmetic forces RCA internally
+- [ ] **BUG-DIV-02 fix:** Often fixing division only -- verify the same MSB comparison pattern works for modular reduction
+- [ ] **Quantum counting IQAE:** Often returning float -- verify integer rounding produces correct M for exact solution counts
+
+## Recovery Strategies
+
+When pitfalls occur despite prevention, how to recover.
+
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Modular add orphan qubits (Pitfall 2) | HIGH | Rewrite as C-level Beauregard primitive; cannot be patched at Python level |
+| Compile cache mode mismatch (Pitfall 3) | LOW | Add mode flags to cache key; one-line change |
+| CLA inside modular ops (Pitfall 4) | MEDIUM | Add mode flag to force RCA inside modular primitives |
+| Quantum counting sign error (Pitfall 5) | LOW | Switch to corrected formula; one-line change in counting |
+| Toffoli CQ parametric failure (Pitfall 6) | MEDIUM | Fall back to per-value caching for Toffoli CQ; document limitation |
+| Layer-based uncomputation failure (Pitfall 9) | HIGH | Migrate to compile-decorator-based uncomputation; architectural change |
+| BUG-DIV-02 compounds modular (Pitfall 1) | HIGH | Must fix BUG-DIV-02 first; blocks modular arithmetic |
+
+## Pitfall-to-Phase Mapping
+
+How roadmap phases should address these pitfalls.
+
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| Pitfall 1: BUG-DIV-02 compounds modular | Bug fix phase (BUG-DIV-02) | MSB comparison qubits properly uncomputed; no orphan temporaries |
+| Pitfall 2: Modular reduction garbage qubits | Bug fix phase (BUG-MOD-REDUCE) | `circuit_stats()['current_in_use']` stable after modular operations |
+| Pitfall 3: Compile cache missing mode flags | Parametric compilation (PAR-01) | Cache miss on mode change; regression test |
+| Pitfall 4: CLA subtraction in modular ops | Depth/ancilla tradeoff (OPT-01) | Modular arithmetic forces RCA; assertion in code |
+| Pitfall 5: Quantum counting sign | Quantum counting (GADV-01) | `count_solutions` returns exact M for known-solution oracles |
+| Pitfall 6: Toffoli CQ parametric | Parametric compilation (PAR-01) | Toffoli CQ triggers recompilation on value change |
+| Pitfall 7: No qubit budget | Depth/ancilla tradeoff (OPT-01) | Width-threshold works; document limitation |
+| Pitfall 8: Counting qubit overhead | Quantum counting (GADV-01) | Use IQAE-based counting; test within 17-qubit limit |
+| Pitfall 9: Layer uncomputation failure | Modular arithmetic (FTE-02) | Use compile decorator for modular ops; avoid layer-based uncomputation |
+| Pitfall 10: Controlled modular CCCX | Modular arithmetic (FTE-02) | AND-ancilla reuse verified; qubit count matches expectation |
+| Pitfall 11: Oracle parametric caching | Parametric compilation (PAR-01) | Oracles force per-value caching for structural params |
+| Pitfall 12: Controlled diffusion for counting | Quantum counting (GADV-01) | Controlled Grover operator includes both oracle and diffusion |
+| Pitfall 13: Threshold vs hardcoded sequences | Depth/ancilla tradeoff (OPT-01) | Correct cache array accessed per tradeoff decision |
+| Pitfall 14: Modular qubit count | Modular arithmetic (FTE-02) | Width 2-4 with statevector; width 5+ with MPS simulator |
 
 ## Sources
 
-- [Pillow Limits Documentation](https://pillow.readthedocs.io/en/stable/reference/limits.html) -- MAX_IMAGE_PIXELS, memory limits
-- [Pillow DecompressionBombError Issue #5218](https://github.com/python-pillow/Pillow/issues/5218) -- pixel count limits
-- [Pillow ImageDraw Performance Issue #2450](https://github.com/python-pillow/Pillow/issues/2450) -- per-call overhead
-- [Pillow PNG Save Performance Issue #5986](https://github.com/python-pillow/Pillow/issues/5986) -- 4x slower than OpenCV
-- [Pillow PNG Save Slow Issue #1211](https://github.com/python-pillow/Pillow/issues/1211) -- compress_level settings
-- [Pillow Resampling Concepts](https://pillow.readthedocs.io/en/stable/handbook/concepts.html) -- NEAREST vs BICUBIC
-- [Pillow ANTIALIAS Deprecation Issue #6200](https://github.com/python-pillow/Pillow/issues/6200) -- filter selection
-- [Quantivine: Large-Scale Quantum Circuit Visualization (arXiv:2307.08969)](https://arxiv.org/abs/2307.08969) -- semantic abstraction for 100+ qubit circuits
-- [IBM Quantum Circuit Visualization Guide](https://quantum.cloud.ibm.com/docs/en/guides/visualize-circuits) -- practical rendering challenges
-- Project source: `types.h` lines 64-82 (gate_t, Standardgate_t enum)
-- Project source: `circuit.h` lines 54-79 (circuit_s structure, layer/gate storage)
-- Project source: `_core.pxd` lines 62-148 (Cython declarations, no per-gate Python API)
-- Project source: `circuit_output.c` lines 35-120 (existing text visualization approach)
+- Codebase inspection: `src/quantum_language/qint_mod.pyx`, `src/quantum_language/compile.py`, `src/quantum_language/qint_division.pxi`, `c_backend/src/ToffoliAdditionCDKM.c`, `c_backend/src/ToffoliAdditionCLA.c`, `c_backend/src/hot_path_add_toffoli.c`, `c_backend/include/circuit.h`, `c_backend/include/toffoli_arithmetic_ops.h`
+- [Chung & Nepomechie, "Quantum counting, and a relevant sign" (arXiv:2310.07428)](https://arxiv.org/abs/2310.07428) -- sign ambiguity in quantum counting
+- [Beauregard, "Circuit for Shor's algorithm using 2n+3 qubits" (arXiv:quant-ph/0205095)](https://arxiv.org/abs/quant-ph/0205095) -- modular arithmetic circuit design
+- [A Comprehensive Study of Quantum Arithmetic Circuits (arXiv:2406.03867)](https://arxiv.org/html/2406.03867v1) -- depth-count tradeoffs, RCA vs CLA comparison
+- [Draper-Kutin-Rains-Svore CLA Adder (arXiv:quant-ph/0406142)](https://arxiv.org/abs/quant-ph/0406142) -- CLA ancilla requirements
+- [Optimal compilation of parametrised quantum circuits (arXiv:2401.12877)](https://arxiv.org/abs/2401.12877) -- parametric compilation constraints
+- [Quantum counting algorithm -- Wikipedia](https://en.wikipedia.org/wiki/Quantum_counting_algorithm) -- QPE-based counting overview
+- [Classiq: Quantum Counting Using IQAE](https://docs.classiq.io/latest/explore/algorithms/amplitude_estimation/quantum_counting/quantum_counting/) -- IQAE-based counting approach
+- Previous research: `.planning/research/PITFALLS-TOFFOLI-ARITHMETIC.md`, `.planning/research/PITFALLS-COMPILE-DECORATOR.md`, `.planning/research/PITFALLS_GROVER.md`
+- Known bugs: BUG-DIV-02 (MSB comparison leak), BUG-QFT-DIV (QFT division failures), BUG-MOD-REDUCE (_reduce_mod corruption)
+
+---
+*Pitfalls research for: v5.0 Advanced Arithmetic & Compilation (modular Toffoli arithmetic, parametric compilation, depth/ancilla tradeoff, quantum counting)*
+*Researched: 2026-02-24*

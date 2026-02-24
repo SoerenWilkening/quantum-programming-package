@@ -1,230 +1,201 @@
 # Project Research Summary
 
-**Project:** Quantum Assembly v4.1 Quality & Efficiency
-**Domain:** Bug fixes, tech debt cleanup, security hardening, performance optimization, binary size reduction, and test coverage for a C/Cython/Python quantum programming framework
-**Researched:** 2026-02-22
+**Project:** Quantum Assembly v5.0 — Advanced Arithmetic & Compilation
+**Domain:** Quantum programming framework — modular Toffoli arithmetic, parametric compilation, automatic depth/ancilla tradeoff, quantum counting
+**Researched:** 2026-02-24
 **Confidence:** HIGH
 
 ## Executive Summary
 
-The v4.1 milestone is a consolidation milestone that addresses 9 known bugs, accumulated tech debt, security vulnerabilities, and test coverage gaps in the Quantum Assembly framework. Research across four domains (stack, features, architecture, pitfalls) confirms that the existing tool stack (Python 3.11+, Cython 3.x, C23 backend, pytest, ASan, Valgrind, py-spy, memray) is comprehensive — only 3 pip packages (pytest-cov, coverage, vulture) and 1 system tool (cppcheck) need to be added. The existing architecture is sound and does not change: all v4.1 work operates within the established three-layer design (C backend -> Cython bridge -> Python frontend), fixing from the bottom up and validating from the top down.
+The v5.0 milestone adds four significant capabilities to an existing, well-structured quantum programming framework: modular Toffoli arithmetic (for Shor's algorithm building blocks), parametric compilation (compile-once-replay-many for circuits with varying classical parameters), automatic depth/ancilla tradeoff (intelligent CLA vs RCA adder selection), and quantum counting (estimating solution cardinality via IQAE). All four features compose from existing verified infrastructure — no new external dependencies are required beyond declaring the already-used `scipy>=1.10` in `pyproject.toml`. The framework's three-layer architecture (Python frontend -> Cython bindings -> C backend) is the right foundation for all of these, and the implementation patterns are clearly defined by peer-reviewed literature.
 
-The dominant risk is regression cascade from arithmetic bug fixes. The 7 carry-forward bugs all touch shared C backend code paths (IntegerAddition.c, IntegerComparison.c, ToffoliAddition*.c). The `sequence_t` cache and qubit offset mapping create non-obvious couplings: fixing `CQ_add` affects every operation that internally calls it (multiplication, division, comparisons). One additional critical finding emerged from direct code inspection: the optimizer's `smallest_layer_below_comp()` function contains a latent infinite-loop bug (`++i` where `--i` was intended) that works by accident in the common case but could cause buffer overreads under specific gate placement patterns. This bug must be fixed as part of the optimizer binary-search improvement, not separately.
+The recommended build order is dependency-driven: quantum counting first (independent, simplest, immediate user value), then bug fixes (BUG-DIV-02 and BUG-MOD-REDUCE must be resolved before modular arithmetic), then the modular Toffoli arithmetic chain (modular add -> modular sub -> controlled modular add -> modular multiply), then the depth/ancilla tradeoff system (enhances all arithmetic and must know the full set of mode flags before parametric compilation), and finally parametric compilation (the most complex, benefits from stable arithmetic as its primary use case). This ordering surfaces bugs early and avoids building on a broken foundation.
 
-The binary size opportunity is significant and low-risk. Seven compiled `.so` extension modules total approximately 134 MB because every module statically links all 105 hardcoded sequence C files (~344K lines). Compiler flags (`-ffunction-sections`, `-fdata-sections`, `-Wl,--gc-sections`, strip) can reduce this by 30-50% with zero code changes. A more impactful structural change — factoring the repeated 15-gate Clifford+T CCX decomposition into a shared helper — could reduce C source from 344K to ~200K lines and further reduce binary size. BUG-MOD-REDUCE is the most complex carry-forward bug: it requires a fundamentally different circuit topology (Beauregard-style modular reduction) rather than an incremental patch and is a strong candidate for deferral again.
+The primary risks are three interacting failure modes: (1) the existing BUG-DIV-02 MSB comparison leak will reproduce identically in Beauregard modular addition if not fixed first — both share the same orphan-temporary pattern from Python-level comparison operators; (2) parametric compilation cannot be applied uniformly to Toffoli CQ operations because their gate topology depends on classical bit values, not just angles, requiring per-value fallback for Toffoli CQ; and (3) the quantum counting diffusion operator uses a sign convention correct for Grover search but wrong for QPE-based counting, requiring either a formula correction or a switch to IQAE-based counting. All three risks are well-understood with clear mitigations — they are sequencing risks, not fundamental algorithmic problems.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing stack requires minimal additions. Three pip packages close specific gaps: `pytest-cov>=6.0` + `coverage[toml]>=7.4` for coverage measurement (enabling the Cython.Coverage plugin via the existing `QUANTUM_PROFILE=1` env var), and `vulture>=2.12` for dead code detection beyond what ruff F401/F841 catches. One system tool — `cppcheck>=2.14` — provides C static analysis that catches the specific buffer overrun and null dereference risks identified in the codebase audit. All other tooling (profiling, debugging, C testing) already exists. For binary size reduction no new tools are needed — the changes are compiler flags in `setup.py`.
+The v5.0 stack is identical to v4.x. All features compose from existing Python, Cython, and C primitives. The only required action is adding `scipy>=1.10` to `pyproject.toml` — `amplitude_estimation.py` already imports `scipy.stats.beta` for Clopper-Pearson confidence intervals, but it is absent from declared dependencies. This matters immediately for quantum counting, which reuses the IQAE infrastructure directly.
 
-**Core technologies (additions only):**
-- `pytest-cov>=6.0` + `coverage[toml]>=7.4`: Coverage measurement — enables data-driven test writing; Cython.Coverage plugin maps lines back to `.pyx` files via the existing `QUANTUM_PROFILE=1` build mode
-- `vulture>=2.12`: Dead code detection — finds unused functions, methods, and classes that ruff F401/F841 does not detect; confidence scoring (60-100%) reduces false positives
-- `cppcheck>=2.14`: C static analysis — detects buffer overruns, null dereference, and array bounds issues in `c_backend/src/` without running code; runs locally with no cloud upload
-- `qiskit-aer>=0.14` in `[verification]` optional extras: Declares the currently undeclared dependency; fixes bare `ModuleNotFoundError` for all users
+**Core technologies:**
+- Python >=3.11: Frontend, algorithm logic — unchanged; all new features are pure Python wrappers or `compile.py` extensions
+- Cython >=3.0.11,<4.0: C/Python bindings — new `cdef extern` declarations needed for modular arithmetic C functions; no new .pyx modules required
+- C (gcc/clang, C11): Backend gate/circuit engine — one new file (`ToffoliModularArithmetic.c`) implementing the Beauregard modular adder sequence by composing existing Toffoli adder calls
+- SciPy >=1.10: Clopper-Pearson CI in IQAE (used but undeclared) — declare in `pyproject.toml` immediately; v1.17.0 stable, supports Python 3.13
 
-**What NOT to add:** pytest-xdist (global circuit state makes parallel tests corrupt), mypy (Cython `.pyx` unsupported), gcov/lcov (C code compiled into Cython extensions, not standalone), fuzz testing harness (out of scope), full LTO (previously disabled due to GCC bug — evaluate ThinLTO for Clang only with empirical testing).
+**What NOT to add:**
+- SymPy: 20+ transitive deps; parametric values are discrete integers, not continuous symbolic expressions needing differentiation
+- Qiskit Parameter/ParameterVector: Designed for variational rotation angles; incompatible with capture-replay model for integer arithmetic parameters
+- QPE for quantum counting: Requires extra qubit register that would exceed the 17-qubit simulation limit; IQAE is already implemented and fits within constraints
 
 ### Expected Features
 
-**Must have (table stakes — milestone incomplete without these):**
-- Fix BUG-CQQ-QFT — QFT controlled QQ addition emits incorrect CCP rotations at width 2+; blocks all controlled QFT arithmetic
-- Fix BUG-QFT-DIV — QFT division pervasively broken; cascades from BUG-CQQ-QFT and BUG-WIDTH-ADD
-- Fix BUG-COND-MUL-01 — Controlled multiplication corrupts result register via scope uncomputation; blocks oracle-based algorithms
-- Fix BUG-WIDTH-ADD — Off-by-one in mixed-width QFT addition; qubit offset calculation error in IntegerAddition.c
-- Fix BUG-DIV-02 — MSB comparison ancilla not cleaned up between division loop iterations; 9 failures per test file
-- Fix 32-bit multiplication segfault — `MAXLAYERINSEQUENCE` constant insufficient for 32-bit QFT multiply in IntegerMultiplication.c
-- Fix qarray `*=` segfault — In-place multiply on array elements crashes the process
-- Declare `qiskit-aer` dependency — Removes bare `ModuleNotFoundError` for all users (trivial, low-risk fix)
-- Test coverage measurement setup — Cannot improve coverage without measuring it first (pytest-cov + coverage config)
+The feature landscape divides cleanly into two parallel tracks. An independent track (quantum counting, parametric compilation, depth/ancilla tradeoff) can begin immediately. A dependent track (the modular arithmetic hierarchy) requires bug fixes first.
 
-**Should have (meaningful quality improvement):**
-- Fix BUG-MOD-REDUCE — Requires Beauregard-style circuit redesign; HIGH complexity; strong candidate for deferral
-- Optimizer binary search — O(log L) vs O(L) per gate; also fixes the latent infinite-loop bug in `smallest_layer_below_comp()`
-- Binary size reduction via compiler flags — 30-50% reduction with zero code changes
-- Clifford+T sequence factoring — ~150K line source reduction, ~5-10 MB binary reduction
-- Dead code removal (QPU.c/QPU.h stubs) — Empty files since v1.1; mechanical removal
-- Automate `qint_preprocessed.pyx` generation — Enforce via `.gitignore` and pre-commit check
-- Circuit pointer validation — Add `_get_validated_circuit()` at all 15-20 raw cast sites in `_core.pyx`
-- `qubit_array` bounds checking — Validate slot count before writing into the 384-element scratch buffer
-- C test integration into pytest — Subprocess wrapper around existing C Makefile targets
+**Must have (table stakes):**
+- Modular addition mod N (Toffoli) — fault-tolerant Shor's needs `(a+b) mod N` with reversible gates; current `_reduce_mod` is broken (BUG-MOD-REDUCE)
+- Modular subtraction mod N (Toffoli) — inverse of modular addition; needed for uncomputation in modular multiply
+- Controlled modular addition — modular exponentiation decomposes into controlled modular adds; adds one control to every gate in the mod-add circuit
+- Quantum counting (`ql.count_solutions`) — natural companion to `ql.grover()` and `ql.amplitude_estimate()`; table stakes for any search framework
+- Configurable depth/ancilla tradeoff — users with Toffoli arithmetic expect to choose CDKM vs BK CLA; both adders already exist
 
-**Defer to v4.2+:**
-- Full DAG-based circuit IR rewrite — Architectural change touching every layer; v5.0+ effort
-- BUG-MOD-REDUCE (if not feasible) — Document as requiring Beauregard redesign; track for dedicated milestone
-- Comprehensive mutation testing — Computationally prohibitive (millions of Qiskit simulation runs)
-- Coverage target enforcement (e.g., 90% line coverage) — Misleading metric for quantum circuit libraries; behavioral verification matters more
-- PyPy compatibility — `__del__`-based uncomputation depends on CPython GC ordering
+**Should have (competitive):**
+- Parametric compilation `@ql.compile(parametric=True)` — compile-once-replay-many for circuits with varying classical parameters; unique in any circuit-building DSL framework at this level
+- Modular multiplication mod N (Toffoli) — end-to-end Shor's requires `(a*c) mod N`; enables a complete fault-tolerant arithmetic pipeline
+- Automatic adder selection via `ql.option('tradeoff', 'auto'|'min_depth'|'min_qubits')` — policy abstraction hiding CLA/RCA implementation details from users
+
+**Defer (v6+):**
+- Modular exponentiation — circuit sizes exceed simulator capacity; requires working mod-mul; provide building blocks with documented composition pattern
+- Full Shor's algorithm end-to-end API (`ql.factor(N)`) — untestable on 17-qubit simulator; QPE wrapper and classical post-processing (continued fractions) are out of scope
+- QFT-based modular arithmetic — defeats the fault-tolerant purpose; BUG-QFT-DIV also makes the QFT path unreliable
 
 ### Architecture Approach
 
-The v4.1 milestone does not change the architecture. The three-layer design (C backend -> Cython bridge -> Python frontend) is validated and stays. All changes are in-place modifications within existing layers, following the "fix from the bottom up, validate from the top down" principle. The bug dependency graph is clear: BUG-WIDTH-ADD and BUG-CQQ-QFT are root causes; BUG-QFT-DIV is a compound bug that resolves when those are fixed; BUG-COND-MUL-01 is independent (scope/lifecycle issue in Cython); BUG-MOD-REDUCE requires algorithm redesign. The 32-bit segfault traces to `MAXLAYERINSEQUENCE` being a compile-time constant insufficient for wide multiplication.
+The existing three-layer architecture handles all four features cleanly without structural changes. Modular Toffoli arithmetic belongs at the C level — Python-level composition via `_reduce_mod` creates orphan qubits and circuit corruption (this is not an optimization, it is a correctness requirement). Quantum counting is a thin Python wrapper (`counting.py`) over `amplitude_estimate()` with M = N * sin^2(theta) conversion. The depth/ancilla tradeoff is a `tradeoff_policy_t` enum added to `circuit_t` and plumbed through `hot_path_add_toffoli.c`. Parametric compilation extends `compile.py`'s cache and replay with `DeferredCQOp` nodes for value-topology-dependent operations.
 
-**Components modified in v4.1 (no new components):**
-1. **C backend (`c_backend/src/`)** — Bug fixes in IntegerAddition.c, IntegerMultiplication.c, IntegerComparison.c; optimizer binary search in optimizer.c; Clifford+T sequence factoring; no module structure changes
-2. **Cython bridge (`*.pyx`, `*.pxi`)** — Pointer validation, bounds checking, scope fix for BUG-COND-MUL-01 in qint_arithmetic.pxi; no API surface changes
-3. **Build system (`setup.py`, `pyproject.toml`)** — Compiler flag changes for binary size; new dependency groups; coverage config
-4. **Tests (`tests/python/`)** — One regression test per bug fix; C test subprocess integration; coverage-guided gap filling
+**Major components:**
+1. `ToffoliModularArithmetic.c` (NEW) — Beauregard modular add/sub/mul implemented as atomic C functions; calls existing `toffoli_QQ_add`, `toffoli_CQ_add`, `toffoli_cCQ_add` in a 5-step sequence; includes `toffoli_modular_ops.h`
+2. `compile.py` (MODIFIED) — adds `parametric=True` option; `DeferredCQOp` and `ParametricPlaceholder` node types for deferred classical substitution; cache key extended to include `arithmetic_mode` and `cla_override` (pre-existing bug fix)
+3. `counting.py` (NEW) — `count_solutions()` function and `CountResult` class; wraps `amplitude_estimate()` with N-scaling, integer rounding, and corrected sign formula
+4. `hot_path_add_toffoli.c` + `circuit.h` (MODIFIED) — `tradeoff_policy_t` enum (`TRADEOFF_AUTO`, `TRADEOFF_MIN_DEPTH`, `TRADEOFF_MIN_QUBITS`) added to `circuit_t`; policy-based CLA/RCA dispatch replaces hardcoded `CLA_THRESHOLD = 2`
+5. `qint_mod.pyx` + `qint_mod.pxd` (MODIFIED) — `_reduce_mod` replaced by Cython `cdef extern` calls into new C-level modular operations
 
 ### Critical Pitfalls
 
-1. **Arithmetic bug fix introduces regression cascade** — Fixing one shared code path breaks operations that internally call it. Fix one bug per commit; run the full exhaustive suite (test_add, test_sub, test_mul, test_div, test_mod, test_compare, test_bitwise) after each fix. Check all four variants (QQ, CQ, cQQ, cCQ) for every arithmetic change. The project history confirms this: v1.5 fix triggered BUG-CMP-01 in v1.6.
+1. **BUG-DIV-02 MSB comparison leak reproduces in modular arithmetic** — The same orphan-temporary pattern that causes BUG-DIV-02 appears in any Beauregard modular adder implemented at the Python level. Fix BUG-DIV-02 first. Implement the Beauregard sequence at the C level where ancilla is managed explicitly via `allocator_alloc`/`allocator_free`, never escaping to the Python-level uncomputation system. Warning signs: modular add works for single calls but produces wrong results when chained; `circuit_stats()['current_in_use']` grows with each call.
 
-2. **Optimizer loop direction bug must be fixed before binary search** — `smallest_layer_below_comp()` at optimizer.c line 32 has `++i` where `--i` was intended. The function works in the common case only because the last occupied layer is typically less than `compar`. Fix the loop direction in a separate commit before implementing binary search. Do NOT combine these into one commit.
+2. **Quantum counting sign ambiguity produces wrong M** — The existing diffusion operator uses W~ = -W (X-MCZ-X pattern), shifting QPE eigenvalues by pi/2. Standard formula `M = N * sin^2(pi * j / 2^t)` with this operator gives wrong counts (Chung & Nepomechie 2023 show errors near factor of 2). Use IQAE-based counting (recommended), which sidesteps QPE entirely and stays within the 17-qubit limit. If QPE is used, apply corrected formula `M = N * sin^2(pi * (j/2^t - 1/2))`.
 
-3. **Dead code removal breaking build or silently removing live code** — QPU.h is included by optimizer.c and 4 other files. KS CLA stubs that return NULL are intentionally called by the dispatch layer as the fallback to RCA. Grep for function names across all `.pxd`, `.pyx`, `.c`, `.h`, and `setup.py` before any removal. Rebuild and run full tests after each individual removal.
+3. **Parametric compilation cannot uniformly handle Toffoli CQ operations** — Toffoli CQ operations generate structurally different circuits per classical value because the Phase 73 optimizer eliminates gates at zero-bit positions. Circuit topology changes with the value, not just gate angles. Parametric compilation must detect Toffoli mode and fall back to per-value caching for CQ operations, or use the unoptimized (fixed-topology) CQ path. Document this limitation clearly.
 
-4. **BUG-MOD-REDUCE is an algorithm redesign, not a patch** — Current `_reduce_mod` hits duplicate-qubit errors at larger moduli because the circuit topology is wrong. Beauregard-style reduction requires ordered additions, comparisons, and conditional re-additions with careful ancilla management. Do NOT attempt an incremental patch. Either redesign from scratch or defer with clear documentation.
+4. **Compile cache key is missing arithmetic_mode and cla_override** — A pre-existing bug: the compile cache key does not include circuit-level mode flags added in v3.0 and v4.0. Replaying a Toffoli-compiled function in QFT mode returns the wrong gate sequence with wrong qubit layout assumptions. Fix this before adding any new mode flags for the tradeoff feature.
 
-5. **False test coverage masking real bugs** — Tests that verify "runs without error" provide no confidence in quantum correctness. Every new test for quantum operations must include Qiskit simulation verification (the `verify_circuit` fixture) or cross-backend differential testing. Do not convert xfail markers to skip — they represent the active bug backlog.
-
-6. **qint_preprocessed.pyx drift during refactoring** — Any edit to a `.pxi` file without regenerating the preprocessed version leaves a stale artifact. Run `python build_preprocessor.py` after every commit touching `.pyx` or `.pxi` files. Add `build_preprocessor.py --check` as a pre-commit hook. Never edit `qint_preprocessed.pyx` directly.
-
-7. **Binary size reduction breaking sequence dispatch** — Dispatch functions use width-indexed function calls into the sequence files. Removing a sequence file without updating dispatch causes linker failure. Start with strip and section GC (safe, no code changes); only then consider structural factoring. Always verify `import quantum_language` succeeds after each change, not just that the build completes.
+5. **BK CLA subtraction falls back to RCA, breaking modular operation symmetry** — Beauregard modular adder requires addition and subtraction with the same circuit structure (subtraction = inverse of addition). If automatic tradeoff selects CLA for the forward pass, the reverse pass uses RCA due to the known BK CLA subtraction limitation. Force RCA inside all modular arithmetic primitives until a dedicated CLA subtractor is implemented.
 
 ## Implications for Roadmap
 
-Based on combined research, suggested phase structure (8 phases):
+Based on combined research, suggested phase structure (5 phases):
 
-### Phase 1: Infrastructure & Quick Wins
-**Rationale:** Add measurement tooling before measuring anything; declare the qiskit-aer dependency before touching user-facing code; add C static analysis tool to catch bugs during subsequent fix work. None of these changes touch quantum logic.
-**Delivers:** pytest-cov + coverage config with Cython plugin; vulture installed and added to dev extras; cppcheck Makefile target; qiskit-aer declared in pyproject.toml with friendly ImportError wrappers in grover.py and amplitude_estimation.py.
-**Addresses:** qiskit-aer undeclared dependency, test coverage measurement setup, dead code scanner availability.
-**Avoids:** Pitfall 6 (false coverage confidence) — establishes measurement infrastructure before writing any tests; avoids discovering tooling gaps mid-milestone.
-**Standard patterns:** All items are installation and configuration tasks with official documentation. No phase-specific research needed.
+### Phase 1: Scipy Declaration + Quantum Counting
 
-### Phase 2: Tech Debt Cleanup
-**Rationale:** Remove dead code and enforce preprocessor automation before bug fixes touch the same files. A simpler codebase is easier to debug and the preprocessor automation prevents drift from the start of the milestone.
-**Delivers:** QPU.c/QPU.h removed and replaced with direct `circuit.h` includes in 5 files; `qint_preprocessed.pyx` added to `.gitignore`; `build_preprocessor.py --check` pre-commit hook added; vulture scan results documented (dead code candidates identified for follow-up).
-**Addresses:** QPU.c/QPU.h dead stubs, qint_preprocessed.pyx automation, initial dead code inventory.
-**Avoids:** Pitfall 2 (dead code removal breaking build) — remove one item at a time, rebuild and run full tests after each. Pitfall 7 (preprocessed drift) — automation removes the manual sync requirement going forward.
-**Standard patterns:** Mechanical removal and build system enforcement. The QPU.h dependency chain is fully traced (5 files). No phase-specific research needed.
+**Rationale:** Zero dependencies on other v5.0 features. Declaring the scipy dependency is a one-line `pyproject.toml` change that must happen before quantum counting can be properly installed. Quantum counting itself is a thin wrapper (~80 lines) over existing, verified IQAE infrastructure and delivers immediate user value. This phase can ship independently and proves the counting API before the more complex arithmetic phases.
 
-### Phase 3: Security Hardening
-**Rationale:** Add safety nets before making algorithmic changes. Pointer validation and bounds checking convert opaque segfaults into clear Python exceptions during the subsequent bug fix phases. The performance cost is ~3 branch instructions per arithmetic operation — negligible against the 15% regression tolerance established in v2.3.
-**Delivers:** `_get_validated_circuit()` validated accessor replacing all ~15-20 raw pointer casts; `qubit_array` slot count validation before C calls; C allocator return-code propagation changed from void to int with error checking in optimizer.c.
-**Addresses:** Circuit pointer validation, qubit_array bounds checking, allocator error propagation.
-**Avoids:** Pitfall 3 (bounds checking killing hot paths) — validate once at Cython operation entry, never per-gate inside the inner loop. The `@cython.boundscheck(False)` decorators on hot-path functions remain untouched.
-**Standard patterns:** Well-understood defensive programming with explicit performance budget analysis. No phase-specific research needed.
+**Delivers:** `scipy>=1.10` declared in `pyproject.toml`; `ql.count_solutions(oracle, width=n)` returning integer M with confidence interval; `CountResult` class with `.count`, `.estimate`, `.count_interval`, `.search_space`, `.num_oracle_calls`; corrected sign formula applied; tests against known-M oracles for M=1,2,3
 
-### Phase 4: Optimizer Fix & Improvement
-**Rationale:** Fix the latent optimizer bug and convert to binary search before the heavy QFT bug fix work. Faster test execution improves iteration speed during Phase 5-6. The optimizer bug fix also removes a correctness hazard that could interfere with circuit layout verification.
-**Delivers:** Loop direction bug fixed in optimizer.c (one commit, separate from binary search); binary search replacing the buggy linear scan (second commit); `_optimize_gate_list` max_passes cap removed (unbounded iteration until stable); golden-master circuit snapshots captured before any change and verified identical after.
-**Addresses:** Latent optimizer infinite-loop bug, O(log L) gate placement, Python optimizer convergence.
-**Avoids:** Pitfall 4 (optimizer refactoring changing circuit semantics) — golden-master snapshots captured before any code change; binary search implemented alongside the linear scan with assertion of identical results before replacing.
-**Research flag:** MEDIUM risk. Needs investigation of how often the `++i` bug's common-case bypass fails (does ASan catch it in existing `make asan-test` runs?). Capture golden-master snapshots BEFORE any code change — if snapshots cannot be captured cleanly, escalate to phase-specific research.
+**Addresses:** GADV-01 (quantum counting); undeclared scipy dependency
 
-### Phase 5: QFT Bug Fixes (Root Causes First)
-**Rationale:** Fix the three root-cause bugs in dependency order; BUG-QFT-DIV should resolve as a side effect. Regenerate hardcoded sequences only after the C code is correct. C-level fixes precede the scope fix (Phase 6) because BUG-COND-MUL-01 internally uses controlled QFT addition.
-**Delivers:** Correct mixed-width QFT addition (BUG-WIDTH-ADD); correct controlled QFT addition (BUG-CQQ-QFT); correct MSB comparison cleanup in division (BUG-DIV-02); verified BUG-QFT-DIV resolution; regenerated QFT hardcoded sequences for widths 1-16; one regression test per bug fix.
-**Addresses:** BUG-WIDTH-ADD in IntegerAddition.c, BUG-CQQ-QFT in IntegerAddition.c, BUG-DIV-02 in IntegerComparison.c, BUG-QFT-DIV verification.
-**Avoids:** Pitfall 1 (regression cascade) — one bug per commit; full exhaustive suite after each (test_add, test_sub, test_mul, test_div, test_mod, test_compare, test_bitwise); cross-backend verification after each. Sequence regeneration happens AFTER C bugs are verified correct, never before.
-**Research flag:** HIGH risk. BUG-CQQ-QFT requires auditing the Draper QFT adder CCP decomposition against the Ruiz-Perez & Garcia-Escartin paper. BUG-WIDTH-ADD requires careful audit of the qubit offset formula for the mixed-width case. BUG-QFT-DIV may have independent bugs beyond the cascading effects. Phase-specific research is strongly recommended before implementation planning.
+**Avoids:** Pitfall 5 (sign ambiguity) — use IQAE-based counting with corrected formula rather than QPE-based counting; Pitfall 8 (QPE qubit overhead) — IQAE stays within 17-qubit simulation limit without additional QPE ancilla register
 
-### Phase 6: Scope & Segfault Fixes
-**Rationale:** Fix remaining bugs after the QFT foundation is stable. BUG-COND-MUL-01 interacts with QFT addition internally — fixing QFT first isolates scope issues. 32-bit segfault and qarray `*=` are independent but complete the "no crashes at valid widths" guarantee.
-**Delivers:** Correct controlled multiplication (BUG-COND-MUL-01 — scope lifecycle fix in qint_arithmetic.pxi); no segfault at 32-bit multiplication (MAXLAYERINSEQUENCE fix in types.h); no segfault for qarray `*=` (fix in qarray.pyx); regression tests for all three. Explicit decision documented for BUG-MOD-REDUCE (fix or defer with Beauregard redesign documentation).
-**Addresses:** BUG-COND-MUL-01, 32-bit segfault, qarray `*=` segfault. BUG-MOD-REDUCE: fix if Beauregard redesign is feasible, else defer with documentation.
-**Avoids:** Pitfall 1 (regression cascade) — BUG-COND-MUL-01 touches `_scope_stack` in `_core.pyx` and `__exit__`/`__del__` in `qint.pyx`; must run all controlled operation tests after the fix.
-**Research flag:** MEDIUM risk for BUG-COND-MUL-01 (scope/GC interaction with two fix options — mark result as non-uncomputable vs restructure multiply). HIGH risk for BUG-MOD-REDUCE if attempted (needs Beauregard circuit topology research before any code is written).
+### Phase 2: Bug Fixes (BUG-DIV-02 + BUG-MOD-REDUCE)
 
-### Phase 7: Binary Size Reduction
-**Rationale:** Last code-change phase. All bug fixes and sequence regeneration from Phases 5-6 must be complete before applying size optimizations — earlier size work would be invalidated by sequence regeneration. Compiler flag changes should reflect the final code state.
-**Delivers:** `.so` files reduced by 30-50% via `-ffunction-sections`, `-fdata-sections`, `-Wl,--gc-sections`, and strip flags in setup.py; Clifford+T sequences factored from ~207K to ~60-80K lines via `emit_clifft_ccx()` shared helper; optional shared library investigation if size target is not met by flags alone.
-**Addresses:** Compiler flag changes, Clifford+T sequence source factoring, ThinLTO evaluation.
-**Avoids:** Pitfall 5 (dispatch breakage) — verify with `-Wl,--print-gc-sections` to confirm only dead sections are removed; never remove Toffoli CDKM sequences (no runtime fallback); verify `import quantum_language` baseline timing unchanged after each flag addition. ThinLTO must be tested on both macOS and Linux before committing.
-**Research flag:** MEDIUM risk for ThinLTO. Full LTO was disabled due to a GCC bug; ThinLTO (Clang-only) may avoid the same issue but needs empirical confirmation. If ThinLTO causes build failures, drop it — the section GC flags alone achieve significant reduction.
+**Rationale:** Modular Toffoli arithmetic cannot be built correctly until the MSB comparison leak (BUG-DIV-02) and modular reduction corruption (BUG-MOD-REDUCE) are resolved. Both bugs share the same root cause: Python-level comparison operators creating orphan qubits that corrupt circuit state. Fixing them together in one phase avoids compounding the same architectural mistake in two separate places. This phase is purely remediation — it does not add user-facing features but is a hard prerequisite for Phase 3.
 
-### Phase 8: Test Coverage
-**Rationale:** Final phase validates all previous work. xfail conversions are only meaningful after bugs are fixed. Coverage measurement will now reveal the remaining gaps after organically adding regression tests in each previous phase.
-**Delivers:** pytest-cov HTML report showing current coverage baseline; C allocator tests integrated into pytest via subprocess; regression tests promoted from xfail to passing for all fixed bugs; targeted tests for nested `with`-blocks, circuit reset with live qints, `qiskit-aer` import failure, width-64 boundary conditions.
-**Addresses:** C test integration, nested with-block tests, circuit reset tests, qiskit-aer import tests, xfail-to-passing conversions, coverage-guided gap identification.
-**Avoids:** Pitfall 6 (false coverage) — every new test for quantum operations must include Qiskit simulation verification (the `verify_circuit` fixture) or cross-backend differential testing; no "runs without error" assertions; do not convert xfail to skip.
-**Standard patterns:** Well-understood pytest patterns. The `verify_circuit` fixture and cross-backend differential pattern are established in the existing test suite. No phase-specific research needed.
+**Delivers:** Clean MSB comparison and uncomputation in division (BUG-DIV-02 fix); `_reduce_mod` replaced or disabled in favor of C-level implementation forthcoming in Phase 3 (BUG-MOD-REDUCE); BUG-QFT-DIV addressed to the extent it depends on BUG-DIV-02; regression tests verifying ancilla cleanliness after modular operations (`circuit_stats()['current_in_use']` stable)
+
+**Addresses:** BUG-DIV-02, BUG-MOD-REDUCE, BUG-QFT-DIV (partial)
+
+**Avoids:** Pitfall 1 (BUG-DIV-02 compounds modular arithmetic) — resolved before Phase 3 begins; Pitfall 2 (garbage qubits from iterative modular reduction) — iterative `_reduce_mod` loop removed
+
+### Phase 3: Modular Toffoli Arithmetic
+
+**Rationale:** Builds directly on the bug fixes from Phase 2. Implementation order within this phase is strict: modular add -> modular sub -> controlled modular add -> modular multiply. Each step depends on the previous. The Beauregard modular adder is implemented at the C level as an atomic function composing existing Toffoli adders — not as Python-level operator stacking. This is the core deliverable of v5.0.
+
+**Delivers:** `ToffoliModularArithmetic.c` with Beauregard modular add/sub implemented atomically; `toffoli_modular_ops.h` API; controlled modular addition (adds single control qubit to Beauregard sequence); modular multiplication via schoolbook shift-and-add with mod-reduce interleaved; `qint_mod` operators (`+`, `-`, `*`) routed through C-level modular ops; exhaustive verification for widths 2-4 with statevector simulator, widths 5-8 with MPS simulator
+
+**Addresses:** FTE-02 (modular Toffoli arithmetic); `qint_mod` operator correctness in fault-tolerant mode
+
+**Avoids:** Pitfall 4 (CLA subtraction in modular ops) — force RCA for all internal additions/subtractions; Pitfall 9 (layer-based uncomputation for composite operations) — use `@ql.compile`-based uncomputation for modular operations, which operates on captured gate lists rather than layer indices; Pitfall 10 (CCCX ancilla explosion for controlled variants) — pre-allocate single AND-ancilla and verify reuse via `allocator_get_stats()`; Pitfall 14 (simulation qubit limit) — use MPS for widths >= 5
+
+### Phase 4: Automatic Depth/Ancilla Tradeoff
+
+**Rationale:** Enhances all Toffoli operations, including the new modular arithmetic from Phase 3. Most meaningful after modular arithmetic is stable because that is where CLA/RCA tradeoff has the greatest performance impact (O(n) modular additions per multiply). Must be done before Phase 5 because it adds a new mode flag (`tradeoff_policy`) that must be in the parametric compilation cache key. The tradeoff explicitly excludes CLA from inside modular primitives due to the CLA subtraction fallback limitation.
+
+**Delivers:** `tradeoff_policy_t` enum in `circuit_t`; `ql.option('tradeoff', 'auto'|'min_depth'|'min_qubits')` Python API; policy-based dispatch in `hot_path_add_toffoli.c` replacing hardcoded `CLA_THRESHOLD = 2`; width-threshold auto-selection heuristic (CLA at width >= 4, RCA otherwise); documentation of CLA subtraction limitation and exclusion from modular primitives; `allocator_available()` query function added to `qubit_allocator.c`
+
+**Addresses:** OPT-01 (automatic depth/ancilla tradeoff)
+
+**Avoids:** Pitfall 4 (CLA inside modular ops) — tradeoff policy explicitly excluded within `ToffoliModularArithmetic.c` primitives; Pitfall 7 (no qubit budget mechanism) — width-threshold approach is sufficient for v5.0; document `qubit_budget` option as future enhancement; Pitfall 13 (threshold vs hardcoded sequences) — verify correct cache array (`precompiled_toffoli_QQ_add[]` vs `precompiled_toffoli_QQ_add_bk[]`) is accessed per policy decision
+
+### Phase 5: Parametric Compilation
+
+**Rationale:** The most complex v5.0 feature. Benefits from modular arithmetic being stable (it is the primary use case — Shor's modular exponentiation calls the modular multiplier with many different classical values, making the compile-once benefit most visible here). The cache key fix (adding `arithmetic_mode`, `cla_override`, and now `tradeoff_policy`) is done as part of this phase since parametric compilation touches the same cache infrastructure. Toffoli CQ operations fall back to per-value caching with clear documentation.
+
+**Delivers:** `@ql.compile(parametric=True)` and `@ql.compile(parametric=['arg_name'])` API; `DeferredCQOp` and `ParametricPlaceholder` node types in `compile.py`; extended cache key including `arithmetic_mode`, `cla_override`, `tradeoff_policy`; parametric replay for QFT CQ operations (angle substitution); documented per-value fallback for Toffoli CQ operations; oracle decorator (`@ql.grover_oracle`) forced to per-value caching for all classical parameters regardless of parametric setting; regression tests for cache-miss on mode change
+
+**Addresses:** PAR-01, PAR-02 (parametric compilation); pre-existing compile cache key correctness bug
+
+**Avoids:** Pitfall 3 (cache key missing mode flags) — fixed as part of this phase before any other changes; Pitfall 6 (Toffoli CQ topology is value-dependent) — detected via arithmetic mode and handled with per-value fallback, documented explicitly; Pitfall 11 (oracle parametric caching corrupting search) — oracle decorator forces per-value caching for structural parameters
 
 ### Phase Ordering Rationale
 
-- Infrastructure first because measurement tools and dependency fixes enable everything that follows without blocking anything
-- Tech debt before bug fixes because removing dead code simplifies the codebase that will be debugged
-- Security hardening before algorithmic bug fixes because pointer validation converts opaque segfaults to clear exceptions during Phase 5-6 work
-- Optimizer fix before QFT bug fixes because faster tests improve iteration speed during the heavy arithmetic debugging; also eliminates a latent correctness hazard from circuit layout verification
-- C-level QFT root causes (Phase 5) before scope/segfault fixes (Phase 6) because BUG-COND-MUL-01 uses controlled QFT addition internally — fixing QFT first isolates what is a scope issue vs a QFT issue
-- Binary size after all code changes because sequence regeneration in Phase 5 invalidates earlier size work; compiler flags should reflect the final code state
-- Test coverage last because it validates all previous work and xfail conversions are only meaningful once the corresponding bugs are fixed
+- **Quantum counting first** because it is fully independent, delivers immediate user value, and keeps Phase 1 small and shippable. It also validates the IQAE-to-count conversion pipeline before the more complex arithmetic phases begin.
+- **Bug fixes before modular arithmetic** because the MSB comparison leak reproduces identically in the Beauregard sequence if not resolved first. Building modular arithmetic on a broken comparison/uncomputation foundation creates hard-to-diagnose compound failures.
+- **Modular arithmetic before tradeoff** because the tradeoff is most meaningful in the context of modular operations (where O(n) additions per multiply make CLA/RCA choice impactful), and because implementing modular arithmetic with forced RCA first then making the adder configurable is simpler than building both simultaneously.
+- **Tradeoff before parametric compilation** because the tradeoff adds a new circuit mode flag (`tradeoff_policy`) that must be in the compile cache key. Doing this before Phase 5 lets the cache key fix absorb all new mode flags in one pass.
+- **Parametric compilation last** because it touches the most shared infrastructure (compile.py cache, replay, gate list internals) and benefits from knowing the full set of mode flags and from modular arithmetic being stable (its primary use case).
 
 ### Research Flags
 
-Phases requiring deeper research or design review before implementation:
-- **Phase 5 (QFT Bug Fixes):** HIGH risk. BUG-CQQ-QFT requires auditing the Draper QFT adder CCP gate decomposition against the Ruiz-Perez & Garcia-Escartin 2017 paper. BUG-WIDTH-ADD requires mapping the qubit offset formula for the mixed-width asymmetric case. BUG-QFT-DIV may have independent bugs beyond cascading effects from its dependencies. Phase-specific research is strongly recommended before implementation planning begins.
-- **Phase 6 (BUG-COND-MUL-01):** MEDIUM risk. Two fix options (mark result as non-uncomputable vs restructure multiply circuit) have different trade-offs. The option evaluation should happen before the phase is planned.
-- **Phase 6 (BUG-MOD-REDUCE, if attempted):** HIGH risk. Beauregard-style circuit topology is substantially different from the current implementation. Needs circuit design research before any code is written. Deferral is the lower-risk option.
-- **Phase 7 (ThinLTO):** MEDIUM risk. Needs empirical testing on both macOS and Linux. Should be last flag tried, not first.
+Phases likely needing `/gsd:research-phase` during planning:
+
+- **Phase 3 (Modular Toffoli Arithmetic):** The Beauregard ancilla reset step (steps 5-7 of the modular add sequence) requires careful qubit layout specification — specifically how a single ancilla is shared across all five sub-operations and how the controlled variants extend this layout. The interaction between `allocator_alloc`/`allocator_free` and the controlled Toffoli adder calls needs verification before C implementation begins. HIGH risk.
+- **Phase 5 (Parametric Compilation):** Novel feature with no direct precedent in other quantum frameworks. The `DeferredCQOp` replay mechanism — specifically how it interacts with qubit remapping during `_replay` and the boundary conditions for when to fall back to per-value caching — needs detailed design before any code is written. MEDIUM-HIGH risk.
 
 Phases with standard patterns (skip additional research):
-- **Phase 1 (Infrastructure):** Tool installation and configuration; all documentation is official and current.
-- **Phase 2 (Tech Debt):** Mechanical removal with fully traced dependency chain. No algorithmic decisions.
-- **Phase 3 (Security Hardening):** Defensive programming patterns are well-established; specific sites identified; performance cost bounded.
-- **Phase 4 (Optimizer Fix):** Binary search algorithm is textbook; primary risk is procedural (golden-master capture before changes), not algorithmic.
-- **Phase 8 (Test Coverage):** Standard pytest patterns; the `verify_circuit` fixture and cross-backend differential pattern are established.
+
+- **Phase 1 (Quantum Counting):** Well-established algorithm (BHMT 1998); direct wrapper over verified IQAE. Sign convention issue is documented and correctable with a one-line formula change.
+- **Phase 2 (Bug Fixes):** Root causes are understood and confirmed via codebase inspection. The fix is architectural (move comparison to C level), not algorithmic. Both bugs share the same root cause, simplifying analysis.
+- **Phase 4 (Depth/Ancilla Tradeoff):** Both adders already exist and are tested. The policy abstraction is standard engineering. Width-threshold heuristic is a minimal change to the existing dispatch logic.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack additions | HIGH | All tools verified on PyPI with release history; Cython.Coverage plugin documented in official Cython source; version constraints validated for compatibility |
-| Bug root causes | HIGH | All 9 bugs traced to specific files and line ranges via direct codebase inspection; fix pattern classified (A: buffer bounds, B: qubit mapping, C: scope lifecycle, D: algorithm redesign, E: compound bug) |
-| Bug fix complexity | MEDIUM | BUG-CQQ-QFT and BUG-MOD-REDUCE involve non-obvious quantum arithmetic circuit design; root causes are confirmed but fix implementation needs phase-specific research |
-| Optimizer latent bug | HIGH | The `++i` vs `--i` issue in optimizer.c line 32 confirmed via direct code review; common-case bypass mechanism documented; binary search fix design is complete |
-| Binary size reduction | MEDIUM | Compiler flags are well-documented and GCC/Clang standard; ThinLTO needs empirical testing because full LTO was previously disabled for a reason; sequence factoring is mechanically clear but needs generator script changes |
-| Security hardening | HIGH | All vulnerable sites identified; validation patterns are well-understood; performance impact bounded at ~3 branches per arithmetic operation, well within v2.3 regression tolerance |
-| Test coverage tooling | HIGH | pytest-cov + coverage.py is the standard Python ecosystem approach; Cython plugin support confirmed in official Cython source |
-| Phase ordering | HIGH | Each ordering decision has explicit dependency justification backed by project history (v1.5-v3.0 regression patterns) and dependency graph analysis |
+| Stack | HIGH | Zero new dependencies confirmed by codebase analysis; scipy undeclared dependency verified by direct source inspection of `amplitude_estimation.py:29` vs `pyproject.toml` |
+| Features | HIGH | Well-established quantum algorithms from peer-reviewed literature; feature dependency graph is fully traceable in existing codebase |
+| Architecture | HIGH | Codebase-verified integration points; Beauregard/Haner-Roetteler-Svore patterns confirmed in literature; component boundaries clear |
+| Pitfalls | HIGH | Critical pitfalls identified from codebase inspection of known bugs (BUG-DIV-02, BUG-MOD-REDUCE) and literature (Chung & Nepomechie 2023 for sign convention); Toffoli CQ topology pitfall confirmed by Phase 73 code inspection |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **BUG-QFT-DIV independence:** May have bugs beyond the cascading effects of BUG-CQQ-QFT and BUG-WIDTH-ADD. After fixing root causes, if division still fails, the QFT subtraction-in-loop structure has independent bugs. Phase 5 research should investigate this before assuming automatic resolution.
-- **BUG-MOD-REDUCE scope decision:** Whether to attempt Beauregard redesign in v4.1 or defer definitively needs a decision at the start of Phase 6 planning. If deferred, document the specific circuit topology required so future work can begin without re-research.
-- **optimizer.c `++i` full impact analysis:** Need to determine how often the common-case bypass fails in practice. Does ASan catch it in existing `make asan-test` runs? This determines whether it has been silently corrupting results or is genuinely safe in all current test scenarios.
-- **Cython coverage accuracy:** The Cython.Coverage plugin maps `.pyx` lines but cannot measure which C code paths are taken. Coverage numbers will undercount the true uncovered surface. Supplement with ASan in CI and targeted C-level testing for security-critical paths.
-- **ThinLTO macOS/Linux compatibility:** Full LTO was disabled due to a GCC-specific bug. ThinLTO is Clang-only and may not have the same issue, but this requires empirical confirmation on both platforms before committing the flag.
+- **Parametric compilation Toffoli CQ boundary mechanism:** Research identifies that Toffoli CQ operations have value-dependent topology, but the exact mechanism for detecting which gates are value-dependent during capture (vs which are static structure) is not fully specified. This needs explicit design work during Phase 5 planning before any code is written.
+- **Qubit budget for automatic tradeoff:** The auto-selection heuristic uses width thresholds rather than true qubit budget awareness. A `qubit_budget` option would make selection more accurate for nested operations (e.g., modular multiply with multiple concurrent additions). Track as future enhancement; width-threshold is sufficient for v5.0.
+- **Modular multiply verification via MPS simulator:** At widths >= 5, modular multiplication exceeds the 17-qubit statevector simulation limit. Before Phase 3 begins, confirm the `matrix_product_state` simulator path is functional by running a smoke test of an existing large-qubit circuit via MPS.
+- **BUG-QFT-DIV scope in Phase 2:** Research indicates BUG-QFT-DIV depends on BUG-DIV-02, but it may also have independent bugs beyond cascading effects. Phase 2 should scope BUG-QFT-DIV explicitly — either fix fully in Phase 2 or defer with documented remaining failure modes.
+- **AND-ancilla reuse for controlled modular operations:** Controlled modular multiply turns every CCX into CCCX, which decomposes into CCX + AND-ancilla. The claim is that a single AND-ancilla can be reused across all CCCX decompositions (returned to |0> after each use). This needs verification against the existing `allocator_alloc()` count=1 reuse path before Phase 3 implementation.
 
 ## Sources
 
-### Primary (HIGH confidence — direct codebase inspection)
-- `.planning/codebase/CONCERNS.md` — Security vulnerabilities, performance bottlenecks, tech debt inventory
-- `.planning/codebase/ARCHITECTURE.md` — Three-layer architecture, component boundaries
-- `.planning/codebase/TESTING.md` — Test coverage gaps, xfail patterns, 8,365+ test inventory
-- `.planning/codebase/STACK.md` — Existing tool inventory (profiling, debugging, analysis)
-- `.planning/PROJECT.md` — Carry-forward bugs, milestone goals, key decisions
-- `c_backend/src/optimizer.c` — Linear scan bug and binary search opportunity (direct code review)
-- `c_backend/src/IntegerAddition.c` — QFT rotation mapping, controlled addition code paths
-- `c_backend/include/types.h` — `MAXLAYERINSEQUENCE` constant (32-bit segfault root cause)
-- `src/quantum_language/_core.pyx` — Circuit pointer casts, qubit_array scratch buffer
-- `setup.py` — Static C linking, compiler flags, LTO history
+### Primary (HIGH confidence)
+- Haner, Roetteler, Svore (2017) "Factoring using 2n+2 qubits with Toffoli based modular multiplication" [arXiv:1611.07995](https://arxiv.org/abs/1611.07995) — Toffoli-only modular multiplication hierarchy, O(n^3 log n) gates, 2n+2 qubits
+- Beauregard (2003) "Circuit for Shor's algorithm using 2n+3 qubits" [arXiv:quant-ph/0205095](https://arxiv.org/abs/quant-ph/0205095) — Beauregard modular adder: add, subtract N, check MSB, conditionally add N back, reset ancilla
+- Brassard, Hoyer, Mosca, Tapp (1998) "Quantum Counting" [arXiv:quant-ph/9805082](https://arxiv.org/abs/quant-ph/9805082) — M = N * sin^2(theta) conversion; counting via amplitude estimation
+- Grinko, Gacon, Zoufal, Woerner (2021) "Iterative Quantum Amplitude Estimation" [Nature npj QI](https://www.nature.com/articles/s41534-021-00379-1) — IQAE already implemented in `amplitude_estimation.py`
+- Cuccaro, Draper, Kutin, Moulton (2004) "A new quantum ripple-carry addition circuit" (CDKM) [arXiv:quant-ph/0410184](https://arxiv.org/abs/quant-ph/0410184) — CDKM adder: O(n) depth, 1 ancilla
+- Draper, Kutin, Rains, Svore (2006) "A logarithmic-depth quantum carry-lookahead adder" [arXiv:quant-ph/0406142](https://arxiv.org/abs/quant-ph/0406142) — BK CLA adder: O(log n) depth, O(n) ancilla; subtraction fallback documented
 
-### Secondary (MEDIUM confidence — verified external sources)
-- [pytest-cov 7.0.0 on PyPI](https://pypi.org/project/pytest-cov/) — version and compatibility verified
-- [coverage.py 7.13.4 documentation](https://coverage.readthedocs.io/) — Cython plugin configuration
-- [Cython.Coverage plugin source](https://github.com/cython/cython/blob/master/Cython/Coverage.py) — implementation details and `linetrace=True` requirement
-- [vulture 2.14 on PyPI](https://pypi.org/project/vulture/) — feature set and confidence scoring verified
-- [cppcheck 2.19.0 releases](https://github.com/danmar/cppcheck/releases) — C23 support confirmed
-- [GCC section GC](https://www.vidarholen.net/contents/blog/?p=729) — `-ffunction-sections` + `--gc-sections` effectiveness
-- [Link-Time Optimization techniques](https://markaicode.com/link-time-optimization-cpp26/) — ThinLTO vs full LTO comparison
-- [Running C unit tests with pytest](https://p403n1x87.github.io/running-c-unit-tests-with-pytest.html) — subprocess integration pattern
-- [Draper QFT adder (Ruiz-Perez & Garcia-Escartin 2017)](https://arxiv.org/pdf/1411.5949) — CCP rotation angles for BUG-CQQ-QFT analysis
-- [VOQC verified optimizer](https://www.cs.umd.edu/~mwh/papers/voqc.pdf) — commutation-aware optimization and circuit correctness patterns
+### Secondary (MEDIUM confidence)
+- Chung & Nepomechie (2023) "Quantum counting, and a relevant sign" [arXiv:2310.07428](https://arxiv.org/abs/2310.07428) — diffusion operator sign convention in quantum counting; quantified error near factor of 2
+- Classiq quantum counting documentation [classiq.io](https://docs.classiq.io/latest/explore/algorithms/amplitude_estimation/quantum_counting/quantum_counting/) — IQAE-based counting reference implementation
+- Comprehensive Study of Quantum Arithmetic Circuits (2024) [arXiv:2406.03867](https://arxiv.org/html/2406.03867v1) — depth-count tradeoffs, RCA vs CLA comparison across circuit families
+- Optimal compilation of parametrised quantum circuits (2024) [arXiv:2401.12877](https://arxiv.org/abs/2401.12877) — parametric compilation scope, constraints, and limitations for quantum circuits
+- SciPy v1.17.0 documentation [scipy.org](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.beta.html) — `beta.ppf` Clopper-Pearson CI with Boost Math backend; Python 3.13 compatible
 
-### Tertiary (MEDIUM confidence — general domain research)
-- [D-Linker: Shared library debloating](https://dl.acm.org/doi/10.1109/TCAD.2024.3446712) — binary size reduction techniques
-- [Cython memory safety limitations](https://pythonspeed.com/articles/cython-limitations/) — Cython-specific pitfalls and `boundscheck(False)` trade-offs
-- [Test coverage false confidence](https://hackernoon.com/misleading-test-coverage-and-how-to-avoid-false-confidence) — general testing practices
-- [QuteFuzz: Fuzzing Quantum Compilers](https://popl25.sigplan.org/details/planqc-2025-papers/12/QuteFuzz-Fuzzing-quantum-compilers-using-randomly-generated-circuits-with-control-fl) — quantum testing approaches and differential testing patterns
-- [Bounds checking performance overhead](https://chandlerc.blog/posts/2024/11/story-time-bounds-checking/) — 0.3% overhead characterization
+### Codebase Analysis (HIGH confidence)
+- `src/quantum_language/amplitude_estimation.py:29` — `from scipy.stats import beta` import confirming undeclared dependency
+- `src/quantum_language/qint_mod.pyx:107-131` — broken `_reduce_mod` iterative loop (BUG-MOD-REDUCE root cause)
+- `src/quantum_language/compile.py:594-625` — cache key structure, `_classify_args`, missing mode flags
+- `c_backend/src/hot_path_add_toffoli.c` — CLA/RCA dispatch, hardcoded `CLA_THRESHOLD = 2`, existing two-cache dispatch arrays
+- `c_backend/src/ToffoliAdditionCDKM.c`, `ToffoliAdditionCLA.c`, `ToffoliMultiplication.c` — existing Toffoli primitives used by new modular arithmetic
+- `c_backend/include/circuit.h` — `circuit_t` struct, `cla_override`, `qubit_saving`, `arithmetic_mode` fields
+- `c_backend/include/toffoli_arithmetic_ops.h` — full Toffoli add/mul function signatures
+- Previous pitfall research: `.planning/research/PITFALLS-TOFFOLI-ARITHMETIC.md`, `.planning/research/PITFALLS-COMPILE-DECORATOR.md`, `.planning/research/PITFALLS_GROVER.md`
+- Known bugs: BUG-DIV-02 (MSB comparison leak in division), BUG-QFT-DIV (QFT division failures), BUG-MOD-REDUCE (`_reduce_mod` corruption)
 
 ---
-*Research completed: 2026-02-22*
+*Research completed: 2026-02-24*
 *Ready for roadmap: yes*
