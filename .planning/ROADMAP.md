@@ -139,11 +139,11 @@
   2. The returned `CountResult` object exposes `.count`, `.estimate`, `.count_interval`, `.search_space`, and `.num_oracle_calls` attributes
   3. Quantum counting produces correct M for known-M oracles with M=1, M=2, and M=3 verified by Qiskit simulation
   4. `scipy>=1.10` is declared in `pyproject.toml` (previously undeclared dependency used by IQAE)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 90-01: TBD
-- [ ] 90-02: TBD
+- [ ] 90-01-PLAN.md — CountResult class, count_solutions() function, scipy dependency
+- [ ] 90-02-PLAN.md — Known-M oracle verification tests (M=1, M=2, M=3)
 
 ### Phase 91: Arithmetic Bug Fixes
 **Goal**: Division and modular reduction produce correct results without orphan qubits or circuit corruption
