@@ -200,7 +200,12 @@ Plans:
   2. `qarray *= scalar` executes without crashing for arrays of qint at widths 1-8 (BUG-02 fixed)
   3. Controlled multiplication inside a `with` block produces correct results verified by Qiskit simulation, with no result register corruption from scope uncomputation (BUG-07 fixed)
   4. BUG-MOD-REDUCE is either fixed with correct results for modular reduction at all tested moduli, OR explicitly deferred with documented rationale explaining the Beauregard-style redesign required
-**Plans**: TBD
+**Plans**: 4 plans
+Plans:
+- [ ] 87-01-PLAN.md — Fix 32-bit multiplication segfault (MAXLAYERINSEQUENCE increase)
+- [ ] 87-02-PLAN.md — Document BUG-09 (BUG-MOD-REDUCE) deferral with rationale
+- [ ] 87-03-PLAN.md — Investigate and fix qarray *= scalar crash
+- [ ] 87-04-PLAN.md — Fix controlled multiplication scope uncomputation corruption
 
 ### Phase 88: Binary Size Reduction
 **Goal**: Compiled .so files are significantly smaller without breaking any functionality or causing performance regression
