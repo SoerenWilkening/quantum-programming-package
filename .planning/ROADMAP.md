@@ -114,7 +114,7 @@
 - [x] **Phase 86: QFT Bug Fixes** (3/3 plans) -- completed 2026-02-24 (BUG-04 fixed, BUG-05 fixed, BUG-06/BUG-08 deferred)
 - [x] **Phase 87: Scope & Segfault Fixes** - Fix controlled multiplication corruption, 32-bit segfault, qarray crash, and resolve MOD-REDUCE (completed 2026-02-24)
 - [x] **Phase 88: Binary Size Reduction** - Apply compiler flags and strip symbols to reduce .so file sizes by 30-50% (completed 2026-02-24)
-- [ ] **Phase 89: Test Coverage** - Add missing test scenarios, integrate C tests, convert xfail markers for fixed bugs
+- [x] **Phase 89: Test Coverage** - Add missing test scenarios, integrate C tests, convert xfail markers for fixed bugs (completed 2026-02-24)
 
 ## Phase Details
 
@@ -231,11 +231,11 @@ Plans:
   3. C backend tests (`test_allocator_block`, `test_reverse_circuit`) run as part of `pytest` via subprocess wrappers and their pass/fail status is reported in pytest output
   4. Every xfail marker corresponding to a bug fixed in Phases 82-88 has been converted to a passing test (no xfails remain for fixed bugs)
   5. Coverage report shows improvement over the Phase 82 baseline measurement
-**Plans**: 3 plans
+**Plans**: 3 plans (all complete)
 Plans:
-- [ ] 89-01-PLAN.md — Convert xfail markers for fixed bugs, integrate C backend tests into pytest
-- [ ] 89-02-PLAN.md — Add nested with-block tests and circuit reset behavior tests
-- [ ] 89-03-PLAN.md — Measure coverage improvement over Phase 82 baseline
+- [x] 89-01-PLAN.md — Convert xfail markers for fixed bugs, integrate C backend tests into pytest
+- [x] 89-02-PLAN.md — Add nested with-block tests and circuit reset behavior tests
+- [x] 89-03-PLAN.md — Measure coverage improvement over Phase 82 baseline
 
 ## Progress
 

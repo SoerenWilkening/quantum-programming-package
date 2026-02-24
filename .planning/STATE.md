@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v4.1 Quality & Efficiency -- Phase 86 (QFT Bug Fixes) COMPLETE
+**Current focus:** v4.1 Quality & Efficiency -- Phase 89 (Test Coverage) COMPLETE
 
 ## Current Position
 
-Phase: 86 of 89 (QFT Bug Fixes) -- COMPLETE
+Phase: 89 of 89 (Test Coverage) -- COMPLETE
 Plan: 3 of 3 in current phase (all plans complete)
-Status: Phase 86 complete. BUG-04 (mixed-width addition) fixed, BUG-05 (cQQ_add rotation) fixed, BUG-06/BUG-08 (division ancilla leak) investigated and deferred.
-Last activity: 2026-02-24 -- Completed 86-03 (division ancilla leak investigation)
+Status: Phase 89 complete. Coverage improved 48.2% -> 56% (+7.8%). xfail conversions, C test integration, nested with-block tests, circuit reset tests all added.
+Last activity: 2026-02-24 -- Completed 89-03 (coverage measurement)
 
-Progress: [========================                          ] 5/8 phases (v4.1)
+Progress: [==================================================] 8/8 phases (v4.1)
 
 ## Performance Metrics
 
@@ -30,7 +30,7 @@ Progress: [========================                          ] 5/8 phases (v4.1)
 | v1.0-v2.3 | 1-64 | 166 | Complete |
 | v3.0 Fault-Tolerant | 65-75 | 35 | Complete (2026-02-18) |
 | v4.0 Grover's Algorithm | 76-81 | 18 | Complete (2026-02-22) |
-| v4.1 Quality & Efficiency | 82-89 | 12 | In progress |
+| v4.1 Quality & Efficiency | 82-89 | 15 | Complete (2026-02-24) |
 
 **v4.1 Plan Details:**
 
@@ -48,6 +48,9 @@ Progress: [========================                          ] 5/8 phases (v4.1)
 | 86 | 01 | 15min | 2 | 2 |
 | 86 | 02 | 15min | 2 | 1 |
 | 86 | 03 | 120min | 2 | 2 |
+| 89 | 01 | 20min | 2 | 3 |
+| 89 | 02 | 10min | 2 | 2 |
+| 89 | 03 | 15min | 1 | 1 |
 
 ## Accumulated Context
 
@@ -138,8 +141,8 @@ See PROJECT.md Key Decisions table for full history.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Phase 86 complete. Ready for Phase 87 (Scope & Segfault Fixes).
-Resume action: Plan and execute Phase 87
+Stopped at: Phase 89 complete. v4.1 milestone all phases complete.
+Resume action: Audit v4.1 milestone completion
 
 ---
-*State updated: 2026-02-24 -- Completed Phase 86 (QFT bug fixes) -- 3 plans complete (BUG-04 fixed, BUG-05 fixed, BUG-06/BUG-08 deferred)*
+*State updated: 2026-02-24 -- Completed Phase 89 (Test Coverage) -- 3 plans complete (coverage 48.2% -> 56%, xfail conversions, C test integration, nested with-block + circuit reset tests)*
