@@ -47,7 +47,7 @@
 // ======================================================
 // Sequence and Layer Constants
 // ======================================================
-#define MAXLAYERINSEQUENCE 10000
+#define MAXLAYERINSEQUENCE 300000
 #define MAXGATESPERLAYER INTEGERSIZE
 
 // ======================================================
