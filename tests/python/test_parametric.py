@@ -298,6 +298,98 @@ class TestParametricToffoliStructural:
         measured = _simulate_and_extract(qasm_str, 0, 4)
         assert measured == 8, f"Expected 8, got {measured}"
 
+    def test_toffoli_qq_parametric_safe(self):
+        """Toffoli QQ add (both quantum) should work with parametric=True.
+
+        When both operands are quantum, there are no classical args,
+        so parametric=True is a no-op. Verify it still works correctly.
+        """
+
+        @ql.compile(parametric=True)
+        def add_qq(x, y):
+            return x + y
+
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        a = ql.qint(3, width=4)
+        b = ql.qint(2, width=4)
+        result = add_qq(a, b)
+        # Both operands are quantum -- no classical args, so parametric is a no-op
+        # Just verify execution succeeds without error
+        assert result is not None
+
+
+# ============================================================================
+# Edge cases for parametric compilation
+# ============================================================================
+
+
+class TestParametricEdgeCases:
+    """Edge cases for parametric compilation."""
+
+    def test_different_classical_value_triggers_recapture(self):
+        """Different classical values between calls trigger re-capture.
+
+        Cache key includes classical arg values, so different values produce
+        separate cache entries, verified by cache size increase.
+        """
+
+        @ql.compile(parametric=True)
+        def add_val(x, val):
+            x += val
+            return x
+
+        # Call with classical value 3
+        ql.circuit()
+        ql.option("fault_tolerant", False)
+        a = ql.qint(0, width=4)
+        _ = add_val(a, 3)
+        cache_size_after_first = len(add_val._cache)
+
+        # Call with different classical value 7 (triggers probe comparison)
+        b = ql.qint(0, width=4)
+        _ = add_val(b, 7)
+        cache_size_after_second = len(add_val._cache)
+
+        # Should have grown (different cache key for different values)
+        assert cache_size_after_second > cache_size_after_first, (
+            f"Expected cache size increase: first={cache_size_after_first}, "
+            f"second={cache_size_after_second}"
+        )
+
+    def test_clear_cache_then_reprobe(self):
+        """clear_cache() resets parametric state, allowing full re-probe."""
+
+        @ql.compile(parametric=True)
+        def add_val(x, val):
+            x += val
+            return x
+
+        # Trigger probe and detect as safe (QFT mode)
+        ql.circuit()
+        ql.option("fault_tolerant", False)
+        a = ql.qint(0, width=4)
+        _ = add_val(a, 2)
+
+        ql.circuit()
+        ql.option("fault_tolerant", False)
+        b = ql.qint(0, width=4)
+        _ = add_val(b, 5)
+        assert add_val._parametric_safe is True
+
+        # Clear cache -- should reset all parametric state
+        add_val.clear_cache()
+        assert add_val._parametric_probed is False
+        assert add_val._parametric_safe is None
+
+        # Re-probe from scratch
+        ql.circuit()
+        ql.option("fault_tolerant", False)
+        c = ql.qint(0, width=4)
+        _ = add_val(c, 1)
+        assert add_val._parametric_probed is True
+        assert add_val._parametric_safe is None  # Not decided yet
+
 
 # ============================================================================
 # PAR-04: Oracle non-parametric override
