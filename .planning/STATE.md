@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Phase 91 — Arithmetic Bug Fixes
+**Current focus:** Phase 93 — Depth/Ancilla Tradeoff
 
 ## Current Position
 
-Phase: 91 of 94 (Arithmetic Bug Fixes) — second phase of v5.0
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-02-24 — Phase 91 complete (CQ divmod fixed, mod_reduce improved, tests updated)
+Phase: 93 of 94 (Depth/Ancilla Tradeoff) — fourth phase of v5.0
+Plan: 1 of 2 in current phase
+Status: Plan 93-01 complete, Plan 93-02 pending
+Last activity: 2026-02-25 — Plan 93-01 complete (tradeoff option API + CLA/RCA dispatch)
 
-Progress: [██████████] 100% (3/3 Phase 91 plans)
+Progress: [█████░░░░░] 50% (1/2 Phase 93 plans)
 
 ## Performance Metrics
 
@@ -49,9 +49,9 @@ See PROJECT.md Key Decisions table for full history.
 
 ## Session Continuity
 
-Last session: 2026-02-24
-Stopped at: Phase 91 complete, all 3 plans executed
-Resume action: `/gsd:plan-phase 92` or `/gsd:progress`
+Last session: 2026-02-25
+Stopped at: Phase 93 Plan 01 complete, Plan 02 (CLA subtraction) pending
+Resume action: Execute Plan 93-02 (CLA subtraction via two's complement)
 
 ---
-*State updated: 2026-02-24 — Phase 91 complete*
+*State updated: 2026-02-25 — Phase 93 Plan 01 complete*
