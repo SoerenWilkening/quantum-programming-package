@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** Phase 94 — Parametric Compilation (COMPLETE)
+**Current focus:** Phase 94 — Parametric Compilation (IN PROGRESS)
 
 ## Current Position
 
 Phase: 94 of 94 (Parametric Compilation) — fifth phase of v5.0
-Plan: 3 of 3 in current phase
-Status: Phase 94 complete (all plans executed)
-Last activity: 2026-02-25 — Phase 94 complete (parametric compilation)
+Plan: 2 of 3 in current phase
+Status: Plan 01 complete, Plan 02 next
+Last activity: 2026-02-25 — Plan 01 complete (mode-aware cache keys and parametric API)
 
-Progress: [██████████] 100% (3/3 Phase 94 plans)
+Progress: [███-------] 33% (1/3 Phase 94 plans)
 
 ## Performance Metrics
 
@@ -47,11 +47,16 @@ See PROJECT.md Key Decisions table for full history.
 - Parametric Toffoli CQ limitation — value-dependent gate topology requires per-value fallback (RESOLVED in Phase 94 — auto-detected and documented)
 - Research flags: Phase 92 (HIGH risk — Beauregard ancilla layout) — Phase 94 MEDIUM-HIGH risk resolved via two-capture probe
 
+### Decisions (Phase 94)
+
+- Cache key includes (arithmetic_mode, cla_override, tradeoff_policy) tuple appended to all 4 key construction sites
+- Oracle decorator forces parametric=False since oracle parameters are structural by nature
+
 ## Session Continuity
 
 Last session: 2026-02-25
-Stopped at: Phase 94 complete, all 3 plans executed
-Resume action: `/gsd:progress` — v5.0 milestone may be complete
+Stopped at: Completed 94-01-PLAN.md
+Resume action: Execute 94-02-PLAN.md (parametric probe/replay lifecycle)
 
 ---
-*State updated: 2026-02-25 — Phase 94 complete*
+*State updated: 2026-02-25 — Plan 94-01 complete*

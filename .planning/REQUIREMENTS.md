@@ -94,7 +94,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FIX-01 | Phase 91 | Pending |
 | FIX-02 | Phase 91 | Pending |
 | FIX-03 | Phase 91 | Pending |
-| FIX-04 | Phase 94 | Pending |
+| FIX-04 | Phase 94 | Complete |
 | MOD-01 | Phase 92 | Complete |
 | MOD-02 | Phase 92 | Complete |
 | MOD-03 | Phase 92 | Complete |
@@ -107,7 +107,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TRD-02 | Phase 93 | Complete |
 | TRD-03 | Phase 93 | Complete |
 | TRD-04 | Phase 93 | Complete |
-| PAR-01 | Phase 94 | Pending |
+| PAR-01 | Phase 94 | Complete |
 | PAR-02 | Phase 94 | Pending |
 | PAR-03 | Phase 94 | Pending |
 | PAR-04 | Phase 94 | Pending |

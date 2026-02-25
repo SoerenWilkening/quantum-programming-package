@@ -230,7 +230,7 @@ Phases execute in numeric order: 90 -> 91 -> 92 -> 93 -> 94
 | 91. Arithmetic Bug Fixes | v5.0 | 3/3 | Complete | 2026-02-24 |
 | 92. Modular Toffoli Arithmetic | v5.0 | Complete    | 2026-02-25 | - |
 | 93. Depth/Ancilla Tradeoff | v5.0 | 2/2 | Complete | 2026-02-25 |
-| 94. Parametric Compilation | v5.0 | 3/3 | Complete | 2026-02-25 |
+| 94. Parametric Compilation | 1/3 | In Progress|  | 2026-02-25 |
 
 ---
 *Roadmap created: 2026-02-02*
