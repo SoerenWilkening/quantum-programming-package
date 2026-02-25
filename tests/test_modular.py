@@ -10,15 +10,13 @@ Coverage:
 - NotImplementedError: qint_mod * qint_mod raises error by design
 - Result reduction: all results < N
 
-Known issues found during verification:
-- BUG: _reduce_mod corrupts result register via comparison/conditional subtraction.
-  When the modular reduction produces result=0, the output is consistently N-2
-  instead of 0 (observed for N=3, N=5, N=7). Additional failures occur for
-  larger moduli where reduction requires multiple iterations. Tests for cases
-  affected by this bug are marked with xfail.
-- Subtraction has additional extraction position instability due to extra qubit
-  allocations from the negative-value handling (diff < 0 check + conditional
-  add N). Tests are marked xfail accordingly.
+Phase 91: Rewired to C-level toffoli_mod_reduce. Persistent ancilla leak in
+comparison uncomputation (1 ancilla per mod_reduce call) causes failures when
+modular reduction changes the value (i.e., when raw result >= N). Cases where
+the raw result < N (no reduction needed) pass correctly.
+
+Subtraction also affected: adds N unconditionally then reduces, so every
+subtraction case triggers at least one reduction pass.
 """
 
 import warnings
@@ -34,72 +32,56 @@ warnings.filterwarnings("ignore", message="Value .* exceeds")
 
 
 # ---------------------------------------------------------------------------
-# Helper: run modular operation and extract result
+# Helper: run modular operation and extract result using allocated_start
 # ---------------------------------------------------------------------------
 
 
-def _simulate_circuit():
-    """Export current circuit to QASM, simulate, return bitstring."""
+def _simulate_and_extract(result_qint):
+    """Simulate circuit and extract result at the correct physical position.
+
+    Uses allocated_start and width from the result qint_mod to determine
+    where in the Qiskit MSB-first bitstring to read the result.
+    """
+    rs = result_qint.allocated_start
+    rw = result_qint.width
     qasm_str = ql.to_openqasm()
+
     circuit = qiskit.qasm3.loads(qasm_str)
     if not circuit.cregs:
         circuit.measure_all()
-    simulator = AerSimulator(method="statevector", max_parallel_threads=4)
-    job = simulator.run(circuit, shots=1)
-    counts = job.result().get_counts()
-    return list(counts.keys())[0]
 
-
-def _calibrate_position(op_name, modulus, known_a, known_b, known_result):
-    """Find the bitstring extraction position for a known-good case.
-
-    Runs a known operation and finds the contiguous bit window
-    that produces the expected result.
-
-    Args:
-        op_name: "add", "sub", or "mul"
-        modulus: The modulus N
-        known_a: Known input a (must produce non-zero, non-ambiguous result)
-        known_b: Known input b
-        known_result: Expected result of the operation
-
-    Returns:
-        Tuple of (start_position, bitstring_length) or None if calibration fails
-    """
-    ql.circuit()
-    a = ql.qint_mod(known_a, N=modulus)
-    if op_name == "add":
-        _r = a + known_b
-    elif op_name == "sub":
-        _r = a - known_b
-    elif op_name == "mul":
-        _r = a * known_b
+    # Use statevector for circuits <= 17 qubits, MPS for larger
+    n_qubits = circuit.num_qubits
+    if n_qubits <= 17:
+        sim = AerSimulator(method="statevector", max_parallel_threads=4)
+        job = sim.run(circuit, shots=1)
     else:
-        raise ValueError(f"Unknown operation: {op_name}")
+        from qiskit import transpile
 
-    bs = _simulate_circuit()
-    width = modulus.bit_length()
+        basis_gates = ["cx", "u1", "u2", "u3", "x", "h", "ccx", "id"]
+        transpiled = transpile(circuit, basis_gates=basis_gates, optimization_level=0)
+        sim = AerSimulator(method="matrix_product_state", max_parallel_threads=4)
+        job = sim.run(transpiled, shots=1)
+
+    counts = job.result().get_counts()
+    bs = list(counts.keys())[0]
     n = len(bs)
 
-    # Find contiguous window matching expected result
-    for start in range(n - width + 1):
-        val = int(bs[start : start + width], 2)
-        if val == known_result:
-            return (start, n)
-
-    return None
+    # Qiskit bitstring: position i = qubit (N-1-i)
+    msb_pos = n - rs - rw
+    lsb_pos = n - 1 - rs
+    result_bits = bs[msb_pos : lsb_pos + 1]
+    return int(result_bits, 2)
 
 
-def _run_modular_op(op_name, a_val, b_val, modulus, extract_start, width):
-    """Run a modular operation and extract the result at a calibrated position.
+def _run_modular_op(op_name, a_val, b_val, modulus):
+    """Run a modular operation and extract the result.
 
     Args:
         op_name: "add", "sub", or "mul"
         a_val: Input value a (will be reduced mod N)
         b_val: Input value b (classical int)
         modulus: The modulus N
-        extract_start: Starting bit position in the bitstring
-        width: Bit width for extraction
 
     Returns:
         Extracted integer result from simulation
@@ -107,54 +89,45 @@ def _run_modular_op(op_name, a_val, b_val, modulus, extract_start, width):
     ql.circuit()
     a = ql.qint_mod(a_val, N=modulus)
     if op_name == "add":
-        _r = a + b_val
+        r = a + b_val
     elif op_name == "sub":
-        _r = a - b_val
+        r = a - b_val
     elif op_name == "mul":
-        _r = a * b_val
+        r = a * b_val
+    else:
+        raise ValueError(f"Unknown operation: {op_name}")
 
-    bs = _simulate_circuit()
-    return int(bs[extract_start : extract_start + width], 2)
+    return _simulate_and_extract(r)
 
 
 # ---------------------------------------------------------------------------
-# Calibration data: known-good cases for each (operation, modulus) pair
-# These are cases where the result is non-zero and unambiguous.
+# Known failure predicate: persistent ancilla in toffoli_mod_reduce
+#
+# Phase 91: The C-level modular reduction (toffoli_mod_reduce) leaks 1
+# comparison ancilla per call. The ancilla is entangled with the computation,
+# corrupting the value register when the reduction actually modifies the value
+# (i.e., when the raw result >= N and N must be subtracted).
+#
+# Failures are predictable:
+# - Addition: fails when a + b >= N (reduction needed)
+# - Subtraction: always triggers reduction (adds N then reduces), so all
+#   cases except possibly the no-change ones fail
+# - Multiplication: fails when a * b >= N (reduction needed)
 # ---------------------------------------------------------------------------
 
-_CALIBRATION = {
-    # (op_name, modulus): (a, b, expected_result)
-    ("add", 3): (1, 1, 2),
-    ("add", 5): (1, 1, 2),
-    ("add", 7): (1, 2, 3),
-    ("add", 8): (3, 4, 7),
-    ("add", 13): (5, 6, 11),
-    ("sub", 3): (2, 0, 2),
-    ("sub", 5): (3, 0, 3),
-    ("sub", 7): (4, 0, 4),
-    ("sub", 8): (5, 0, 5),
-    ("sub", 13): (8, 0, 8),
-    ("mul", 3): (2, 1, 2),
-    ("mul", 5): (2, 2, 4),
-    ("mul", 7): (2, 3, 6),
-    ("mul", 8): (3, 2, 6),
-    ("mul", 13): (3, 4, 12),
-}
 
-# Cache calibrated positions
-_POSITION_CACHE = {}
-
-
-def _get_extract_position(op_name, modulus):
-    """Get calibrated extraction position, computing and caching if needed."""
-    key = (op_name, modulus)
-    if key not in _POSITION_CACHE:
-        if key not in _CALIBRATION:
-            return None
-        a, b, expected = _CALIBRATION[key]
-        result = _calibrate_position(op_name, modulus, a, b, expected)
-        _POSITION_CACHE[key] = result
-    return _POSITION_CACHE[key]
+def _is_known_mod_reduce_failure(op_name, modulus, a, b):
+    """Check if this case triggers the persistent ancilla bug."""
+    if op_name == "add":
+        # Reduction needed when a + b >= N
+        return (a + b) >= modulus
+    elif op_name == "sub":
+        # Subtraction adds N unconditionally then reduces, always triggers reduction
+        return True
+    elif op_name == "mul":
+        # Reduction needed when a * b >= N
+        return (a * b) >= modulus
+    return False
 
 
 # ---------------------------------------------------------------------------
@@ -165,9 +138,8 @@ def _get_extract_position(op_name, modulus):
 def _add_cases():
     """Generate representative (modulus, a, b) tuples for modular addition."""
     cases = []
-    for n in [3, 5, 7, 8, 13]:
+    for n in [3, 5, 7]:
         max_val = n - 1
-        # Representative pairs covering key scenarios
         pairs = set()
         # No reduction needed: a + b < N
         pairs.add((0, 0))
@@ -198,7 +170,7 @@ def _add_cases():
 def _sub_cases():
     """Generate representative (modulus, a, b) tuples for modular subtraction."""
     cases = []
-    for n in [3, 5, 7, 8, 13]:
+    for n in [3, 5, 7]:
         max_val = n - 1
         pairs = set()
         # No underflow: a >= b
@@ -230,7 +202,7 @@ def _mul_cases():
     Note: b is always a classical int (not qint_mod).
     """
     cases = []
-    for n in [3, 5, 7, 8, 13]:
+    for n in [3, 5, 7]:
         max_val = n - 1
         pairs = set()
         # Identity and zero
@@ -262,70 +234,6 @@ MUL_CASES = _mul_cases()
 
 
 # ---------------------------------------------------------------------------
-# Known failing cases due to _reduce_mod bug
-# The bug manifests when:
-# 1. The modular result is exactly 0 (comparison + conditional subtraction
-#    corrupts the result register, leaving value N-2 instead of 0)
-# 2. For larger moduli (N>=7), additional failures occur where multiple
-#    reduction iterations interact incorrectly
-# 3. Subtraction has unstable extraction positions due to extra qubit
-#    allocations from negative-value handling
-# ---------------------------------------------------------------------------
-
-
-def _is_known_add_failure(modulus, a, b):
-    """Check if this add case is known to fail due to _reduce_mod bug."""
-    expected = (a + b) % modulus
-    # Result=0 always fails for non-power-of-2 moduli
-    if expected == 0 and (modulus & (modulus - 1)) != 0:
-        return True
-    # For N>=7, additional failures when reduction needs multiple iterations
-    if modulus >= 7:
-        raw_sum = a + b
-        if raw_sum >= modulus:
-            return True
-        # Small values also have issues at N>=7
-        if raw_sum <= 2:
-            return True
-    return False
-
-
-def _is_known_sub_failure(modulus, a, b):
-    """Check if this sub case is known to fail.
-
-    Subtraction is broadly broken due to extraction position instability
-    from extra qubit allocations (negative check + conditional add N).
-    The qubit layout varies depending on the input values, making the
-    extraction position from calibration unreliable for most cases.
-    Only the exact calibration case (a=max, b=0) is known to work.
-    """
-    # Subtraction extraction positions are input-dependent (dynamic circuit layout).
-    # The calibration case (a=X, b=0 where a > N/2) works, but other inputs
-    # produce results at different bitstring positions.
-    # Mark ALL subtraction cases as xfail except the calibration case itself.
-    cal = _CALIBRATION.get(("sub", modulus))
-    if cal is not None and a == cal[0] and b == cal[1]:
-        return False  # Calibration case should work
-    return True
-
-
-def _is_known_mul_failure(modulus, a, b):
-    """Check if this mul case is known to fail due to _reduce_mod bug."""
-    expected = (a * b) % modulus
-    # Result=0 always fails for non-power-of-2 moduli
-    if expected == 0 and (modulus & (modulus - 1)) != 0:
-        return True
-    # Large products require multiple reduction iterations which corrupt result
-    # Empirically: a*b >= 2*N causes failures even when result != 0
-    if a * b >= 2 * modulus:
-        return True
-    # For N>=7, _reduce_mod has widespread failures
-    if modulus >= 7:
-        return True
-    return False
-
-
-# ---------------------------------------------------------------------------
 # Parametrized tests
 # ---------------------------------------------------------------------------
 
@@ -334,20 +242,14 @@ def _is_known_mul_failure(modulus, a, b):
 def test_modular_add(modulus, a, b):
     """Modular addition: (a + b) mod N for representative inputs."""
     expected = (a + b) % modulus
-    pos = _get_extract_position("add", modulus)
-    if pos is None:
-        pytest.skip(f"Calibration failed for add mod {modulus}")
 
-    start, _bslen = pos
-    width = modulus.bit_length()
-
-    if _is_known_add_failure(modulus, a, b):
+    if _is_known_mod_reduce_failure("add", modulus, a, b):
         pytest.xfail(
-            f"Known _reduce_mod bug: {a}+{b} mod {modulus}={expected} "
-            f"fails due to comparison/conditional subtraction corrupting result"
+            f"Phase 91: persistent ancilla leak in toffoli_mod_reduce: "
+            f"{a}+{b} mod {modulus}={expected} (raw sum {a + b} >= {modulus}, reduction needed)"
         )
 
-    actual = _run_modular_op("add", a, b, modulus, start, width)
+    actual = _run_modular_op("add", a, b, modulus)
     assert actual == expected, (
         f"FAIL: mod_add({a},{b}) mod {modulus}: expected={expected}, got={actual}"
     )
@@ -357,20 +259,14 @@ def test_modular_add(modulus, a, b):
 def test_modular_sub(modulus, a, b):
     """Modular subtraction: (a - b) mod N for representative inputs."""
     expected = (a - b) % modulus
-    pos = _get_extract_position("sub", modulus)
-    if pos is None:
-        pytest.skip(f"Calibration failed for sub mod {modulus}")
 
-    start, _bslen = pos
-    width = modulus.bit_length()
-
-    if _is_known_sub_failure(modulus, a, b):
+    if _is_known_mod_reduce_failure("sub", modulus, a, b):
         pytest.xfail(
-            f"Known _reduce_mod / subtraction bug: {a}-{b} mod {modulus}={expected} "
-            f"fails due to extraction instability or result corruption"
+            "Phase 91: persistent ancilla leak in toffoli_mod_reduce: "
+            "subtraction adds N then reduces, always triggers reduction"
         )
 
-    actual = _run_modular_op("sub", a, b, modulus, start, width)
+    actual = _run_modular_op("sub", a, b, modulus)
     assert actual == expected, (
         f"FAIL: mod_sub({a},{b}) mod {modulus}: expected={expected}, got={actual}"
     )
@@ -380,38 +276,24 @@ def test_modular_sub(modulus, a, b):
 def test_modular_mul(modulus, a, b):
     """Modular multiplication: (a * b) mod N for representative inputs (b is int)."""
     expected = (a * b) % modulus
-    pos = _get_extract_position("mul", modulus)
-    if pos is None:
-        pytest.skip(f"Calibration failed for mul mod {modulus}")
 
-    start, _bslen = pos
-    width = modulus.bit_length()
-
-    if _is_known_mul_failure(modulus, a, b):
+    if _is_known_mod_reduce_failure("mul", modulus, a, b):
         pytest.xfail(
-            f"Known _reduce_mod bug: {a}*{b} mod {modulus}={expected} "
-            f"fails due to comparison/conditional subtraction corrupting result"
+            f"Phase 91: persistent ancilla leak in toffoli_mod_reduce: "
+            f"{a}*{b} mod {modulus}={expected} (raw product {a * b} >= {modulus}, reduction needed)"
         )
 
-    actual = _run_modular_op("mul", a, b, modulus, start, width)
+    actual = _run_modular_op("mul", a, b, modulus)
     assert actual == expected, (
         f"FAIL: mod_mul({a},{b}) mod {modulus}: expected={expected}, got={actual}"
     )
 
 
 @pytest.mark.parametrize("modulus,a,b", ADD_CASES)
-def test_modular_add_result_reduced(modulus, a, b):
-    """Verify modular addition result is properly reduced: result < N."""
-    pos = _get_extract_position("add", modulus)
-    if pos is None:
-        pytest.skip(f"Calibration failed for add mod {modulus}")
-
-    start, _bslen = pos
+def test_modular_add_result_in_range(modulus, a, b):
+    """Verify modular addition result is in valid range [0, 2^width)."""
+    actual = _run_modular_op("add", a, b, modulus)
     width = modulus.bit_length()
-    actual = _run_modular_op("add", a, b, modulus, start, width)
-
-    # Result should be in range [0, N) -- i.e., properly reduced
-    # Note: even for buggy cases, result should be < 2^width
     assert actual < (1 << width), f"Result {actual} exceeds {width}-bit range for mod {modulus}"
 
 

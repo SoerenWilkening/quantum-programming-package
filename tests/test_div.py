@@ -5,9 +5,12 @@ Python quantum_language API -> C backend circuit -> OpenQASM 3.0 -> Qiskit simul
 
 Exhaustive at widths 1-3, sampled at width 4. Division by zero is skipped per design.
 
-Result extraction: Division allocates input(w) + quotient(w) + remainder(w) + ancillae.
-The quotient register occupies qubits w..2w-1. In the Qiskit MSB-first bitstring of
-length n, this maps to bs[n-2w : n-w].
+Result extraction: Uses allocated_start from the quotient qint object to determine
+physical qubit positions. In the Qiskit MSB-first bitstring of length n,
+physical qubit i maps to bitstring position n-1-i.
+
+Phase 91: All BUG-DIV-02 / BUG-QFT-DIV xfail markers removed. C-level restoring
+divmod fixes all previously-failing cases.
 """
 
 import random
@@ -22,37 +25,6 @@ import quantum_language as ql
 
 warnings.filterwarnings("ignore", message="Value .* exceeds")
 
-# ---------------------------------------------------------------------------
-# Known-failing (width, a, divisor) triples -- ancilla leak in >= comparison (BUG-06)
-# The >= operator in the division loop creates widened temporaries (comp_width = bits+1)
-# whose qubits are never freed by the uncomputation mechanism. This causes incorrect
-# results when leaked ancilla qubits interfere with the circuit state.
-# Root cause: _do_uncompute reverses gates but doesn't cascade-free temporaries
-# because they have operation_type=None and creation_scope=0 (lazy mode skips them).
-# Phase 86-03 investigated but deferred the deep fix (requires uncomputation arch changes).
-# Updated after BUG-05 fix (Phase 86-02) which changed some passing/failing cases.
-# ---------------------------------------------------------------------------
-KNOWN_DIV_MSB_LEAK = {
-    # Width 3: small-value failures with divisor 1
-    (3, 0, 1),
-    (3, 2, 1),
-    # Width 3: comparison leak for values >= 4 with small divisors
-    (3, 4, 1),
-    (3, 6, 1),
-    # Width 4: small-value failures
-    (4, 0, 1),
-    (4, 0, 2),
-    (4, 1, 1),
-    (4, 1, 2),
-    (4, 3, 1),
-    (4, 7, 3),
-    # Width 4: comparison leak for large values
-    (4, 13, 1),
-    (4, 14, 1),
-    (4, 15, 1),
-    (4, 15, 2),
-}
-
 
 # ---------------------------------------------------------------------------
 # Pipeline helper
@@ -61,7 +33,9 @@ def _run_div(width, a_val, divisor):
     """Run division through full pipeline, return (actual_quotient, total_qubits, bitstring)."""
     ql.circuit()
     a = ql.qint(a_val, width=width)
-    _q = a // divisor
+    q = a // divisor
+    result_start = q.allocated_start
+    result_width = q.width
     qasm_str = ql.to_openqasm()
 
     circuit = qiskit.qasm3.loads(qasm_str)
@@ -74,7 +48,10 @@ def _run_div(width, a_val, divisor):
     bitstring = list(counts.keys())[0]
 
     n = len(bitstring)
-    quotient_bits = bitstring[n - 2 * width : n - width]
+    # Qiskit bitstring: position i = qubit (N-1-i)
+    msb_pos = n - result_start - result_width
+    lsb_pos = n - 1 - result_start
+    quotient_bits = bitstring[msb_pos : lsb_pos + 1]
     actual = int(quotient_bits, 2)
     return actual, n, bitstring
 
@@ -115,33 +92,10 @@ SAMPLED_DIV = _sampled_div_cases()
 
 
 # ---------------------------------------------------------------------------
-# Helper to apply xfail marker for MSB leak cases only
-# ---------------------------------------------------------------------------
-def _mark_msb_leak_cases(cases):
-    """Wrap known MSB-leak cases with pytest.param(..., marks=xfail)."""
-    marked = []
-    for triple in cases:
-        if triple in KNOWN_DIV_MSB_LEAK:
-            marked.append(
-                pytest.param(
-                    *triple,
-                    marks=pytest.mark.xfail(
-                        reason="BUG-DIV-02: MSB comparison leak (not overflow)",
-                        strict=True,
-                    ),
-                )
-            )
-        else:
-            marked.append(triple)
-    return marked
-
-
-# ---------------------------------------------------------------------------
 # Parametrized tests
+# Phase 91: All xfail markers removed -- C-level divmod fixes all cases.
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize(
-    "width,a,divisor", _mark_msb_leak_cases(EXHAUSTIVE_DIV), ids=lambda *args: None
-)
+@pytest.mark.parametrize("width,a,divisor", EXHAUSTIVE_DIV, ids=lambda *args: None)
 def test_div_exhaustive(width, a, divisor):
     """Floor division: qint(a) // divisor at widths 1-3 (exhaustive)."""
     expected = a // divisor
@@ -149,9 +103,7 @@ def test_div_exhaustive(width, a, divisor):
     assert actual == expected, format_failure_message("div", [a, divisor], width, expected, actual)
 
 
-@pytest.mark.parametrize(
-    "width,a,divisor", _mark_msb_leak_cases(SAMPLED_DIV), ids=lambda *args: None
-)
+@pytest.mark.parametrize("width,a,divisor", SAMPLED_DIV, ids=lambda *args: None)
 def test_div_sampled(width, a, divisor):
     """Floor division: qint(a) // divisor at width 4 (sampled)."""
     expected = a // divisor
