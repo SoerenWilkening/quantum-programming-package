@@ -171,12 +171,12 @@ Plans:
   3. User can compute `(a * c) mod N` where c is a classical integer using Toffoli gates via `qint_mod` multiplication
   4. All modular operations are verified exhaustively for widths 2-4 (statevector) and widths 5-8 (MPS simulator)
   5. Modular operations force RCA internally regardless of tradeoff policy (CLA subtraction limitation)
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 92-01: TBD
-- [ ] 92-02: TBD
-- [ ] 92-03: TBD
+- [ ] 92-01-PLAN.md -- Beauregard modular add/sub at C level (CQ + QQ + controlled variants)
+- [ ] 92-02-PLAN.md -- Modular multiplication at C level + Python qint_mod rewiring
+- [ ] 92-03-PLAN.md -- Exhaustive verification tests for widths 2-8
 
 ### Phase 93: Depth/Ancilla Tradeoff
 **Goal**: Users can control whether the framework optimizes for circuit depth or qubit count when selecting adder implementations
