@@ -16,11 +16,11 @@ Requirements for v5.0 Advanced Arithmetic & Compilation. Each maps to roadmap ph
 
 ### Modular Toffoli Arithmetic
 
-- [ ] **MOD-01**: User can compute (a + b) mod N using Toffoli gates via qint_mod addition
-- [ ] **MOD-02**: User can compute (a - b) mod N using Toffoli gates via qint_mod subtraction
-- [ ] **MOD-03**: User can compute controlled (a + b) mod N inside a with block
-- [ ] **MOD-04**: User can compute (a * c) mod N (c classical) using Toffoli gates via qint_mod multiplication
-- [ ] **MOD-05**: Modular operations verified exhaustively for widths 2-4 (statevector) and 5-8 (MPS)
+- [x] **MOD-01**: User can compute (a + b) mod N using Toffoli gates via qint_mod addition
+- [x] **MOD-02**: User can compute (a - b) mod N using Toffoli gates via qint_mod subtraction
+- [x] **MOD-03**: User can compute controlled (a + b) mod N inside a with block
+- [x] **MOD-04**: User can compute (a * c) mod N (c classical) using Toffoli gates via qint_mod multiplication
+- [x] **MOD-05**: Modular operations verified exhaustively for widths 2-4 (statevector) and 5-8 (MPS)
 
 ### Quantum Counting
 
@@ -95,11 +95,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | FIX-02 | Phase 91 | Pending |
 | FIX-03 | Phase 91 | Pending |
 | FIX-04 | Phase 94 | Pending |
-| MOD-01 | Phase 92 | Pending |
-| MOD-02 | Phase 92 | Pending |
-| MOD-03 | Phase 92 | Pending |
-| MOD-04 | Phase 92 | Pending |
-| MOD-05 | Phase 92 | Pending |
+| MOD-01 | Phase 92 | Complete |
+| MOD-02 | Phase 92 | Complete |
+| MOD-03 | Phase 92 | Complete |
+| MOD-04 | Phase 92 | Complete |
+| MOD-05 | Phase 92 | Complete |
 | CNT-01 | Phase 90 | Complete |
 | CNT-02 | Phase 90 | Complete |
 | CNT-03 | Phase 90 | Complete |
