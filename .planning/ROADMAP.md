@@ -268,7 +268,7 @@ Phases execute in numeric order: 90 -> 91 -> 92 -> 93 -> 94
 | 93. Depth/Ancilla Tradeoff | v5.0 | 2/2 | Complete | 2026-02-25 |
 | 94. Parametric Compilation | 3/3 | Complete    | 2026-02-25 | 2026-02-25 |
 | 95. Verification & Requirements Closure | v5.0 | Complete    | 2026-02-26 | 2026-02-26 |
-| 96. v5.0 Tech Debt Cleanup | 3/3 | Complete   | 2026-02-26 | 2026-02-26 |
+| 96. v5.0 Tech Debt Cleanup | 3/3 | Complete    | 2026-02-26 | 2026-02-26 |
 
 ---
 *Roadmap created: 2026-02-02*
