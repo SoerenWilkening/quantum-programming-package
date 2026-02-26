@@ -71,12 +71,6 @@ cdef extern from "toffoli_arithmetic_ops.h":
 	                        const unsigned int *remainder_qubits,
 	                        unsigned int ext_ctrl)
 
-	# Toffoli Modular Reduction (Phase 91)
-	void toffoli_mod_reduce(circuit_t *circ, const unsigned int *value_qubits,
-	                        int value_bits, int64_t modulus)
-	void toffoli_cmod_reduce(circuit_t *circ, const unsigned int *value_qubits,
-	                         int value_bits, int64_t modulus, unsigned int ext_ctrl)
-
 	# Toffoli Modular CQ Addition/Subtraction (Phase 92)
 	void toffoli_mod_add_cq(circuit_t *circ, const unsigned int *value_qubits,
 	                        int value_bits, int64_t addend, int64_t modulus)
