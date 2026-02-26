@@ -1,16 +1,16 @@
 ---
-status: diagnosed
+status: resolved
 trigger: "Controlled branch CRy not activating when control=|1>"
 created: 2026-02-20T00:00:00Z
-updated: 2026-02-20T00:00:00Z
+updated: 2026-02-26T00:00:00Z
 ---
 
 ## Current Focus
 
-hypothesis: CONFIRMED - Test bitstring interpretation is wrong due to Qiskit qubit ordering convention
-test: Traced full qubit allocation, gate emission, QASM export, and Qiskit measurement convention
-expecting: n/a - root cause confirmed
-next_action: Report findings
+hypothesis: CONFIRMED and FIXED - Test bitstring interpretation corrected for Qiskit qubit ordering convention
+test: Ran test_controlled_branch_cry and all 31 tests in test_branch_superposition.py
+expecting: All pass
+next_action: Archive session
 
 ## Symptoms
 
@@ -73,14 +73,12 @@ started: Unknown
 
 root_cause: The test_controlled_branch_cry test has a QUBIT ORDERING BUG in its assertion. The test assumes ctrl (first allocated qbool) is the MSB in Qiskit's bitstring output, but Qiskit uses little-endian convention where q[0] is the RIGHTMOST bit. Since ctrl=q[0] and target=q[1], the correct expected bitstrings are "01" (ctrl=1, target=0) and "11" (ctrl=1, target=1), NOT "10" and "11". The CRy gate itself is emitted and serialized correctly - the circuit implementation is correct. The measured p_10=0.0 + p_11=0.51 ~= 0.51 is exactly what you get when you only count half the valid states ("11" captures target=1 only, missing the "01" where target=0 but ctrl is still correctly 1).
 
-fix: (not applied - research only mode)
-  The test assertions at lines 220-226 should be changed from:
-    p_10 = counts.get("10", 0) / total  # Wrong: this is q[1]=1, q[0]=0 (ctrl=0)
-    p_11 = counts.get("11", 0) / total
-  To:
-    p_01 = counts.get("01", 0) / total  # Correct: q[1]=0, q[0]=1 (ctrl=1, target=0)
-    p_11 = counts.get("11", 0) / total  # Correct: q[1]=1, q[0]=1 (ctrl=1, target=1)
-  And assertions should check p_01 + p_11 > 0.95 and abs(p_01 - 0.5) < 0.05 and abs(p_11 - 0.5) < 0.05.
+fix: Test assertions at lines 218-226 corrected to use Qiskit little-endian convention:
+  - Changed p_10 to p_01 (bitstring "01" = ctrl=1, target=0)
+  - Kept p_11 (bitstring "11" = ctrl=1, target=1)
+  - Updated assertions to check p_01 + p_11 > 0.95
+  - Added comments explaining Qiskit qubit ordering convention
 
-verification: (not applied - research only mode)
-files_changed: []
+verification: PASSED - test_controlled_branch_cry passes. All 31 tests in test_branch_superposition.py pass with zero failures.
+files_changed:
+  - tests/python/test_branch_superposition.py
