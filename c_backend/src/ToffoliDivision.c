@@ -470,6 +470,22 @@ static int div_cqq_add(circuit_t *circ, const unsigned int *target_qubits,
 void toffoli_divmod_qq(circuit_t *circ, const unsigned int *dividend_qubits, int dividend_bits,
                        const unsigned int *divisor_qubits, int divisor_bits,
                        const unsigned int *quotient_qubits, const unsigned int *remainder_qubits) {
+    /* ======================================================================
+     * KNOWN LIMITATION: QQ Division Ancilla Leak
+     * ======================================================================
+     * This function leaks 2^n comparison ancillae (one per iteration of the
+     * repeated-subtraction loop). Each iteration allocates a cmp_anc qubit
+     * whose state becomes entangled with the remainder and quotient registers.
+     * There is no known efficient uncomputation for these ancillae without
+     * running the entire algorithm backward (full Bennett's trick), which
+     * would double the circuit size.
+     *
+     * Impact: QQ division (quantum divisor) is unreliable for width > 2.
+     *         CQ division (classical divisor) does NOT have this issue.
+     * Workaround: Use CQ division when the divisor is classically known.
+     * Tracking: See docs/KNOWN-ISSUES.md and GitHub issue.
+     * See detailed analysis: lines ~620-840 (original inline comments).
+     * ====================================================================== */
     int n = dividend_bits;
 
     /* Copy dividend to remainder via CNOT */
