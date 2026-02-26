@@ -128,7 +128,7 @@
 - [x] **Phase 93: Depth/Ancilla Tradeoff** - Policy-based CLA vs RCA adder selection via `ql.option('tradeoff', ...)` (completed 2026-02-25)
 - [x] **Phase 94: Parametric Compilation** - Compile-once-replay-many for circuits with varying classical values (completed 2026-02-25)
 - [x] **Phase 95: Verification & Requirements Closure** - Generate missing VERIFICATION.md for Phases 91/93 and update REQUIREMENTS.md checkboxes/traceability (completed 2026-02-26)
-- [ ] **Phase 96: v5.0 Tech Debt Cleanup** - Remove dead declarations, add explicit qubit accounting test, document known limitations
+- [x] **Phase 96: v5.0 Tech Debt Cleanup** - Remove dead declarations, add explicit qubit accounting test, document known limitations (completed 2026-02-26)
 
 ## Phase Details
 
@@ -242,9 +242,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 96-01-PLAN.md — Remove dead declarations (toffoli_mod_reduce, toffoli_cdivmod_cq/qq)
-- [ ] 96-02-PLAN.md — Add explicit qubit accounting test for modular operations
-- [ ] 96-03-PLAN.md — Document QQ division ancilla leak as known limitation
+- [x] 96-01-PLAN.md — Remove dead declarations (toffoli_mod_reduce, toffoli_cdivmod_cq/qq) -- completed 2026-02-26
+- [x] 96-02-PLAN.md — Add explicit qubit accounting test for modular operations -- completed 2026-02-26
+- [x] 96-03-PLAN.md — Document QQ division ancilla leak as known limitation -- completed 2026-02-26
 
 ## Progress
 
@@ -268,7 +268,7 @@ Phases execute in numeric order: 90 -> 91 -> 92 -> 93 -> 94
 | 93. Depth/Ancilla Tradeoff | v5.0 | 2/2 | Complete | 2026-02-25 |
 | 94. Parametric Compilation | 3/3 | Complete    | 2026-02-25 | 2026-02-25 |
 | 95. Verification & Requirements Closure | v5.0 | Complete    | 2026-02-26 | 2026-02-26 |
-| 96. v5.0 Tech Debt Cleanup | v5.0 | 0/3 | Pending | - |
+| 96. v5.0 Tech Debt Cleanup | 3/3 | Complete   | 2026-02-26 | 2026-02-26 |
 
 ---
 *Roadmap created: 2026-02-02*
