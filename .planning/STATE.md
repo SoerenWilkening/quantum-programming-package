@@ -71,8 +71,9 @@ Recent from Phase 97:
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Phase 97 complete, Phase 98 ready to plan
+Stopped at: Phase 98 context gathered
+Resume file: .planning/phases/98-local-diffusion-operator/98-CONTEXT.md
 Resume action: Plan Phase 98 via `/gsd:plan-phase 98`
 
 ---
-*State updated: 2026-03-02 -- Phase 97 completed (Tree Encoding & Predicate Interface)*
+*State updated: 2026-03-02 -- Phase 98 context gathered (Local Diffusion Operator)*
