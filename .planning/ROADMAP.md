@@ -155,12 +155,11 @@
   3. User can prepare the root state (height qubit set, branch registers initialized) and verify via statevector that the root is correctly encoded
   4. User can pass a predicate callable returning (is_accept, is_reject) qbools and the framework validates mutual exclusion (both cannot be true simultaneously)
   5. Predicate uncomputation works correctly via raw allocation or @ql.compile inverse pattern without conflicting with LIFO scope tracking
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 97-01: TBD
-- [ ] 97-02: TBD
-- [ ] 97-03: TBD
+- [ ] 97-01-PLAN.md — QWalkTree class + TreeNode + root state prep + tree encoding tests (TREE-01, TREE-02, TREE-03)
+- [ ] 97-02-PLAN.md — Predicate interface + mutual exclusion validation + predicate tests (PRED-01, PRED-02, PRED-03)
 
 ### Phase 98: Local Diffusion Operator
 **Goal**: Users can apply verified-correct local diffusion D_x to any tree node with proper amplitude coefficients
