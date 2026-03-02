@@ -24,15 +24,15 @@ Requirements for quantum walk primitives (Montanaro 2015 backtracking speedup). 
 - [x] **DIFF-01**: D_x local diffusion operator for uniform branching with correct amplitude angle phi = 2*arctan(sqrt(d))
 - [x] **DIFF-02**: Root node diffusion with separate phi_root formula (different amplitude weighting per Montanaro section 2)
 - [x] **DIFF-03**: Statevector tests verifying |psi_x> amplitudes match 1/sqrt(d(x)+1) tolerance
-- [ ] **DIFF-04**: Variable branching support — count valid children per node via predicate evaluation, controlled Ry rotation based on child count d(x)
+- [x] **DIFF-04**: Variable branching support — count valid children per node via predicate evaluation, controlled Ry rotation based on child count d(x)
 
 ### Walk Operators
 
-- [ ] **WALK-01**: R_A operator applying local diffusions at even-depth nodes via height-parity control
-- [ ] **WALK-02**: R_B operator applying local diffusions at odd-depth nodes (plus root reflection) via height-parity control
-- [ ] **WALK-03**: Walk step U = R_B * R_A composed as single operation
-- [ ] **WALK-04**: Walk step wrapped in @ql.compile for caching and controlled variant derivation
-- [ ] **WALK-05**: Qubit disjointness test confirming R_A and R_B have zero qubit-index overlap
+- [x] **WALK-01**: R_A operator applying local diffusions at even-depth nodes via height-parity control
+- [x] **WALK-02**: R_B operator applying local diffusions at odd-depth nodes (plus root reflection) via height-parity control
+- [x] **WALK-03**: Walk step U = R_B * R_A composed as single operation
+- [x] **WALK-04**: Walk step wrapped in @ql.compile for caching and controlled variant derivation
+- [x] **WALK-05**: Qubit disjointness test confirming R_A and R_B have zero qubit-index overlap
 
 ### Detection
 
@@ -88,12 +88,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DIFF-01 | Phase 98 | Complete |
 | DIFF-02 | Phase 98 | Complete |
 | DIFF-03 | Phase 98 | Complete |
-| DIFF-04 | Phase 100 | Pending |
-| WALK-01 | Phase 99 | Pending |
-| WALK-02 | Phase 99 | Pending |
-| WALK-03 | Phase 99 | Pending |
-| WALK-04 | Phase 99 | Pending |
-| WALK-05 | Phase 99 | Pending |
+| DIFF-04 | Phase 100 | Complete |
+| WALK-01 | Phase 99 | Complete |
+| WALK-02 | Phase 99 | Complete |
+| WALK-03 | Phase 99 | Complete |
+| WALK-04 | Phase 99 | Complete |
+| WALK-05 | Phase 99 | Complete |
 | DET-01 | Phase 101 | Pending |
 | DET-02 | Phase 101 | Pending |
 | DET-03 | Phase 101 | Pending |

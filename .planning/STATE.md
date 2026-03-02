@@ -18,21 +18,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-02-26)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v6.0 Quantum Walk Primitives -- Phase 99 complete
+**Current focus:** v6.0 Quantum Walk Primitives -- Phase 100 complete
 
 ## Current Position
 
-Phase: 99 of 101 (Walk Operators)
+Phase: 100 of 101 (Variable Branching)
 Plan: 2 of 2 complete
 Status: Phase Complete
-Last activity: 2026-03-02 -- Phase 99 complete (R_A, R_B, walk_step, verify_disjointness + 25 tests)
+Last activity: 2026-03-02 -- Phase 100 complete (_variable_diffusion, angle tables, fast-path, 12 statevector tests)
 
-Progress: [######....] 60%
+Progress: [########..] 80%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 264 (v1.0-v6.0)
+- Total plans completed: 266 (v1.0-v6.0)
 - Average duration: ~13 min/plan
 - Total execution time: ~44.7 hours
 
@@ -45,13 +45,21 @@ Progress: [######....] 60%
 | v4.0 Grover's Algorithm | 76-81 | 18 | Complete (2026-02-22) |
 | v4.1 Quality & Efficiency | 82-89 | 21 | Complete (2026-02-24) |
 | v5.0 Advanced Arithmetic | 90-96 | 19 | Shipped (2026-02-26) |
-| v6.0 Quantum Walk | 97-101 | 7/? | In Progress |
+| v6.0 Quantum Walk | 97-101 | 9/? | In Progress |
 
 ## Accumulated Context
 
 ### Decisions
 
 See PROJECT.md Key Decisions table for full history.
+
+Recent from Phase 100:
+- Fast-path dispatch: predicate is None -> existing uniform path, zero overhead
+- Validity ancilla semantics: validity[i]=|1> means child i is valid (NOT rejected)
+- Pattern matching via X-flip sandwich on validity ancillae for each d(x) combination
+- Multi-controlled Ry uses recursive V-gate decomposition for 3+ controls
+- Each raw predicate call allocates new qbools - compiled predicates needed for qubit efficiency
+- Norm-based verification instead of D_x^2=I when qubit count grows between operations
 
 Recent from Phase 99:
 - _all_qubits_register() bundles all tree qubits into single qint for @ql.compile to avoid forward-call tracking conflicts
@@ -81,9 +89,9 @@ Recent from Phase 97:
 ## Session Continuity
 
 Last session: 2026-03-02
-Stopped at: Phase 99 complete
-Resume file: .planning/phases/99-walk-operators/99-02-SUMMARY.md
-Resume action: Plan and execute Phase 100 (Variable Branching)
+Stopped at: Phase 100 complete
+Resume file: .planning/phases/100-variable-branching/100-02-SUMMARY.md
+Resume action: Plan and execute Phase 101 (Detection & Demo)
 
 ---
-*State updated: 2026-03-02 -- Phase 99 complete (walk operators R_A, R_B, walk_step with 25 tests)*
+*State updated: 2026-03-02 -- Phase 100 complete (variable branching diffusion with 12 statevector tests)*

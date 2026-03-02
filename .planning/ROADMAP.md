@@ -140,7 +140,7 @@
 - [x] **Phase 97: Tree Encoding & Predicate Interface** - Foundational data structures, register allocation, predicate API, and resource estimation -- completed 2026-03-02
 - [x] **Phase 98: Local Diffusion Operator** - D_x with correct amplitude angles for uniform branching, root special case, and statevector verification (completed 2026-03-02)
 - [x] **Phase 99: Walk Operators** - R_A, R_B via parity-controlled diffusion, composed walk step, @ql.compile wrapping, disjointness validation (completed 2026-03-02)
-- [ ] **Phase 100: Variable Branching** - Dynamic child counting via predicate evaluation and controlled Ry rotation based on d(x)
+- [x] **Phase 100: Variable Branching** - Dynamic child counting via predicate evaluation and controlled Ry rotation based on d(x) (completed 2026-03-02)
 - [ ] **Phase 101: Detection & Demo** - Iterative power-method detection, SAT demo within 17-qubit budget, Qiskit statevector verification
 
 ## Phase Details
@@ -198,11 +198,11 @@ Plans:
   1. Variable branching counts valid children per node by evaluating the predicate on each potential child and produces the correct d(x) count
   2. Controlled Ry rotation applies the angle phi = 2*arctan(sqrt(d(x))) conditioned on the child count d(x), so nodes with fewer valid children get different diffusion amplitudes
   3. Statevector tests confirm correct amplitudes for a tree where different nodes have different branching factors (at least one node pruned vs. one node fully branching)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 100-01: TBD
-- [ ] 100-02: TBD
+- [x] 100-01-PLAN.md -- Variable branching implementation: _variable_diffusion(), angle tables, fast-path, multi-controlled helpers (DIFF-04)
+- [x] 100-02-PLAN.md -- Statevector verification tests: 12 tests for reflection, amplitudes, differential branching (DIFF-04)
 
 ### Phase 101: Detection & Demo
 **Goal**: Users can detect whether a solution exists in a backtracking tree, verified end-to-end on a small SAT instance within the 17-qubit simulator ceiling
@@ -239,7 +239,7 @@ Phases execute in numeric order: 97 -> 98 -> 99 -> 100 -> 101
 | 97. Tree Encoding & Predicate Interface | v6.0 | 2/2 | Complete | 2026-03-02 |
 | 98. Local Diffusion Operator | v6.0 | 2/2 | Complete | 2026-03-02 |
 | 99. Walk Operators | v6.0 | 2/2 | Complete | 2026-03-02 |
-| 100. Variable Branching | v6.0 | 0/? | Not started | - |
+| 100. Variable Branching | v6.0 | 2/2 | Complete | 2026-03-02 |
 | 101. Detection & Demo | v6.0 | 0/? | Not started | - |
 
 ---
