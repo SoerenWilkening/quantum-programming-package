@@ -238,7 +238,7 @@ Phases execute in numeric order: 97 -> 98 -> 99 -> 100 -> 101
 | 90-96 | v5.0 | 19/19 | Complete | 2026-02-26 |
 | 97. Tree Encoding & Predicate Interface | v6.0 | 2/2 | Complete | 2026-03-02 |
 | 98. Local Diffusion Operator | v6.0 | 2/2 | Complete | 2026-03-02 |
-| 99. Walk Operators | v6.0 | 0/? | Not started | - |
+| 99. Walk Operators | 1/2 | In Progress|  | - |
 | 100. Variable Branching | v6.0 | 0/? | Not started | - |
 | 101. Detection & Demo | v6.0 | 0/? | Not started | - |
 
