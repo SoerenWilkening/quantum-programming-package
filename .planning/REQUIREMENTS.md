@@ -9,15 +9,15 @@ Requirements for quantum walk primitives (Montanaro 2015 backtracking speedup). 
 
 ### Tree Encoding
 
-- [ ] **TREE-01**: QuantumBacktrackingTree class with one-hot height register (max_depth+1 qubits) and QuantumArray branch registers (one entry per depth level)
-- [ ] **TREE-02**: Resource estimator that computes exact qubit count for given tree parameters and fails fast before circuit construction
-- [ ] **TREE-03**: Node initialization (root state preparation with correct height qubit)
+- [x] **TREE-01**: QuantumBacktrackingTree class with one-hot height register (max_depth+1 qubits) and QuantumArray branch registers (one entry per depth level)
+- [x] **TREE-02**: Resource estimator that computes exact qubit count for given tree parameters and fails fast before circuit construction
+- [x] **TREE-03**: Node initialization (root state preparation with correct height qubit)
 
 ### Predicate Interface
 
-- [ ] **PRED-01**: Accept/reject predicate interface — user provides callable returning two qbools (is_accept, is_reject) for a given tree state
-- [ ] **PRED-02**: Predicate mutual exclusion validation (accept and reject cannot both be true)
-- [ ] **PRED-03**: Predicate uncomputation managed below LIFO scope tracking (raw allocation or @ql.compile inverse pattern)
+- [x] **PRED-01**: Accept/reject predicate interface — user provides callable returning two qbools (is_accept, is_reject) for a given tree state
+- [x] **PRED-02**: Predicate mutual exclusion validation (accept and reject cannot both be true)
+- [x] **PRED-03**: Predicate uncomputation managed below LIFO scope tracking (raw allocation or @ql.compile inverse pattern)
 
 ### Local Diffusion
 
@@ -79,12 +79,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TREE-01 | Phase 97 | Pending |
-| TREE-02 | Phase 97 | Pending |
-| TREE-03 | Phase 97 | Pending |
-| PRED-01 | Phase 97 | Pending |
-| PRED-02 | Phase 97 | Pending |
-| PRED-03 | Phase 97 | Pending |
+| TREE-01 | Phase 97 | Complete |
+| TREE-02 | Phase 97 | Complete |
+| TREE-03 | Phase 97 | Complete |
+| PRED-01 | Phase 97 | Complete |
+| PRED-02 | Phase 97 | Complete |
+| PRED-03 | Phase 97 | Complete |
 | DIFF-01 | Phase 98 | Pending |
 | DIFF-02 | Phase 98 | Pending |
 | DIFF-03 | Phase 98 | Pending |
@@ -105,4 +105,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-26*
-*Last updated: 2026-02-26 after roadmap creation (all 18 requirements mapped to Phases 97-101)*
+*Last updated: 2026-03-02 -- Phase 97 complete (TREE-01, TREE-02, TREE-03, PRED-01, PRED-02, PRED-03)*

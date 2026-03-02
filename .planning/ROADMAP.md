@@ -137,7 +137,7 @@
 
 **Milestone Goal:** Predicate-aware quantum walk operators based on Montanaro 2015 backtracking speedup, with variable branching, correct amplitude calculation, and Qiskit-verified demos on small SAT instances.
 
-- [ ] **Phase 97: Tree Encoding & Predicate Interface** - Foundational data structures, register allocation, predicate API, and resource estimation
+- [x] **Phase 97: Tree Encoding & Predicate Interface** - Foundational data structures, register allocation, predicate API, and resource estimation -- completed 2026-03-02
 - [ ] **Phase 98: Local Diffusion Operator** - D_x with correct amplitude angles for uniform branching, root special case, and statevector verification
 - [ ] **Phase 99: Walk Operators** - R_A, R_B via parity-controlled diffusion, composed walk step, @ql.compile wrapping, disjointness validation
 - [ ] **Phase 100: Variable Branching** - Dynamic child counting via predicate evaluation and controlled Ry rotation based on d(x)
@@ -158,8 +158,8 @@
 **Plans**: 2 plans
 
 Plans:
-- [ ] 97-01-PLAN.md — QWalkTree class + TreeNode + root state prep + tree encoding tests (TREE-01, TREE-02, TREE-03)
-- [ ] 97-02-PLAN.md — Predicate interface + mutual exclusion validation + predicate tests (PRED-01, PRED-02, PRED-03)
+- [x] 97-01-PLAN.md — QWalkTree class + TreeNode + root state prep + tree encoding tests (TREE-01, TREE-02, TREE-03)
+- [x] 97-02-PLAN.md — Predicate interface + mutual exclusion validation + predicate tests (PRED-01, PRED-02, PRED-03)
 
 ### Phase 98: Local Diffusion Operator
 **Goal**: Users can apply verified-correct local diffusion D_x to any tree node with proper amplitude coefficients
@@ -236,7 +236,7 @@ Phases execute in numeric order: 97 -> 98 -> 99 -> 100 -> 101
 | 76-81 | v4.0 | 18/18 | Complete | 2026-02-22 |
 | 82-89 | v4.1 | 21/21 | Complete | 2026-02-24 |
 | 90-96 | v5.0 | 19/19 | Complete | 2026-02-26 |
-| 97. Tree Encoding & Predicate Interface | v6.0 | 0/? | Not started | - |
+| 97. Tree Encoding & Predicate Interface | v6.0 | 2/2 | Complete | 2026-03-02 |
 | 98. Local Diffusion Operator | v6.0 | 0/? | Not started | - |
 | 99. Walk Operators | v6.0 | 0/? | Not started | - |
 | 100. Variable Branching | v6.0 | 0/? | Not started | - |
