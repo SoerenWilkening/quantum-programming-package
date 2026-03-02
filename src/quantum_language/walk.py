@@ -208,6 +208,81 @@ def _emit_cascade_ops(branch_reg, ops, sign=1):
                 emit_x(target_qubit)
 
 
+def _emit_cascade_h_controlled(branch_reg, ops, h_qubit_idx, sign=1):
+    """Execute cascade ops with height-qubit control, avoiding nested contexts.
+
+    All gates are emitted controlled on ``h_qubit_idx``. For operations
+    that already have a cascade control (cry, cx), the height control is
+    added via V-gate decomposition (CCRy -> CRy + CNOT sequence) rather
+    than nested ``with qbool:`` blocks.
+
+    Parameters
+    ----------
+    branch_reg : qint
+        Branch register to operate on.
+    ops : list[tuple]
+        Gate operations from ``_plan_cascade_ops``.
+    h_qubit_idx : int
+        Physical qubit index for the height control qubit.
+    sign : int
+        +1 for forward cascade, -1 for inverse (negates Ry angles).
+    """
+    w = branch_reg.width
+    h_ctrl = _make_qbool_wrapper(h_qubit_idx)
+
+    if sign == -1:
+        ops = list(reversed(ops))
+
+    for op in ops:
+        if op[0] == "ry":
+            # Single-qubit Ry -> CRy controlled on h
+            _, bit_off, angle = op
+            qubit = int(branch_reg.qubits[64 - w + bit_off])
+            with h_ctrl:
+                emit_ry(qubit, sign * angle)
+        elif op[0] == "cry":
+            # CRy(theta, ctrl_q, target_q) -> CCRy(theta, h, ctrl_q, target_q)
+            # Decompose via V-gate: CCRy(t) =
+            #   CRy(t/2, c2, tgt) CNOT(c1, c2) CRy(-t/2, c2, tgt)
+            #   CNOT(c1, c2) CRy(t/2, c1, tgt)
+            # where c1=h_qubit, c2=cascade_ctrl
+            _, bit_off, angle, ctrl_bit_off = op
+            target_q = int(branch_reg.qubits[64 - w + bit_off])
+            cascade_ctrl_q = int(branch_reg.qubits[64 - w + ctrl_bit_off])
+            theta = sign * angle
+            cascade_ctrl = _make_qbool_wrapper(cascade_ctrl_q)
+
+            # V-gate decomposition for CCRy
+            with cascade_ctrl:
+                emit_ry(target_q, theta / 2)
+            with h_ctrl:
+                emit_x(cascade_ctrl_q)
+            with cascade_ctrl:
+                emit_ry(target_q, -theta / 2)
+            with h_ctrl:
+                emit_x(cascade_ctrl_q)
+            with h_ctrl:
+                emit_ry(target_q, theta / 2)
+        elif op[0] == "x":
+            # X -> CX controlled on h
+            _, bit_off = op
+            qubit = int(branch_reg.qubits[64 - w + bit_off])
+            with h_ctrl:
+                emit_x(qubit)
+        elif op[0] == "cx":
+            # CX(target, ctrl) -> CCX(h, ctrl, target)
+            # Decompose as Toffoli via H-CCZ-H:
+            #   H(target) MCZ(target, [h, ctrl]) H(target)
+            _, target_bit_off, ctrl_bit_off = op
+            target_q = int(branch_reg.qubits[64 - w + target_bit_off])
+            cascade_ctrl_q = int(branch_reg.qubits[64 - w + ctrl_bit_off])
+            from ._gates import emit_h, emit_mcz
+
+            emit_h(target_q)
+            emit_mcz(target_q, [h_qubit_idx, cascade_ctrl_q])
+            emit_h(target_q)
+
+
 class TreeNode:
     """Wraps tree registers for predicate evaluation.
 
@@ -554,37 +629,54 @@ class QWalkTree:
 
         is_root = depth == self.max_depth
 
-        # Get compiled cascade functions (handles height control via @ql.compile)
+        # Get pre-planned cascade ops
         cascade_key = (d, w)
-        cascade_fwd, cascade_inv = self._cascade_compiled.get(cascade_key, (None, None))
+        cascade_ops = self._cascade_ops.get(cascade_key, [])
 
+        # D_x = U * S_0 * U_dagger (reflection about |psi_x>)
+        # All gates height-controlled on h[depth].  The cascade uses
+        # _emit_cascade_h_controlled which decomposes doubly-controlled
+        # gates (CCRy) via V-gate pattern, avoiding nested 'with' blocks.
+
+        # Step A: U_dagger (inverse state preparation)
+        # First undo cascade, then undo parent-child split
+        if d > 1 and cascade_ops:
+            _emit_cascade_h_controlled(branch_reg, cascade_ops, h_qubit_idx, sign=-1)
         with h_control:
-            # D_x = U * S_0 * U_dagger (reflection about |psi_x>)
-
-            # Step A: U_dagger (inverse state preparation)
-            # First undo cascade, then undo parent-child split
-            if d > 1 and cascade_inv is not None:
-                cascade_inv(branch_reg)
             if is_root:
                 emit_ry(self._height_qubit(depth - 1), -self._root_phi)
             else:
                 emit_ry(self._height_qubit(depth - 1), -data["phi"])
 
-            # Step B: S_0 reflection on the local subspace
-            from .diffusion import diffusion as _s0_reflection
+        # Step B: S_0 reflection on the local subspace
+        # Emit raw X-MCZ-X pattern controlled on h[depth].
+        from ._gates import emit_mcz, emit_z
+        from .diffusion import _collect_qubits
 
-            # Local subspace is h[depth-1] + branch register
-            h_child = _make_qbool_wrapper(self._height_qubit(depth - 1))
-            _s0_reflection(h_child, branch_reg)
+        h_child = _make_qbool_wrapper(self._height_qubit(depth - 1))
+        s0_qubits = _collect_qubits(h_child, branch_reg)
+        with h_control:
+            for q in s0_qubits:
+                emit_x(q)
+        # MCZ: add h_qubit to the control list for the S_0 reflection
+        all_s0_with_h = [h_qubit_idx] + s0_qubits
+        if len(all_s0_with_h) == 1:
+            emit_z(all_s0_with_h[0])
+        else:
+            emit_mcz(all_s0_with_h[-1], all_s0_with_h[:-1])
+        with h_control:
+            for q in s0_qubits:
+                emit_x(q)
 
-            # Step C: U (forward state preparation)
-            # First parent-child split, then cascade
+        # Step C: U (forward state preparation)
+        # First parent-child split, then cascade
+        with h_control:
             if is_root:
                 emit_ry(self._height_qubit(depth - 1), self._root_phi)
             else:
                 emit_ry(self._height_qubit(depth - 1), data["phi"])
-            if d > 1 and cascade_fwd is not None:
-                cascade_fwd(branch_reg)
+        if d > 1 and cascade_ops:
+            _emit_cascade_h_controlled(branch_reg, cascade_ops, h_qubit_idx, sign=1)
 
     def _validate_predicate(self):
         """Validate predicate mutual exclusion on root state.
