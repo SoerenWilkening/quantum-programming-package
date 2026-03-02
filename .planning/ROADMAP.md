@@ -169,11 +169,11 @@ Plans:
   1. Local diffusion D_x for uniform branching uses phi = 2*arctan(sqrt(d)) and produces amplitudes matching 1/sqrt(d(x)+1) for parent and each child (the "+1" includes the parent node)
   2. Root node diffusion uses a separate phi_root formula (different amplitude weighting per Montanaro section 2) and is controlled on the root height qubit h[max_depth]
   3. Statevector tests confirm |psi_x> amplitudes match the 1/sqrt(d(x)+1) tolerance for non-root nodes and the correct root formula for the root node
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 98-01: TBD
-- [ ] 98-02: TBD
+- [ ] 98-01-PLAN.md — Angle precomputation + local_diffusion() implementation with height-controlled dispatch (DIFF-01, DIFF-02)
+- [ ] 98-02-PLAN.md — Statevector tests for non-root, root, and amplitude verification (DIFF-03)
 
 ### Phase 99: Walk Operators
 **Goal**: Users can apply the complete walk step U = R_B * R_A as a compiled, cacheable operation with verified qubit disjointness between R_A and R_B
@@ -237,7 +237,7 @@ Phases execute in numeric order: 97 -> 98 -> 99 -> 100 -> 101
 | 82-89 | v4.1 | 21/21 | Complete | 2026-02-24 |
 | 90-96 | v5.0 | 19/19 | Complete | 2026-02-26 |
 | 97. Tree Encoding & Predicate Interface | v6.0 | 2/2 | Complete | 2026-03-02 |
-| 98. Local Diffusion Operator | v6.0 | 0/? | Not started | - |
+| 98. Local Diffusion Operator | v6.0 | 0/2 | Not started | - |
 | 99. Walk Operators | v6.0 | 0/? | Not started | - |
 | 100. Variable Branching | v6.0 | 0/? | Not started | - |
 | 101. Detection & Demo | v6.0 | 0/? | Not started | - |
