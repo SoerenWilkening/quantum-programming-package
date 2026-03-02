@@ -415,6 +415,18 @@ class QWalkTree:
         # Precompute diffusion angles for all depth levels
         self._setup_diffusion()
 
+        # Lazy compilation for walk_step (compiled on first call)
+        self._walk_compiled = None
+
+        # Disjointness validation (fail fast)
+        disjointness = self.verify_disjointness()
+        if not disjointness["disjoint"]:
+            raise ValueError(
+                f"R_A and R_B height controls are not disjoint. "
+                f"Overlapping qubit indices: {disjointness['overlap']}. "
+                f"This indicates a bug in the parity assignment logic."
+            )
+
         # Predicate validation (if provided) -- called at scope depth 0
         # to avoid LIFO scope interference with returned qbools
         if self._predicate is not None:
@@ -677,6 +689,158 @@ class QWalkTree:
                 emit_ry(self._height_qubit(depth - 1), data["phi"])
         if d > 1 and cascade_ops:
             _emit_cascade_h_controlled(branch_reg, cascade_ops, h_qubit_idx, sign=1)
+
+    def R_A(self):
+        """Apply R_A: reflections at even-depth nodes.
+
+        R_A is the product of local diffusions D_x for all nodes at even
+        depths (0, 2, 4, ...), excluding the root which always belongs
+        to R_B per the Montanaro convention. Leaf (depth=0) is a no-op
+        but included for completeness.
+
+        Each local_diffusion(depth) is height-controlled (only activates
+        when h[depth] = |1>), so applying all even depths is safe.
+        """
+        for depth in range(0, self.max_depth + 1, 2):
+            if depth == self.max_depth:
+                continue  # Root always belongs to R_B
+            self.local_diffusion(depth)
+
+    def R_B(self):
+        """Apply R_B: reflections at odd-depth nodes plus root.
+
+        R_B is the product of local diffusions D_x for all nodes at odd
+        depths (1, 3, 5, ...) plus the root node (at max_depth).
+        Root is always in R_B regardless of whether max_depth is even
+        or odd (Montanaro convention).
+
+        If max_depth is odd, the root is already covered by the odd-depth
+        loop. If max_depth is even, root is added explicitly.
+        """
+        for depth in range(1, self.max_depth + 1, 2):
+            self.local_diffusion(depth)
+        # Root always in R_B; add if not already covered (even max_depth)
+        if self.max_depth % 2 == 0:
+            self.local_diffusion(self.max_depth)
+
+    def verify_disjointness(self):
+        """Verify R_A and R_B height controls are disjoint.
+
+        Checks that the height qubits serving as primary controls for
+        R_A (even depths, excluding root) and R_B (odd depths + root)
+        have no overlap. This is the structural correctness condition
+        for the product-of-reflections walk step.
+
+        The check operates on physical qubit indices from the height
+        register -- no circuit execution required.
+
+        Returns
+        -------
+        dict
+            Keys: 'R_A_qubits' (set), 'R_B_qubits' (set),
+            'overlap' (set), 'disjoint' (bool).
+
+        Examples
+        --------
+        >>> import quantum_language as ql
+        >>> ql.circuit()
+        >>> tree = ql.QWalkTree(max_depth=2, branching=2)
+        >>> result = tree.verify_disjointness()
+        >>> result['disjoint']
+        True
+        """
+        r_a_depths = set()
+        r_b_depths = set()
+
+        # R_A: even depths, excluding root
+        for depth in range(0, self.max_depth + 1, 2):
+            if depth != self.max_depth:
+                r_a_depths.add(depth)
+
+        # R_B: odd depths + root
+        for depth in range(1, self.max_depth + 1, 2):
+            r_b_depths.add(depth)
+        if self.max_depth % 2 == 0:
+            r_b_depths.add(self.max_depth)
+
+        # Map to physical qubit indices
+        r_a_qubits = {self._height_qubit(d) for d in r_a_depths}
+        r_b_qubits = {self._height_qubit(d) for d in r_b_depths}
+
+        overlap = r_a_qubits & r_b_qubits
+        return {
+            "R_A_qubits": r_a_qubits,
+            "R_B_qubits": r_b_qubits,
+            "overlap": overlap,
+            "disjoint": len(overlap) == 0,
+        }
+
+    def _all_qubits_register(self):
+        """Create a qint wrapping all tree qubits (no allocation).
+
+        Used as the argument to the compiled walk step so that all tree
+        qubits are treated as parameter qubits (not internal ancillas).
+        This prevents the forward-call tracking from blocking repeated
+        walk_step() invocations.
+
+        Returns
+        -------
+        qint
+            A qint backed by all tree qubits (height + branch registers).
+        """
+        all_indices = []
+        w = self.max_depth + 1
+        for i in range(w):
+            all_indices.append(int(self.height_register.qubits[64 - w + i]))
+        for br in self.branch_registers:
+            bw = br.width
+            for i in range(bw):
+                all_indices.append(int(br.qubits[64 - bw + i]))
+
+        arr = np.zeros(64, dtype=np.uint32)
+        total = len(all_indices)
+        for i, idx in enumerate(all_indices):
+            arr[64 - total + i] = idx
+        return qint(0, create_new=False, bit_list=arr, width=total)
+
+    def walk_step(self):
+        """Apply walk step U = R_B * R_A.
+
+        The walk step is the fundamental operation of the quantum walk.
+        It composes R_A (even-depth reflections) and R_B (odd-depth +
+        root reflections) into a single operation.
+
+        On first call, the gate sequence is captured and compiled via
+        @ql.compile for caching and automatic controlled variant
+        derivation. Subsequent calls replay the cached sequence.
+
+        The controlled variant is accessible via standard ``with qbool:``
+        pattern -- no separate method needed.
+
+        Examples
+        --------
+        >>> import quantum_language as ql
+        >>> ql.circuit()
+        >>> tree = ql.QWalkTree(max_depth=2, branching=2)
+        >>> tree.walk_step()  # First call compiles
+        >>> tree.walk_step()  # Replays cached gates
+        """
+        if self._walk_compiled is None:
+            from .compile import compile as ql_compile
+
+            # Capture tree reference for the closure
+            tree_ref = self
+
+            def _walk_body(all_qubits_reg):
+                tree_ref.R_A()
+                tree_ref.R_B()
+
+            # Key by total_qubits per CONTEXT.md locked decision.
+            # Pass all tree qubits as the argument so none are treated
+            # as internal ancillas by the compile infrastructure.
+            self._walk_compiled = ql_compile(key=lambda r: tree_ref.total_qubits)(_walk_body)
+
+        self._walk_compiled(self._all_qubits_register())
 
     def _validate_predicate(self):
         """Validate predicate mutual exclusion on root state.
