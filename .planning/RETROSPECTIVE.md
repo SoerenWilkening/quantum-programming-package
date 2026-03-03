@@ -45,6 +45,50 @@
 
 ---
 
+## Milestone: v6.0 — Quantum Walk Primitives
+
+**Shipped:** 2026-03-03
+**Phases:** 6 | **Plans:** 11
+
+### What Was Built
+- QWalkTree class with one-hot height register, per-level branch registers, predicate interface with mutual exclusion validation
+- D_x local diffusion with Ry cascade and correct amplitude angles per Montanaro 2015, statevector-verified for d=2..5
+- Walk operators R_A/R_B with compiled walk step U = R_B * R_A, qubit disjointness verification
+- Variable branching with predicate-driven child counting, conditional Ry rotation, multi-controlled V-gate decomposition
+- Iterative power-method detection algorithm with 3/8 threshold and SAT demo within 17-qubit budget
+- Full requirements closure: 18/18 satisfied, 130 walk tests all pass
+
+### What Worked
+- Pure Python implementation strategy: walk module is compositional (composing existing framework primitives), so no new C code was needed — fast iteration
+- Milestone audit before completion caught 4 verification gaps (missing VERIFICATION.md) which were cleanly resolved by Phase 102 — lesson from v5.0 applied
+- Statevector verification at every phase caught the height-controlled dispatch bug (Phase 98) and compile forward-call tracking conflict (Phase 99) immediately
+- V-gate CCRy decomposition pattern cleanly worked around the nested `with qbool:` framework limitation without requiring framework changes
+
+### What Was Inefficient
+- Phase 102 (gap closure) was still needed despite v5.0 lesson — VERIFICATION.md was not written during Phase 100/101 execution
+- Raw predicate qubit allocation limits practical demos to depth=1 trees — compiled predicate support would have been more impactful than raw predicates for SAT instances
+- Detection algorithm simplified to threshold-only (removed reference comparison and marked_leaves approaches) — earlier scoping would have saved the iteration time in Phase 101
+
+### Patterns Established
+- One-hot height encoding for tree depth tracking with single-qubit control per level
+- Flat cascade gate planning: pre-plan ops at construction, compile via @ql.compile, replay in controlled context
+- _make_qbool_wrapper(qubit_idx) for wrapping existing physical qubits without allocation
+- _all_qubits_register() for @ql.compile wrapping to prevent forward-call tracking conflicts
+- Norm-based unitarity verification when qubit count grows between operations (raw predicate expansion)
+
+### Key Lessons
+1. **Pure Python when compositional**: Walk module composes existing qint/qbool/compile primitives — no C code needed. Future modules should assess whether they're computational (needs C) or compositional (Python only)
+2. **Write VERIFICATION.md during phase execution**: v5.0 lesson still not internalized — Phase 102 gap closure was avoidable
+3. **Framework limitations are design constraints**: The nested `with qbool:` limitation shaped the entire diffusion architecture (V-gate decomposition, flat cascade planning) — document limitations in CLAUDE.md for faster future reference
+4. **Qubit budget shapes algorithm design**: The 17-qubit simulation ceiling forced predicate=None in measurement, threshold-only detection, and depth=1 demos — budget constraints should be explicit in requirements
+
+### Cost Observations
+- Model mix: ~90% opus, ~10% haiku (research agents)
+- 31 commits across 2 days
+- Notable: Phases 97-100 (4 implementation phases) completed in 1 day; Phase 101 (detection) took ~1 hour; Phase 102 (closure) took ~10 min
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -55,6 +99,7 @@
 | v4.0 | 6 | 18 | Oracle infrastructure with validation-at-build-time |
 | v4.1 | 8 | 21 | Quality-focused: security, coverage, size reduction |
 | v5.0 | 7 | 19 | Milestone audit process; gap closure phases |
+| v6.0 | 6 | 11 | Pure Python compositional module; V-gate workarounds |
 
 ### Cumulative Quality
 
@@ -63,9 +108,11 @@
 | v4.0 | 16 satisfied | N/A | 3 deferred bugs |
 | v4.1 | N/A (quality) | N/A | 3 deferred bugs |
 | v5.0 | 20/20 | PASSED (20/20 + 7/7 + 20/20 + 8/8) | 12 non-blocking |
+| v6.0 | 18/18 | gaps_found → CLOSED (Phase 102) | 3 non-blocking |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. **C-level implementation scales well**: Pattern from v3.0 CDKM → v5.0 Beauregard confirms that implementing at C level first, then wiring through Cython, is the right approach
-2. **Exhaustive verification catches real bugs**: CDKM register ordering (v5.0), QFT qubit mapping (v3.0), comparison MSB (v4.0) — all caught by systematic testing
+2. **Exhaustive verification catches real bugs**: CDKM register ordering (v5.0), QFT qubit mapping (v3.0), comparison MSB (v4.0), height-controlled dispatch (v6.0) — all caught by systematic testing
 3. **Profile before optimizing**: v2.2 principle continues to pay off — data-driven tradeoff threshold (width 4) in v5.0
+4. **Compositional modules stay in Python**: Walk module (v6.0) composes existing primitives without C code — assess compute vs compose before choosing implementation language
