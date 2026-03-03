@@ -32,6 +32,9 @@ __all__ = [
     "legal_moves_black",
     "legal_moves",
     "get_legal_moves_and_oracle",
+    "print_position",
+    "print_moves",
+    "sq_to_algebraic",
 ]
 
 # Knight L-shaped move offsets (rank_delta, file_delta)
@@ -246,6 +249,86 @@ def legal_moves(wk_sq, bk_sq, wn_squares, side_to_move):
         return legal_moves_black(wk_sq, bk_sq, wn_squares)
     else:
         raise ValueError(f"side_to_move must be 'white' or 'black', got {side_to_move!r}")
+
+
+def sq_to_algebraic(sq):
+    """Convert square index (0-63) to algebraic notation (e.g., 'e1').
+
+    Parameters
+    ----------
+    sq : int
+        Square index where sq = rank * 8 + file.
+
+    Returns
+    -------
+    str
+        Algebraic notation string (e.g., 'a1', 'h8').
+    """
+    rank, file = divmod(sq, 8)
+    return f"{'abcdefgh'[file]}{rank + 1}"
+
+
+def print_position(wk_sq, bk_sq, wn_squares):
+    """Print an ASCII board showing piece positions.
+
+    Displays the board from white's perspective (rank 8 at top, rank 1 at
+    bottom). Uses:
+    - K = white king
+    - k = black king
+    - N = white knight
+    - . = empty square
+
+    Parameters
+    ----------
+    wk_sq : int
+        White king square (0-63).
+    bk_sq : int
+        Black king square (0-63).
+    wn_squares : list[int]
+        White knight square(s).
+    """
+    wn_set = set(wn_squares)
+    lines = []
+    lines.append("  a b c d e f g h")
+    for rank in range(7, -1, -1):
+        row = [f"{rank + 1} "]
+        for file in range(8):
+            sq = rank * 8 + file
+            if sq == wk_sq:
+                row.append("K")
+            elif sq == bk_sq:
+                row.append("k")
+            elif sq in wn_set:
+                row.append("N")
+            else:
+                row.append(".")
+            row.append(" ")
+        lines.append("".join(row).rstrip())
+    lines.append("  a b c d e f g h")
+    print("\n".join(lines))
+
+
+def print_moves(moves, label=""):
+    """Print a move list with index, algebraic notation, and square indices.
+
+    Each line shows: index (branch register value), source and destination
+    in algebraic notation, and the raw (piece_sq, dest_sq) pair.
+
+    Parameters
+    ----------
+    moves : list[tuple[int, int]]
+        Legal move list as (piece_sq, dest_sq) pairs.
+    label : str, optional
+        Label to print before the move list.
+    """
+    if label:
+        print(f"{label} ({len(moves)} moves):")
+    else:
+        print(f"{len(moves)} moves:")
+    for i, (src, dst) in enumerate(moves):
+        src_alg = sq_to_algebraic(src)
+        dst_alg = sq_to_algebraic(dst)
+        print(f"  [{i:2d}] {src_alg}-{dst_alg}  ({src:2d} -> {dst:2d})")
 
 
 def _classify_move(piece_sq, wk_sq, wn_squares):

@@ -709,3 +709,145 @@ class TestMoveOracleSubcircuit:
             board["white_knights"],
             branch,
         )
+
+
+class TestEndToEnd:
+    """Full pipeline integration test from position setup through oracle creation."""
+
+    def test_endgame_position_pipeline(self):
+        """Exercise the full Phase 103 pipeline with an interesting endgame."""
+        from chess_encoding import (
+            get_legal_moves_and_oracle,
+            king_attacks,
+            knight_attacks,
+            legal_moves,
+            print_moves,
+            print_position,
+        )
+
+        # Interesting endgame: white king e1=4, black king e8=60,
+        # white knights on d4=27 and f5=37
+        wk_sq = 4  # e1
+        bk_sq = 60  # e8
+        wn_squares = [27, 37]  # d4, f5
+
+        # Print position for human inspection
+        print("\n--- End-to-end test position ---")
+        print_position(wk_sq, bk_sq, wn_squares)
+
+        # Get moves for both sides
+        moves_w = legal_moves(wk_sq, bk_sq, wn_squares, "white")
+        moves_b = legal_moves(wk_sq, bk_sq, wn_squares, "black")
+
+        print(f"\nWhite: {len(moves_w)} legal moves")
+        print_moves(moves_w, "White moves")
+        print(f"\nBlack: {len(moves_b)} legal moves")
+        print_moves(moves_b, "Black moves")
+
+        # White should have reasonable move count (2 knights + king)
+        assert len(moves_w) > 0, "White should have legal moves"
+        # 2 knights with up to 8 moves each + king with up to 8 moves
+        assert len(moves_w) <= 24, f"White has too many moves: {len(moves_w)}"
+
+        # Black should have only king moves (minus attacked squares)
+        assert len(moves_b) >= 0, "Black may have 0 moves (stalemate)"
+        assert len(moves_b) <= 8, f"Black has too many moves: {len(moves_b)}"
+
+        # Verify all moves are valid
+        friendly_white = set(wn_squares) | {wk_sq}
+        for piece_sq, dest_sq in moves_w:
+            assert 0 <= dest_sq < 64, f"Move destination {dest_sq} out of range"
+            assert dest_sq not in friendly_white, (
+                f"Move ({piece_sq}, {dest_sq}) targets friendly square"
+            )
+            assert piece_sq in friendly_white, f"Move from {piece_sq} -- not a white piece"
+
+        white_attacks = set(king_attacks(wk_sq)) | {wk_sq}
+        for sq in wn_squares:
+            white_attacks |= set(knight_attacks(sq))
+        for piece_sq, dest_sq in moves_b:
+            assert piece_sq == bk_sq, f"Black move from {piece_sq} -- not black king"
+            assert dest_sq not in white_attacks, f"Black king moved to {dest_sq} which is attacked"
+
+        # Oracle should work for both sides
+        oracle_w = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, "white")
+        oracle_b = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, "black")
+        assert oracle_w["move_count"] == len(moves_w)
+        assert oracle_b["move_count"] == len(moves_b)
+
+    def test_stalemate_detection(self):
+        """Position where black has 0 legal moves (stalemate)."""
+        from chess_encoding import legal_moves
+
+        # Black king in corner, surrounded by white attacks
+        # wk on b2=9, bk on a1=0 -- white king attacks a1's neighbors
+        # King attacks from b2(9): [0,1,2,8,10,16,17,18] -- covers all of a1's moves
+        wk_sq = 9  # b2
+        bk_sq = 0  # a1
+        wn_squares = []
+
+        moves_b = legal_moves(wk_sq, bk_sq, wn_squares, "black")
+        # a1 moves to [1, 8, 9]. b2 king attacks [0,1,2,8,10,16,17,18]
+        # All of a1's moves (1, 8, 9) are in b2's attack set (including b2 itself=9)
+        assert len(moves_b) == 0, f"Black should be stalemated, got {len(moves_b)} moves"
+
+
+class TestUtilities:
+    """Tests for print_position, print_moves, and sq_to_algebraic."""
+
+    def test_sq_to_algebraic_corners(self):
+        """Corner squares convert correctly."""
+        from chess_encoding import sq_to_algebraic
+
+        assert sq_to_algebraic(0) == "a1"
+        assert sq_to_algebraic(7) == "h1"
+        assert sq_to_algebraic(56) == "a8"
+        assert sq_to_algebraic(63) == "h8"
+
+    def test_sq_to_algebraic_center(self):
+        """Center squares convert correctly."""
+        from chess_encoding import sq_to_algebraic
+
+        assert sq_to_algebraic(27) == "d4"  # rank=3, file=3
+        assert sq_to_algebraic(36) == "e5"  # rank=4, file=4
+
+    def test_print_position_no_error(self, capsys):
+        """print_position runs without error and produces output."""
+        from chess_encoding import print_position
+
+        print_position(4, 60, [27, 37])
+        captured = capsys.readouterr()
+        assert "K" in captured.out  # White king
+        assert "k" in captured.out  # Black king
+        assert "N" in captured.out  # White knight
+        assert "." in captured.out  # Empty square
+
+    def test_print_moves_no_error(self, capsys):
+        """print_moves runs without error and produces indexed output."""
+        from chess_encoding import legal_moves, print_moves
+
+        moves = legal_moves(4, 60, [27], "white")
+        print_moves(moves, "Test")
+        captured = capsys.readouterr()
+        assert "Test" in captured.out
+        assert "[" in captured.out  # Index markers
+        assert "moves" in captured.out
+
+    def test_module_exports_complete(self):
+        """chess_encoding __all__ includes all public functions."""
+        import chess_encoding
+
+        expected = [
+            "encode_position",
+            "knight_attacks",
+            "king_attacks",
+            "legal_moves_white",
+            "legal_moves_black",
+            "legal_moves",
+            "get_legal_moves_and_oracle",
+            "print_position",
+            "print_moves",
+            "sq_to_algebraic",
+        ]
+        for name in expected:
+            assert name in chess_encoding.__all__, f"{name} not in __all__"
