@@ -141,7 +141,7 @@
 - [x] **Phase 98: Local Diffusion Operator** - D_x with correct amplitude angles for uniform branching, root special case, and statevector verification (completed 2026-03-02)
 - [x] **Phase 99: Walk Operators** - R_A, R_B via parity-controlled diffusion, composed walk step, @ql.compile wrapping, disjointness validation (completed 2026-03-02)
 - [x] **Phase 100: Variable Branching** - Dynamic child counting via predicate evaluation and controlled Ry rotation based on d(x) (completed 2026-03-02)
-- [ ] **Phase 101: Detection & Demo** - Iterative power-method detection, SAT demo within 17-qubit budget, Qiskit statevector verification
+- [x] **Phase 101: Detection & Demo** - Iterative power-method detection, SAT demo within 17-qubit budget, Qiskit statevector verification (completed 2026-03-03)
 
 ## Phase Details
 
@@ -213,11 +213,11 @@ Plans:
   2. Demo runs on a small SAT instance (binary tree depth 2-3, within 17-qubit budget) and correctly detects the known solution
   3. Qiskit statevector verification confirms detection probability is above threshold on a known-solution instance and below threshold on a no-solution instance
   4. Detection returns false (no false positive) on a tree with no satisfying assignment
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 101-01: TBD
-- [ ] 101-02: TBD
+- [x] 101-01-PLAN.md -- detect() method + _measure_root_overlap + _tree_size + DET-01 tests (DET-01)
+- [x] 101-02-PLAN.md -- SAT predicate integration tests + standalone demo script (DET-02, DET-03)
 
 ## Progress
 
@@ -240,7 +240,7 @@ Phases execute in numeric order: 97 -> 98 -> 99 -> 100 -> 101
 | 98. Local Diffusion Operator | v6.0 | 2/2 | Complete | 2026-03-02 |
 | 99. Walk Operators | v6.0 | 2/2 | Complete | 2026-03-02 |
 | 100. Variable Branching | v6.0 | 2/2 | Complete | 2026-03-02 |
-| 101. Detection & Demo | v6.0 | 0/? | Not started | - |
+| 101. Detection & Demo | v6.0 | 2/2 | Complete | 2026-03-03 |
 
 ---
 *Roadmap created: 2026-02-02*

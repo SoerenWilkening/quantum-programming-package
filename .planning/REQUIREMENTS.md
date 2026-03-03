@@ -36,9 +36,9 @@ Requirements for quantum walk primitives (Montanaro 2015 backtracking speedup). 
 
 ### Detection
 
-- [ ] **DET-01**: Iterative power-method detection algorithm (apply walk step powers, measure, threshold probability > 3/8)
-- [ ] **DET-02**: Demo on small SAT instance (binary tree depth 2-3, within 17-qubit budget)
-- [ ] **DET-03**: Qiskit statevector verification confirming detection probability on known-solution and no-solution instances
+- [x] **DET-01**: Iterative power-method detection algorithm (apply walk step powers, measure, threshold probability > 3/8)
+- [x] **DET-02**: Demo on small SAT instance (binary tree depth 2-3, within 17-qubit budget)
+- [x] **DET-03**: Qiskit statevector verification confirming detection probability on known-solution and no-solution instances
 
 ## Future Requirements
 
@@ -94,9 +94,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WALK-03 | Phase 99 | Complete |
 | WALK-04 | Phase 99 | Complete |
 | WALK-05 | Phase 99 | Complete |
-| DET-01 | Phase 101 | Pending |
-| DET-02 | Phase 101 | Pending |
-| DET-03 | Phase 101 | Pending |
+| DET-01 | Phase 101 | Complete |
+| DET-02 | Phase 101 | Complete |
+| DET-03 | Phase 101 | Complete |
 
 **Coverage:**
 - v6.0 requirements: 18 total
@@ -105,4 +105,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-26*
-*Last updated: 2026-03-02 -- Phase 97 complete (TREE-01, TREE-02, TREE-03, PRED-01, PRED-02, PRED-03)*
+*Last updated: 2026-03-03 -- Phase 101 complete (DET-01, DET-02, DET-03) -- All v6.0 requirements complete*
