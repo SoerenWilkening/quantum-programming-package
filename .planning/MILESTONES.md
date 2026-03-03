@@ -1,5 +1,39 @@
 # Project Milestones: Quantum Assembly
 
+## v6.0 Quantum Walk Primitives (Shipped: 2026-03-03)
+
+**Delivered:** Predicate-aware quantum walk operators based on Montanaro 2015 backtracking speedup — tree encoding with one-hot height registers, local diffusion with correct amplitude angles, compiled walk operators R_A/R_B, variable branching with dynamic child counting, and iterative power-method detection with SAT demo verified within 17-qubit budget.
+
+**Phases completed:** 97-102 (11 plans total)
+
+**Key accomplishments:**
+
+- QWalkTree class with one-hot height register, per-level branch registers, predicate interface with mutual exclusion validation
+- D_x local diffusion with Ry cascade and correct amplitude angles (phi = 2*arctan(sqrt(d))) per Montanaro 2015, statevector-verified for d=2..5
+- Walk operators R_A/R_B with compiled walk step U = R_B * R_A, qubit disjointness verification, and @ql.compile wrapping for controlled variant derivation
+- Variable branching with predicate-driven child counting, conditional Ry rotation based on d(x), multi-controlled V-gate decomposition
+- Iterative power-method detection algorithm (detect()) with 3/8 threshold on root state overlap
+- SAT detection demo within 17-qubit budget, Qiskit statevector verification for known-solution and no-solution instances
+- Full requirements closure: 18/18 satisfied, all verified with 130 walk tests
+
+**Stats:**
+
+- 31 commits, 30 files changed (+6,688 / -52 lines)
+- 6 phases, 11 plans
+- 2 days (2026-03-02 → 2026-03-03)
+- Walk module: 4,278 LOC (1,497 walk.py + 2,579 tests + 202 demo)
+
+**Known gaps (tech debt, non-blocking):**
+- Raw predicate qubit allocation: each predicate call allocates new qbools, making full SAT demos infeasible at depth >= 2 without compiled predicates (future work)
+- Framework limitation: `with qbool:` cannot nest — worked around via V-gate CCRy decomposition and inline gate emission
+- 14-15 pre-existing test failures in test_compile.py (unrelated to v6.0)
+
+**Git range:** `edc069e`..`61d1206`
+
+**What's next:** TBD — next milestone planning via `/gsd:new-milestone`
+
+---
+
 ## v5.0 Advanced Arithmetic & Compilation (Shipped: 2026-02-26)
 
 **Delivered:** Fixed all deferred arithmetic bugs (division, modular reduction) with C-level restoring divmod, added Beauregard modular Toffoli arithmetic for Shor's building blocks, parametric compilation for compile-once-replay-many, automatic depth/ancilla tradeoff policy, and quantum counting API.

@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A quantum programming framework that enables writing quantum algorithms using standard programming constructs — operator overloading on variable-width quantum integers (qint, 1-64 bits) and quantum booleans (qbool), with Python's `with` statement implementing quantum conditionals. Operations compile to optimized quantum circuits via a C backend with Cython bindings. Supports dual arithmetic backends: QFT-based (phase rotations) and Toffoli-based (fault-tolerant, Clifford+T decomposable) with CDKM ripple-carry and Brent-Kung carry look-ahead adders, plus automatic depth/ancilla tradeoff selection. Includes Beauregard modular Toffoli arithmetic (add/sub/mul mod N) for Shor's algorithm building blocks, `@ql.compile` for function-level compilation with gate capture/replay/optimization and parametric mode for compile-once-replay-many, Grover's search with `ql.grover()` (lambda predicate oracles, adaptive BBHT search), quantum counting via `ql.count_solutions()`, iterative quantum amplitude estimation via `ql.amplitude_estimate()`, circuit optimization, pixel-art circuit visualization scaling to 200+ qubits, T-count reporting, statistics, OpenQASM 3.0 export, and Qiskit-based verification.
+A quantum programming framework that enables writing quantum algorithms using standard programming constructs — operator overloading on variable-width quantum integers (qint, 1-64 bits) and quantum booleans (qbool), with Python's `with` statement implementing quantum conditionals. Operations compile to optimized quantum circuits via a C backend with Cython bindings. Supports dual arithmetic backends: QFT-based (phase rotations) and Toffoli-based (fault-tolerant, Clifford+T decomposable) with CDKM ripple-carry and Brent-Kung carry look-ahead adders, plus automatic depth/ancilla tradeoff selection. Includes Beauregard modular Toffoli arithmetic (add/sub/mul mod N) for Shor's algorithm building blocks, `@ql.compile` for function-level compilation with gate capture/replay/optimization and parametric mode for compile-once-replay-many, Grover's search with `ql.grover()` (lambda predicate oracles, adaptive BBHT search), quantum counting via `ql.count_solutions()`, iterative quantum amplitude estimation via `ql.amplitude_estimate()`, quantum walk primitives based on Montanaro 2015 backtracking speedup (QWalkTree with predicate-aware walk operators, variable branching, and iterative detection), circuit optimization, pixel-art circuit visualization scaling to 200+ qubits, T-count reporting, statistics, OpenQASM 3.0 export, and Qiskit-based verification.
 
 ## Core Value
 
@@ -164,20 +164,14 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - ✓ Toffoli CQ per-value fallback with topology-safe auto-detection — v5.0
 - ✓ Oracle decorator forces per-value caching for structural parameters — v5.0
 
+- ✓ QWalkTree class with one-hot height register, per-level branch registers, predicate interface with mutual exclusion validation — v6.0
+- ✓ D_x local diffusion with correct amplitude angles (phi = 2*arctan(sqrt(d))) and root formula per Montanaro 2015 — v6.0
+- ✓ Walk operators R_A/R_B with compiled walk step U = R_B * R_A and qubit disjointness verification — v6.0
+- ✓ Variable branching with predicate-driven child counting and conditional Ry rotation — v6.0
+- ✓ Iterative power-method detection algorithm (detect()) with 3/8 threshold — v6.0
+- ✓ SAT detection demo within 17-qubit budget with Qiskit statevector verification — v6.0
+
 ### Active
-
-## Current Milestone: v6.0 Quantum Walk Primitives
-
-**Goal:** Predicate-aware quantum walk operators based on Montanaro 2015 backtracking speedup, with variable branching, correct amplitude calculation, and Qiskit-verified demos on small SAT instances.
-
-**Target features:**
-- Predicate-aware walk operator (user provides P(v) → accept/reject/continue)
-- Local diffusion R_x with correct amplitudes based on number of valid children d(x)
-- Walk operators R_A/R_B built from parallel local diffusions on disjoint qubit sets
-- Variable branching support (dynamic amplitude calculation via controlled rotations)
-- Detection mode (does a solution exist?) per Montanaro Algorithm 1
-- New `quantum_walk` module (separate from grover)
-- Demo + Qiskit verification on small SAT instance
 
 **Deferred features (carry forward):**
 - Resource estimation for compiled functions — ADV-01
@@ -192,6 +186,11 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - Database search oracle from classical data structure — GSPEC-02
 - Modular exponentiation via repeated squaring — MEXT-01
 - Full Shor's algorithm API (`ql.factor(N)`) — MEXT-02
+- Quantum walk public API (`ql.quantum_walk()` / `ql.detect_solution()`) — API-01/API-02
+- Solution finding via hybrid classical-quantum Algorithm 2 — FIND-01/FIND-02
+- Subspace optimization for walk operators — ADV-WALK-01
+- QPE-based detection with formal precision guarantees — ADV-WALK-03
+- CSP-to-predicate compiler (auto CNF to accept/reject) — ADV-WALK-04
 
 ### Out of Scope
 
@@ -202,12 +201,14 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - GUI interface — programmatic API sufficient (pixel-art visualization is image output, not interactive GUI)
 - Direct quantum state access — violates no-cloning theorem
 - Automatic qubit cloning — physically impossible
+- Continuous-time quantum walk (CTQW) — incompatible mathematical framework requiring Hamiltonian simulation
+- General graph quantum walks — fundamentally different framework; separate future module
 
 ## Context
 
 **Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) -> Cython bindings -> Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
 
-**Current state:** v6.0 in progress — Quantum walk primitives based on Montanaro 2015. Previous: v5.0 shipped advanced arithmetic (Beauregard modular Toffoli, C-level restoring divmod, parametric compilation, quantum counting). Full feature set: dual arithmetic backends (QFT/Toffoli with Toffoli default), `@ql.compile` with parametric mode, `ql.grover()`, `ql.amplitude_estimate()`, `ql.count_solutions()`, pixel-art visualization, Clifford+T decomposition, cross-backend verification.
+**Current state:** v6.0 shipped — Quantum walk primitives based on Montanaro 2015 backtracking speedup with predicate-aware walk operators, variable branching, and iterative detection. Full feature set: dual arithmetic backends (QFT/Toffoli with Toffoli default), `@ql.compile` with parametric mode, `ql.grover()`, `ql.amplitude_estimate()`, `ql.count_solutions()`, QWalkTree with `detect()`, pixel-art visualization, Clifford+T decomposition, cross-backend verification.
 
 **Codebase:**
 - ~1,059,000 lines of code (604K C, 395K Python, 60K Cython)
@@ -238,6 +239,8 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - Tradeoff state silently discarded by IQAE rounds (each round calls circuit() which resets to auto)
 - CountResult not exported via `ql.__all__` — users must import from `quantum_language.quantum_counting`
 - 14-15 pre-existing test failures in test_compile.py (qarray, replay gate count, nesting, auto-uncompute)
+- Raw predicate qubit allocation in QWalkTree: each predicate call allocates new qbools, making SAT demos infeasible at depth >= 2 without compiled predicates
+- QWalkTree nested `with qbool:` limitation worked around via V-gate CCRy decomposition and inline gate emission
 
 ## Constraints
 
@@ -364,5 +367,15 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | CountResult arithmetic on int count, not float estimate | Int-like contract for counting API | ✓ Good — intuitive behavior |
 | Clean dead code removal (no stubs) | Recover from git if needed; stubs add confusion | ✓ Good — cleaner codebase |
 
+| One-hot height encoding over binary | Single-qubit control per depth level, simpler parity dispatch | ✓ Good — enables height-controlled cascade |
+| Branch registers as plain list (not qarray) | Independent per-level access without array indexing overhead | ✓ Good — per-level manipulation |
+| Flat cascade gate planning for diffusion | Framework `with qbool:` cannot nest — pre-plan and compile | ✓ Good — avoids nested control limitation |
+| V-gate CCRy decomposition | Decomposes multi-controlled Ry without nested control contexts | ✓ Good — works for arbitrary d |
+| Inline S_0 reflection | @ql.compile first-call emits uncontrolled gates; inline avoids | ✓ Good — correct on every circuit |
+| _all_qubits_register for @ql.compile wrapping | Prevents forward-call tracking from blocking repeated walk_step() | ✓ Good — walk_step() reusable in loops |
+| 3/8 threshold detection without reference | Simpler than reference comparison; tree structure determines detection | ✓ Good — matches Montanaro Algorithm 1 |
+| predicate=None in _measure_root_overlap | Avoids qubit explosion from raw predicate allocation during measurement | ✓ Good — stays within 17-qubit budget |
+| All Python implementation for walk module | Walk is compositional, not computational at bit-width scale | ✓ Good — no new C code needed |
+
 ---
-*Last updated: 2026-02-26 after v6.0 milestone started*
+*Last updated: 2026-03-03 after v6.0 milestone*
