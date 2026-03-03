@@ -1,7 +1,7 @@
-"""Tests for chess board encoding, move generation, and legal move filtering.
+"""Tests for chess board encoding, move generation, legal move filtering, and move oracle.
 
-Classical unit tests for Phase 103 requirements CHESS-01 through CHESS-04.
-No quantum simulation -- pure Python logic tests.
+Classical unit tests for Phase 103 requirements CHESS-01 through CHESS-05.
+Oracle tests verify compiled quantum oracle construction and subcircuit spot-checks.
 """
 
 import os
@@ -491,3 +491,178 @@ class TestBoardEncodingQuantum:
         ]
         for name in expected:
             assert name in chess_encoding.__all__, f"{name} not in __all__"
+
+
+class TestMoveOracle:
+    """CHESS-05: Move oracle as @ql.compile function producing legal move set."""
+
+    def test_oracle_returns_move_count(self):
+        """move_oracle returns correct move count matching legal_moves output length."""
+        from chess_encoding import get_legal_moves_and_oracle, legal_moves
+
+        wk_sq, bk_sq, wn_squares = 4, 60, [27]
+        expected_moves = legal_moves(wk_sq, bk_sq, wn_squares, "white")
+
+        result = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, "white")
+        assert result["move_count"] == len(expected_moves)
+
+    def test_oracle_returns_move_list(self):
+        """move_oracle returns the same move list as legal_moves."""
+        from chess_encoding import get_legal_moves_and_oracle, legal_moves
+
+        wk_sq, bk_sq, wn_squares = 4, 60, [27]
+        expected_moves = legal_moves(wk_sq, bk_sq, wn_squares, "white")
+
+        result = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, "white")
+        assert result["moves"] == expected_moves
+
+    def test_oracle_compiles_without_error(self, clean_circuit):
+        """apply_move decorated with @ql.compile(inverse=True) can be called."""
+        import quantum_language as ql
+        from chess_encoding import encode_position, get_legal_moves_and_oracle
+
+        wk_sq, bk_sq, wn_squares = 4, 60, [27]
+        result = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, "white")
+        apply_move = result["apply_move"]
+
+        # Create board qarrays and branch register
+        board = encode_position(wk_sq, bk_sq, wn_squares)
+        branch = ql.qint(0, width=result["branch_width"])
+
+        # Calling apply_move should not raise
+        apply_move(board, branch)
+
+    def test_oracle_inverse_exists(self, clean_circuit):
+        """apply_move has .inverse() method available (from inverse=True)."""
+        from chess_encoding import get_legal_moves_and_oracle
+
+        wk_sq, bk_sq, wn_squares = 4, 60, [27]
+        result = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, "white")
+        apply_move = result["apply_move"]
+
+        # inverse() should return a callable proxy (not None)
+        inv = apply_move.inverse()
+        assert inv is not None
+
+    def test_oracle_deterministic(self):
+        """Calling get_legal_moves_and_oracle twice with same position produces same result."""
+        from chess_encoding import get_legal_moves_and_oracle
+
+        wk_sq, bk_sq, wn_squares = 4, 60, [27]
+        r1 = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, "white")
+        r2 = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, "white")
+        assert r1["moves"] == r2["moves"]
+        assert r1["move_count"] == r2["move_count"]
+        assert r1["branch_width"] == r2["branch_width"]
+
+    def test_oracle_different_positions(self):
+        """Different positions produce different move counts."""
+        from chess_encoding import get_legal_moves_and_oracle
+
+        r1 = get_legal_moves_and_oracle(4, 60, [27], "white")
+        r2 = get_legal_moves_and_oracle(4, 60, [27, 45], "white")
+        assert r1["move_count"] != r2["move_count"]
+
+    def test_oracle_black_side(self):
+        """Oracle works for black side."""
+        from chess_encoding import get_legal_moves_and_oracle, legal_moves
+
+        wk_sq, bk_sq, wn_squares = 4, 60, [27]
+        result = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, "black")
+        expected = legal_moves(wk_sq, bk_sq, wn_squares, "black")
+        assert result["moves"] == expected
+        assert result["move_count"] == len(expected)
+
+    def test_oracle_branch_width_sufficient(self):
+        """Branch register width is sufficient to index all moves."""
+        import math
+
+        from chess_encoding import get_legal_moves_and_oracle
+
+        result = get_legal_moves_and_oracle(4, 60, [27, 45], "white")
+        move_count = result["move_count"]
+        branch_width = result["branch_width"]
+        # 2^branch_width must be >= move_count
+        assert (1 << branch_width) >= move_count, (
+            f"branch_width={branch_width} cannot index {move_count} moves"
+        )
+        # Branch width should be minimal
+        expected_width = max(1, math.ceil(math.log2(max(move_count, 1))))
+        assert branch_width == expected_width
+
+
+class TestMoveOracleSubcircuit:
+    """CHESS-05: Subcircuit spot-check for move oracle.
+
+    Uses minimal positions to verify circuit generation works correctly.
+    No Qiskit simulation -- just verifying circuit structure (gate generation).
+    """
+
+    def test_tiny_board_spot_check(self, clean_circuit):
+        """Minimal position (2 kings, no knights) produces a circuit without errors."""
+        import quantum_language as ql
+        from chess_encoding import encode_position, get_legal_moves_and_oracle
+
+        # 2 kings far apart, 0 knights -- minimal position
+        wk_sq = 0  # a1 corner: 3 king moves max
+        bk_sq = 63  # h8 corner: far away, no interference
+        wn_squares = []
+
+        result = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, "white")
+        apply_move = result["apply_move"]
+
+        # Move count should be 3 (king on a1 has 3 moves, none blocked by bk on h8)
+        assert result["move_count"] == 3
+
+        # Create board and branch register
+        board = encode_position(wk_sq, bk_sq, wn_squares)
+        branch = ql.qint(0, width=result["branch_width"])
+
+        # Apply move should generate circuit gates without error
+        apply_move(board, branch)
+
+    def test_tiny_board_inverse_works(self, clean_circuit):
+        """Inverse of apply_move can be called on a minimal position."""
+        import quantum_language as ql
+        from chess_encoding import encode_position, get_legal_moves_and_oracle
+
+        wk_sq = 0
+        bk_sq = 63
+        wn_squares = []
+
+        result = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, "white")
+        apply_move = result["apply_move"]
+
+        board = encode_position(wk_sq, bk_sq, wn_squares)
+        branch = ql.qint(0, width=result["branch_width"])
+
+        # Forward call
+        apply_move(board, branch)
+        # Inverse call -- should not raise
+        apply_move.inverse()(board, branch)
+
+    def test_single_knight_circuit(self, clean_circuit):
+        """Single knight position generates correct move count in circuit."""
+        import quantum_language as ql
+        from chess_encoding import encode_position, get_legal_moves_and_oracle
+
+        # Knight on a1 (sq=0): attacks squares 10, 17 (2 moves)
+        # King on e1 (sq=4): has moves (3,5,11,12,13) minus bk zone
+        # Black king on h8 (sq=63): far away
+        wk_sq = 4
+        bk_sq = 63
+        wn_squares = [0]
+
+        result = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, "white")
+
+        # Knight from 0 attacks: [10, 17] -- 2 moves (sq 4 is wk, excluded as friendly)
+        # King from 4 attacks: [3, 5, 11, 12, 13] -- 5 moves (sq 0 is knight, excluded)
+        # Total should be 7
+        assert result["move_count"] == 7
+
+        board = encode_position(wk_sq, bk_sq, wn_squares)
+        branch = ql.qint(0, width=result["branch_width"])
+
+        # Circuit generation should succeed
+        apply_move = result["apply_move"]
+        apply_move(board, branch)
