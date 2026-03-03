@@ -13,7 +13,7 @@
 - v4.0 Grover's Algorithm -- Phases 76-81 (shipped 2026-02-22) -- See `milestones/v4.0-ROADMAP.md`
 - v4.1 Quality & Efficiency -- Phases 82-89 (shipped 2026-02-24) -- See `milestones/v4.1-ROADMAP.md`
 - v5.0 Advanced Arithmetic & Compilation -- Phases 90-96 (shipped 2026-02-26) -- See `milestones/v5.0-ROADMAP.md`
-- v6.0 Quantum Walk Primitives -- Phases 97-101 (in progress)
+- v6.0 Quantum Walk Primitives -- Phases 97-102 (in progress)
 
 ## Phases
 
@@ -142,6 +142,7 @@
 - [x] **Phase 99: Walk Operators** - R_A, R_B via parity-controlled diffusion, composed walk step, @ql.compile wrapping, disjointness validation (completed 2026-03-02)
 - [x] **Phase 100: Variable Branching** - Dynamic child counting via predicate evaluation and controlled Ry rotation based on d(x) (completed 2026-03-02)
 - [x] **Phase 101: Detection & Demo** - Iterative power-method detection, SAT demo within 17-qubit budget, Qiskit statevector verification (completed 2026-03-03)
+- [ ] **Phase 102: Verification & Cosmetic Cleanup** - Create missing VERIFICATION.md for Phases 100/101, fix cosmetic qubit count display in SAT demo Case 4 (gap closure)
 
 ## Phase Details
 
@@ -219,6 +220,21 @@ Plans:
 - [x] 101-01-PLAN.md -- detect() method + _measure_root_overlap + _tree_size + DET-01 tests (DET-01)
 - [x] 101-02-PLAN.md -- SAT predicate integration tests + standalone demo script (DET-02, DET-03)
 
+### Phase 102: Verification & Cosmetic Cleanup
+**Goal**: Close all audit gaps — create formal VERIFICATION.md for Phases 100 and 101, fix cosmetic qubit count display in SAT demo
+**Depends on**: Phase 101
+**Requirements**: DIFF-04, DET-01, DET-02, DET-03
+**Gap Closure:** Closes gaps from v6.0 milestone audit
+**Success Criteria** (what must be TRUE):
+  1. 100-VERIFICATION.md exists in Phase 100 directory, documents test results for DIFF-04 (variable branching), and marks requirement as PASSED
+  2. 101-VERIFICATION.md exists in Phase 101 directory, documents test results for DET-01/DET-02/DET-03 (detection algorithm, SAT demo, statevector verification), and marks all 3 requirements as PASSED
+  3. SAT demo Case 4 in examples/sat_detection_demo.py displays correct qubit count (3, not 10) for uniform walk comparison
+  4. All 130 walk tests continue to pass after changes
+**Plans**: TBD
+
+Plans:
+- [ ] 102-01: TBD
+
 ## Progress
 
 **Execution Order:**
@@ -241,6 +257,7 @@ Phases execute in numeric order: 97 -> 98 -> 99 -> 100 -> 101
 | 99. Walk Operators | v6.0 | 2/2 | Complete | 2026-03-02 |
 | 100. Variable Branching | v6.0 | 2/2 | Complete | 2026-03-02 |
 | 101. Detection & Demo | v6.0 | 2/2 | Complete | 2026-03-03 |
+| 102. Verification & Cosmetic Cleanup | v6.0 | 0/1 | Pending | - |
 
 ---
 *Roadmap created: 2026-02-02*

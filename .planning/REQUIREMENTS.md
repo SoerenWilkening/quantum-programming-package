@@ -24,7 +24,7 @@ Requirements for quantum walk primitives (Montanaro 2015 backtracking speedup). 
 - [x] **DIFF-01**: D_x local diffusion operator for uniform branching with correct amplitude angle phi = 2*arctan(sqrt(d))
 - [x] **DIFF-02**: Root node diffusion with separate phi_root formula (different amplitude weighting per Montanaro section 2)
 - [x] **DIFF-03**: Statevector tests verifying |psi_x> amplitudes match 1/sqrt(d(x)+1) tolerance
-- [x] **DIFF-04**: Variable branching support — count valid children per node via predicate evaluation, controlled Ry rotation based on child count d(x)
+- [ ] **DIFF-04**: Variable branching support — count valid children per node via predicate evaluation, controlled Ry rotation based on child count d(x)
 
 ### Walk Operators
 
@@ -36,9 +36,9 @@ Requirements for quantum walk primitives (Montanaro 2015 backtracking speedup). 
 
 ### Detection
 
-- [x] **DET-01**: Iterative power-method detection algorithm (apply walk step powers, measure, threshold probability > 3/8)
-- [x] **DET-02**: Demo on small SAT instance (binary tree depth 2-3, within 17-qubit budget)
-- [x] **DET-03**: Qiskit statevector verification confirming detection probability on known-solution and no-solution instances
+- [ ] **DET-01**: Iterative power-method detection algorithm (apply walk step powers, measure, threshold probability > 3/8)
+- [ ] **DET-02**: Demo on small SAT instance (binary tree depth 2-3, within 17-qubit budget)
+- [ ] **DET-03**: Qiskit statevector verification confirming detection probability on known-solution and no-solution instances
 
 ## Future Requirements
 
@@ -88,15 +88,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DIFF-01 | Phase 98 | Complete |
 | DIFF-02 | Phase 98 | Complete |
 | DIFF-03 | Phase 98 | Complete |
-| DIFF-04 | Phase 100 | Complete |
+| DIFF-04 | Phase 102 | Pending |
 | WALK-01 | Phase 99 | Complete |
 | WALK-02 | Phase 99 | Complete |
 | WALK-03 | Phase 99 | Complete |
 | WALK-04 | Phase 99 | Complete |
 | WALK-05 | Phase 99 | Complete |
-| DET-01 | Phase 101 | Complete |
-| DET-02 | Phase 101 | Complete |
-| DET-03 | Phase 101 | Complete |
+| DET-01 | Phase 102 | Pending |
+| DET-02 | Phase 102 | Pending |
+| DET-03 | Phase 102 | Pending |
 
 **Coverage:**
 - v6.0 requirements: 18 total
@@ -105,4 +105,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-26*
-*Last updated: 2026-03-03 -- Phase 101 complete (DET-01, DET-02, DET-03) -- All v6.0 requirements complete*
+*Last updated: 2026-03-03 -- Gap closure: DIFF-04, DET-01, DET-02, DET-03 reassigned to Phase 102 (verification gap)*
