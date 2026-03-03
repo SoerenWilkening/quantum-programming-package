@@ -1248,6 +1248,189 @@ class QWalkTree:
 
         self._walk_compiled(self._all_qubits_register())
 
+    def _tree_size(self):
+        """Compute total number of nodes in the tree.
+
+        For uniform branching d at each level with max_depth n:
+        T = 1 + d + d^2 + ... + d^n = (d^(n+1) - 1) / (d - 1)
+
+        For variable branching, uses the maximum branching degree
+        at each level (conservative upper bound for iteration count).
+
+        Returns
+        -------
+        int
+            Total node count.
+        """
+        total = 1  # root
+        level_count = 1
+        for level_idx in range(self.max_depth):
+            level_count *= self.branching[level_idx]
+            total += level_count
+        return total
+
+    def _measure_root_overlap(self, num_steps):
+        """Build a fresh circuit with num_steps walk steps and measure root overlap.
+
+        Constructs a new circuit and QWalkTree with identical parameters
+        (but no predicate, to keep qubit count minimal), applies walk_step
+        the specified number of times, then computes |<r|psi>|^2 where
+        |r> is the root state.
+
+        Parameters
+        ----------
+        num_steps : int
+            Number of walk steps to apply.
+
+        Returns
+        -------
+        float
+            Probability of measuring the root state (|<r|psi>|^2).
+        """
+        import qiskit.qasm3
+        from qiskit import transpile
+        from qiskit_aer import AerSimulator
+
+        import quantum_language as ql
+
+        ql.circuit()
+        inner_tree = QWalkTree(
+            max_depth=self.max_depth,
+            branching=list(self.branching),
+            predicate=None,  # No predicate for clean measurement
+            max_qubits=self.max_qubits,
+        )
+
+        for _ in range(num_steps):
+            inner_tree.walk_step()
+
+        qasm_str = ql.to_openqasm()
+
+        # Statevector simulation
+        circuit = qiskit.qasm3.loads(qasm_str)
+        circuit.save_statevector()
+        sim = AerSimulator(method="statevector", max_parallel_threads=4)
+        result = sim.run(transpile(circuit, sim)).result()
+        sv = np.asarray(result.get_statevector())
+
+        # Root state index: h[max_depth]=|1>, all others |0>
+        # Qiskit little-endian: qubit k set = bit k of statevector index
+        h_root = inner_tree._height_qubit(inner_tree.max_depth)
+        root_idx = 1 << h_root
+        return float(abs(sv[root_idx]) ** 2)
+
+    def _measure_marked_overlap(self, num_steps, marked_leaves):
+        """Measure total probability of marked leaf states after walk steps.
+
+        Constructs a fresh circuit, applies walk_step num_steps times,
+        then sums the probabilities of all statevector components
+        corresponding to the marked leaf assignments.
+
+        This implements the marked vertex detection: if the walk step
+        distributes significant amplitude to the marked leaves, a
+        solution is detected.
+
+        Parameters
+        ----------
+        num_steps : int
+            Number of walk steps to apply.
+        marked_leaves : list[dict]
+            List of marked leaf states. Each dict maps depth level (int)
+            to branch value (int), e.g. [{0: 0, 1: 1}] for leaf with
+            branch[0]=0, branch[1]=1 at depth 0 (leaf level).
+
+        Returns
+        -------
+        float
+            Total probability of measuring any marked leaf state.
+        """
+        import qiskit.qasm3
+        from qiskit import transpile
+        from qiskit_aer import AerSimulator
+
+        import quantum_language as ql
+
+        ql.circuit()
+        inner_tree = QWalkTree(
+            max_depth=self.max_depth,
+            branching=list(self.branching),
+            predicate=None,
+            max_qubits=self.max_qubits,
+        )
+
+        for _ in range(num_steps):
+            inner_tree.walk_step()
+
+        qasm_str = ql.to_openqasm()
+
+        circuit = qiskit.qasm3.loads(qasm_str)
+        circuit.save_statevector()
+        sim = AerSimulator(method="statevector", max_parallel_threads=4)
+        result = sim.run(transpile(circuit, sim)).result()
+        sv = np.asarray(result.get_statevector())
+
+        # Compute statevector indices for marked leaf states
+        total_prob = 0.0
+        for leaf in marked_leaves:
+            idx = 0
+            # Height qubit: leaf is at depth 0, so h[0] = |1>
+            idx |= 1 << inner_tree._height_qubit(0)
+            # Branch register values
+            for level_idx, branch_val in leaf.items():
+                br = inner_tree.branch_registers[level_idx]
+                bw = br.width
+                for bit in range(bw):
+                    if (branch_val >> (bw - 1 - bit)) & 1:
+                        idx |= 1 << int(br.qubits[64 - bw + bit])
+            total_prob += float(abs(sv[idx]) ** 2)
+
+        return total_prob
+
+    def detect(self, max_iterations=None):
+        """Detect whether a solution exists in the backtracking tree.
+
+        Implements Montanaro's Algorithm 1 (adapted): iterative power-method
+        detection. Applies the walk step U raised to increasing powers
+        (1, 2, 4, 8, ...), measuring root state overlap after each power
+        level. If the root overlap probability drops below the 3/8
+        threshold at any power level, a solution is detected.
+
+        Each power level is a separate circuit execution using statevector
+        simulation.
+
+        .. warning::
+
+            This method resets the global circuit state. Save any existing
+            circuit (via ``ql.to_openqasm()``) before calling.
+
+        Parameters
+        ----------
+        max_iterations : int, optional
+            Maximum number of walk steps in the largest power level.
+            Auto-computed from tree size as ``ceil(sqrt(T / n))`` if not
+            provided, where T is total node count and n is max_depth.
+
+        Returns
+        -------
+        bool
+            True if a solution is detected, False otherwise.
+        """
+        if max_iterations is None:
+            T = self._tree_size()
+            n = self.max_depth
+            max_iterations = max(4, int(math.ceil(math.sqrt(T / n))))
+
+        threshold = 3.0 / 8.0  # Montanaro detection threshold
+
+        power = 1
+        while power <= max_iterations:
+            root_prob = self._measure_root_overlap(power)
+            if root_prob < threshold:
+                return True  # Solution detected
+            power *= 2
+
+        return False  # No solution detected
+
     def _validate_predicate(self):
         """Validate predicate mutual exclusion on root state.
 
