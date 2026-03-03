@@ -432,3 +432,62 @@ class TestEdgeCases:
         assert len(moves1) != len(moves2), (
             f"1 knight ({len(moves1)} moves) should differ from 2 knights ({len(moves2)} moves)"
         )
+
+
+class TestBoardEncodingQuantum:
+    """Quantum spot-check: verify qarray construction with clean_circuit fixture.
+
+    These tests do NOT simulate via Qiskit (full board = 192+ qubits,
+    far exceeds 17-qubit budget). They verify qarray construction and
+    circuit generation only.
+    """
+
+    def test_single_piece_encoding(self, clean_circuit):
+        """Single king encodes as a ql.qarray without error."""
+        from chess_encoding import encode_position
+
+        result = encode_position(wk_sq=4, bk_sq=60, wn_squares=[])
+        wk = result["white_king"]
+        # Verify it's a qarray-like object (not None, not a plain array)
+        assert wk is not None
+        assert hasattr(wk, "__getitem__"), "white_king should support indexing"
+
+    def test_multi_piece_encoding(self, clean_circuit):
+        """King + knight encodes as separate qarrays without error."""
+        from chess_encoding import encode_position
+
+        result = encode_position(wk_sq=4, bk_sq=60, wn_squares=[27])
+        wk = result["white_king"]
+        wn = result["white_knights"]
+        bk = result["black_king"]
+
+        # All three should be valid qarray objects
+        assert wk is not None
+        assert wn is not None
+        assert bk is not None
+
+    def test_circuit_generation_sanity(self, clean_circuit):
+        """Encoding a position within a circuit context raises no exceptions."""
+        from chess_encoding import encode_position
+
+        # This exercises the full qarray creation path within a circuit
+        result = encode_position(wk_sq=0, bk_sq=63, wn_squares=[27, 45])
+        assert "white_king" in result
+        assert "black_king" in result
+        assert "white_knights" in result
+
+    def test_module_exports(self):
+        """chess_encoding has __all__ with all public functions."""
+        import chess_encoding
+
+        assert hasattr(chess_encoding, "__all__")
+        expected = [
+            "encode_position",
+            "knight_attacks",
+            "king_attacks",
+            "legal_moves_white",
+            "legal_moves_black",
+            "legal_moves",
+        ]
+        for name in expected:
+            assert name in chess_encoding.__all__, f"{name} not in __all__"

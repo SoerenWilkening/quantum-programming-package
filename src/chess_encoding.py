@@ -22,6 +22,15 @@ import numpy as np
 
 import quantum_language as ql
 
+__all__ = [
+    "encode_position",
+    "knight_attacks",
+    "king_attacks",
+    "legal_moves_white",
+    "legal_moves_black",
+    "legal_moves",
+]
+
 # Knight L-shaped move offsets (rank_delta, file_delta)
 _KNIGHT_OFFSETS = [
     (-2, -1),
