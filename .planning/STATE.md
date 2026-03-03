@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v6.1
 milestone_name: Quantum Chess Demo
 status: completed
-stopped_at: Phase 104 context gathered
-last_updated: "2026-03-03T22:07:36.886Z"
-last_activity: 2026-03-03 -- Completed 103-02 compiled move oracle (CHESS-05)
+stopped_at: Completed 104-01 walk register scaffolding
+last_updated: "2026-03-03T22:32:51.449Z"
+last_activity: 2026-03-03 -- Completed 104-01 walk register scaffolding (WALK-01, WALK-02)
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
-  percent: 25
+  total_plans: 4
+  completed_plans: 3
+  percent: 38
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v6.1 Quantum Chess Demo -- Phase 103 Plan 02 next
+**Current focus:** v6.1 Quantum Chess Demo -- Phase 104 Plan 02 next
 
 ## Current Position
 
-Phase: 103 of 106 (Chess Board Encoding & Legal Moves)
-Plan: 2 of 2 in current phase (COMPLETE)
-Status: Phase 103 complete -- ready for Phase 104
-Last activity: 2026-03-03 -- Completed 103-02 compiled move oracle (CHESS-05)
+Phase: 104 of 106 (Walk Register Scaffolding & Local Diffusion)
+Plan: 1 of 2 in current phase
+Status: 104-01 complete -- ready for 104-02 local diffusion
+Last activity: 2026-03-03 -- Completed 104-01 walk register scaffolding (WALK-01, WALK-02)
 
-Progress: [##░░░░░░░░] 25%
+Progress: [###░░░░░░░] 38%
 
 ## Performance Metrics
 
@@ -49,7 +49,8 @@ Progress: [##░░░░░░░░] 25%
 | v4.1 Quality & Efficiency | 82-89 | 21 | Complete (2026-02-24) |
 | v5.0 Advanced Arithmetic | 90-96 | 19 | Shipped (2026-02-26) |
 | v6.0 Quantum Walk | 97-102 | 11 | Shipped (2026-03-03) |
-| v6.1 Quantum Chess Demo | 103-106 | 2/8 | In progress |
+| v6.1 Quantum Chess Demo | 103-106 | 3/8 | In progress |
+| Phase 104 P01 | 3min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,12 @@ Recent decisions affecting current work:
 - Separate qarray args (wk_arr, bk_arr, wn_arr, branch) for compile cache key + inverse support
 - Use ~qbool (controlled NOT) for square flipping -- ^= 1 unsupported in controlled context
 - .inverse is a @property returning _AncillaInverseProxy, called as f.inverse(args)
+- Purely functional walk module (chess_walk.py): 6 standalone functions, no class
+- board_arrs as tuple (wk, bk, wn) matching oracle calling convention
+- Oracle replay: derive calls forward, underive calls .inverse in LIFO order
+- Height qubit addressing: int(h_reg.qubits[64 - (max_depth+1) + depth])
+- Side alternation: level % 2 == 0 is white, odd is black
+- [Phase 104]: Purely functional walk module: 6 standalone functions, board_arrs as tuple, oracle replay pattern
 
 ### Blockers/Concerns
 
@@ -79,10 +86,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-03T22:07:36.876Z
-Stopped at: Phase 104 context gathered
-Resume file: .planning/phases/104-walk-register-scaffolding-local-diffusion/104-CONTEXT.md
-Resume action: Plan Phase 104 (Walk Register Scaffolding & Local Diffusion) via `/gsd:plan-phase 104`
+Last session: 2026-03-03T22:32:51.440Z
+Stopped at: Completed 104-01 walk register scaffolding
+Resume file: None
+Resume action: Execute Phase 104 Plan 02 (Local Diffusion) via `/gsd:execute-phase 104`
 
 ---
-*State updated: 2026-03-03 -- Completed Phase 103 (chess board encoding + compiled move oracle)*
+*State updated: 2026-03-03 -- Completed 104-01 walk register scaffolding (WALK-01, WALK-02)*

@@ -17,8 +17,8 @@ Requirements for Quantum Chess Demo milestone. Each maps to roadmap phases.
 
 ### Manual Quantum Walk Operators
 
-- [ ] **WALK-01**: One-hot height register (max_depth+1 qubits) from raw qint with root initialization
-- [ ] **WALK-02**: Per-level branch registers encoding chosen move index from legal move list
+- [x] **WALK-01**: One-hot height register (max_depth+1 qubits) from raw qint with root initialization
+- [x] **WALK-02**: Per-level branch registers encoding chosen move index from legal move list
 - [ ] **WALK-03**: Single local diffusion D_x with Montanaro angles (phi = 2*arctan(sqrt(d)))
 - [ ] **WALK-04**: Height-controlled diffusion cascade (D_x only activates at correct depth level)
 - [ ] **WALK-05**: R_A operator composing diffusion at even depths (excluding root)
@@ -67,8 +67,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CHESS-03 | Phase 103 | Complete |
 | CHESS-04 | Phase 103 | Complete |
 | CHESS-05 | Phase 103 | Complete |
-| WALK-01 | Phase 104 | Pending |
-| WALK-02 | Phase 104 | Pending |
+| WALK-01 | Phase 104 | Complete |
+| WALK-02 | Phase 104 | Complete |
 | WALK-03 | Phase 104 | Pending |
 | WALK-04 | Phase 105 | Pending |
 | WALK-05 | Phase 105 | Pending |
