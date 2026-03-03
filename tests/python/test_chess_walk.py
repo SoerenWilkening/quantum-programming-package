@@ -396,7 +396,7 @@ class TestEvaluateChildren:
 
     def test_evaluate_children_no_crash(self, clean_circuit):
         """evaluate_children completes without error for a simple position."""
-        import quantum_language as ql
+        from chess_encoding import encode_position
         from chess_walk import (
             create_branch_registers,
             create_height_register,
@@ -414,7 +414,8 @@ class TestEvaluateChildren:
         level_idx = 0  # For depth=max_depth=1, level_idx=max_depth-depth=0
         d_max = data[level_idx]["move_count"]
         oracle = data[level_idx]["apply_move"]
-        board_arrs = ql.encode_position(4, 60, [10])
+        pos = encode_position(4, 60, [10])
+        board_arrs = (pos["white_king"], pos["black_king"], pos["white_knights"])
         validity = [qbool() for _ in range(d_max)]
 
         # Should not crash -- circuit generation only
@@ -432,7 +433,7 @@ class TestEvaluateChildren:
 
     def test_uncompute_children_no_crash(self, clean_circuit):
         """uncompute_children completes without error."""
-        import quantum_language as ql
+        from chess_encoding import encode_position
         from chess_walk import (
             create_branch_registers,
             create_height_register,
@@ -450,7 +451,8 @@ class TestEvaluateChildren:
         level_idx = 0
         d_max = data[level_idx]["move_count"]
         oracle = data[level_idx]["apply_move"]
-        board_arrs = ql.encode_position(4, 60, [10])
+        pos = encode_position(4, 60, [10])
+        board_arrs = (pos["white_king"], pos["black_king"], pos["white_knights"])
         validity = [qbool() for _ in range(d_max)]
 
         # Forward then reverse

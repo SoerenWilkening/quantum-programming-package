@@ -1,16 +1,20 @@
-"""Chess quantum walk register scaffolding and board state replay.
+"""Chess quantum walk register scaffolding, board state replay, and local diffusion.
 
-Provides register construction (one-hot height, per-level branch) and board
-state derivation functions for the chess quantum walk demo. Uses raw qint
-allocation and manual oracle replay -- no QWalkTree class.
+Provides register construction (one-hot height, per-level branch), board
+state derivation, and local diffusion D_x with Montanaro angles for the
+chess quantum walk demo. Uses raw qint allocation and walk.py internal
+helpers -- no QWalkTree class.
 
 Phase 104 Plan 01: Walk register infrastructure.
-Phase 104 Plan 02: Local diffusion operator (separate module addition).
+Phase 104 Plan 02: Local diffusion operator with variable branching.
 """
+
+import math
 
 from chess_encoding import get_legal_moves_and_oracle
 from quantum_language._gates import emit_x
 from quantum_language.qint import qint
+from quantum_language.walk import _make_qbool_wrapper, _plan_cascade_ops
 
 __all__ = [
     "create_height_register",
@@ -19,6 +23,11 @@ __all__ = [
     "underive_board_state",
     "height_qubit",
     "prepare_walk_data",
+    "montanaro_phi",
+    "montanaro_root_phi",
+    "precompute_diffusion_angles",
+    "evaluate_children",
+    "uncompute_children",
 ]
 
 
@@ -147,3 +156,218 @@ def prepare_walk_data(wk_sq, bk_sq, wn_squares, max_depth):
         level_data = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, side)
         data.append(level_data)
     return data
+
+
+# ---------------------------------------------------------------------------
+# Montanaro angle helpers
+# ---------------------------------------------------------------------------
+
+
+def montanaro_phi(d):
+    """Montanaro parent-children split angle for internal nodes.
+
+    Parameters
+    ----------
+    d : int
+        Branching factor (number of valid children).
+
+    Returns
+    -------
+    float
+        phi = 2 * arctan(sqrt(d)).
+    """
+    return 2.0 * math.atan(math.sqrt(d))
+
+
+def montanaro_root_phi(d, max_depth):
+    """Montanaro root angle with depth amplification.
+
+    Parameters
+    ----------
+    d : int
+        Branching factor at the root.
+    max_depth : int
+        Maximum tree depth n.
+
+    Returns
+    -------
+    float
+        phi_root = 2 * arctan(sqrt(n * d)).
+    """
+    return 2.0 * math.atan(math.sqrt(max_depth * d))
+
+
+def precompute_diffusion_angles(d_max, branch_width):
+    """Precompute angle data for each possible branching factor 1..d_max.
+
+    Parameters
+    ----------
+    d_max : int
+        Maximum branching degree.
+    branch_width : int
+        Width of the branch register in qubits.
+
+    Returns
+    -------
+    dict[int, dict]
+        Maps d_val -> {"phi": float, "cascade_ops": list}.
+    """
+    angles = {}
+    for d_val in range(1, d_max + 1):
+        phi = montanaro_phi(d_val)
+        ops = _plan_cascade_ops(d_val, branch_width) if d_val > 1 else []
+        angles[d_val] = {"phi": phi, "cascade_ops": ops}
+    return angles
+
+
+# ---------------------------------------------------------------------------
+# Validity evaluation (child predicate loop)
+# ---------------------------------------------------------------------------
+
+
+def evaluate_children(
+    depth, level_idx, d_max, branch_reg, h_reg, max_depth, oracle, board_arrs, validity
+):
+    """Evaluate each child's validity and store in validity ancillae.
+
+    For each child i (0..d_max-1): encode child index in branch register,
+    flip height, apply oracle to get child board state, check validity via
+    quantum predicate, store result, then undo everything.
+
+    Follows walk.py _evaluate_children pattern exactly.
+
+    Parameters
+    ----------
+    depth : int
+        Current depth level.
+    level_idx : int
+        Level index (max_depth - depth).
+    d_max : int
+        Maximum branching degree at this level.
+    branch_reg : qint
+        Branch register for this level.
+    h_reg : qint
+        Height register.
+    max_depth : int
+        Maximum tree depth.
+    oracle : callable
+        Compiled apply_move function for this level.
+    board_arrs : tuple
+        (wk_arr, bk_arr, wn_arr) qarrays.
+    validity : list[qbool]
+        Validity ancillae to store results (one per child).
+    """
+    from quantum_language.qbool import qbool as alloc_qbool
+
+    bw = branch_reg.width
+    wk, bk, wn = board_arrs
+
+    for i in range(d_max):
+        # (a) Encode child index i in branch register (MSB-first)
+        for bit in range(bw):
+            if (i >> (bw - 1 - bit)) & 1:
+                emit_x(int(branch_reg.qubits[64 - bw + bit]))
+
+        # (b) Flip height: depth -> depth-1 (move to child level)
+        emit_x(height_qubit(h_reg, depth, max_depth))
+        emit_x(height_qubit(h_reg, depth - 1, max_depth))
+
+        # (c) Apply oracle to derive child board state
+        oracle(wk, bk, wn, branch_reg)
+
+        # (d) Quantum validity predicate: allocate reject qbool,
+        # then set validity[i] = NOT reject.
+        # For the KNK endgame with precomputed structurally valid moves,
+        # all children in the oracle are valid. The predicate is trivially
+        # satisfied (reject = |0>, validity = |1>). The quantum predicate
+        # is still necessary to support the variable-branching D_x pattern
+        # where d(x) counts valid children via these ancillae.
+        reject = alloc_qbool()
+        reject_qubit = int(reject.qubits[63])
+        validity_qubit = int(validity[i].qubits[63])
+        reject_ctrl = _make_qbool_wrapper(reject_qubit)
+        with reject_ctrl:
+            emit_x(validity_qubit)
+        emit_x(validity_qubit)  # Flip: validity=|1> means valid
+
+        # (e) Uncompute predicate (adjoint of trivial predicate is identity)
+
+        # (f) Uncompute oracle
+        oracle.inverse(wk, bk, wn, branch_reg)
+
+        # (g) Undo height flip
+        emit_x(height_qubit(h_reg, depth - 1, max_depth))
+        emit_x(height_qubit(h_reg, depth, max_depth))
+
+        # (h) Undo branch register encoding
+        for bit in range(bw):
+            if (i >> (bw - 1 - bit)) & 1:
+                emit_x(int(branch_reg.qubits[64 - bw + bit]))
+
+
+def uncompute_children(
+    depth, level_idx, d_max, branch_reg, h_reg, max_depth, oracle, board_arrs, validity
+):
+    """Uncompute validity ancillae (reverse of evaluate_children).
+
+    Iterates children in reversed order and undoes the validity store.
+
+    Parameters
+    ----------
+    depth : int
+        Current depth level.
+    level_idx : int
+        Level index (max_depth - depth).
+    d_max : int
+        Maximum branching degree at this level.
+    branch_reg : qint
+        Branch register for this level.
+    h_reg : qint
+        Height register.
+    max_depth : int
+        Maximum tree depth.
+    oracle : callable
+        Compiled apply_move function for this level.
+    board_arrs : tuple
+        (wk_arr, bk_arr, wn_arr) qarrays.
+    validity : list[qbool]
+        Validity ancillae to uncompute.
+    """
+    from quantum_language.qbool import qbool as alloc_qbool
+
+    bw = branch_reg.width
+    wk, bk, wn = board_arrs
+
+    for i in reversed(range(d_max)):
+        # Navigate to child i
+        for bit in range(bw):
+            if (i >> (bw - 1 - bit)) & 1:
+                emit_x(int(branch_reg.qubits[64 - bw + bit]))
+
+        emit_x(height_qubit(h_reg, depth, max_depth))
+        emit_x(height_qubit(h_reg, depth - 1, max_depth))
+
+        # Re-apply oracle
+        oracle(wk, bk, wn, branch_reg)
+
+        # Re-evaluate predicate (trivial)
+        reject = alloc_qbool()
+        reject_qubit = int(reject.qubits[63])
+        validity_qubit = int(validity[i].qubits[63])
+
+        # Undo validity store (reverse order: X then CNOT)
+        emit_x(validity_qubit)
+        reject_ctrl = _make_qbool_wrapper(reject_qubit)
+        with reject_ctrl:
+            emit_x(validity_qubit)
+
+        # Uncompute oracle
+        oracle.inverse(wk, bk, wn, branch_reg)
+
+        # Undo navigation
+        emit_x(height_qubit(h_reg, depth - 1, max_depth))
+        emit_x(height_qubit(h_reg, depth, max_depth))
+
+        for bit in range(bw):
+            if (i >> (bw - 1 - bit)) & 1:
+                emit_x(int(branch_reg.qubits[64 - bw + bit]))
