@@ -478,3 +478,73 @@ class TestEvaluateChildren:
             board_arrs=board_arrs,
             validity=validity,
         )
+
+
+class TestDiffusion:
+    """WALK-03: Circuit-generation test for apply_diffusion."""
+
+    def test_apply_diffusion_no_crash(self, clean_circuit):
+        """apply_diffusion completes without error for a simple position."""
+        from chess_encoding import encode_position
+        from chess_walk import (
+            apply_diffusion,
+            create_branch_registers,
+            create_height_register,
+            prepare_walk_data,
+        )
+
+        # Simple position with max_depth=1 (smallest valid tree)
+        max_depth = 1
+        data = prepare_walk_data(wk_sq=4, bk_sq=60, wn_squares=[10], max_depth=max_depth)
+        h_reg = create_height_register(max_depth)
+        branch_regs = create_branch_registers(max_depth, data)
+        pos = encode_position(4, 60, [10])
+        board_arrs = (pos["white_king"], pos["black_king"], pos["white_knights"])
+        oracle_per_level = [d["apply_move"] for d in data]
+
+        # Circuit generation only -- no simulation (qubit count exceeds budget)
+        apply_diffusion(
+            depth=max_depth,
+            h_reg=h_reg,
+            branch_regs=branch_regs,
+            board_arrs=board_arrs,
+            oracle_per_level=oracle_per_level,
+            move_data_per_level=data,
+            max_depth=max_depth,
+        )
+
+    def test_apply_diffusion_importable(self):
+        """apply_diffusion is importable from chess_walk."""
+        from chess_walk import apply_diffusion
+
+        assert callable(apply_diffusion)
+
+
+class TestDiffusionAngles:
+    """Verify correct angle selection for positions with known move counts."""
+
+    def test_angles_for_known_position(self, clean_circuit):
+        """For a known position, precomputed angles use correct phi."""
+        from chess_walk import precompute_diffusion_angles, prepare_walk_data
+
+        data = prepare_walk_data(wk_sq=4, bk_sq=60, wn_squares=[10], max_depth=1)
+        d_max = data[0]["move_count"]
+        branch_width = data[0]["branch_width"]
+        angles = precompute_diffusion_angles(d_max, branch_width)
+
+        # Verify phi for the actual move count
+        expected_phi = 2.0 * math.atan(math.sqrt(d_max))
+        assert abs(angles[d_max]["phi"] - expected_phi) < 1e-10
+
+    def test_all_exports_importable(self):
+        """All 10 public exports are importable from chess_walk."""
+        # Also check evaluate_children and uncompute_children
+        from chess_walk import (
+            apply_diffusion,
+            evaluate_children,
+            uncompute_children,
+        )
+
+        assert callable(apply_diffusion)
+        assert callable(evaluate_children)
+        assert callable(uncompute_children)

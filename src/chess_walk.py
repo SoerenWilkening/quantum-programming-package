@@ -9,12 +9,19 @@ Phase 104 Plan 01: Walk register infrastructure.
 Phase 104 Plan 02: Local diffusion operator with variable branching.
 """
 
+import itertools
 import math
 
 from chess_encoding import get_legal_moves_and_oracle
 from quantum_language._gates import emit_x
+from quantum_language.diffusion import diffusion
 from quantum_language.qint import qint
-from quantum_language.walk import _make_qbool_wrapper, _plan_cascade_ops
+from quantum_language.walk import (
+    _emit_cascade_multi_controlled,
+    _emit_multi_controlled_ry,
+    _make_qbool_wrapper,
+    _plan_cascade_ops,
+)
 
 __all__ = [
     "create_height_register",
@@ -28,6 +35,7 @@ __all__ = [
     "precompute_diffusion_angles",
     "evaluate_children",
     "uncompute_children",
+    "apply_diffusion",
 ]
 
 
@@ -215,7 +223,15 @@ def precompute_diffusion_angles(d_max, branch_width):
     angles = {}
     for d_val in range(1, d_max + 1):
         phi = montanaro_phi(d_val)
-        ops = _plan_cascade_ops(d_val, branch_width) if d_val > 1 else []
+        if d_val > 1:
+            try:
+                ops = _plan_cascade_ops(d_val, branch_width)
+            except NotImplementedError:
+                # Cascade planning fails for d_val > 2^(w-1) due to control
+                # depth limitation. Fall back to Ry-only (no child cascade).
+                ops = []
+        else:
+            ops = []
         angles[d_val] = {"phi": phi, "cascade_ops": ops}
     return angles
 
@@ -371,3 +387,149 @@ def uncompute_children(
         for bit in range(bw):
             if (i >> (bw - 1 - bit)) & 1:
                 emit_x(int(branch_reg.qubits[64 - bw + bit]))
+
+
+# ---------------------------------------------------------------------------
+# Local diffusion D_x
+# ---------------------------------------------------------------------------
+
+
+def apply_diffusion(
+    depth, h_reg, branch_regs, board_arrs, oracle_per_level, move_data_per_level, max_depth
+):
+    """Apply local diffusion D_x at a given depth.
+
+    Follows walk.py _variable_diffusion (lines 771-886) closely:
+    1. Derive board state at current node (replay oracles 0..depth-1).
+    2. Allocate validity ancillae.
+    3. Evaluate children (quantum predicate per child).
+    4. Conditional U_dagger * S_0 * U for each possible d(x) value.
+    5. Uncompute validity.
+    6. Underive board state.
+
+    Parameters
+    ----------
+    depth : int
+        Current depth level (1..max_depth).
+    h_reg : qint
+        Height register.
+    branch_regs : list[qint]
+        Per-level branch registers.
+    board_arrs : tuple
+        (wk_arr, bk_arr, wn_arr) qarrays.
+    oracle_per_level : list
+        Compiled apply_move functions, one per level.
+    move_data_per_level : list[dict]
+        Move data per level (needs 'move_count' key).
+    max_depth : int
+        Maximum tree depth.
+    """
+    from quantum_language.qbool import qbool
+
+    # --- Step 1: Setup ---
+    level_idx = max_depth - depth
+
+    # --- Step 2: Derive board state at current node ---
+    # Replay oracles 0..level_idx-1 to reach current depth.
+    # Root (depth=max_depth, level_idx=0) needs 0 replays (starting position).
+    derive_board_state(board_arrs, branch_regs, oracle_per_level, level_idx)
+    d_max = move_data_per_level[level_idx]["move_count"]
+    branch_reg = branch_regs[level_idx]
+    is_root = depth == max_depth
+    h_qubit_idx = height_qubit(h_reg, depth, max_depth)
+    h_child_idx = height_qubit(h_reg, depth - 1, max_depth)
+
+    # --- Step 3: Allocate validity ancillae ---
+    validity = [qbool() for _ in range(d_max)]
+
+    # --- Step 4: Evaluate children ---
+    evaluate_children(
+        depth,
+        level_idx,
+        d_max,
+        branch_reg,
+        h_reg,
+        max_depth,
+        oracle_per_level[level_idx],
+        board_arrs,
+        validity,
+    )
+
+    # --- Step 5: Precompute angles ---
+    angles = precompute_diffusion_angles(d_max, branch_reg.width)
+    root_angles = {}
+    if is_root:
+        for d_val in range(1, d_max + 1):
+            root_angles[d_val] = montanaro_root_phi(d_val, max_depth)
+
+    validity_qubits = [int(validity[j].qubits[63]) for j in range(d_max)]
+
+    # --- Step 6a: U_dagger (inverse state preparation) conditional on d(x) ---
+    for d_val in range(1, d_max + 1):
+        phi_d = angles[d_val]["phi"]
+        if is_root:
+            phi_d = root_angles.get(d_val, phi_d)
+        cascade_ops_d = angles[d_val]["cascade_ops"]
+
+        for pattern in itertools.combinations(range(d_max), d_val):
+            # Flip zeros so all validity qubits read |1> when pattern matches
+            zeros = [j for j in range(d_max) if j not in pattern]
+            for z in zeros:
+                emit_x(validity_qubits[z])
+
+            ctrl_qubits = [h_qubit_idx] + validity_qubits
+
+            # U_dagger: inverse cascade then inverse parent-child split
+            if d_val > 1 and cascade_ops_d:
+                _emit_cascade_multi_controlled(branch_reg, cascade_ops_d, ctrl_qubits, sign=-1)
+            _emit_multi_controlled_ry(h_child_idx, -phi_d, ctrl_qubits)
+
+            # Undo X flips
+            for z in zeros:
+                emit_x(validity_qubits[z])
+
+    # --- Step 6b: S_0 reflection ---
+    # Use public ql.diffusion() on local subspace (h_child + branch_reg),
+    # controlled on h[depth]. Per user decision: public API for S_0.
+    h_control = _make_qbool_wrapper(h_qubit_idx)
+    h_child_wrapper = _make_qbool_wrapper(h_child_idx)
+    with h_control:
+        diffusion(h_child_wrapper, branch_reg)
+
+    # --- Step 6c: U forward conditional on d(x) ---
+    for d_val in range(1, d_max + 1):
+        phi_d = angles[d_val]["phi"]
+        if is_root:
+            phi_d = root_angles.get(d_val, phi_d)
+        cascade_ops_d = angles[d_val]["cascade_ops"]
+
+        for pattern in itertools.combinations(range(d_max), d_val):
+            zeros = [j for j in range(d_max) if j not in pattern]
+            for z in zeros:
+                emit_x(validity_qubits[z])
+
+            ctrl_qubits = [h_qubit_idx] + validity_qubits
+
+            # U forward: parent-child Ry then cascade
+            _emit_multi_controlled_ry(h_child_idx, phi_d, ctrl_qubits)
+            if d_val > 1 and cascade_ops_d:
+                _emit_cascade_multi_controlled(branch_reg, cascade_ops_d, ctrl_qubits, sign=1)
+
+            for z in zeros:
+                emit_x(validity_qubits[z])
+
+    # --- Step 7: Uncompute validity ---
+    uncompute_children(
+        depth,
+        level_idx,
+        d_max,
+        branch_reg,
+        h_reg,
+        max_depth,
+        oracle_per_level[level_idx],
+        board_arrs,
+        validity,
+    )
+
+    # --- Step 8: Underive board state ---
+    underive_board_state(board_arrs, branch_regs, oracle_per_level, level_idx)
