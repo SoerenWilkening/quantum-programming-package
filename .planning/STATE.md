@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v6.1
 milestone_name: Quantum Chess Demo
-status: completed
-stopped_at: Phase 105 context updated
-last_updated: "2026-03-05T13:26:51.992Z"
-last_activity: 2026-03-03 -- Completed 104-02 local diffusion (WALK-03)
+status: in-progress
+stopped_at: Completed 105-01-PLAN.md
+last_updated: "2026-03-05T13:46:10Z"
+last_activity: 2026-03-05 -- Completed 105-01 R_A/R_B walk operators (WALK-04, WALK-05, WALK-06)
 progress:
   total_phases: 4
   completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 6
+  completed_plans: 5
   percent: 50
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-03)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v6.1 Quantum Chess Demo -- Phase 104 Plan 02 next
+**Current focus:** v6.1 Quantum Chess Demo -- Phase 105 Plan 02 next
 
 ## Current Position
 
-Phase: 104 of 106 (Walk Register Scaffolding & Local Diffusion)
-Plan: 2 of 2 in current phase
-Status: 104 complete -- all plans done (WALK-01, WALK-02, WALK-03)
-Last activity: 2026-03-03 -- Completed 104-02 local diffusion (WALK-03)
+Phase: 105 of 106 (Full Walk Operators)
+Plan: 1 of 2 in current phase (105-01 complete)
+Status: 105-01 complete -- R_A/R_B walk operators (WALK-04, WALK-05, WALK-06)
+Last activity: 2026-03-05 -- Completed 105-01 R_A/R_B walk operators
 
-Progress: [#####░░░░░] 50%
+Progress: [██████████] 98%
 
 ## Performance Metrics
 
@@ -49,9 +49,10 @@ Progress: [#####░░░░░] 50%
 | v4.1 Quality & Efficiency | 82-89 | 21 | Complete (2026-02-24) |
 | v5.0 Advanced Arithmetic | 90-96 | 19 | Shipped (2026-02-26) |
 | v6.0 Quantum Walk | 97-102 | 11 | Shipped (2026-03-03) |
-| v6.1 Quantum Chess Demo | 103-106 | 4/8 | In progress |
+| v6.1 Quantum Chess Demo | 103-106 | 5/8 | In progress |
 | Phase 104 P01 | 3min | 1 tasks | 2 files |
 | Phase 104 P02 | 10min | 2 tasks | 2 files |
+| Phase 105 P01 | 7min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -79,6 +80,8 @@ Recent decisions affecting current work:
 - [Phase 104-02]: Derive/underive uses level_idx (max_depth - depth) not depth for oracle replay count
 - [Phase 104-02]: Cascade fallback for d_val exceeding register control depth (NotImplementedError -> empty ops)
 - [Phase 104-02]: S_0 via public ql.diffusion() in with h_control: context (not manual X-MCZ-X)
+- [Phase 105-01]: r_a skips depth 0 (leaves) since level_idx=max_depth exceeds oracle_per_level range
+- [Phase 105-01]: r_b explicitly adds max_depth when even to ensure root inclusion per Montanaro convention
 
 ### Blockers/Concerns
 
@@ -90,10 +93,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-05T13:26:51.974Z
-Stopped at: Phase 105 context updated
-Resume file: .planning/phases/105-full-walk-operators/105-CONTEXT.md
-Resume action: Execute Phase 105 (Walk Operators R_A/R_B) via `/gsd:execute-phase 105`
+Last session: 2026-03-05T13:46:10Z
+Stopped at: Completed 105-01-PLAN.md
+Resume file: .planning/phases/105-full-walk-operators/105-02-PLAN.md
+Resume action: Execute Phase 105 Plan 02 (walk step compilation) via `/gsd:execute-phase 105`
 
 ---
-*State updated: 2026-03-03 -- Completed 104-02 local diffusion (WALK-03), Phase 104 complete*
+*State updated: 2026-03-05 -- Completed 105-01 R_A/R_B walk operators (WALK-04, WALK-05, WALK-06)*
