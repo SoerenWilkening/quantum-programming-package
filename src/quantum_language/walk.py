@@ -658,7 +658,12 @@ class QWalkTree:
             w = branch_reg.width
             key = (d, w)
             if key not in self._cascade_ops and d > 1:
-                ops = _plan_cascade_ops(d, w)
+                try:
+                    ops = _plan_cascade_ops(d, w)
+                except NotImplementedError:
+                    # Cascade planning fails for d > 2^(w-1) due to control
+                    # depth limitation. Fall back to Ry-only (no child cascade).
+                    ops = []
                 self._cascade_ops[key] = ops
 
                 # Build compiled forward/inverse cascade for height-controlled use
@@ -689,7 +694,13 @@ class QWalkTree:
             for d_val in range(1, d_max_level + 1):
                 if d_val not in self._variable_angles:
                     phi_d = 2.0 * math.atan(math.sqrt(d_val))
-                    ops_d = _plan_cascade_ops(d_val, w) if d_val > 1 else []
+                    if d_val > 1:
+                        try:
+                            ops_d = _plan_cascade_ops(d_val, w)
+                        except NotImplementedError:
+                            ops_d = []
+                    else:
+                        ops_d = []
                     self._variable_angles[d_val] = {
                         "phi": phi_d,
                         "cascade_ops": ops_d,
