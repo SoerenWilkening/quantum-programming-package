@@ -178,11 +178,11 @@
   3. All 106+ existing compile tests pass unchanged when opt=3 is the default
   4. Call graph DAG contains nodes with qubit sets, and edges weighted by shared qubit count between dependent sequences
   5. Parallel sequences (disjoint qubit sets) are identified as concurrent groups in the DAG
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 107-01: TBD
-- [ ] 107-02: TBD
+- [ ] 107-01-PLAN.md -- CallGraphDAG module with DAGNode, overlap edges, parallel groups, builder stack
+- [ ] 107-02-PLAN.md -- Wire opt parameter into compile.py, DAG building in __call__, backward compat + integration tests
 
 ### Phase 108: Call Graph Analysis & Visualization
 **Goal**: Users can extract actionable metrics from the call graph and visualize program structure as DOT
@@ -247,7 +247,7 @@ Phases execute in numeric order: 107 -> 108 -> 109 -> 110
 | 90-96 | v5.0 | 19/19 | Complete | 2026-02-26 |
 | 97-102 | v6.0 | 11/11 | Complete | 2026-03-03 |
 | 103-106 | v6.1 | 8/8 | Complete | 2026-03-05 |
-| 107. Call Graph DAG Foundation | v7.0 | 0/TBD | Not started | - |
+| 107. Call Graph DAG Foundation | v7.0 | 0/2 | Planning | - |
 | 108. Call Graph Analysis & Visualization | v7.0 | 0/TBD | Not started | - |
 | 109. Selective Sequence Merging | v7.0 | 0/TBD | Not started | - |
 | 110. Merge Verification & Regression | v7.0 | 0/TBD | Not started | - |
