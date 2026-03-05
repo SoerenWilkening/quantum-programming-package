@@ -44,6 +44,13 @@ from ._core import (
     inject_remapped_gates,
     option,
 )
+from .call_graph import (
+    CallGraphDAG,
+    _dag_builder_stack,
+    current_dag_context,
+    pop_dag_context,
+    push_dag_context,
+)
 from .qint import qint
 
 # ---------------------------------------------------------------------------
@@ -302,6 +309,7 @@ def _clear_all_caches():
     """
     global _capture_depth
     _capture_depth = 0
+    _dag_builder_stack.clear()
     alive = []
     for ref in _compiled_funcs:
         obj = ref()
@@ -662,6 +670,7 @@ class CompiledFunc:
         inverse=False,
         debug=False,
         parametric=False,
+        opt=1,
     ):
         functools.update_wrapper(self, func)
         self._func = func
@@ -674,6 +683,8 @@ class CompiledFunc:
         self._inverse_func = None
         self._debug = debug
         self._parametric = parametric
+        self._opt = opt
+        self._call_graph = None
         self._forward_calls = {}
         self._inverse_proxy = None
         self._adjoint_func = None
@@ -714,6 +725,55 @@ class CompiledFunc:
                 qubit_saving,
             ) + mode_flags
 
+        # DAG building (opt != 3)
+        _building_dag = self._opt != 3
+        _is_top_level_dag = False
+        if _building_dag:
+            ctx = current_dag_context()
+            if ctx is None:
+                # Top-level call: create fresh DAG
+                self._call_graph = CallGraphDAG()
+                push_dag_context(self._call_graph, None)
+                _is_top_level_dag = True
+
+        try:
+            result = self._call_inner(
+                args,
+                kwargs,
+                quantum_args,
+                classical_args,
+                widths,
+                is_controlled,
+                control_count,
+                qubit_saving,
+                mode_flags,
+                cache_key,
+                _building_dag,
+            )
+        finally:
+            if _is_top_level_dag:
+                pop_dag_context()
+                if self._call_graph is not None:
+                    self._call_graph.build_overlap_edges()
+
+        return result
+
+    def _call_inner(
+        self,
+        args,
+        kwargs,
+        quantum_args,
+        classical_args,
+        widths,
+        is_controlled,
+        control_count,
+        qubit_saving,
+        mode_flags,
+        cache_key,
+        _building_dag,
+    ):
+        """Inner call logic, separated for DAG try/finally wrapper."""
+
         # Parametric routing (PAR-02): if parametric and has classical args,
         # use the parametric probe/replay lifecycle instead of normal caching.
         if self._parametric and classical_args:
@@ -729,6 +789,28 @@ class CompiledFunc:
                 mode_flags,
                 cache_key,
             )
+            # Record DAG node for parametric path
+            if _building_dag:
+                ctx = current_dag_context()
+                if ctx is not None:
+                    dag, parent_idx = ctx
+                    qubit_set = set()
+                    for qa in quantum_args:
+                        qubit_set.update(_get_quantum_arg_qubit_indices(qa))
+                    block = self._cache.get(cache_key)
+                    if (
+                        block
+                        and hasattr(block, "_capture_virtual_to_real")
+                        and block._capture_virtual_to_real
+                    ):
+                        qubit_set.update(block._capture_virtual_to_real.values())
+                    dag.add_node(
+                        self._func.__name__,
+                        qubit_set,
+                        len(block.gates) if block else 0,
+                        cache_key,
+                        parent_index=parent_idx,
+                    )
             # Auto-uncompute (same as normal path)
             if qubit_saving:
                 cached_block = self._cache.get(cache_key)
@@ -746,6 +828,24 @@ class CompiledFunc:
             # Move to end (most recently used)
             self._cache.move_to_end(cache_key)
             result = self._replay(self._cache[cache_key], quantum_args)
+            # Record DAG node for replay path (no nesting -- body not re-executed)
+            if _building_dag:
+                ctx = current_dag_context()
+                if ctx is not None:
+                    dag, parent_idx = ctx
+                    qubit_set = set()
+                    for qa in quantum_args:
+                        qubit_set.update(_get_quantum_arg_qubit_indices(qa))
+                    block = self._cache.get(cache_key)
+                    if block and block._capture_virtual_to_real:
+                        qubit_set.update(block._capture_virtual_to_real.values())
+                    dag.add_node(
+                        self._func.__name__,
+                        qubit_set,
+                        len(block.gates) if block else 0,
+                        cache_key,
+                        parent_index=parent_idx,
+                    )
         else:
             result = self._capture_and_cache_both(
                 args,
@@ -873,12 +973,26 @@ class CompiledFunc:
         for qa in quantum_args:
             param_qubit_indices.append(_get_quantum_arg_qubit_indices(qa))
 
+        # DAG: push placeholder node so nested compiled calls see us as parent
+        _dag_node_idx = None
+        if self._opt != 3:
+            ctx = current_dag_context()
+            if ctx is not None:
+                dag, parent_idx = ctx
+                _dag_node_idx = dag.add_node(
+                    self._func.__name__, set(), 0, (), parent_index=parent_idx
+                )
+                push_dag_context(dag, _dag_node_idx)
+
         # Execute function normally (gates flow to circuit as usual)
         try:
             result = self._func(*args, **kwargs)
         except Exception:
             # Do NOT cache partial result -- let exception propagate
             raise
+        finally:
+            if _dag_node_idx is not None:
+                pop_dag_context()
 
         # Record end layer
         end_layer = get_current_layer()
@@ -974,6 +1088,28 @@ class CompiledFunc:
         block._capture_virtual_to_real = capture_vtr
         block.return_type = return_type
         block._return_qarray_element_widths = return_qarray_element_widths
+
+        # DAG: update placeholder node with real data now that capture is done
+        if _dag_node_idx is not None:
+            ctx = current_dag_context()
+            if ctx is not None:
+                dag = ctx[0]
+                node = dag._nodes[_dag_node_idx]
+                qubit_set = set()
+                for qa in quantum_args:
+                    qubit_set.update(_get_quantum_arg_qubit_indices(qa))
+                if capture_vtr:
+                    qubit_set.update(capture_vtr.values())
+                node.func_name = self._func.__name__
+                node.qubit_set = frozenset(qubit_set)
+                node.gate_count = len(virtual_gates)
+                # cache_key not available here; left as placeholder ()
+                # Recompute bitmask
+                bitmask = np.uint64(0)
+                for q in qubit_set:
+                    bitmask |= np.uint64(1 << q)
+                node.bitmask = bitmask
+
         return block
 
     def _capture_and_cache_both(
@@ -1471,6 +1607,7 @@ class CompiledFunc:
         """
         self._cache.clear()
         self._forward_calls.clear()
+        self._call_graph = None
         # Preserve parametric state across circuits; only clear the block
         # reference since its cache entry is gone.
         self._parametric_block = None
@@ -1498,6 +1635,11 @@ class CompiledFunc:
         if self._adjoint_func is not None:
             self._adjoint_func.clear_cache()
 
+    @property
+    def call_graph(self):
+        """Return the CallGraphDAG from the most recent top-level call, or None."""
+        return self._call_graph
+
     def __repr__(self):
         return f"<CompiledFunc {self._func.__name__}>"
 
@@ -1515,6 +1657,7 @@ class _InverseCompiledFunc:
 
     def __init__(self, original):
         self._original = original
+        self._opt = original._opt
         self._inv_cache = {}
         functools.update_wrapper(self, original._func)
 
@@ -1672,6 +1815,7 @@ def compile(
     inverse=False,
     debug=False,
     parametric=False,
+    opt=1,
 ):
     """Decorator that compiles a quantum function for cached gate replay.
 
@@ -1742,6 +1886,7 @@ def compile(
             inverse=inverse,
             debug=debug,
             parametric=parametric,
+            opt=opt,
         )
 
     if func is not None:
@@ -1755,6 +1900,7 @@ def compile(
             inverse=inverse,
             debug=debug,
             parametric=parametric,
+            opt=opt,
         )
     # Called as @ql.compile() or @ql.compile(max_cache=N)
     return decorator
