@@ -180,6 +180,17 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ### Active
 
+## Current Milestone: v7.0 Compile Infrastructure
+
+**Goal:** Restructure `@ql.compile` from monolithic circuit generation to a multi-level compilation model with call graph DAG, selective sequence merging, and sparse circuit support for large programs.
+
+**Target features:**
+- Three-level opt_flag compilation (call graph only / selective merge / full expansion)
+- Call graph DAG with qubit dependency analysis and parallelism detection
+- Intelligent sequence merging for overlapping-qubit instruction pairs
+- DOT format call graph visualization
+- Sparse circuit arrays (auto opt-in for large circuits)
+
 **Deferred features (carry forward):**
 - Resource estimation for compiled functions — ADV-01
 - Serialization of compiled functions to disk — ADV-02
@@ -218,7 +229,7 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 **Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) -> Cython bindings -> Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
 
-**Current state:** v6.1 shipped — Quantum chess demo with manual quantum walk on chess game tree using raw primitives. Full feature set: dual arithmetic backends (QFT/Toffoli with Toffoli default), `@ql.compile` with parametric mode, `ql.grover()`, `ql.amplitude_estimate()`, `ql.count_solutions()`, QWalkTree with `detect()`, manual walk operators (chess_encoding + chess_walk modules), pixel-art visualization, Clifford+T decomposition, cross-backend verification.
+**Current state:** v7.0 in progress — Restructuring `@ql.compile` with multi-level compilation. Previous: v6.1 shipped quantum chess demo. Full feature set: dual arithmetic backends (QFT/Toffoli with Toffoli default), `@ql.compile` with parametric mode, `ql.grover()`, `ql.amplitude_estimate()`, `ql.count_solutions()`, QWalkTree with `detect()`, manual walk operators (chess_encoding + chess_walk modules), pixel-art visualization, Clifford+T decomposition, cross-backend verification.
 
 **Codebase:**
 - ~1,059,000 lines of code (604K C, 395K Python, 60K Cython)
@@ -395,4 +406,4 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Board qarrays separate from mega-register | Total qubit count exceeds 64-qubit qint limit | ✓ Good — multi-arg compile pattern |
 
 ---
-*Last updated: 2026-03-05 after v6.1 milestone*
+*Last updated: 2026-03-05 after v7.0 milestone start*
