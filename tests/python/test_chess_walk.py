@@ -1,6 +1,7 @@
 """Tests for chess quantum walk register scaffolding, board state replay, and local diffusion.
 
-Component tests for Phase 104 requirements WALK-01, WALK-02, and WALK-03.
+Component tests for Phase 104 requirements WALK-01, WALK-02, WALK-03,
+and Phase 105 requirements WALK-04, WALK-05, WALK-06.
 Tests stay within 17-qubit budget by testing registers in isolation.
 Derive/underive tests verify call order at circuit-generation level (no simulation).
 Diffusion tests verify circuit generation without simulation (qubit count exceeds budget).
@@ -9,7 +10,7 @@ Diffusion tests verify circuit generation without simulation (qubit count exceed
 import math
 import os
 import sys
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
@@ -548,3 +549,229 @@ class TestDiffusionAngles:
         assert callable(apply_diffusion)
         assert callable(evaluate_children)
         assert callable(uncompute_children)
+
+
+class TestRA:
+    """WALK-05: R_A operator composes diffusion at even depths, excluding root."""
+
+    def test_ra_max_depth_1(self):
+        """r_a() with max_depth=1: even depths are [0], but depth 0 skipped (leaves)."""
+        from chess_walk import r_a
+
+        with patch("chess_walk.apply_diffusion") as mock_diff:
+            r_a(
+                h_reg=MagicMock(),
+                branch_regs=MagicMock(),
+                board_arrs=MagicMock(),
+                oracle_per_level=MagicMock(),
+                move_data_per_level=MagicMock(),
+                max_depth=1,
+            )
+            # max_depth=1: even depths in range(0,2,2) = [0]
+            # depth 0 is skipped (leaves), depth 1 is root (skipped)
+            # So no calls.
+            mock_diff.assert_not_called()
+
+    def test_ra_max_depth_2(self):
+        """r_a() with max_depth=2: even depths [0, 2], skip 0 (leaves) and 2 (root)."""
+        from chess_walk import r_a
+
+        with patch("chess_walk.apply_diffusion") as mock_diff:
+            h = MagicMock()
+            br = MagicMock()
+            ba = MagicMock()
+            opl = MagicMock()
+            mdpl = MagicMock()
+            r_a(h, br, ba, opl, mdpl, max_depth=2)
+            # depth 0 skipped (leaves), depth 2 == max_depth (root, skipped)
+            mock_diff.assert_not_called()
+
+    def test_ra_max_depth_3(self):
+        """r_a() with max_depth=3: even depths [0, 2], skip 0 (leaves), call depth=2."""
+        from chess_walk import r_a
+
+        with patch("chess_walk.apply_diffusion") as mock_diff:
+            h = MagicMock()
+            br = MagicMock()
+            ba = MagicMock()
+            opl = MagicMock()
+            mdpl = MagicMock()
+            r_a(h, br, ba, opl, mdpl, max_depth=3)
+            # depth 0 skipped (leaves), depth 2 called, depth 3 is root (odd, not in range)
+            mock_diff.assert_called_once_with(2, h, br, ba, opl, mdpl, 3)
+
+    def test_ra_max_depth_4(self):
+        """r_a() with max_depth=4: even depths [0,2,4], skip 0 and 4 (root), call 2."""
+        from chess_walk import r_a
+
+        with patch("chess_walk.apply_diffusion") as mock_diff:
+            h = MagicMock()
+            br = MagicMock()
+            ba = MagicMock()
+            opl = MagicMock()
+            mdpl = MagicMock()
+            r_a(h, br, ba, opl, mdpl, max_depth=4)
+            # depth 0 skipped (leaves), depth 2 called, depth 4 == max_depth (root, skipped)
+            mock_diff.assert_called_once_with(2, h, br, ba, opl, mdpl, 4)
+
+
+class TestRB:
+    """WALK-06: R_B operator composes diffusion at odd depths plus root."""
+
+    def test_rb_max_depth_1(self):
+        """r_b() with max_depth=1: odd depths [1], root is 1 (odd, already included)."""
+        from chess_walk import r_b
+
+        with patch("chess_walk.apply_diffusion") as mock_diff:
+            h = MagicMock()
+            br = MagicMock()
+            ba = MagicMock()
+            opl = MagicMock()
+            mdpl = MagicMock()
+            r_b(h, br, ba, opl, mdpl, max_depth=1)
+            # max_depth=1 is odd, so root already in range(1,2,2)=[1]
+            mock_diff.assert_called_once_with(1, h, br, ba, opl, mdpl, 1)
+
+    def test_rb_max_depth_2(self):
+        """r_b() with max_depth=2: odd depths [1], root=2 added explicitly (even max_depth)."""
+        from chess_walk import r_b
+
+        with patch("chess_walk.apply_diffusion") as mock_diff:
+            h = MagicMock()
+            br = MagicMock()
+            ba = MagicMock()
+            opl = MagicMock()
+            mdpl = MagicMock()
+            r_b(h, br, ba, opl, mdpl, max_depth=2)
+            # range(1,3,2) = [1], then max_depth=2 is even so add depth=2
+            assert mock_diff.call_count == 2
+            mock_diff.assert_any_call(1, h, br, ba, opl, mdpl, 2)
+            mock_diff.assert_any_call(2, h, br, ba, opl, mdpl, 2)
+
+    def test_rb_max_depth_3(self):
+        """r_b() with max_depth=3: odd depths [1, 3], root=3 already included."""
+        from chess_walk import r_b
+
+        with patch("chess_walk.apply_diffusion") as mock_diff:
+            h = MagicMock()
+            br = MagicMock()
+            ba = MagicMock()
+            opl = MagicMock()
+            mdpl = MagicMock()
+            r_b(h, br, ba, opl, mdpl, max_depth=3)
+            # range(1,4,2) = [1, 3], root=3 is odd so already there
+            assert mock_diff.call_count == 2
+            calls = mock_diff.call_args_list
+            assert calls[0] == call(1, h, br, ba, opl, mdpl, 3)
+            assert calls[1] == call(3, h, br, ba, opl, mdpl, 3)
+
+    def test_rb_max_depth_4(self):
+        """r_b() with max_depth=4: odd depths [1, 3], root=4 added explicitly."""
+        from chess_walk import r_b
+
+        with patch("chess_walk.apply_diffusion") as mock_diff:
+            h = MagicMock()
+            br = MagicMock()
+            ba = MagicMock()
+            opl = MagicMock()
+            mdpl = MagicMock()
+            r_b(h, br, ba, opl, mdpl, max_depth=4)
+            # range(1,5,2) = [1, 3], then max_depth=4 is even so add depth=4
+            assert mock_diff.call_count == 3
+            calls = mock_diff.call_args_list
+            assert calls[0] == call(1, h, br, ba, opl, mdpl, 4)
+            assert calls[1] == call(3, h, br, ba, opl, mdpl, 4)
+            assert calls[2] == call(4, h, br, ba, opl, mdpl, 4)
+
+
+class TestHeightControlledCascade:
+    """WALK-04: Disjointness and completeness of R_A/R_B depth sets."""
+
+    def _get_depth_sets(self, max_depth):
+        """Helper: compute R_A and R_B depth sets for a given max_depth."""
+        # R_A: even depths, skip 0 (leaves) and max_depth (root)
+        r_a_depths = set()
+        for d in range(0, max_depth + 1, 2):
+            if d == 0:
+                continue  # skip leaves
+            if d == max_depth:
+                continue  # root belongs to R_B
+            r_a_depths.add(d)
+
+        # R_B: odd depths + root
+        r_b_depths = set(range(1, max_depth + 1, 2))
+        if max_depth % 2 == 0:
+            r_b_depths.add(max_depth)
+
+        return r_a_depths, r_b_depths
+
+    def test_disjointness_max_depth_1(self):
+        """R_A and R_B depth sets have no overlap for max_depth=1."""
+        ra, rb = self._get_depth_sets(1)
+        assert ra & rb == set()
+
+    def test_disjointness_max_depth_2(self):
+        """R_A and R_B depth sets have no overlap for max_depth=2."""
+        ra, rb = self._get_depth_sets(2)
+        assert ra & rb == set()
+
+    def test_disjointness_max_depth_3(self):
+        """R_A and R_B depth sets have no overlap for max_depth=3."""
+        ra, rb = self._get_depth_sets(3)
+        assert ra & rb == set()
+
+    def test_disjointness_max_depth_4(self):
+        """R_A and R_B depth sets have no overlap for max_depth=4."""
+        ra, rb = self._get_depth_sets(4)
+        assert ra & rb == set()
+
+    def test_coverage_max_depth_1(self):
+        """R_A union R_B covers depths 0..max_depth (minus leaves) for max_depth=1."""
+        ra, rb = self._get_depth_sets(1)
+        # Depth 0 is skipped (leaves) so coverage is {1..max_depth}
+        assert ra | rb == set(range(1, 2))
+
+    def test_coverage_max_depth_2(self):
+        """R_A union R_B covers depths 1..max_depth for max_depth=2."""
+        ra, rb = self._get_depth_sets(2)
+        assert ra | rb == set(range(1, 3))
+
+    def test_coverage_max_depth_3(self):
+        """R_A union R_B covers depths 1..max_depth for max_depth=3."""
+        ra, rb = self._get_depth_sets(3)
+        assert ra | rb == set(range(1, 4))
+
+    def test_coverage_max_depth_4(self):
+        """R_A union R_B covers depths 1..max_depth for max_depth=4."""
+        ra, rb = self._get_depth_sets(4)
+        assert ra | rb == set(range(1, 5))
+
+    def test_root_always_in_rb(self):
+        """Root (depth == max_depth) is always in R_B, never in R_A."""
+        for md in range(1, 6):
+            ra, rb = self._get_depth_sets(md)
+            assert md in rb, f"Root {md} not in R_B for max_depth={md}"
+            assert md not in ra, f"Root {md} in R_A for max_depth={md}"
+
+    def test_circuit_gen_smoke_ra_rb(self, clean_circuit):
+        """Smoke test: r_a and r_b run without error on real chess position."""
+        from chess_encoding import encode_position
+        from chess_walk import (
+            create_branch_registers,
+            create_height_register,
+            prepare_walk_data,
+            r_a,
+            r_b,
+        )
+
+        max_depth = 1
+        data = prepare_walk_data(wk_sq=4, bk_sq=60, wn_squares=[10], max_depth=max_depth)
+        h_reg = create_height_register(max_depth)
+        branch_regs = create_branch_registers(max_depth, data)
+        pos = encode_position(4, 60, [10])
+        board_arrs = (pos["white_king"], pos["black_king"], pos["white_knights"])
+        oracle_per_level = [d["apply_move"] for d in data]
+
+        # Both should complete without error
+        r_a(h_reg, branch_regs, board_arrs, oracle_per_level, data, max_depth)
+        r_b(h_reg, branch_regs, board_arrs, oracle_per_level, data, max_depth)
