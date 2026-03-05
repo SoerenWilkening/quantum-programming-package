@@ -1,182 +1,181 @@
 # Project Research Summary
 
-**Project:** Quantum Assembly v6.0 — Quantum Walk Primitives (Montanaro 2015 Backtracking)
-**Domain:** Quantum programming framework — discrete-time quantum walk for constraint satisfaction speedup
-**Researched:** 2026-02-26
-**Confidence:** HIGH (stack and architecture verified from codebase; algorithm from peer-reviewed literature; reference implementation studied in Qrisp)
+**Project:** Quantum Assembly v7.0 -- Multi-Level Compile Infrastructure
+**Domain:** Quantum circuit compilation (call graph DAG, sequence merging, sparse circuit arrays)
+**Researched:** 2026-03-05
+**Confidence:** HIGH
 
 ## Executive Summary
 
-v6.0 implements Montanaro's 2015 backtracking speedup algorithm by adding a new `quantum_walk` module (~400-600 lines) to the existing Quantum Assembly framework. The entire implementation is pure Python composing existing gate primitives — zero new C-level gates, zero new Cython modules, and zero new external dependencies. Every required gate (Ry, CRy, H, CH, X, CX, MCZ, MCX, P, CP) already exists in the C backend and is accessible via `_gates.pyx`. The core work is algorithmic: constructing the local diffusion operator D_x (a node-weighted reflection), the walk operators R_A and R_B (parity-partitioned parallel diffusions), and the detection algorithm (iterative phase estimation on the walk step). A Qrisp reference implementation was studied in detail and the critical patterns — one-hot height register, parity-controlled diffusion, phi = 2*arctan(sqrt(d)) rotation angle — have been validated against Montanaro's original paper and the Qrisp Sudoku paper.
+The v7.0 milestone adds multi-level compilation to the existing `@ql.compile` decorator, introducing three capabilities: a call graph DAG that captures program structure without full circuit expansion (opt_flag=1), selective sequence merging that eliminates redundant QFT/IQFT pairs across compiled function boundaries (opt_flag=2), and sparse circuit arrays for large circuits (independent track). The recommended approach is LLVM-style optimization levels -- opt_flag=1 is cheap structural analysis, opt_flag=2 is selective inlining with gate cancellation, and opt_flag=3 is the existing full-expansion behavior relabeled. No major quantum framework (Qiskit, TKET, Cirq, PennyLane) exposes multi-level compilation as a user-facing feature, making this a genuine differentiator.
 
-The recommended approach is a 3-file module split mirroring the existing grover.py/oracle.py/diffusion.py split: `quantum_walk.py` (public API and detection algorithm), `quantum_walk_tree.py` (QuantumBacktrackingTree class managing the one-hot height + QuantumArray branch registers), and `quantum_walk_diffusion.py` (D_x operator, R_A/R_B via height-parity-controlled diffusion). The walk step U = R_B * R_A is wrapped in `@ql.compile` for caching and to enable the controlled variant needed for phase estimation. The 17-qubit simulator ceiling constrains demo scope to a binary tree of depth 2-3 with a simple SAT predicate (10-11 qubits total), which leaves comfortable headroom for predicate ancillae.
+The stack situation is unusually favorable: zero new core dependencies are needed. rustworkx (already installed, Rust-native DAG library used by Qiskit itself) provides all graph primitives. scipy.sparse (already installed) handles large gate arrays. NumPy bitmasks give O(1) qubit overlap detection. The only new optional dependency is pydot for DOT image rendering. All new code is pure Python in compile.py, with no changes to the C backend or Cython bridge for the DAG and merge features. Sparse circuit arrays are the one exception -- they require C-level modifications to replace the dense `gate_index_of_layer_and_qubits` array with a hash map, but this is an independent track that can ship separately.
 
-The highest-risk integration hazard is the interaction between the walk operator's internal compute-use-uncompute predicate pattern and the framework's LIFO scope-based automatic uncomputation. Unlike Grover's oracle (a self-contained block), the walk predicate must be evaluated, used as a diffusion control, and then uncomputed — all within a single operator scope — in a pattern the framework's auto-uncompute system was not designed for. The mitigation is to build the walk operator below the scope-tracking layer using `_allocate_qubit()` / `_deallocate_qubits()` directly, or to compile the predicate with `@ql.compile` and call `.inverse()` explicitly. A second critical silent-failure risk is incorrect amplitude coefficients in the local diffusion — using 1/sqrt(d) instead of 1/sqrt(d+1) (parent included in count) produces a structurally valid circuit that silently destroys the O(sqrt(T)) speedup guarantee with no error output.
+The primary risk is silent quantum correctness bugs. Unlike classical compilation, a missed qubit dependency or reordered gate sequence produces a valid-looking circuit that computes the wrong quantum state with no runtime error. The top three pitfalls are: (1) treating control qubits as read-only in dependency analysis (classical intuition that is wrong for quantum -- phase kickback makes all qubit interactions bidirectional), (2) merge operations violating per-qubit gate ordering, and (3) ancilla lifecycle corruption when forward-inverse pairs are split during DAG restructuring. All three are preventable with explicit invariant checks and statevector verification tests against Qiskit simulation.
 
 ## Key Findings
 
 ### Recommended Stack
 
-No new dependencies are required. See `.planning/research/STACK.md` for full codebase-verified analysis.
+Zero new core dependencies. Everything needed is already installed. See `.planning/research/STACK.md` for full analysis.
 
 **Core technologies:**
-- Python 3.11+: new `quantum_walk.py` module — algorithmic composition of existing emit_* functions into walk operators; no new primitives
-- Cython `_gates.pyx` (existing): gate emission (emit_ry, emit_h, emit_x, emit_mcz, emit_p) — all required gate primitives confirmed present
-- C backend gate.h (existing): ry, cry, h, ch, x, cx, mcz, mcx, p, cp — complete coverage verified; no additions required
-- NumPy (existing): angle calculations (arctan, sqrt) for diffusion amplitudes — no new features needed
-- Qiskit + qiskit-aer (existing): verification via sim_backend.py — identical pipeline to Grover/amplitude estimation verification
-- `@ql.compile` (existing): walk step caching and controlled variant derivation for phase estimation powers
+- **rustworkx 0.17.1** (installed): Call graph DAG via `PyDAG`, topological sort, parallelism detection via `topological_generations()`, cycle prevention -- 10-100x faster than NetworkX, same library Qiskit uses internally
+- **scipy.sparse** (installed): `dok_array` for incremental gate capture, `csr_array` for fast row-sliced replay -- used only for Python-level virtual gate lists exceeding 50K gates
+- **NumPy uint64 bitmasks** (installed): O(1) qubit overlap detection for merge decisions -- scalar path for <64 virtual qubits (common case), ndarray path for wider circuits
+- **pydot >=3.0.0** (NEW, optional): DOT image rendering via `rustworkx.visualization.graphviz_draw()` -- pure Python, lazy-imported, not a hard runtime dependency
+
+**What NOT to add:** NetworkX (slower, redundant with rustworkx), pygraphviz (requires C compiler/SWIG), pandas (massive overhead for gate storage), any new Cython bindings (Python-level is sufficient for DAG traversal).
 
 ### Expected Features
 
-See `.planning/research/FEATURES.md` for the full feature landscape including dependency graph.
+See `.planning/research/FEATURES.md` for full analysis including competitor comparison and dependency tree.
 
-**Must have (table stakes — v6.0 MVP):**
-- Tree state encoding (one-hot height register + QuantumArray branch registers) — foundational; every other feature depends on this decision
-- accept/reject predicate interface — defines the backtracking tree; predicates must be mutually exclusive and uncomputable with zero ancilla delta
-- Local diffusion operator D_x (uniform branching) — core building block; amplitude angle phi = 2*arctan(sqrt(d)); root uses different formula
-- Walk operators R_A and R_B — parity-partitioned parallel diffusions; R_A on even-depth nodes, R_B on odd-depth nodes plus root reflection
-- Walk step U = R_B * R_A — compiled and cacheable; controlled variant required for phase estimation
-- Detection algorithm — iterative power method on walk step; threshold probability > 3/8 indicates solution exists
-- Python API `ql.quantum_walk()` — API style consistent with `ql.grover()`; returns WalkResult with `.has_solution` boolean
-- Demo + Qiskit verification — binary tree depth 2-3, 2-variable SAT predicate, within 17-qubit budget
+**Must have (v7.0 launch -- P1):**
+- opt_flag parameter on `@ql.compile` -- the API surface for selecting compilation level
+- opt_flag=1: Call graph DAG with qubit overlap edges -- the core new abstraction
+- opt_flag=3: Full expansion (current behavior, relabeled) -- backward compatibility
+- Call graph node metadata (function name, gate count, qubit set, depth) -- makes DAG actionable
+- DOT-format call graph export -- makes DAG visible
+- Qubit overlap analysis -- foundation for both merging and parallelism detection
 
-**Should have (v6.x after core is validated):**
-- Variable branching support (dynamic d(x)) — required for real CSP instances where rejection prunes differently at each node; deferred due to very high complexity (child counting + controlled Ry lookup table)
-- Subspace optimization — halves circuit depth by allowing reject to return True on non-algorithmic states; requires specific predicate properties
-- Solution finding via hybrid classical-quantum Algorithm 2 — recursive subtree detection; depends on detection working correctly first
-- Circuit resource estimator — computes qubit count before construction; fail-fast before hitting simulation ceiling
+**Should have (v7.x -- P2):**
+- opt_flag=2: Selective sequence merging -- the killer feature (QFT/IQFT cancellation across function boundaries)
+- Merge cost estimation ("merging f+g saves 847 gates") -- transparency for merge decisions
+- Parallelism detection from call graph -- free information from overlap analysis
+- Compilation report with per-level stats -- extends existing debug mode
 
-**Defer (v7+):**
-- General graph quantum walks (non-tree) — fundamentally different mathematical framework; separate future module
-- CSP-to-predicate compiler (auto CNF to accept/reject) — encoding optimization is a research problem; let users control encoding
-- Fault-tolerant walk operators with T-count optimization — need correct operators before optimizing them
+**Defer (v8+ -- P3):**
+- Sparse circuit arrays at C level -- independent track, needs careful benchmarking of hash map vs. array indexing crossover
+- Cross-function merge chains (A+B+C in one pass) -- needs real-world merge patterns to validate
 
-**Anti-features explicitly rejected:**
-- Continuous-time quantum walk (CTQW) — incompatible mathematical framework requiring Hamiltonian simulation
-- IQAE reuse for detection — IQAE convergence assumes Grover operator structure; walk operator eigenvalue analysis is different; would give incorrect confidence intervals
-- QPE with arbitrary precision — each precision qubit costs one register qubit under the 17-qubit ceiling
+**Anti-features to avoid:** Automatic opt_flag selection (hides tradeoffs), cross-function global optimization (combinatorial explosion), lazy/deferred circuit construction (changes execution model), custom user-defined merge strategies (backward-compat burden).
 
 ### Architecture Approach
 
-The quantum walk module is a new, self-contained layer in the Python frontend that composes existing Cython/C infrastructure. No existing module is modified except `__init__.py` for exports. See `.planning/research/ARCHITECTURE.md` for full component breakdown, data flow diagrams, and integration point tables.
+The architecture follows a "capture-then-analyze" pattern that preserves the existing stateless C backend. Gates flow through the normal `add_gate()` path during capture, are extracted into `CompiledBlock` objects (already existing), and then registered in a Python-level `CallGraphDAG`. For opt_flag=1, the DAG is informational alongside the fully-expanded circuit. For opt_flag=2, the DAG drives merge decisions, after which a fresh circuit is built from merged blocks via the existing `inject_remapped_gates()` path. See `.planning/research/ARCHITECTURE.md` for full component inventory and data flows.
 
 **Major components:**
-1. `quantum_walk.py` — public API (`ql.quantum_walk()`, `ql.detect_solution()`), detection/search algorithms, adaptive walk iteration, simulation/measurement layer, `__init__.py` export point
-2. `quantum_walk_tree.py` — `QuantumBacktrackingTree` class: allocates branch_qa (ql.array, one entry per depth level) and one-hot height register (max_depth+1 qubits via `_allocate_qubit()`), manages node initialization and height qubit access interface
-3. `quantum_walk_diffusion.py` — D_x construction (Ry + MCZ + Ry_dag), R_A/R_B via height-parity-controlled diffusion using `with h_qubit:` controlled context, predicate evaluation and explicit uncomputation via capture-reverse pattern
+1. **CallGraphDAG** (new, Python) -- rustworkx `PyDAG` wrapper with `SequenceNode` entries, qubit overlap edges, topological sort, and DOT export
+2. **MergeHeuristic** (new, Python) -- decision logic for which sequence pairs to merge based on qubit overlap ratio and estimated gate reduction
+3. **opt_flag routing** (modified, Python) -- `CompiledFunc.__call__()` branches on opt_flag to build DAG (1), merge and rebuild (2), or expand directly (3, existing)
+4. **sparse_layer_t** (new, C, deferred) -- open-addressing hash map replacing dense `gate_index_of_layer_and_qubits` for large circuits
 
-**Key architectural decisions validated by research:**
-- All Python, no new C code — walk is compositional at 3-5 depth levels, not computational at bit-width scale; Python overhead is negligible
-- One-hot height encoding preferred over binary — single-qubit control per depth level vs. multi-qubit equality check; matches Qrisp reference
-- Controlled context (`with qbool:`) for parity-controlled diffusion — auto-derives CRy from Ry, CH from H; no explicit controlled gate emission needed
-- Predicate built below LIFO scope tracking — walk operator manages compute-use-uncompute cycle directly with `_allocate_qubit()` / `_deallocate_qubits()`
+**Key architectural decisions:**
+- opt_flag=1 does NOT suppress gates from entering the circuit -- it builds the DAG alongside normal expansion (avoids modifying C backend)
+- Sparse arrays are Python-level only for v7.0; C-level sparse is deferred to v8+
+- Per-gate Cython boundary crossing stays as-is (no batch injection needed for v7.0)
+- Merge operates on `CompiledBlock` virtual gate lists, not on the physical circuit
 
 ### Critical Pitfalls
 
-See `.planning/research/PITFALLS.md` for all 12 pitfalls with severity ratings, recovery costs, and phase-to-address mapping.
+See `.planning/research/PITFALLS-COMPILE-INFRASTRUCTURE.md` for all 7 pitfalls with recovery strategies. Top five:
 
-1. **Wrong amplitude coefficients in D_x (silent failure)** — The local diffusion superposition is |psi_x> = 1/sqrt(d(x)+1) * (|x> + sum children); the "+1" counts the parent node. Using 1/sqrt(d) or 1/sqrt(max_d) instead produces structurally valid circuits that silently destroy the O(sqrt(T)) speedup guarantee. Prevention: unit test that prepares |psi_x> and verifies amplitudes via statevector simulation before any walk operator integration. This test must pass before Phase 2 is considered complete.
+1. **Incomplete qubit dependency tracking** -- Control qubits are NOT read-only in quantum circuits (phase kickback). All qubits in target+controls must be treated as full dependencies. Two functions sharing ANY qubit must be sequentially ordered. Test with superposition inputs, not just computational basis states.
 
-2. **Predicate ancilla leak into LIFO uncomputation (double-uncompute)** — The walk operator evaluates, uses, and uncomputes the predicate within a single operator scope. The framework's scope-based auto-uncompute fires at scope exit, causing double-uncomputation of the predicate ancillae and corrupting the walk state. Prevention: use `_allocate_qubit()` / `_deallocate_qubits()` directly inside the walk operator (bypassing scope tracking), or compile the predicate with `@ql.compile` and call `.inverse()` explicitly. Never construct qint/qbool inside walk operator scopes.
+2. **Merge violates gate ordering** -- Interleaving gates from two sequences that share qubits can reorder operations on the same qubit. Must build per-qubit dependency chains and perform topological merge. Post-merge validation: extract per-qubit gate subsequence and compare to original ordering.
 
-3. **R_A and R_B register overlap (walk operator invalid)** — If the branch path uses a single shared integer register, R_A and R_B are not disjoint and the walk operator does not implement the correct product of reflections. Prevention: QuantumArray with one register entry per depth level (branch_qa[depth]) enforces disjointness structurally. Validate with qubit-index enumeration test verifying zero overlap between R_A and R_B qubit sets.
+3. **Ancilla lifecycle corruption** -- Forward-inverse pairs (`inverse=True` functions) must be treated as atomic scheduling units in the DAG. Never split them. Ancilla qubits must not appear in other nodes between forward and inverse calls.
 
-4. **Qubit budget explosion under 17-qubit ceiling** — Height register (max_depth+1 one-hot) + branch register (max_depth * ceil(log2(d))) + predicate ancillae + precision qubits for detection can easily exceed 17 qubits for depth >= 4 trees. Prevention: implement resource estimator in Phase 1 that computes exact qubit count before any circuit construction; target binary tree of depth 2-3 as demo.
+4. **Parametric topology breaks after merge** -- Merging changes gate ordering, which changes topology signatures. Parametric comparison must happen BEFORE merge on individual blocks, not after.
 
-5. **Root node diffusion uses a different amplitude formula** — The root uses phi_root = 2*arctan(sqrt(N*d)) where N is a tree-size tuning parameter, not the standard phi = 2*arctan(sqrt(d)) used for all other nodes. Using uniform angles for all nodes corrupts the spectral gap. Prevention: implement root diffusion as an explicit separate code path controlled on h[max_depth]; test independently via statevector amplitude verification.
+5. **Breaking 118 existing compile tests** -- New features must be opt-in. Default `@ql.compile` (no new flags) must produce identical gate sequences to v6.1. Never batch-update test expectations.
 
 ## Implications for Roadmap
 
-Based on combined research, 5 phases are suggested. The ARCHITECTURE.md research provides an explicit build order; the PITFALLS.md maps each pitfall to the phase where it must be addressed. All Phase 1 decisions are architectural — changing them later requires rewrites.
+Based on combined research, the v7.0 milestone naturally splits into 5 phases with clear dependency ordering. Sparse circuit arrays (originally in scope) should be deferred to v8+ -- they require C-level changes that are independent of and riskier than the Python-level compilation features.
 
-### Phase 1: Tree Encoding Foundation and Module Architecture
+### Phase 1: opt_flag API + Call Graph DAG Foundation
+**Rationale:** Everything depends on this. The opt_flag parameter is the API surface. The call graph DAG is the core data structure. Qubit overlap analysis is needed by both DAG ordering and later merge decisions.
+**Delivers:** `@ql.compile(opt_flag=1)` producing a `CallGraphDAG` with nodes (wrapping existing `CompiledBlock`), qubit overlap edges, and topological ordering. opt_flag=3 relabeled as current behavior.
+**Addresses:** opt_flag parameter, opt_flag=1 call graph DAG, opt_flag=3 backward compat, qubit overlap analysis, call graph node metadata (all P1 features)
+**Avoids:** Pitfall 1 (qubit dependency tracking -- design qubit sets correctly from day one), Pitfall 3 (ancilla atomicity -- encode forward-inverse pairing in DAG design), Pitfall 5 (cache key -- include opt_flag in cache key from start), Pitfall 7 (controlled variants -- define propagation strategy)
+**Stack:** rustworkx PyDAG, NumPy bitmasks
 
-**Rationale:** The tree register layout (QuantumArray branch_qa + one-hot height) is foundational. Every subsequent component depends on it. Four pitfalls (R_A/R_B overlap, qubit budget, uncomputation conflict, encoding convention) require architectural decisions that cannot be retrofitted. The predicate interface design (accept/reject callables, mutual exclusion validation, ancilla delta = 0 constraint) must also be settled before any gate emission code is written. This phase produces data structures and scaffolding only — no gate emission.
-**Delivers:** `QuantumBacktrackingTree` class with register allocation and initialization; three-file module scaffold; resource estimator (outputs exact qubit count for given tree parameters); predicate interface specification with classical mutual exclusion validation; height/depth convention documented and enforced throughout
-**Addresses:** Tree state encoding (FEATURES.md table stakes); accept/reject predicate interface (FEATURES.md table stakes)
-**Avoids:** Pitfall 4 (R_A/R_B overlap — QuantumArray per level enforces disjointness), Pitfall 5 (qubit budget — resource estimator built here), Pitfall 6 (uncomputation conflict — raw qubit allocation strategy decided here), Pitfall 9 (encoding convention — height-based, one-hot, established in this phase), Pitfall 10 (accept/reject mutual exclusion — validated at API level before circuit construction)
+### Phase 2: DOT Visualization + Compilation Report
+**Rationale:** Once the DAG exists, making it visible is low-cost and high-value. DOT export is trivial string generation. Compilation report extends existing debug mode. Having visualization available before implementing merging makes merge debugging dramatically easier.
+**Delivers:** `call_graph.to_dot()` producing valid DOT strings with node labels (function name, gate count, qubit set) and edge labels (shared qubit count). Compilation stats at each opt_flag level. Parallelism detection with color-coding of independent nodes.
+**Addresses:** DOT-format export, parallelism detection, compilation report (P1/P2 features)
+**Avoids:** Pitfall checklist item "DOT missing edge labels" -- include qubit dependency labels from the start
+**Stack:** Pure Python string generation (no pydot needed for DOT text)
 
-### Phase 2: Local Diffusion Operator D_x
+### Phase 3: Selective Sequence Merging (opt_flag=2)
+**Rationale:** Depends on Phase 1 (DAG with qubit overlaps). This is the highest-complexity, highest-value feature. QFT/IQFT cancellation across function boundaries is the killer differentiator that no other quantum framework offers.
+**Delivers:** `@ql.compile(opt_flag=2)` that identifies overlapping-qubit sequence pairs, merges their gate lists, runs existing `_optimize_gate_list()` on the junction, and rebuilds the circuit from merged blocks.
+**Addresses:** opt_flag=2 selective merging, merge cost estimation (P2 features)
+**Avoids:** Pitfall 2 (gate ordering -- per-qubit dependency chains with topological merge), Pitfall 3 (ancilla corruption -- skip merge for functions with ancilla tracking), Pitfall 4 (parametric topology -- compare topology before merge, not after)
+**Stack:** Existing `_optimize_gate_list()`, `_remap_gates()`, `inject_remapped_gates()` -- all reused
 
-**Rationale:** D_x is the core building block of R_A, R_B, and the walk step. It must be verified correct in isolation before it is composed into larger operators. The amplitude coefficient formula (phi = 2*arctan(sqrt(d))) and the root special case (phi_root with tuning parameter N) must each be validated via statevector tests before any walk operator testing begins. The predicate compute-use-uncompute pattern is established in this phase as the canonical approach for all walk operator internals.
-**Delivers:** `_emit_local_diffusion()` for uniform branching with correct phi formula; root diffusion as a separate code path controlled on h[max_depth]; predicate compute-use-uncompute pattern (evaluate, use as diffusion control, uncompute via `@ql.compile` inverse or raw capture-reverse); statevector tests verifying |psi_x> amplitudes at 1/sqrt(d(x)+1) tolerance
-**Uses:** emit_ry, emit_h, emit_x, emit_mcz from `_gates.pyx`; `_allocate_qubit()` / `_deallocate_qubits()` from `_core.pyx`; `with qbool:` height-controlled context
-**Avoids:** Pitfall 1 (wrong amplitudes — verified here before integration), Pitfall 3 (predicate uncomputation — canonical pattern established), Pitfall 11 (root special case — implemented and tested here)
+### Phase 4: Merge Validation + End-to-End Testing
+**Rationale:** After merge implementation, rigorous correctness validation is essential. Quantum compilation bugs are silent -- wrong circuits produce valid-looking but incorrect results. This phase is about proving correctness via Qiskit simulation.
+**Delivers:** Statevector comparison tests (merged vs. sequential execution), per-qubit ordering assertions, parametric replay tests at each opt_flag level, full 118-test regression suite passing.
+**Addresses:** Pitfall 6 (existing test regression), all "Looks Done But Isn't" checklist items from pitfalls research
+**Avoids:** Shipping silently incorrect merge behavior
 
-### Phase 3: Walk Operators R_A, R_B, and Compiled Walk Step
-
-**Rationale:** R_A and R_B compose from the verified D_x. The parity-controlled diffusion pattern — allocate parity qubit, XOR height qubits for target parity, apply D_x in controlled context, uncompute parity qubit — is the key architectural insight from the Qrisp reference. The walk step U = R_B * R_A is then wrapped in `@ql.compile` for caching and controlled variant generation required for phase estimation.
-**Delivers:** `emit_R_A()` and `emit_R_B()` using parity-controlled diffusion; composed walk step U = R_B * R_A; `@ql.compile`-wrapped walk operator with controlled variant accessible for phase estimation; qubit disjointness test confirming R_A and R_B have zero qubit-index overlap; circuit depth and gate count profile of a single walk step
-**Implements:** R_A/R_B operators (ARCHITECTURE.md component 3); walk step U (FEATURES.md table stakes)
-**Avoids:** Pitfall 4 (disjointness verified here via qubit index enumeration), Pitfall 12 (circuit depth — profiled before detection is layered on to avoid surprises)
-
-### Phase 4: Detection Algorithm and Public API
-
-**Rationale:** Detection (Montanaro Algorithm 1) builds on a verified walk step. This phase implements the iterative power-method approach — applying walk step powers and measuring — rather than full QPE (which requires inverse QFT and precision qubits that stress the 17-qubit ceiling). The public `ql.quantum_walk()` API is finalized here, with unambiguous naming distinguishing boolean detection from solution-path finding.
-**Delivers:** Detection algorithm (iterative, 2-3 precision bits, threshold > 3/8); `ql.quantum_walk()` and `ql.detect_solution()` public API; `WalkResult` type with `.has_solution` boolean; `__init__.py` exports; API documentation clearly distinguishing detection (exists?) from solution finding (which path?); comparison of iterative power method against classical brute-force on a known-solution instance
-**Uses:** Compiled walk step controlled variant; sim_backend.simulate(); to_openqasm() export pipeline
-**Avoids:** Pitfall 7 (detection vs. finding confusion — API naming enforced), Pitfall 8 (phase estimation precision — empirically tuned here against known instances)
-
-### Phase 5: End-to-End Verification and Demo
-
-**Rationale:** All components tested in isolation need an integration test on a real CSP instance. A binary tree of depth 3 (8 leaves, 15 total nodes) with a 2-variable SAT predicate targets 10-11 qubits total, comfortably within the 17-qubit ceiling. Qiskit statevector verification provides the confidence signal that the walk is mathematically correct end-to-end. Circuit depth and gate count analysis at this scale informs the priority and approach for future subspace optimization work.
-**Delivers:** End-to-end demo (2-variable SAT, binary tree depth 3); Qiskit statevector verification confirming detection probability; test suite covering tree encoding, D_x amplitudes, R_A/R_B disjointness, walk convergence, detection accuracy on known-solution instances; circuit depth and gate count profile for the demo instance; documented qubit budget for depth 4 (to inform v6.x scope)
-**Addresses:** Demo + Qiskit verification (FEATURES.md table stakes); full integration of all prior phases
+### Phase 5: Sparse Circuit Arrays (Deferred -- v8+ Candidate)
+**Rationale:** Independent of the opt_flag system. Requires C-level modifications (hash map in `circuit_t`, 6 access sites in optimizer.c). High risk of performance regression for small circuits. Should only be pursued when real-world workloads demonstrate memory pressure from the dense `gate_index_of_layer_and_qubits` array.
+**Delivers:** Auto-transition from dense to sparse index storage when memory exceeds threshold. Same circuit output, reduced memory for large circuits (2000+ qubits).
+**Addresses:** Sparse circuit arrays (P3 feature)
+**Avoids:** Anti-pattern of sparse-by-default (hash lookups are 3-5x slower than array indexing for small circuits)
+**Stack:** C-level open-addressing hash map with linear probing
 
 ### Phase Ordering Rationale
 
-- Phases 1 through 5 follow strict dependency order: tree encoding -> diffusion -> walk operators -> detection -> integration
-- Phase 1 architectural decisions (register layout, predicate interface, uncomputation strategy) are non-negotiable; five of twelve pitfalls require them to be settled before any gate emission code is written
-- Variable branching (v6.x) is explicitly excluded from v6.0 scope: it requires counting valid children per node (evaluating reject on all d potential children), a popcount circuit, and controlled-Ry conditioned on the count register — a separate, very-high-complexity feature correctly deferred
-- Solution finding (Algorithm 2) deferred similarly: it is a classical outer loop calling detection n times; correctly built after detection is independently verified
-- No bug fixes required before v6.0 starts, unlike v5.0 — the existing infrastructure is sound for this addition
+- Phases 1-2-3-4 form a strict dependency chain: opt_flag API before DAG, DAG before visualization, DAG with overlaps before merging, merging before validation.
+- Phase 5 is independent: sparse arrays touch only the C backend and can ship in any order relative to Python-level features. Deferring it reduces v7.0 scope and risk.
+- Phase 2 (DOT) comes before Phase 3 (merge) deliberately: having visualization available makes merge debugging dramatically easier. Build the debuggability tooling before the complex feature.
+- Phase 4 (validation) is a separate phase, not an afterthought: quantum correctness bugs are silent, so a dedicated validation phase with Qiskit simulation ensures merged circuits compute the right quantum states.
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 2 (Local Diffusion — root amplitude):** The root node amplitude formula phi_root involves a tuning parameter N whose exact value differs between Algorithm 1 (detection) and Algorithm 2 (finding). PITFALLS.md rates confidence MEDIUM on this specific formula. Validate the exact phi_root formula against Montanaro section 2 / Algorithm 1 and cross-reference against Qrisp `backtracking_tree.py` source before writing any gate emission code.
-- **Phase 4 (Detection — iterative vs QPE approach):** STACK.md, FEATURES.md, and ARCHITECTURE.md reached slightly different conclusions on the detection approach. STACK.md recommends adapting IQAE; FEATURES.md warns against it (different eigenvalue structure); ARCHITECTURE.md recommends the iterative power method. The iterative power method is the lower-risk path but loses theoretical precision guarantees. Resolve during Phase 4 planning with an explicit decision record.
+- **Phase 3 (Selective Merging):** HIGH complexity. Merge heuristic thresholds (overlap ratio, minimum benefit) need tuning against real QFT arithmetic workloads. The interaction between merging and parametric compilation is subtle. Recommend `/gsd:research-phase` before implementation.
+- **Phase 5 (Sparse Arrays):** C-level hash map design, dense-to-sparse transition strategy, and performance crossover benchmarking all need investigation. Recommend `/gsd:research-phase` if this phase is pulled into v7.0.
 
-Phases with standard patterns (skip additional research):
-- **Phase 1 (Tree Encoding):** One-hot height + QuantumArray branch encoding follows Qrisp's validated approach. Register allocation uses existing qint/qarray/`_allocate_qubit()` patterns. No new mechanisms.
-- **Phase 3 (Walk Operators):** Parity-controlled diffusion via `with qbool:` is a direct application of the existing controlled context mechanism. `@ql.compile` wrapping follows established patterns from grover.py and amplitude_estimation.py.
-- **Phase 5 (Verification):** Qiskit verification pipeline is identical to existing Grover and amplitude estimation verification. No new infrastructure needed.
+Phases with standard patterns (skip research-phase):
+- **Phase 1 (Call Graph DAG):** Well-documented. rustworkx API is straightforward. Existing `CompiledBlock` provides all needed data. Direct mapping from code analysis to implementation.
+- **Phase 2 (DOT Visualization):** Trivial string generation. DOT format is well-specified. No unknowns.
+- **Phase 4 (Validation):** Standard testing patterns. Qiskit statevector comparison is established practice in this codebase.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Codebase directly inspected: all required gates confirmed in gate.h, all emit_* functions confirmed in _gates.pyx. Zero new dependencies verified. |
-| Features | MEDIUM | Algorithm well-established in literature; MVP feature set is clear and conservative. Variable branching deferred correctly given very high complexity. Anti-feature analysis (especially IQAE misuse for detection) is a valuable and actionable finding. |
-| Architecture | HIGH | Codebase-verified integration points; Qrisp reference implementation studied in detail; explicit data flow validated against existing module patterns; proposed 3-file split mirrors grover/oracle/diffusion split exactly. |
-| Pitfalls | HIGH | 7 critical + 5 moderate pitfalls identified; each has specific prevention, phase-to-address mapping, recovery cost, and warning signs. Integration pitfalls grounded in direct codebase analysis. Algorithmic pitfalls cross-referenced with Qrisp implementation and Martiel 2019. |
+| Stack | HIGH | All core libraries already installed and verified. Zero new dependencies for core features. Versions confirmed via pip list. |
+| Features | HIGH | Classical compiler analogies (LLVM -O levels) well-established. Competitor analysis confirms no existing framework offers user-facing multi-level compilation. Feature dependencies are clear. |
+| Architecture | HIGH | Based on direct source analysis of compile.py (1700+ lines), _core.pyx (1011 lines), optimizer.c (217 lines). Integration points precisely identified with line numbers. |
+| Pitfalls | HIGH | Based on direct codebase analysis plus quantum physics fundamentals (phase kickback). 118 existing tests provide concrete regression baseline. |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Root diffusion amplitude formula (phi_root):** Montanaro's exact root weighting coefficient depends on a parameter N whose relationship to tree size and detection mode is described in section 2 but was not fully confirmed due to PDF parsing limitations during research. PITFALLS.md rates this MEDIUM confidence. Resolve in Phase 2 planning by re-reading Montanaro's Definition 1 and Theorem 1 and comparing to Qrisp's `psi_prep` function in `backtracking_tree.py`.
-- **Detection approach (iterative power method vs. IQAE adaptation):** Three research files give slightly different recommendations. The iterative power method (varying walk step count, measuring, using majority vote) is safer to implement because it avoids eigenvalue analysis complications, but it does not provide formal precision guarantees. Resolve with an explicit decision during Phase 4 planning before any detection code is written.
-- **Predicate ancilla qubit count:** Total qubit count estimates assume 2-4 predicate ancillae, but the actual count depends on the predicate's arithmetic complexity. Resolve during Phase 5 demo design by choosing the specific predicate first, then running the resource estimator (built in Phase 1) to verify budget before committing to the demo instance.
+- **Merge heuristic thresholds:** The optimal qubit overlap ratio and minimum gate reduction thresholds for merge decisions are not known. Need empirical tuning against real QFT arithmetic circuits (quantum walk adders, Grover's oracle arithmetic). Address during Phase 3 planning.
+- **opt_flag=2 circuit rebuild cost:** Merging requires building the circuit twice (capture + rebuild). For large circuits, this doubles construction time. Need to measure whether the gate reduction from merging justifies the rebuild cost. Address with benchmarks during Phase 3 implementation.
+- **Controlled variant propagation through call graph:** The exact mechanism for deriving controlled variants of call graph nodes (recursive propagation vs. flatten-then-control) needs design work. Address during Phase 1 detailed design.
+- **Sparse array performance crossover:** At what circuit size does hash map lookup become cheaper than dense array allocation? Needs benchmarking on target hardware. Address if Phase 5 is scheduled.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- [Montanaro 2015 — Quantum walk speedup of backtracking algorithms (arXiv:1509.02374)](https://arxiv.org/abs/1509.02374) — foundational algorithm: D_x definition, R_A/R_B, Algorithm 1 (detection), Algorithm 2 (finding), spectral gap theorem
-- [Theory of Computing published version (v014a015)](https://theoryofcomputing.org/articles/v014a015/) — peer-reviewed version of Montanaro
-- [Qrisp QuantumBacktrackingTree documentation](https://qrisp.eu/reference/Algorithms/QuantumBacktrackingTree.html) — reference implementation API, one-hot encoding, quantum_step, accept/reject constraints
-- [Qrisp backtracking_tree.py source](https://github.com/eclipse-qrisp/Qrisp/blob/main/src/qrisp/algorithms/quantum_backtracking/backtracking_tree.py) — qstep_diffuser pattern, phi/phi_root rotation angles, parity control implementation
-- Quantum Assembly codebase (direct read): gate.h, _gates.pyx, grover.py, oracle.py, diffusion.py, amplitude_estimation.py, _core.pyx — all integration points verified from source code
+- Direct codebase analysis: `compile.py`, `_core.pyx`, `circuit.h`, `optimizer.c`, `types.h`, `circuit_allocations.c`
+- Verified library versions: rustworkx 0.17.1, scipy 1.17.1, numpy 2.4.2 (via pip list)
+- rustworkx DAG API documentation and tutorials
+- scipy.sparse array API documentation
+- Existing test suite: 118 tests in `test_compile.py`
+- Project documentation: `.planning/PROJECT.md` (v7.0 milestone goals, key decisions)
 
 ### Secondary (MEDIUM confidence)
-- [Martiel & Remaud 2019 — Practical implementation of a quantum backtracking algorithm (arXiv:1908.11291)](https://arxiv.org/abs/1908.11291) — O(n log d) qubit implementation, circuit depth analysis, encoding choices
-- [Seidel et al. 2024 — Quantum Backtracking in Qrisp Applied to Sudoku Problems (arXiv:2402.10060)](https://arxiv.org/abs/2402.10060) — phi_root formula, circuit depth benchmarks (3968 depth for 4x4 Sudoku), 6n+14 CX per controlled diffuser
-- [Quantum Search on Computation Trees (arXiv:2505.22405)](https://arxiv.org/html/2505.22405) — generalized walk state with weights, D_x = I - 2|psi_x><psi_x| formulation, variable-time walk
+- Qiskit DAGCircuit representation (DeepWiki) -- internal IR patterns
+- TKET compilation and box hierarchy -- subroutine handling patterns
+- MLIR quantum circuit transformations (arXiv:2112.10677) -- multi-level IR concepts
+- LLVM optimization levels -- analogy for opt_flag semantics
+- Quantum arithmetic with QFT (arXiv:1411.5949) -- Draper adder QFT/IQFT structure
 
 ### Tertiary (LOW confidence)
-- [Jarret & Wan 2018 — Improved quantum backtracking via effective resistance (arXiv:1711.05295)](https://arxiv.org/abs/1711.05295) — improved spectral gap analysis via effective resistance; relevant to Phase 4 detection precision tuning but not needed for MVP
+- Sparse tensor simulation (arXiv:2602.04011) -- sparse representation patterns, needs validation for circuit index storage specifically
+- Merge heuristic thresholds -- no empirical data yet, needs tuning during implementation
 
 ---
-*Research completed: 2026-02-26*
+*Research completed: 2026-03-05*
 *Ready for roadmap: yes*
