@@ -28,7 +28,7 @@ Requirements for Quantum Chess Demo milestone. Each maps to roadmap phases.
 ### Demo Scripts
 
 - [x] **DEMO-01**: demo.py with full manual quantum walk — starting position, legal move tree, walk operators, circuit statistics
-- [ ] **DEMO-02**: Secondary script using QWalkTree API on same chess position for comparison
+- [x] **DEMO-02**: Secondary script using QWalkTree API on same chess position for comparison
 
 ## Future Requirements
 
@@ -75,7 +75,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WALK-06 | Phase 105 | Complete |
 | WALK-07 | Phase 105 | Complete |
 | DEMO-01 | Phase 106 | Complete |
-| DEMO-02 | Phase 106 | Pending |
+| DEMO-02 | Phase 106 | Complete |
 
 **Coverage:**
 - v6.1 requirements: 14 total

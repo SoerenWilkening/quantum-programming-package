@@ -155,7 +155,7 @@
 - [x] **Phase 103: Chess Board Encoding & Legal Moves** - Board representation, piece encoding, move generation, and compiled move oracle (completed 2026-03-03)
 - [x] **Phase 104: Walk Register Scaffolding & Local Diffusion** - One-hot height register, branch registers, board-state-from-branch-history derivation, and single D_x diffusion operator with position-aware branching factor (completed 2026-03-03)
 - [x] **Phase 105: Full Walk Operators** - Height-controlled diffusion cascade, R_A, R_B, and compiled walk step U = R_B * R_A (completed 2026-03-05)
-- [ ] **Phase 106: Demo Scripts** - Manual walk demo.py with circuit statistics and QWalkTree comparison script
+- [x] **Phase 106: Demo Scripts** - Manual walk demo.py with circuit statistics and QWalkTree comparison script (completed 2026-03-05)
 
 ## Phase Details
 
@@ -239,7 +239,7 @@ Phases execute in numeric order: 103 -> 104 -> 105 -> 106
 | 103. Chess Board Encoding & Legal Moves | v6.1 | Complete    | 2026-03-03 | 2026-03-03 |
 | 104. Walk Register Scaffolding & Local Diffusion | 2/2 | Complete    | 2026-03-03 | - |
 | 105. Full Walk Operators | 2/2 | Complete    | 2026-03-05 | - |
-| 106. Demo Scripts | 1/2 | In Progress|  | - |
+| 106. Demo Scripts | 2/2 | Complete   | 2026-03-05 | - |
 
 ---
 *Roadmap created: 2026-02-02*

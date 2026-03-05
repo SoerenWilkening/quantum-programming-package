@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v6.1
 milestone_name: Quantum Chess Demo
 status: completed
-stopped_at: Phase 106 context gathered
-last_updated: "2026-03-05T16:02:31Z"
-last_activity: 2026-03-05 -- Completed 106-01 chess walk demo
+stopped_at: Completed 106-02-PLAN.md
+last_updated: "2026-03-05T16:19:00Z"
+last_activity: 2026-03-05 -- Completed 106-02 comparison script
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 6
-  completed_plans: 7
-  percent: 99
+  completed_plans: 8
+  percent: 100
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-03)
 ## Current Position
 
 Phase: 106 of 106 (Demo Scripts)
-Plan: 1 of 2 in current phase (106-01 complete)
-Status: 106-01 complete -- chess walk demo script
-Last activity: 2026-03-05 -- Completed 106-01 chess walk demo
+Plan: 2 of 2 in current phase (106-02 complete)
+Status: Phase 106 complete -- all demo scripts done
+Last activity: 2026-03-05 -- Completed 106-02 comparison script
 
-Progress: [██████████] 99%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -49,7 +49,7 @@ Progress: [██████████] 99%
 | v4.1 Quality & Efficiency | 82-89 | 21 | Complete (2026-02-24) |
 | v5.0 Advanced Arithmetic | 90-96 | 19 | Shipped (2026-02-26) |
 | v6.0 Quantum Walk | 97-102 | 11 | Shipped (2026-03-03) |
-| v6.1 Quantum Chess Demo | 103-106 | 7/8 | In progress |
+| v6.1 Quantum Chess Demo | 103-106 | 8/8 | Complete (2026-03-05) |
 | Phase 104 P01 | 3min | 1 tasks | 2 files |
 | Phase 104 P02 | 10min | 2 tasks | 2 files |
 | Phase 105 P01 | 7min | 1 tasks | 2 files |
@@ -87,6 +87,8 @@ Recent decisions affecting current work:
 - [Phase 105-02]: all_walk_qubits wraps height + branch only; walk_step passes board qarrays separately
 - [Phase 105-02]: Module-level CompiledFunc with mutable context dict for functional walk_step caching
 - [Phase 106-01]: Demo smoke test patches walk_step to avoid OOM in memory-constrained CI (8GB+ needed for real compilation)
+- [Phase 106-02]: QWalkTree cascade fallback: added try/except in _setup_diffusion matching chess_walk.py pattern
+- [Phase 106-02]: Comparison test dual-patches both demo.walk_step and QWalkTree.walk_step for CI safety
 
 ### Blockers/Concerns
 
@@ -98,10 +100,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-05T16:02:31Z
-Stopped at: Completed 106-01-PLAN.md
-Resume file: .planning/phases/106-demo-scripts/106-01-SUMMARY.md
-Resume action: Execute 106-02-PLAN.md (comparison script)
+Last session: 2026-03-05T16:19:00Z
+Stopped at: Completed 106-02-PLAN.md
+Resume file: .planning/phases/106-demo-scripts/106-02-SUMMARY.md
+Resume action: Phase 106 and v6.1 milestone complete
 
 ---
-*State updated: 2026-03-05 -- Completed 106-01 chess walk demo (DEMO-01)*
+*State updated: 2026-03-05 -- Completed 106-02 comparison script (DEMO-02), Phase 106 complete, v6.1 milestone complete*
