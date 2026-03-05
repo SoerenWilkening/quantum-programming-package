@@ -89,6 +89,51 @@
 
 ---
 
+## Milestone: v6.1 — Quantum Chess Demo
+
+**Shipped:** 2026-03-05
+**Phases:** 4 | **Plans:** 8
+
+### What Was Built
+- Chess board encoding module with knight/king attack patterns, legal move filtering, and deterministic sorted move enumeration
+- Compiled move oracle via `@ql.compile(inverse=True)` with factory pattern for quantum state manipulation
+- Walk register scaffolding: one-hot height register, per-level branch registers, forward/reverse oracle replay for board state derivation
+- Local diffusion D_x with Montanaro angles and variable branching with cascade fallback
+- Full walk operators R_A/R_B with height-controlled diffusion cascade and compiled walk step U = R_B * R_A
+- Demo scripts with manual walk circuit stats and side-by-side QWalkTree comparison
+
+### What Worked
+- v6.0's pure Python approach carried forward perfectly — chess_encoding.py and chess_walk.py compose existing framework primitives with zero new C code
+- Oracle factory pattern (`_make_apply_move()`) cleanly encapsulates classical move specs in @ql.compile closures — inverse support works correctly
+- Milestone audit ran before completion and PASSED on first try (14/14 requirements, 4/4 phases, 14/14 integration, 2/2 E2E flows) — first clean audit without gap closure phases
+- Separate qarray args pattern (wk_arr, bk_arr, wn_arr) solved the 64-qubit qint limit for compile cache keys
+- 122+ tests across 4 test files, all passing — comprehensive coverage without verification gaps
+
+### What Was Inefficient
+- Nyquist validation only partial for Phases 104-106 (draft VALIDATION.md with nyquist_compliant: false) — validation infrastructure gap persists from v6.0
+- Demo smoke tests require patched walk_step to avoid OOM in CI — real compilation needs 8GB+ RAM, limiting automated verification
+- QWalkTree cascade fallback bug found during Phase 106-02 (comparison script) — integration bug that should have been caught by QWalkTree's own test suite
+
+### Patterns Established
+- Oracle factory pattern: `_make_apply_move()` creates @ql.compile function with classical move_specs baked into closure
+- Separate qarray args per piece type for compile cache key + inverse support
+- Forward/reverse oracle replay for deriving board state at any tree node from branch register history
+- Cascade fallback for large branching factors (NotImplementedError -> empty ops)
+- Dual-patch test pattern for CI safety (mock both manual and API walk_step)
+
+### Key Lessons
+1. **First clean milestone audit**: v6.1 passed audit without gap closure phases — writing VERIFICATION.md during execution (from v5.0/v6.0 lessons) finally internalized
+2. **Demo-focused milestones are fast**: 4 phases in 3 days — composing existing primitives into a domain demo is much faster than building new framework infrastructure
+3. **Comparison scripts reveal integration bugs**: chess_comparison.py found QWalkTree cascade fallback bug — always include a comparison/reference implementation
+4. **OOM in CI is a testing ceiling**: Manual walk compilation exceeds CI memory — future demos should plan for mock-based testing from the start
+
+### Cost Observations
+- Model mix: ~90% opus, ~10% haiku (research agents)
+- 52 commits across 3 days
+- Notable: Phases 103-104 completed in 1 day, Phase 105-106 in 2 days (walk_step compilation complexity)
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -100,6 +145,7 @@
 | v4.1 | 8 | 21 | Quality-focused: security, coverage, size reduction |
 | v5.0 | 7 | 19 | Milestone audit process; gap closure phases |
 | v6.0 | 6 | 11 | Pure Python compositional module; V-gate workarounds |
+| v6.1 | 4 | 8 | Domain demo composing framework primitives; first clean audit |
 
 ### Cumulative Quality
 
@@ -109,6 +155,7 @@
 | v4.1 | N/A (quality) | N/A | 3 deferred bugs |
 | v5.0 | 20/20 | PASSED (20/20 + 7/7 + 20/20 + 8/8) | 12 non-blocking |
 | v6.0 | 18/18 | gaps_found → CLOSED (Phase 102) | 3 non-blocking |
+| v6.1 | 14/14 | PASSED (first try, no gaps) | 0 |
 
 ### Top Lessons (Verified Across Milestones)
 

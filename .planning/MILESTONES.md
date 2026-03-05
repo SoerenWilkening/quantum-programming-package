@@ -1,5 +1,33 @@
 # Project Milestones: Quantum Assembly
 
+## v6.1 Quantum Chess Demo (Shipped: 2026-03-05)
+
+**Delivered:** Complete manual quantum walk on a chess game tree using raw quantum_language primitives -- board encoding with legal move generation, compiled move oracles, walk register scaffolding, Montanaro diffusion operators, and compiled walk step U = R_B * R_A, with side-by-side QWalkTree comparison demonstrating framework expressiveness.
+
+**Phases completed:** 103-106 (8 plans total)
+
+**Key accomplishments:**
+
+- Chess board encoding module with knight/king attack patterns, legal move filtering, and deterministic sorted move enumeration (43 tests)
+- Compiled move oracle via `@ql.compile(inverse=True)` with factory pattern for quantum state manipulation
+- Walk register scaffolding: one-hot height register, per-level branch registers, forward/reverse oracle replay for board state derivation
+- Local diffusion D_x with Montanaro angles (phi = 2*arctan(sqrt(d))) and variable branching with cascade fallback
+- Full walk operators R_A/R_B with height-controlled diffusion cascade and compiled walk step U = R_B * R_A
+- Demo scripts: manual quantum walk with circuit stats and QWalkTree comparison showing side-by-side circuit metrics
+
+**Stats:**
+
+- 52 commits, 8 files changed (+3,000 / -110 lines)
+- 4 phases, 8 plans
+- 3 days (2026-03-03 to 2026-03-05)
+- 122+ tests across 4 test files, all passing
+
+**Git range:** `f255d1b`..`6da8cc3`
+
+**What's next:** TBD -- next milestone planning via `/gsd:new-milestone`
+
+---
+
 ## v6.0 Quantum Walk Primitives (Shipped: 2026-03-03)
 
 **Delivered:** Predicate-aware quantum walk operators based on Montanaro 2015 backtracking speedup — tree encoding with one-hot height registers, local diffusion with correct amplitude angles, compiled walk operators R_A/R_B, variable branching with dynamic child counting, and iterative power-method detection with SAT demo verified within 17-qubit budget.

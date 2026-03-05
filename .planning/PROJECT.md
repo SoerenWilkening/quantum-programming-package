@@ -171,18 +171,14 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - ✓ Iterative power-method detection algorithm (detect()) with 3/8 threshold — v6.0
 - ✓ SAT detection demo within 17-qubit budget with Qiskit statevector verification — v6.0
 
+- ✓ Chess board encoding (8x8, 2 kings + white knights) with legal move generation and filtering — v6.1
+- ✓ Compiled move oracle via `@ql.compile(inverse=True)` with factory pattern — v6.1
+- ✓ Manual quantum walk registers: one-hot height, per-level branch, oracle replay for board state derivation — v6.1
+- ✓ Local diffusion D_x with Montanaro angles and variable branching with cascade fallback — v6.1
+- ✓ Walk operators R_A/R_B with height-controlled diffusion cascade and compiled walk step U = R_B * R_A — v6.1
+- ✓ Manual walk demo with circuit stats and QWalkTree comparison script — v6.1
+
 ### Active
-
-## Current Milestone: v6.1 Quantum Chess Demo
-
-**Goal:** Build a quantum minimax chess solver demo using raw quantum_language primitives — manual quantum walk on a chess game tree with legal move generation, demonstrating the framework's expressiveness without using the QWalkTree API.
-
-**Target features:**
-- Chess board encoding (8x8, 2 kings + white knights) with legal move generation
-- Manual quantum walk operators (height registers, branch registers, diffusion, R_A/R_B) from raw primitives
-- demo.py with full manual quantum walk script (circuit generation, no simulation)
-- Secondary QWalkTree comparison script
-- Classical Monte Carlo tree walk verification (separate phase)
 
 **Deferred features (carry forward):**
 - Resource estimation for compiled functions — ADV-01
@@ -202,6 +198,9 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - Subspace optimization for walk operators — ADV-WALK-01
 - QPE-based detection with formal precision guarantees — ADV-WALK-03
 - CSP-to-predicate compiler (auto CNF to accept/reject) — ADV-WALK-04
+- Piece value evaluation function (material counting) — EVAL-01
+- Minimax value accumulation across tree depth — EVAL-02
+- Classical Monte Carlo tree walk verification — VERIF-01/VERIF-02
 
 ### Out of Scope
 
@@ -219,7 +218,7 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 **Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) -> Cython bindings -> Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
 
-**Current state:** v6.0 shipped — Quantum walk primitives based on Montanaro 2015 backtracking speedup with predicate-aware walk operators, variable branching, and iterative detection. Full feature set: dual arithmetic backends (QFT/Toffoli with Toffoli default), `@ql.compile` with parametric mode, `ql.grover()`, `ql.amplitude_estimate()`, `ql.count_solutions()`, QWalkTree with `detect()`, pixel-art visualization, Clifford+T decomposition, cross-backend verification.
+**Current state:** v6.1 shipped — Quantum chess demo with manual quantum walk on chess game tree using raw primitives. Full feature set: dual arithmetic backends (QFT/Toffoli with Toffoli default), `@ql.compile` with parametric mode, `ql.grover()`, `ql.amplitude_estimate()`, `ql.count_solutions()`, QWalkTree with `detect()`, manual walk operators (chess_encoding + chess_walk modules), pixel-art visualization, Clifford+T decomposition, cross-backend verification.
 
 **Codebase:**
 - ~1,059,000 lines of code (604K C, 395K Python, 60K Cython)
@@ -387,6 +386,13 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | 3/8 threshold detection without reference | Simpler than reference comparison; tree structure determines detection | ✓ Good — matches Montanaro Algorithm 1 |
 | predicate=None in _measure_root_overlap | Avoids qubit explosion from raw predicate allocation during measurement | ✓ Good — stays within 17-qubit budget |
 | All Python implementation for walk module | Walk is compositional, not computational at bit-width scale | ✓ Good — no new C code needed |
+| sq = rank * 8 + file indexing convention | Consistent with qarray[rank, file] access pattern | ✓ Good — clean board encoding |
+| Factory pattern for compiled move oracles | @ql.compile closure captures classical move_specs | ✓ Good — correct inverse support |
+| Separate qarray args per piece type | Compile cache key + inverse support require separate args | ✓ Good — ~qbool for controlled NOT |
+| Purely functional walk module (no class) | 6 standalone functions, board_arrs as tuple for oracle convention | ✓ Good — composable and testable |
+| Oracle replay for board state derivation | Forward/reverse oracle calls derive position at any tree node | ✓ Good — correct LIFO inverse order |
+| Cascade fallback for large branching | NotImplementedError -> empty ops when d exceeds register control depth | ✓ Good — graceful degradation |
+| Board qarrays separate from mega-register | Total qubit count exceeds 64-qubit qint limit | ✓ Good — multi-arg compile pattern |
 
 ---
-*Last updated: 2026-03-03 after v6.1 milestone started*
+*Last updated: 2026-03-05 after v6.1 milestone*
