@@ -36,6 +36,8 @@ __all__ = [
     "evaluate_children",
     "uncompute_children",
     "apply_diffusion",
+    "r_a",
+    "r_b",
 ]
 
 
@@ -533,3 +535,83 @@ def apply_diffusion(
 
     # --- Step 8: Underive board state ---
     underive_board_state(board_arrs, branch_regs, oracle_per_level, level_idx)
+
+
+# ---------------------------------------------------------------------------
+# Walk operators R_A and R_B
+# ---------------------------------------------------------------------------
+
+
+def r_a(h_reg, branch_regs, board_arrs, oracle_per_level, move_data_per_level, max_depth):
+    """Apply R_A: diffusion at even depths, excluding root and leaves.
+
+    R_A covers even-numbered depth levels (0, 2, 4, ...) but skips:
+    - depth 0 (leaves -- no children, level_idx out of range)
+    - depth == max_depth (root always belongs to R_B)
+
+    Together with R_B, covers all active depths exactly once (disjoint).
+
+    Parameters
+    ----------
+    h_reg : qint
+        Height register.
+    branch_regs : list[qint]
+        Per-level branch registers.
+    board_arrs : tuple
+        (wk_arr, bk_arr, wn_arr) qarrays.
+    oracle_per_level : list
+        Compiled apply_move functions, one per level.
+    move_data_per_level : list[dict]
+        Move data per level.
+    max_depth : int
+        Maximum tree depth.
+    """
+    for depth in range(0, max_depth + 1, 2):
+        if depth == 0:
+            continue  # Leaves: no children, level_idx out of range
+        if depth == max_depth:
+            continue  # Root always belongs to R_B
+        apply_diffusion(
+            depth, h_reg, branch_regs, board_arrs, oracle_per_level, move_data_per_level, max_depth
+        )
+
+
+def r_b(h_reg, branch_regs, board_arrs, oracle_per_level, move_data_per_level, max_depth):
+    """Apply R_B: diffusion at odd depths plus root.
+
+    R_B covers odd-numbered depth levels (1, 3, 5, ...) and always includes
+    the root (depth == max_depth). If max_depth is even, root is added
+    explicitly since it wouldn't be in the odd range.
+
+    Together with R_A, covers all active depths exactly once (disjoint).
+
+    Parameters
+    ----------
+    h_reg : qint
+        Height register.
+    branch_regs : list[qint]
+        Per-level branch registers.
+    board_arrs : tuple
+        (wk_arr, bk_arr, wn_arr) qarrays.
+    oracle_per_level : list
+        Compiled apply_move functions, one per level.
+    move_data_per_level : list[dict]
+        Move data per level.
+    max_depth : int
+        Maximum tree depth.
+    """
+    for depth in range(1, max_depth + 1, 2):
+        apply_diffusion(
+            depth, h_reg, branch_regs, board_arrs, oracle_per_level, move_data_per_level, max_depth
+        )
+    # Root always in R_B; add explicitly if max_depth is even (not in odd range)
+    if max_depth % 2 == 0:
+        apply_diffusion(
+            max_depth,
+            h_reg,
+            branch_regs,
+            board_arrs,
+            oracle_per_level,
+            move_data_per_level,
+            max_depth,
+        )
