@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v7.0
 milestone_name: Compile Infrastructure
 status: completed
-stopped_at: Phase 108 context gathered
-last_updated: "2026-03-06T16:48:53.312Z"
-last_activity: 2026-03-05 -- Completed 107-02 compile DAG integration (opt param, 43 tests)
+stopped_at: Completed 108-01-PLAN.md
+last_updated: "2026-03-06T17:04:28.062Z"
+last_activity: 2026-03-06 -- Completed 108-01 per-node stats & aggregate metrics (62 tests)
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
   percent: 100
 ---
 
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 
 ## Current Position
 
-Phase: 107 of 110 (Call Graph DAG Foundation)
-Plan: 2 of 2
-Status: Phase 107 Complete
-Last activity: 2026-03-05 -- Completed 107-02 compile DAG integration (opt param, 43 tests)
+Phase: 108 of 110 (Call Graph Analysis & Visualization)
+Plan: 1 of 2
+Status: 108-01 Complete
+Last activity: 2026-03-06 -- Completed 108-01 per-node stats & aggregate metrics (62 tests)
 
 Progress: [██████████] 100%
 
@@ -51,6 +51,7 @@ Progress: [██████████] 100%
 | v6.0 Quantum Walk | 97-102 | 11 | Shipped (2026-03-03) |
 | v6.1 Quantum Chess Demo | 103-106 | 8 | Complete (2026-03-05) |
 | v7.0 Compile Infrastructure | 107-110 | TBD | Ready to plan |
+| Phase 108 P01 | 4min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,9 @@ Recent decisions affecting current work:
 - __call__ refactored into __call__ + _call_inner for clean DAG try/finally
 - Capture path uses placeholder node updated after block finalization
 - opt parameter NOT in cache key (DAG building is observational only)
+- ASAP scheduling for depth: per-qubit occupancy tracking, each gate occupies max(occupied qubits)+1
+- Dual T-count formula: direct T/TDG count preferred, 7*CCX fallback when no T gates
+- Critical-path depth in aggregate: sum of per-group max depths from parallel_groups()
 
 ### Blockers/Concerns
 
@@ -79,10 +83,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-06T16:48:53.300Z
-Stopped at: Phase 108 context gathered
-Resume file: .planning/phases/108-call-graph-analysis-visualization/108-CONTEXT.md
-Resume action: `/gsd:execute-phase 108` (next phase)
+Last session: 2026-03-06T17:04:28.055Z
+Stopped at: Completed 108-01-PLAN.md
+Resume file: None
+Resume action: Execute 108-02 (DOT visualization and compilation report)
 
 ---
-*State updated: 2026-03-05 -- 107-02 compile DAG integration complete (opt param, 43 tests)*
+*State updated: 2026-03-06 -- 108-01 per-node stats & aggregate complete (62 tests)*
