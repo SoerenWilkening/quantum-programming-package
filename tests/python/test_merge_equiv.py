@@ -175,3 +175,91 @@ def test_grover_oracle_equiv():
     sv2 = _get_statevector(build_oracle, opt_level=2)
     sv3 = _get_statevector(build_oracle, opt_level=3)
     assert _statevectors_equivalent(sv2, sv3), "grover oracle (x==5, width=4): opt=2 != opt=3"
+
+
+# ---------------------------------------------------------------------------
+# Parametric + opt interaction tests
+# ---------------------------------------------------------------------------
+
+
+class TestParametricOptInteraction:
+    """Tests for parametric=True interaction with different opt levels."""
+
+    def test_parametric_opt1_works(self):
+        """parametric=True + opt=1 compiles and produces correct output.
+
+        Verifies with 4 classical parameter values that the parametric
+        compilation at opt=1 produces correct addition results.
+        """
+        gc.collect()
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+
+        @ql.compile(parametric=True, opt=1)
+        def add_val(x, val):
+            x += val
+            return x
+
+        for val in [1, 3, 5, 7]:
+            gc.collect()
+            ql.circuit()
+            ql.option("fault_tolerant", True)
+
+            a = ql.qint(0, width=4)
+            add_val(a, val)
+
+            qasm_str = ql.to_openqasm()
+            circuit = qiskit.qasm3.loads(qasm_str)
+            sv = Statevector.from_instruction(circuit)
+
+            # The state |val> should have non-zero amplitude
+            # For a 4-qubit register initialized to 0, after x += val,
+            # the state should be |val> (computational basis state)
+            probs = np.abs(sv.data) ** 2
+            # Find the index with highest probability
+            max_idx = np.argmax(probs)
+            # At least one amplitude should be significant
+            assert probs[max_idx] > 0.5, f"parametric+opt=1: val={val}, no dominant state found"
+
+    def test_parametric_opt3_works(self):
+        """parametric=True + opt=3 compiles and produces correct output.
+
+        Same verification as opt=1 but with opt=3 (full expansion).
+        """
+        gc.collect()
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+
+        @ql.compile(parametric=True, opt=3)
+        def add_val(x, val):
+            x += val
+            return x
+
+        for val in [1, 3, 5, 7]:
+            gc.collect()
+            ql.circuit()
+            ql.option("fault_tolerant", True)
+
+            a = ql.qint(0, width=4)
+            add_val(a, val)
+
+            qasm_str = ql.to_openqasm()
+            circuit = qiskit.qasm3.loads(qasm_str)
+            sv = Statevector.from_instruction(circuit)
+
+            probs = np.abs(sv.data) ** 2
+            max_idx = np.argmax(probs)
+            assert probs[max_idx] > 0.5, f"parametric+opt=3: val={val}, no dominant state found"
+
+    def test_parametric_opt2_raises(self):
+        """parametric=True + opt=2 raises ValueError at construction time.
+
+        This is by design (Phase 109 decision) -- merge is incompatible
+        with parametric compilation.
+        """
+        with pytest.raises(ValueError, match="parametric"):
+
+            @ql.compile(parametric=True, opt=2)
+            def add_val(x, val):
+                x += val
+                return x
