@@ -46,6 +46,8 @@ from ._core import (
 )
 from .call_graph import (
     CallGraphDAG,
+    _compute_depth,
+    _compute_t_count,
     _dag_builder_stack,
     current_dag_context,
     pop_dag_context,
@@ -804,12 +806,15 @@ class CompiledFunc:
                         and block._capture_virtual_to_real
                     ):
                         qubit_set.update(block._capture_virtual_to_real.values())
+                    _gates = block.gates if block else []
                     dag.add_node(
                         self._func.__name__,
                         qubit_set,
-                        len(block.gates) if block else 0,
+                        len(_gates),
                         cache_key,
                         parent_index=parent_idx,
+                        depth=_compute_depth(_gates),
+                        t_count=_compute_t_count(_gates),
                     )
             # Auto-uncompute (same as normal path)
             if qubit_saving:
@@ -839,12 +844,15 @@ class CompiledFunc:
                     block = self._cache.get(cache_key)
                     if block and block._capture_virtual_to_real:
                         qubit_set.update(block._capture_virtual_to_real.values())
+                    _gates = block.gates if block else []
                     dag.add_node(
                         self._func.__name__,
                         qubit_set,
-                        len(block.gates) if block else 0,
+                        len(_gates),
                         cache_key,
                         parent_index=parent_idx,
+                        depth=_compute_depth(_gates),
+                        t_count=_compute_t_count(_gates),
                     )
         else:
             result = self._capture_and_cache_both(
@@ -1103,6 +1111,8 @@ class CompiledFunc:
                 node.func_name = self._func.__name__
                 node.qubit_set = frozenset(qubit_set)
                 node.gate_count = len(virtual_gates)
+                node.depth = _compute_depth(virtual_gates)
+                node.t_count = _compute_t_count(virtual_gates)
                 # cache_key not available here; left as placeholder ()
                 # Recompute bitmask
                 bitmask = np.uint64(0)

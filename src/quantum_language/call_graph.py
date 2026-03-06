@@ -41,6 +41,54 @@ def _popcount_array(arr: np.ndarray) -> np.ndarray:
 
 
 # ---------------------------------------------------------------------------
+# Per-node stat helpers
+# ---------------------------------------------------------------------------
+
+
+def _compute_depth(gates: list) -> int:
+    """Compute circuit depth via ASAP qubit occupancy scheduling.
+
+    For each gate, collects target + control qubits, finds the max current
+    time across those qubits, and assigns all to max+1. Returns the overall
+    maximum time step, or 0 for an empty list.
+    """
+    if not gates:
+        return 0
+    occupancy: dict[int, int] = {}
+    max_depth = 0
+    for g in gates:
+        qubits = [g["target"]]
+        if g.get("num_controls", 0) > 0:
+            qubits.extend(g["controls"])
+        current_max = max((occupancy.get(q, 0) for q in qubits), default=0)
+        new_time = current_max + 1
+        for q in qubits:
+            occupancy[q] = new_time
+        if new_time > max_depth:
+            max_depth = new_time
+    return max_depth
+
+
+def _compute_t_count(gates: list) -> int:
+    """Compute T-gate count using dual formula.
+
+    Counts direct T_GATE (type 10) and TDG_GATE (type 11) occurrences.
+    If none found, falls back to 7 * CCX count (gates with num_controls >= 2).
+    """
+    if not gates:
+        return 0
+    t_direct = 0
+    ccx_count = 0
+    for g in gates:
+        gtype = g.get("type", -1)
+        if gtype == 10 or gtype == 11:
+            t_direct += 1
+        if g.get("num_controls", 0) >= 2:
+            ccx_count += 1
+    return t_direct if t_direct > 0 else 7 * ccx_count
+
+
+# ---------------------------------------------------------------------------
 # DAGNode
 # ---------------------------------------------------------------------------
 
@@ -62,7 +110,7 @@ class DAGNode:
         Pre-computed bitmask encoding qubit_set for fast overlap.
     """
 
-    __slots__ = ("func_name", "qubit_set", "gate_count", "cache_key", "bitmask")
+    __slots__ = ("func_name", "qubit_set", "gate_count", "cache_key", "bitmask", "depth", "t_count")
 
     def __init__(
         self,
@@ -70,11 +118,16 @@ class DAGNode:
         qubit_set,
         gate_count: int,
         cache_key: tuple,
+        *,
+        depth: int = 0,
+        t_count: int = 0,
     ):
         self.func_name = func_name
         self.qubit_set = frozenset(qubit_set)
         self.gate_count = gate_count
         self.cache_key = cache_key
+        self.depth = depth
+        self.t_count = t_count
         # Pre-compute bitmask from qubit_set
         bitmask = np.uint64(0)
         for q in qubit_set:
@@ -82,7 +135,10 @@ class DAGNode:
         self.bitmask = bitmask
 
     def __repr__(self) -> str:
-        return f"DAGNode({self.func_name!r}, qubits={set(self.qubit_set)}, gates={self.gate_count})"
+        return (
+            f"DAGNode({self.func_name!r}, qubits={set(self.qubit_set)}, "
+            f"gates={self.gate_count}, depth={self.depth}, t_count={self.t_count})"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -110,6 +166,9 @@ class CallGraphDAG:
         gate_count: int,
         cache_key: tuple,
         parent_index: int | None = None,
+        *,
+        depth: int = 0,
+        t_count: int = 0,
     ) -> int:
         """Add a node to the DAG.
 
@@ -125,13 +184,17 @@ class CallGraphDAG:
             Cache key for this compiled variant.
         parent_index : int or None
             If not None, add a hierarchical 'call' edge from parent to this node.
+        depth : int
+            Circuit depth for this node.
+        t_count : int
+            T-gate count for this node.
 
         Returns
         -------
         int
             Index of the newly added node.
         """
-        node = DAGNode(func_name, qubit_set, gate_count, cache_key)
+        node = DAGNode(func_name, qubit_set, gate_count, cache_key, depth=depth, t_count=t_count)
         idx = self._dag.add_node(node)
         self._nodes.append(node)
         if parent_index is not None:
