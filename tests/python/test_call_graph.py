@@ -859,13 +859,13 @@ class TestReport:
         dag.add_node("g", {5}, 3, (), depth=2, t_count=0)
         report = dag.report()
         # Two disjoint nodes should have different group numbers
-        # Both group 0 and group 1 should appear
+        # Both group 0 and group 1 should appear in the Group column
         lines = report.split("\n")
         group_vals = set()
         for line in lines:
-            parts = line.split("|")
-            if len(parts) >= 7:
-                grp = parts[-1].strip().rstrip("|").strip()
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 6:
+                grp = parts[-1].strip()
                 if grp.isdigit():
                     group_vals.add(int(grp))
         assert len(group_vals) >= 2, f"Expected 2+ groups, got {group_vals}"

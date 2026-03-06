@@ -366,6 +366,62 @@ class CallGraphDAG:
         lines.append("}")
         return "\n".join(lines)
 
+    # -- Compilation report --------------------------------------------------
+
+    def report(self) -> str:
+        """Return a formatted compilation report string.
+
+        The report includes a header with the top-level function name,
+        a table with per-node stats (Name, Gates, Depth, Qubits, T-count,
+        Group), and an aggregate totals footer row.
+
+        Returns
+        -------
+        str
+            Multi-line formatted report.
+        """
+        if not self._nodes:
+            return "Compilation Report: (empty)\n\nNo nodes."
+
+        top_name = self._nodes[0].func_name
+        groups = self.parallel_groups()
+        node_to_group: dict[int, int] = {}
+        for gi, group in enumerate(groups):
+            for idx in group:
+                node_to_group[idx] = gi
+
+        agg = self.aggregate()
+
+        lines: list[str] = []
+        lines.append(f"Compilation Report: {top_name}")
+        lines.append("")
+
+        # Column widths: Name=20, Gates=8, Depth=8, Qubits=8, T-count=8, Group=8
+        header = (
+            f"{'Name':<20s} | {'Gates':>8s} | {'Depth':>8s} | "
+            f"{'Qubits':>8s} | {'T-count':>8s} | {'Group':>8s}"
+        )
+        sep = "-" * len(header)
+        lines.append(header)
+        lines.append(sep)
+
+        for idx, nd in enumerate(self._nodes):
+            grp = node_to_group.get(idx, 0)
+            row = (
+                f"{nd.func_name:<20s} | {nd.gate_count:>8d} | {nd.depth:>8d} | "
+                f"{len(nd.qubit_set):>8d} | {nd.t_count:>8d} | {grp:>8d}"
+            )
+            lines.append(row)
+
+        lines.append(sep)
+        totals = (
+            f"{'TOTAL':<20s} | {agg['gates']:>8d} | {agg['depth']:>8d} | "
+            f"{agg['qubits']:>8d} | {agg['t_count']:>8d} | {'-':>8s}"
+        )
+        lines.append(totals)
+
+        return "\n".join(lines)
+
     # -- Properties ---------------------------------------------------------
 
     @property
