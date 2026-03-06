@@ -211,8 +211,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 109-01: TBD
-- [ ] 109-02: TBD
+- [ ] 109-01-PLAN.md -- merge_groups() on CallGraphDAG, _merge_and_optimize helper, merge_threshold param
+- [ ] 109-02-PLAN.md -- opt=2 wiring in __call__, _apply_merge, merged replay, cross-boundary integration tests
 
 ### Phase 110: Merge Verification & Regression
 **Goal**: Merged circuits are proven correct via simulation and the full test suite passes at all opt levels
@@ -249,7 +249,7 @@ Phases execute in numeric order: 107 -> 108 -> 109 -> 110
 | 103-106 | v6.1 | 8/8 | Complete | 2026-03-05 |
 | 107. Call Graph DAG Foundation | 2/2 | Complete   | 2026-03-05 | - |
 | 108. Call Graph Analysis & Visualization | 2/2 | Complete    | 2026-03-06 | - |
-| 109. Selective Sequence Merging | v7.0 | 0/TBD | Not started | - |
+| 109. Selective Sequence Merging | v7.0 | 0/2 | Planning complete | - |
 | 110. Merge Verification & Regression | v7.0 | 0/TBD | Not started | - |
 
 ---
