@@ -273,6 +273,43 @@ def _optimize_gate_list(gates):
 
 
 # ---------------------------------------------------------------------------
+# Merge-and-optimize (selective sequence merging helper)
+# ---------------------------------------------------------------------------
+
+
+def _merge_and_optimize(blocks_with_mappings, optimize=True):
+    """Concatenate gate lists from multiple blocks in physical qubit space and optimize.
+
+    Parameters
+    ----------
+    blocks_with_mappings : list of (CompiledBlock, dict)
+        Each tuple is (block, virtual_to_real_mapping) in temporal call order.
+    optimize : bool
+        Whether to run _optimize_gate_list on the concatenated result.
+
+    Returns
+    -------
+    tuple of (list[dict], int)
+        (optimized_gates, original_gate_count)
+    """
+    merged_gates = []
+    for block, v2r in blocks_with_mappings:
+        for g in block.gates:
+            pg = dict(g)
+            pg["target"] = v2r[g["target"]]
+            if g.get("num_controls", 0) > 0 and "controls" in g:
+                pg["controls"] = [v2r[c] for c in g["controls"]]
+            merged_gates.append(pg)
+    original_count = len(merged_gates)
+    if optimize and merged_gates:
+        try:
+            merged_gates = _optimize_gate_list(merged_gates)
+        except Exception:
+            pass
+    return merged_gates, original_count
+
+
+# ---------------------------------------------------------------------------
 # Controlled variant derivation
 # ---------------------------------------------------------------------------
 def _derive_controlled_gates(gates, control_virtual_idx):
@@ -673,6 +710,7 @@ class CompiledFunc:
         debug=False,
         parametric=False,
         opt=1,
+        merge_threshold=1,
     ):
         functools.update_wrapper(self, func)
         self._func = func
@@ -686,6 +724,10 @@ class CompiledFunc:
         self._debug = debug
         self._parametric = parametric
         self._opt = opt
+        self._merge_threshold = merge_threshold
+        self._merged_blocks = None
+        if self._parametric and self._opt == 2:
+            raise ValueError("parametric=True is not supported with opt=2")
         self._call_graph = None
         self._forward_calls = {}
         self._inverse_proxy = None
@@ -1826,6 +1868,7 @@ def compile(
     debug=False,
     parametric=False,
     opt=1,
+    merge_threshold=1,
 ):
     """Decorator that compiles a quantum function for cached gate replay.
 
@@ -1897,6 +1940,7 @@ def compile(
             debug=debug,
             parametric=parametric,
             opt=opt,
+            merge_threshold=merge_threshold,
         )
 
     if func is not None:
@@ -1911,6 +1955,7 @@ def compile(
             debug=debug,
             parametric=parametric,
             opt=opt,
+            merge_threshold=merge_threshold,
         )
     # Called as @ql.compile() or @ql.compile(max_cache=N)
     return decorator
