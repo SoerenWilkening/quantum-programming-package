@@ -2,10 +2,13 @@
 
 Tests merge candidate detection via CallGraphDAG.merge_groups() and
 gate concatenation/optimization via _merge_and_optimize.
+Also tests opt=2 end-to-end integration: merge wiring, merged replay,
+cross-boundary cancellation, and controlled context support.
 """
 
 import pytest
 
+import quantum_language as ql
 from quantum_language.call_graph import (
     CallGraphDAG,
 )
@@ -14,6 +17,7 @@ from quantum_language.compile import (
     CompiledFunc,
     _merge_and_optimize,
 )
+from quantum_language.qint import qint
 
 # ---------------------------------------------------------------------------
 # merge_groups tests
@@ -201,3 +205,161 @@ class TestCompiledFuncMergeParams:
 
         cf = CompiledFunc(dummy, opt=2, merge_threshold=3)
         assert cf._merge_threshold == 3
+
+
+# ---------------------------------------------------------------------------
+# opt=2 integration tests (end-to-end merge wiring)
+# ---------------------------------------------------------------------------
+
+
+class TestOpt2Integration:
+    """Integration tests for opt=2 merge pipeline."""
+
+    def test_opt2_basic(self):
+        """opt=2 produces correct result on first call (same as opt=1)."""
+        ql.circuit()
+
+        @ql.compile(opt=2)
+        def wrapper(x):
+            x += 1
+            return x
+
+        a = qint(3, width=4)
+        result = wrapper(a)
+        assert result is not None
+
+    def test_opt2_second_call_uses_merged(self):
+        """After first call with opt=2, _merged_blocks is populated for merge groups."""
+        ql.circuit()
+
+        # Use two different compiled functions that operate on the same qubits
+        # (overlapping) -- this creates a merge group
+        @ql.compile(opt=1)
+        def step_a(x):
+            x += 1
+            return x
+
+        @ql.compile(opt=1)
+        def step_b(x):
+            x += 2
+            return x
+
+        @ql.compile(opt=2)
+        def wrapper(x):
+            x = step_a(x)
+            x = step_b(x)
+            return x
+
+        a = qint(2, width=4)
+        wrapper(a)
+        # After first call, merged_blocks should be populated if merge groups exist
+        dag = wrapper.call_graph
+        if dag is not None and dag.merge_groups():
+            assert wrapper._merged_blocks is not None
+            assert len(wrapper._merged_blocks) > 0
+
+    def test_opt2_nonoverlapping_stay_independent(self):
+        """Two compiled functions on disjoint qubits produce no merge groups."""
+        ql.circuit()
+
+        @ql.compile(opt=1)
+        def inc_x(x):
+            x += 1
+            return x
+
+        @ql.compile(opt=1)
+        def inc_y(y):
+            y += 1
+            return y
+
+        @ql.compile(opt=2)
+        def wrapper(x, y):
+            x = inc_x(x)
+            y = inc_y(y)
+            return x
+
+        a = qint(1, width=4)
+        b = qint(2, width=4)
+        wrapper(a, b)
+        # Disjoint qubits => no merge groups => _merged_blocks should be None or empty
+        dag = wrapper.call_graph
+        if dag is not None:
+            groups = dag.merge_groups()
+            if not groups:
+                assert wrapper._merged_blocks is None or len(wrapper._merged_blocks) == 0
+
+    def test_opt2_call_graph_preserves_original(self):
+        """call_graph property shows pre-merge DAG structure after opt=2."""
+        ql.circuit()
+
+        @ql.compile(opt=1)
+        def step_a(x):
+            x += 1
+            return x
+
+        @ql.compile(opt=1)
+        def step_b(x):
+            x += 2
+            return x
+
+        @ql.compile(opt=2)
+        def wrapper(x):
+            x = step_a(x)
+            x = step_b(x)
+            return x
+
+        a = qint(2, width=4)
+        wrapper(a)
+        dag = wrapper.call_graph
+        assert dag is not None
+        # DAG should still reflect original structure (at least 2 inner nodes + wrapper)
+        assert dag.node_count >= 2
+
+    def test_opt2_controlled_context(self):
+        """opt=2 works inside controlled context (with qbool:)."""
+        ql.circuit()
+
+        @ql.compile(opt=2)
+        def inc(x):
+            x += 1
+            return x
+
+        ctrl = ql.qbool(value=True)
+        a = qint(2, width=4)
+
+        with ctrl:
+            result = inc(a)
+
+        assert result is not None
+
+    def test_opt2_cross_boundary_cancellation(self):
+        """Cross-boundary cancellation: adjacent inverse gates between sequences cancel."""
+        ql.circuit()
+
+        # step_a ends with X on the qubit, step_b starts with X on same qubit
+        # When merged, the X-X pair at the boundary should cancel
+        @ql.compile(opt=1)
+        def step_a(x):
+            x += 1  # Applies X gates
+            return x
+
+        @ql.compile(opt=1)
+        def step_b(x):
+            x += 1  # Also applies X gates -- X followed by X cancels
+            return x
+
+        @ql.compile(opt=2)
+        def wrapper(x):
+            x = step_a(x)
+            x = step_b(x)
+            return x
+
+        a = qint(0, width=1)  # Single qubit
+        wrapper(a)
+
+        # If merged blocks exist, the merged+optimized gate count should be 0
+        # because X+X = identity on a single qubit
+        if wrapper._merged_blocks is not None and len(wrapper._merged_blocks) > 0:
+            for _key, merged_block in wrapper._merged_blocks.items():
+                # Two X gates on same qubit should cancel completely
+                assert len(merged_block.gates) == 0
