@@ -15,6 +15,7 @@ import qiskit.qasm3
 from qiskit_aer import AerSimulator
 
 import quantum_language as ql
+from quantum_language.compile import CompiledFunc
 
 
 @pytest.fixture
@@ -145,3 +146,30 @@ def clean_circuit():
     circ = ql.circuit()
     yield circ
     # Cleanup happens automatically via Python GC
+
+
+@pytest.fixture(params=[1, 2, 3], ids=["opt1", "opt2", "opt3"])
+def opt_level(request, monkeypatch):
+    """Parametrize compile/merge tests across opt levels 1, 2, 3.
+
+    Monkeypatches CompiledFunc.__init__ so that any @ql.compile call using
+    the default opt=1 is transparently overridden to the fixture's current
+    level.  Calls that explicitly set opt to a non-default value (e.g.
+    opt=2 in merge tests) are left untouched.
+
+    The fixture also avoids injecting opt=2 when parametric=True, since
+    that combination raises ValueError by design.
+    """
+    level = request.param
+    original_init = CompiledFunc.__init__
+
+    def patched_init(self, func, **kwargs):
+        # Only override the default opt=1; leave explicit opt=2/3 alone
+        if kwargs.get("opt", 1) == 1:
+            # Skip override for parametric+opt=2 (ValueError by design)
+            if not (level == 2 and kwargs.get("parametric", False)):
+                kwargs["opt"] = level
+        original_init(self, func, **kwargs)
+
+    monkeypatch.setattr(CompiledFunc, "__init__", patched_init)
+    return level

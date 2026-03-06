@@ -42,6 +42,9 @@ from quantum_language.compile import (
     _Rz,
 )
 
+# Run all tests in this module at opt=1, opt=2, and opt=3
+pytestmark = pytest.mark.usefixtures("opt_level")
+
 # Suppress cosmetic width warnings
 warnings.filterwarnings("ignore", message="Value .* exceeds")
 
