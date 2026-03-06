@@ -163,7 +163,7 @@
 
 - [x] **Phase 107: Call Graph DAG Foundation** - opt_flag API, DAG construction with qubit overlap edges, backward compat (completed 2026-03-05)
 - [x] **Phase 108: Call Graph Analysis & Visualization** - Per-node stats extraction, aggregate metrics, DOT export, compilation report (completed 2026-03-06)
-- [ ] **Phase 109: Selective Sequence Merging** - opt_flag=2 with merge candidate detection, correct merging, cross-boundary optimization
+- [x] **Phase 109: Selective Sequence Merging** - opt_flag=2 with merge candidate detection, correct merging, cross-boundary optimization (completed 2026-03-06)
 - [ ] **Phase 110: Merge Verification & Regression** - Qiskit simulation equivalence, full test suite regression
 
 ## Phase Details
@@ -249,7 +249,7 @@ Phases execute in numeric order: 107 -> 108 -> 109 -> 110
 | 103-106 | v6.1 | 8/8 | Complete | 2026-03-05 |
 | 107. Call Graph DAG Foundation | 2/2 | Complete   | 2026-03-05 | - |
 | 108. Call Graph Analysis & Visualization | 2/2 | Complete    | 2026-03-06 | - |
-| 109. Selective Sequence Merging | 1/2 | In Progress|  | - |
+| 109. Selective Sequence Merging | 2/2 | Complete   | 2026-03-06 | - |
 | 110. Merge Verification & Regression | v7.0 | 0/TBD | Not started | - |
 
 ---

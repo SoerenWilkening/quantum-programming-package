@@ -10,7 +10,7 @@ Requirements for multi-level compile infrastructure. Each maps to roadmap phases
 ### Compilation API
 
 - [x] **CAPI-01**: User can set `@ql.compile(opt=1)` to generate standalone sequences with call graph DAG (default)
-- [ ] **CAPI-02**: User can set `@ql.compile(opt=2)` to selectively merge overlapping-qubit sequences
+- [x] **CAPI-02**: User can set `@ql.compile(opt=2)` to selectively merge overlapping-qubit sequences
 - [x] **CAPI-03**: User can set `@ql.compile(opt=3)` for full circuit expansion (current behavior, backward compatible)
 - [x] **CAPI-04**: Existing 106+ compile tests pass unchanged when opt=3 is used
 
@@ -31,7 +31,7 @@ Requirements for multi-level compile infrastructure. Each maps to roadmap phases
 
 - [x] **MERGE-01**: Overlapping-qubit sequences automatically identified as merge candidates
 - [x] **MERGE-02**: Merged sequences preserve correct per-qubit gate ordering
-- [ ] **MERGE-03**: Cross-boundary optimization (e.g., QFT/IQFT cancellation between adjacent sequences)
+- [x] **MERGE-03**: Cross-boundary optimization (e.g., QFT/IQFT cancellation between adjacent sequences)
 - [ ] **MERGE-04**: Merged result verified equivalent to sequential execution via Qiskit simulation
 
 ## Future Requirements
@@ -65,7 +65,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CAPI-01 | Phase 107 | Complete |
-| CAPI-02 | Phase 109 | Pending |
+| CAPI-02 | Phase 109 | Complete |
 | CAPI-03 | Phase 107 | Complete |
 | CAPI-04 | Phase 107 | Complete |
 | CGRAPH-01 | Phase 107 | Complete |
@@ -77,7 +77,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VIS-02 | Phase 108 | Complete |
 | MERGE-01 | Phase 109 | Complete |
 | MERGE-02 | Phase 109 | Complete |
-| MERGE-03 | Phase 109 | Pending |
+| MERGE-03 | Phase 109 | Complete |
 | MERGE-04 | Phase 110 | Pending |
 
 **Coverage:**
