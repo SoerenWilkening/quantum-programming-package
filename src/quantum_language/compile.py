@@ -799,6 +799,8 @@ class CompiledFunc:
                 pop_dag_context()
                 if self._call_graph is not None:
                     self._call_graph.build_overlap_edges()
+                    if self._opt == 2:
+                        self._apply_merge()
 
         return result
 
@@ -887,7 +889,7 @@ class CompiledFunc:
                     if block and block._capture_virtual_to_real:
                         qubit_set.update(block._capture_virtual_to_real.values())
                     _gates = block.gates if block else []
-                    dag.add_node(
+                    node_idx = dag.add_node(
                         self._func.__name__,
                         qubit_set,
                         len(_gates),
@@ -896,6 +898,10 @@ class CompiledFunc:
                         depth=_compute_depth(_gates),
                         t_count=_compute_t_count(_gates),
                     )
+                    # Store block ref for merge support (opt=2)
+                    if block is not None:
+                        dag._nodes[node_idx]._block_ref = block
+                        dag._nodes[node_idx]._v2r_ref = block._capture_virtual_to_real
         else:
             result = self._capture_and_cache_both(
                 args,
@@ -1156,6 +1162,9 @@ class CompiledFunc:
                 node.depth = _compute_depth(virtual_gates)
                 node.t_count = _compute_t_count(virtual_gates)
                 # cache_key not available here; left as placeholder ()
+                # Store block ref for merge support (opt=2)
+                node._block_ref = block
+                node._v2r_ref = capture_vtr
                 # Recompute bitmask
                 bitmask = np.uint64(0)
                 for q in qubit_set:
@@ -1589,6 +1598,75 @@ class CompiledFunc:
             self._forward_calls.pop(input_key, None)
 
     # ------------------------------------------------------------------
+    # Selective sequence merging (opt=2)
+    # ------------------------------------------------------------------
+    def _apply_merge(self):
+        """Merge overlapping sequences after first call (opt=2).
+
+        Gets merge groups from the call graph, collects CompiledBlocks and
+        their virtual-to-real mappings, runs _merge_and_optimize, and stores
+        merged CompiledBlocks keyed by frozenset of node indices.
+        """
+        if self._call_graph is None:
+            return
+        groups = self._call_graph.merge_groups(self._merge_threshold)
+        if not groups:
+            return
+
+        merged_blocks = {}
+        for group in groups:
+            blocks_with_mappings = []
+            for node_idx in group:
+                node = self._call_graph._nodes[node_idx]
+                block = node._block_ref
+                v2r = node._v2r_ref
+                if block is None or v2r is None:
+                    # Block not available for this node; skip this group
+                    break
+                blocks_with_mappings.append((block, v2r))
+            else:
+                # All blocks found -- merge them
+                merged_gates, original_count = _merge_and_optimize(
+                    blocks_with_mappings, optimize=self._optimize
+                )
+                # Determine max physical qubit used
+                max_phys = 0
+                for g in merged_gates:
+                    if g["target"] > max_phys:
+                        max_phys = g["target"]
+                    for c in g.get("controls", []):
+                        if c > max_phys:
+                            max_phys = c
+                total_vqubits = max_phys + 1 if merged_gates else 0
+                merged_block = CompiledBlock(
+                    gates=merged_gates,
+                    total_virtual_qubits=total_vqubits,
+                    param_qubit_ranges=[],
+                    internal_qubit_count=0,
+                    return_qubit_range=None,
+                    original_gate_count=original_count,
+                )
+                # Identity mapping: physical qubits are already correct
+                merged_block._capture_virtual_to_real = {i: i for i in range(total_vqubits)}
+                group_key = frozenset(group)
+                merged_blocks[group_key] = merged_block
+
+        if merged_blocks:
+            self._merged_blocks = merged_blocks
+
+        if self._debug and merged_blocks:
+            merge_stats = {
+                "merge_groups": len(groups),
+                "merged_blocks": len(merged_blocks),
+            }
+            for gk, mb in merged_blocks.items():
+                merge_stats[f"group_{sorted(gk)}_gates"] = len(mb.gates)
+                merge_stats[f"group_{sorted(gk)}_original"] = mb.original_gate_count
+            if self._stats is None:
+                self._stats = {}
+            self._stats["merge"] = merge_stats
+
+    # ------------------------------------------------------------------
     # Parametric introspection
     # ------------------------------------------------------------------
     @property
@@ -1660,6 +1738,7 @@ class CompiledFunc:
         self._cache.clear()
         self._forward_calls.clear()
         self._call_graph = None
+        self._merged_blocks = None
         # Preserve parametric state across circuits; only clear the block
         # reference since its cache entry is gone.
         self._parametric_block = None

@@ -110,7 +110,17 @@ class DAGNode:
         Pre-computed bitmask encoding qubit_set for fast overlap.
     """
 
-    __slots__ = ("func_name", "qubit_set", "gate_count", "cache_key", "bitmask", "depth", "t_count")
+    __slots__ = (
+        "func_name",
+        "qubit_set",
+        "gate_count",
+        "cache_key",
+        "bitmask",
+        "depth",
+        "t_count",
+        "_block_ref",
+        "_v2r_ref",
+    )
 
     def __init__(
         self,
@@ -128,6 +138,8 @@ class DAGNode:
         self.cache_key = cache_key
         self.depth = depth
         self.t_count = t_count
+        self._block_ref = None  # CompiledBlock ref for merge (opt=2)
+        self._v2r_ref = None  # virtual-to-real mapping for merge (opt=2)
         # Pre-compute bitmask from qubit_set
         bitmask = np.uint64(0)
         for q in qubit_set:
