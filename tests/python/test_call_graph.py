@@ -809,3 +809,81 @@ class TestDot:
         dot = dag.to_dot()
         # The double-quote should be escaped in the label
         assert 'func\\"name' in dot or "func" in dot
+
+
+# ---------------------------------------------------------------------------
+# TestReport: report() method tests
+# ---------------------------------------------------------------------------
+
+
+class TestReport:
+    """Tests for CallGraphDAG.report() compilation report method."""
+
+    def test_empty_dag_report(self):
+        dag = CallGraphDAG()
+        report = dag.report()
+        assert "empty" in report.lower() or "No nodes" in report
+
+    def test_single_node_report_header(self):
+        dag = CallGraphDAG()
+        dag.add_node("my_func", {0, 1, 2}, 42, (), depth=5, t_count=3)
+        report = dag.report()
+        assert "Compilation Report:" in report
+        assert "my_func" in report
+
+    def test_report_columns(self):
+        dag = CallGraphDAG()
+        dag.add_node("f", {0, 1}, 10, (), depth=3, t_count=1)
+        report = dag.report()
+        assert "Name" in report
+        assert "Gates" in report
+        assert "Depth" in report
+        assert "Qubits" in report
+        assert "T-count" in report
+        assert "Group" in report
+
+    def test_report_totals_row(self):
+        dag = CallGraphDAG()
+        dag.add_node("f", {0, 1}, 10, (), depth=3, t_count=1)
+        dag.add_node("g", {1, 2}, 8, (), depth=5, t_count=2)
+        report = dag.report()
+        assert "TOTAL" in report
+        # Aggregate: gates=18, depth=5 (same group), qubits=3, t_count=3
+        agg = dag.aggregate()
+        assert str(agg["gates"]) in report
+        assert str(agg["t_count"]) in report
+
+    def test_report_group_numbers(self):
+        dag = CallGraphDAG()
+        dag.add_node("f", {0}, 5, (), depth=3, t_count=1)
+        dag.add_node("g", {5}, 3, (), depth=2, t_count=0)
+        report = dag.report()
+        # Two disjoint nodes should have different group numbers
+        # Both group 0 and group 1 should appear
+        lines = report.split("\n")
+        group_vals = set()
+        for line in lines:
+            parts = line.split("|")
+            if len(parts) >= 7:
+                grp = parts[-1].strip().rstrip("|").strip()
+                if grp.isdigit():
+                    group_vals.add(int(grp))
+        assert len(group_vals) >= 2, f"Expected 2+ groups, got {group_vals}"
+
+    def test_report_integration(self):
+        """Integration: compile a real function and call report()."""
+        ql.circuit()
+
+        @ql.compile(opt=1)
+        def inc(x):
+            x += 1
+            return x
+
+        a = qint(3, width=4)
+        inc(a)
+        dag = inc.call_graph
+        assert dag is not None
+        report = dag.report()
+        assert "Compilation Report:" in report
+        assert "inc" in report
+        assert "TOTAL" in report
