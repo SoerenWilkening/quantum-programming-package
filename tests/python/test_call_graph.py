@@ -143,6 +143,80 @@ class TestComputeTCount:
 
 
 # ---------------------------------------------------------------------------
+# aggregate() tests
+# ---------------------------------------------------------------------------
+
+
+class TestAggregate:
+    """Tests for CallGraphDAG.aggregate() method."""
+
+    def test_empty_dag(self):
+        dag = CallGraphDAG()
+        result = dag.aggregate()
+        assert result == {"gates": 0, "depth": 0, "qubits": 0, "t_count": 0}
+
+    def test_single_node(self):
+        dag = CallGraphDAG()
+        dag.add_node("f", {0, 1, 2}, 10, (), depth=5, t_count=3)
+        result = dag.aggregate()
+        assert result == {"gates": 10, "depth": 5, "qubits": 3, "t_count": 3}
+
+    def test_two_nodes_same_parallel_group(self):
+        """Two nodes sharing qubits: gates summed, depth=max, qubits=union, t_count summed."""
+        dag = CallGraphDAG()
+        dag.add_node("f", {0, 1}, 10, (), depth=3, t_count=2)
+        dag.add_node("g", {1, 2}, 8, (), depth=5, t_count=4)
+        result = dag.aggregate()
+        assert result["gates"] == 18
+        assert result["depth"] == 5  # max of 3, 5 (same group)
+        assert result["qubits"] == 3  # union {0,1,2}
+        assert result["t_count"] == 6
+
+    def test_two_nodes_different_groups_disjoint(self):
+        """Two disjoint nodes: gates summed, depth=sum of per-group max, qubits=union, t_count summed."""
+        dag = CallGraphDAG()
+        dag.add_node("f", {0, 1}, 10, (), depth=3, t_count=2)
+        dag.add_node("g", {4, 5}, 8, (), depth=5, t_count=4)
+        result = dag.aggregate()
+        assert result["gates"] == 18
+        assert result["depth"] == 8  # 3 + 5 (different groups, sum)
+        assert result["qubits"] == 4  # union {0,1,4,5}
+        assert result["t_count"] == 6
+
+    def test_three_nodes_mixed_groups(self):
+        """3 nodes: 2 in one group, 1 in another. Critical-path depth correct."""
+        dag = CallGraphDAG()
+        dag.add_node("a", {0, 1}, 5, (), depth=3, t_count=1)
+        dag.add_node("b", {1, 2}, 7, (), depth=6, t_count=2)
+        dag.add_node("c", {5, 6}, 4, (), depth=2, t_count=0)
+        result = dag.aggregate()
+        assert result["gates"] == 16
+        # Group 1: {a, b} -> max depth = 6; Group 2: {c} -> depth = 2; total = 8
+        assert result["depth"] == 8
+        assert result["qubits"] == 5  # {0,1,2,5,6}
+        assert result["t_count"] == 3
+
+    def test_integration_compile_aggregate(self):
+        """Integration: compile a real function and call aggregate()."""
+        ql.circuit()
+
+        @ql.compile(opt=1)
+        def inc(x):
+            x += 1
+            return x
+
+        a = qint(3, width=4)
+        inc(a)
+        dag = inc.call_graph
+        assert dag is not None
+        result = dag.aggregate()
+        assert isinstance(result, dict)
+        assert result["gates"] > 0
+        assert result["depth"] > 0
+        assert result["qubits"] > 0
+
+
+# ---------------------------------------------------------------------------
 # CallGraphDAG.add_node tests
 # ---------------------------------------------------------------------------
 
