@@ -24,8 +24,8 @@ Requirements for multi-level compile infrastructure. Each maps to roadmap phases
 
 ### Visualization
 
-- [ ] **VIS-01**: User can export call graph as DOT string via API (e.g., `ql.compile_graph()`)
-- [ ] **VIS-02**: Compilation report showing per-node stats (gate count, depth, qubit set, parallel group)
+- [x] **VIS-01**: User can export call graph as DOT string via API (e.g., `ql.compile_graph()`)
+- [x] **VIS-02**: Compilation report showing per-node stats (gate count, depth, qubit set, parallel group)
 
 ### Sequence Merging
 
@@ -73,8 +73,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CGRAPH-03 | Phase 107 | Complete |
 | CGRAPH-04 | Phase 108 | Complete |
 | CGRAPH-05 | Phase 108 | Complete |
-| VIS-01 | Phase 108 | Pending |
-| VIS-02 | Phase 108 | Pending |
+| VIS-01 | Phase 108 | Complete |
+| VIS-02 | Phase 108 | Complete |
 | MERGE-01 | Phase 109 | Pending |
 | MERGE-02 | Phase 109 | Pending |
 | MERGE-03 | Phase 109 | Pending |
