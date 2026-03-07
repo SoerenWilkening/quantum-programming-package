@@ -222,11 +222,12 @@ Plans:
   1. Merged circuit output verified equivalent to sequential execution via Qiskit statevector simulation for arithmetic workloads (add, mul, grover oracle)
   2. All 106+ existing compile tests pass at opt=1, opt=2, and opt=3
   3. Parametric compilation works correctly at each opt level (no topology corruption from merge)
-**Plans**: 2 plans
+**Plans**: 3 plans
 
 Plans:
 - [ ] 110-01-PLAN.md -- Statevector equivalence tests (add, mul, grover oracle) + parametric+opt interaction
 - [ ] 110-02-PLAN.md -- Opt-level parametrization fixture + full regression across test_compile.py and test_merge.py
+- [ ] 110-03-PLAN.md -- Gap closure: fix OOM and selective opt_level application in test_compile.py
 
 ## Progress
 
@@ -250,7 +251,7 @@ Phases execute in numeric order: 107 -> 108 -> 109 -> 110
 | 107. Call Graph DAG Foundation | 2/2 | Complete   | 2026-03-05 | - |
 | 108. Call Graph Analysis & Visualization | 2/2 | Complete    | 2026-03-06 | - |
 | 109. Selective Sequence Merging | 2/2 | Complete    | 2026-03-06 | - |
-| 110. Merge Verification & Regression | 2/2 | Complete    | 2026-03-06 | - |
+| 110. Merge Verification & Regression | 2/3 | In Progress | - | - |
 
 ---
 *Roadmap created: 2026-02-02*
