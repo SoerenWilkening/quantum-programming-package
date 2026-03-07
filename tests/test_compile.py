@@ -42,8 +42,10 @@ from quantum_language.compile import (
     _Rz,
 )
 
-# Run all tests in this module at opt=1, opt=2, and opt=3
-pytestmark = pytest.mark.usefixtures("opt_level")
+# Mark for tests that should run at all opt levels (behavioral correctness).
+# Tests NOT marked run only at default opt level (they check exact gate counts,
+# cache internals, or stats that vary by optimization strategy).
+opt_safe = pytest.mark.usefixtures("opt_level")
 
 # Suppress cosmetic width warnings
 warnings.filterwarnings("ignore", message="Value .* exceeds")
@@ -199,6 +201,7 @@ def test_replay_same_gate_count():
 # ---------------------------------------------------------------------------
 
 
+@opt_safe
 def test_return_value_usable_in_place():
     """SC3: In-place modified qint returned from compiled fn is usable."""
     ql.circuit()
@@ -220,6 +223,7 @@ def test_return_value_usable_in_place():
     assert layer_after > layer_before, "Subsequent operation should add gates"
 
 
+@opt_safe
 def test_return_value_usable_new_qint():
     """SC3: New qint returned from compiled fn is usable in subsequent ops."""
     ql.circuit()
@@ -244,6 +248,7 @@ def test_return_value_usable_new_qint():
     assert layer_after > layer_before, "Subsequent operation should add gates"
 
 
+@opt_safe
 def test_replay_return_value_usable():
     """SC3: Qint returned from replay is usable in subsequent operations."""
     ql.circuit()
@@ -413,6 +418,7 @@ def test_circuit_reset_replay_after_recapture():
 # ---------------------------------------------------------------------------
 
 
+@opt_safe
 def test_bare_decorator_form():
     """@ql.compile without parentheses works."""
     ql.circuit()
@@ -428,6 +434,7 @@ def test_bare_decorator_form():
     assert result is a
 
 
+@opt_safe
 def test_parens_decorator_form():
     """@ql.compile() with empty parentheses works."""
     ql.circuit()
@@ -443,6 +450,7 @@ def test_parens_decorator_form():
     assert result is a
 
 
+@opt_safe
 def test_decorator_with_options():
     """@ql.compile(max_cache=N) works."""
     ql.circuit()
@@ -535,6 +543,7 @@ def test_clear_cache_method():
 # ---------------------------------------------------------------------------
 
 
+@opt_safe
 def test_in_place_modification_replay():
     """In-place modification during replay returns caller's qint."""
     ql.circuit()
@@ -553,6 +562,7 @@ def test_in_place_modification_replay():
     assert r2 is b, "Replay in-place should return caller's qint"
 
 
+@opt_safe
 def test_exception_during_capture_discarded():
     """Partial capture is discarded on exception; retry works."""
     ql.circuit()
@@ -583,6 +593,7 @@ def test_exception_during_capture_discarded():
     assert result is b
 
 
+@opt_safe
 def test_function_metadata_preserved():
     """functools.update_wrapper preserves function metadata."""
 
@@ -596,6 +607,7 @@ def test_function_metadata_preserved():
     assert my_quantum_func.__doc__ == "My docstring."
 
 
+@opt_safe
 def test_no_return_value():
     """Function with no return works (returns None)."""
     ql.circuit()
@@ -844,6 +856,7 @@ def test_optimization_controlled_gates_respect_controls():
 # ---------------------------------------------------------------------------
 
 
+@opt_safe
 def test_uncomputation_replay_result_in_with_block():
     """UNCOMP1: Replay result inside with block is auto-uncomputed at scope exit.
 
@@ -872,6 +885,7 @@ def test_uncomputation_replay_result_in_with_block():
     assert result._is_uncomputed, "Replay result should be auto-uncomputed after with block exit"
 
 
+@opt_safe
 def test_uncomputation_in_place_return_no_double_uncompute():
     """UNCOMP2: In-place return does NOT set operation_type, preventing spurious uncomputation.
 
@@ -902,6 +916,7 @@ def test_uncomputation_in_place_return_no_double_uncompute():
     )
 
 
+@opt_safe
 def test_uncomputation_second_replay_in_with_block():
     """UNCOMP3: Second replay inside with block also gets correctly uncomputed.
 
@@ -933,6 +948,7 @@ def test_uncomputation_second_replay_in_with_block():
     assert r3._is_uncomputed, "Second replay in with block should also be uncomputed"
 
 
+@opt_safe
 def test_compiled_result_has_operation_type():
     """UNCOMP4: Both first-call and replay results have operation_type set.
 
@@ -1014,6 +1030,7 @@ def test_uncomputation_replay_uses_optimized_sequence():
 # ---------------------------------------------------------------------------
 
 
+@opt_safe
 def test_compile_controlled_basic():
     """CTL-01: Compiled function inside `with qbool:` produces controlled gates.
 
@@ -1139,6 +1156,7 @@ def test_compile_controlled_gates_have_extra_control():
         )
 
 
+@opt_safe
 def test_compile_controlled_nested_with():
     """CTL-01: Compiled function called inside sequential `with` blocks
     produces correctly controlled gates.
@@ -1296,6 +1314,7 @@ def test_compile_controlled_custom_key():
     assert call_count[0] == 1, "Controlled call with custom key should be cache hit"
 
 
+@opt_safe
 def test_compile_controlled_first_call_inside_with():
     """CTL: First call to compiled function happens inside `with` block.
 
@@ -1366,6 +1385,7 @@ def test_compile_controlled_first_call_inside_with():
 # ---------------------------------------------------------------------------
 
 
+@opt_safe
 def test_inverse_reverses_gate_order():
     """INV-01: _inverse_gate_list reverses gate order and adjoints each gate."""
     gates = [
@@ -1390,6 +1410,7 @@ def test_inverse_reverses_gate_order():
     assert inverted[2]["target"] == 0
 
 
+@opt_safe
 def test_inverse_negates_rotation_angles():
     """INV-02: Rotation gates have their angles negated by _adjoint_gate."""
     for gate_type in (_P, _Rx, _Ry, _Rz, _R):
@@ -1401,6 +1422,7 @@ def test_inverse_negates_rotation_angles():
         assert adj["type"] == gate_type
 
 
+@opt_safe
 def test_inverse_self_adjoint_unchanged():
     """INV-03: Self-adjoint gates (X, Y, Z, H) are unchanged by _adjoint_gate."""
     for gate_type in (_X, _Y, _Z, _H):
@@ -1410,6 +1432,7 @@ def test_inverse_self_adjoint_unchanged():
         assert abs(adj["angle"]) < 1e-12
 
 
+@opt_safe
 def test_inverse_measurement_raises():
     """INV-04: _adjoint_gate raises ValueError for measurement gates."""
     g = _gate(_M, 0)
@@ -1417,6 +1440,7 @@ def test_inverse_measurement_raises():
         _adjoint_gate(g)
 
 
+@opt_safe
 def test_inverse_empty_function():
     """INV-05: Adjoint of a no-op compiled function works correctly."""
     ql.circuit()
@@ -1436,6 +1460,7 @@ def test_inverse_empty_function():
     assert result is b  # In-place return
 
 
+@opt_safe
 def test_inverse_round_trip():
     """INV-06: fn.adjoint.inverse() is the original fn (identity round-trip)."""
     ql.circuit()
@@ -1651,6 +1676,7 @@ def test_nesting_inner_gates_in_outer_capture():
     assert inner_count[0] == 1, "Inner should not be called again during replay"
 
 
+@opt_safe
 def test_nesting_depth_limit():
     """NST-02: Recursive compiled functions raise RecursionError at depth limit."""
 
@@ -1668,6 +1694,7 @@ def test_nesting_depth_limit():
         recursive_fn(ql.qint(0, width=4))
 
 
+@opt_safe
 def test_nesting_inner_return_value_usable():
     """NST-03: Inner compiled function's return value is usable in outer."""
     ql.circuit()
@@ -2673,6 +2700,7 @@ def test_qarray_argument_basic():
     assert result.width == 8, "Result should have width 8"
 
 
+@opt_safe
 def test_qarray_argument_mixed_with_qint():
     """ARR-01: Mixed qarray and qint arguments work correctly."""
     ql.circuit()
@@ -2912,6 +2940,7 @@ def test_qarray_cache_separate_for_different_shapes():
     assert len(identity._cache) >= 2, "Cache should have entries for different lengths"
 
 
+@opt_safe
 def test_qarray_empty_raises_error():
     """Empty qarray should raise ValueError."""
     ql.circuit()
@@ -2926,6 +2955,7 @@ def test_qarray_empty_raises_error():
         process(empty_arr)
 
 
+@opt_safe
 def test_qarray_return_value():
     """Compiled function can return qarray."""
     ql.circuit()
@@ -2946,6 +2976,7 @@ def test_qarray_return_value():
     assert len(result) == 2, "Result should have same length"
 
 
+@opt_safe
 def test_qarray_return_replay():
     """qarray return works correctly on replay."""
     ql.circuit()
@@ -3275,6 +3306,8 @@ class TestModeFlagCacheKey:
 # ---------------------------------------------------------------------------
 class TestParametricAPI:
     """Verify @ql.compile(parametric=True) API surface (PAR-01)."""
+
+    pytestmark = opt_safe
 
     def test_parametric_flag_accepted(self):
         """compile() accepts parametric=True without error."""
