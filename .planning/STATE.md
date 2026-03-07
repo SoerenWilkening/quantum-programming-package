@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-05)
 ## Current Position
 
 Phase: 110 of 110 (Merge Verification & Regression)
-Plan: 2 of 2
-Status: 110-02 Complete
-Last activity: 2026-03-06 -- Completed 110-02 opt-level regression (441 test invocations at opt=1/2/3)
+Plan: 3 of 3
+Status: 110-03 Complete
+Last activity: 2026-03-07 -- Completed 110-03 OOM fix and selective opt_level (186 invocations, 171 pass, 15 pre-existing)
 
 Progress: [██████████] 100%
 
@@ -87,6 +87,8 @@ Recent decisions affecting current work:
 - Statevector.from_instruction() for exact equivalence (no AerSimulator overhead)
 - Global phase normalization via first non-zero amplitude alignment (atol=1e-10)
 - opt_level fixture patches ql.compile() function (not CompiledFunc.__init__) to distinguish user-explicit opt= from defaults
+- Selective opt_level: behavioral tests @opt_safe (28+class), sensitive tests run once at default opt level
+- gc.collect() autouse fixture between ALL tests to prevent qint.__del__ OOM from stale gate injection
 
 ### Blockers/Concerns
 
@@ -97,10 +99,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-06T22:15:00Z
-Stopped at: Completed 110-01-PLAN.md (re-executed)
-Resume file: .planning/phases/110-merge-verification-regression/110-01-SUMMARY.md
-Resume action: Phase 110 complete
+Last session: 2026-03-07T11:54:29Z
+Stopped at: Completed 110-03-PLAN.md
+Resume file: .planning/phases/110-merge-verification-regression/110-03-SUMMARY.md
+Resume action: Phase 110 gap closure complete
 
 ---
-*State updated: 2026-03-06 -- 110-01 statevector equivalence tests complete (15 tests, add/mul/grover + parametric interaction)*
+*State updated: 2026-03-07 -- 110-03 OOM fix + selective opt_level (gc.collect autouse, 186 invocations, 15 pre-existing failures stable)*
