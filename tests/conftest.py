@@ -151,6 +151,19 @@ def clean_circuit():
     # Cleanup happens automatically via Python GC
 
 
+@pytest.fixture(autouse=True)
+def _gc_between_tests():
+    """Force garbage collection between tests to prevent OOM.
+
+    qint.__del__ injects uncomputation gates into the active circuit.
+    If GC is deferred, stale qint objects from previous tests inject
+    gates into the wrong circuit, causing unbounded memory growth.
+    """
+    gc.collect()
+    yield
+    gc.collect()
+
+
 @pytest.fixture(params=[1, 2, 3], ids=["opt1", "opt2", "opt3"])
 def opt_level(request, monkeypatch):
     """Parametrize compile/merge tests across opt levels 1, 2, 3.
@@ -164,6 +177,11 @@ def opt_level(request, monkeypatch):
     combination raises ValueError by design.
     """
     level = request.param
+    # Force GC to clean up stale qint objects from previous test.
+    # Without this, qint.__del__ injects gates into wrong circuits
+    # causing memory growth over 354 invocations.
+    gc.collect()
+
     original_compile = _compile_mod.compile
 
     def patched_compile(func=None, **kwargs):
@@ -175,4 +193,6 @@ def opt_level(request, monkeypatch):
 
     monkeypatch.setattr(_compile_mod, "compile", patched_compile)
     monkeypatch.setattr(ql, "compile", patched_compile)
-    return level
+    yield level
+    # Post-test cleanup: collect any qint objects created during the test
+    gc.collect()
