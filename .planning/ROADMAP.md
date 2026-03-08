@@ -173,7 +173,7 @@
 **Milestone Goal:** Rewrite the chess quantum walk to evaluate move legality in superposition using quantum predicates built from standard ql constructs, replace classical pre-filtering with all-moves enumeration and quantum validity checking, redesign diffusion for large branching factors, and optimize compile infrastructure with numpy-based qubit set operations.
 
 - [x] **Phase 112: Compile Infrastructure Optimization** - Numpy-based qubit set operations in compile.py and call_graph.py with profiled before/after validation (completed 2026-03-08)
-- [ ] **Phase 113: Diffusion Redesign & Move Enumeration** - Arithmetic counting circuit replacing combinatorial diffusion explosion, plus all-moves enumeration table
+- [x] **Phase 113: Diffusion Redesign & Move Enumeration** - Arithmetic counting circuit replacing combinatorial diffusion explosion, plus all-moves enumeration table (completed 2026-03-08)
 - [ ] **Phase 114: Core Quantum Predicates** - Piece-exists and no-friendly-capture predicates using standard ql constructs with @ql.compile(inverse=True)
 - [ ] **Phase 115: Check Detection & Combined Predicate** - King-safety predicate via attack tables and combined move legality predicate composing all conditions
 - [ ] **Phase 116: Walk Integration & Demo** - Full walk rewrite replacing classical pre-filtering with quantum predicates, end-to-end demo as framework showcase
@@ -204,7 +204,7 @@ Plans:
   2. Diffusion operator uses an arithmetic counting circuit (summing validity bits into a count register) instead of O(2^d_max) itertools.combinations pattern enumeration
   3. Diffusion circuit generation is O(d_max) in gate count — no exponential or superlinear blowup
   4. Existing walk tests continue to pass (diffusion redesign does not break SAT demo or small-board cases)
-**Plans:** 2/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 - [ ] 113-01-PLAN.md — All-moves enumeration table builder (build_move_table in chess_encoding.py)
@@ -279,7 +279,7 @@ Phases execute in numeric order: 112 -> 113 -> 114 -> 115 -> 116
 | 103-106 | v6.1 | 8/8 | Complete | 2026-03-05 |
 | 107-111 | v7.0 | 10/10 | Complete | 2026-03-08 |
 | 112. Compile Infra Opt | 2/2 | Complete    | 2026-03-08 | - |
-| 113. Diffusion & Enum | 2/3 | In Progress|  | - |
+| 113. Diffusion & Enum | 3/3 | Complete   | 2026-03-08 | - |
 | 114. Core Predicates | v8.0 | 0/TBD | Not started | - |
 | 115. Check & Combined | v8.0 | 0/TBD | Not started | - |
 | 116. Walk Integration | v8.0 | 0/TBD | Not started | - |

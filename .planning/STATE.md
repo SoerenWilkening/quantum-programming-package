@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v8.0
 milestone_name: Quantum Chess Walk Rewrite
-status: completed
-stopped_at: Completed 113-01-PLAN.md
-last_updated: "2026-03-08T14:59:36.613Z"
-last_activity: 2026-03-08 -- Completed 113-01 (build_move_table for position-independent move enumeration)
+status: executing
+stopped_at: Completed 113-03-PLAN.md
+last_updated: "2026-03-08T19:10:07.127Z"
+last_activity: 2026-03-08 -- Completed 113-03 (chess_walk.py wired to shared counting_diffusion_core)
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 5
   percent: 96
 ---
 
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 ## Current Position
 
 Phase: 113 of 116 (Diffusion Redesign Move Enumeration)
-Plan: 1 of 1 complete
-Status: Phase complete
-Last activity: 2026-03-08 -- Completed 113-01 (build_move_table for position-independent move enumeration)
+Plan: 3 of 5 complete
+Status: In progress
+Last activity: 2026-03-08 -- Completed 113-03 (chess_walk.py wired to shared counting_diffusion_core)
 
 Progress: [##########] 96%
 
@@ -53,6 +53,7 @@ Progress: [##########] 96%
 | v7.0 Compile Infrastructure | 107-111 | 10 | Complete (2026-03-08) |
 | v8.0 Chess Walk Rewrite | 112-116 | TBD | Ready to plan |
 | Phase 113 P01 | 4min | 1 tasks | 2 files |
+| Phase 113 P03 | 7min | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,8 @@ Recent decisions affecting current work:
 - No edge-of-board filtering in move table -- quantum predicate handles legality
 - 8 entries per piece in move table (knights and kings both have 8 offsets)
 - [Phase 113]: No edge-of-board filtering in move table -- quantum predicate handles legality
+- [Phase 113]: counting_diffusion_core extracted as shared module-level function in walk.py
+- [Phase 113]: counting_diffusion_core extracted as shared module-level function in walk.py for chess_walk.py integration
 
 ### Blockers/Concerns
 
@@ -84,10 +87,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08T14:59:36.604Z
-Stopped at: Completed 113-01-PLAN.md
+Last session: 2026-03-08T19:10:03.058Z
+Stopped at: Completed 113-03-PLAN.md
 Resume file: None
-Resume action: Execute next plan in phase 113
+Resume action: Execute next plan in phase 113 (113-04)
 
 ---
-*State updated: 2026-03-08 -- 113-01 complete (build_move_table for position-independent move enumeration)*
+*State updated: 2026-03-08 -- 113-03 complete (chess_walk.py shared counting diffusion)*
