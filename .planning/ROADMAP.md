@@ -204,7 +204,7 @@ Plans:
   2. Diffusion operator uses an arithmetic counting circuit (summing validity bits into a count register) instead of O(2^d_max) itertools.combinations pattern enumeration
   3. Diffusion circuit generation is O(d_max) in gate count — no exponential or superlinear blowup
   4. Existing walk tests continue to pass (diffusion redesign does not break SAT demo or small-board cases)
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [ ] 113-01-PLAN.md — All-moves enumeration table builder (build_move_table in chess_encoding.py)
@@ -279,7 +279,7 @@ Phases execute in numeric order: 112 -> 113 -> 114 -> 115 -> 116
 | 103-106 | v6.1 | 8/8 | Complete | 2026-03-05 |
 | 107-111 | v7.0 | 10/10 | Complete | 2026-03-08 |
 | 112. Compile Infra Opt | 2/2 | Complete    | 2026-03-08 | - |
-| 113. Diffusion & Enum | 1/3 | In Progress|  | - |
+| 113. Diffusion & Enum | 2/3 | In Progress|  | - |
 | 114. Core Predicates | v8.0 | 0/TBD | Not started | - |
 | 115. Check & Combined | v8.0 | 0/TBD | Not started | - |
 | 116. Walk Integration | v8.0 | 0/TBD | Not started | - |
