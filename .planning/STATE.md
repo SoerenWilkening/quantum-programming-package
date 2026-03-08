@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v8.0
 milestone_name: Quantum Chess Walk Rewrite
 status: executing
-stopped_at: Phase 114 context gathered
-last_updated: "2026-03-08T20:11:01.628Z"
+stopped_at: Completed 114-01-PLAN.md (piece-exists predicate)
+last_updated: "2026-03-08T20:41:17.285Z"
 last_activity: 2026-03-08 -- Completed 113-03 (chess_walk.py wired to shared counting_diffusion_core)
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 7
+  completed_plans: 6
   percent: 96
 ---
 
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v8.0 Quantum Chess Walk Rewrite -- Phase 113
+**Current focus:** v8.0 Quantum Chess Walk Rewrite -- Phase 114
 
 ## Current Position
 
-Phase: 113 of 116 (Diffusion Redesign Move Enumeration)
-Plan: 3 of 5 complete
+Phase: 114 of 116 (Core Quantum Predicates)
+Plan: 1 of 2 complete
 Status: In progress
-Last activity: 2026-03-08 -- Completed 113-03 (chess_walk.py wired to shared counting_diffusion_core)
+Last activity: 2026-03-08 -- Completed 114-01 (piece-exists predicate factory)
 
-Progress: [##########] 96%
+Progress: [##########] 98%
 
 ## Performance Metrics
 
@@ -54,6 +54,7 @@ Progress: [##########] 96%
 | v8.0 Chess Walk Rewrite | 112-116 | TBD | Ready to plan |
 | Phase 113 P01 | 4min | 1 tasks | 2 files |
 | Phase 113 P03 | 7min | 2 tasks | 3 files |
+| Phase 114 P01 | 15min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,7 @@ Recent decisions affecting current work:
 - [Phase 113]: No edge-of-board filtering in move table -- quantum predicate handles legality
 - [Phase 113]: counting_diffusion_core extracted as shared module-level function in walk.py
 - [Phase 113]: counting_diffusion_core extracted as shared module-level function in walk.py for chess_walk.py integration
+- [Phase 114]: Used .adjoint() instead of .inverse() for ancilla-free predicate reversal
 
 ### Blockers/Concerns
 
@@ -87,9 +89,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08T20:11:01.619Z
-Stopped at: Phase 114 context gathered
-Resume file: .planning/phases/114-core-quantum-predicates/114-CONTEXT.md
+Last session: 2026-03-08T20:41:17.276Z
+Stopped at: Completed 114-01-PLAN.md (piece-exists predicate)
+Resume file: None
 Resume action: Execute next plan in phase 113 (113-04)
 
 ---
