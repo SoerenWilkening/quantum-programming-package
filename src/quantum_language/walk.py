@@ -15,7 +15,6 @@ References
     Theory of Computing, 2018 (arXiv:1509.02374).
 """
 
-import itertools
 import math
 
 import numpy as np
@@ -962,100 +961,6 @@ class QWalkTree:
             count -= v
 
         # --- Step 9: Uncompute validity ancillae (reverse of step 2) ---
-        self._uncompute_children(depth, level_idx, d_max, validity)
-
-    def _variable_diffusion_legacy(self, depth):
-        """Legacy variable-branching diffusion using itertools.combinations.
-
-        O(2^d_max) gate complexity. Kept for equivalence testing during
-        the transition to counting-based diffusion.
-
-        Parameters
-        ----------
-        depth : int
-            Depth level (1..max_depth). Must not be called for depth=0.
-        """
-        from .qbool import qbool
-
-        level_idx = self.max_depth - depth
-        d_max = self.branching[level_idx]
-        branch_reg = self.branch_registers[level_idx]
-        h_qubit_idx = self._height_qubit(depth)
-        h_control = _make_qbool_wrapper(h_qubit_idx)
-        is_root = depth == self.max_depth
-
-        validity = [qbool() for _ in range(d_max)]
-        self._evaluate_children(depth, level_idx, d_max, validity)
-
-        validity_qubits = [int(validity[j].qubits[63]) for j in range(d_max)]
-
-        # Step 3a: U_dagger (inverse state preparation) conditional on d(x)
-        for d_val in range(1, d_max + 1):
-            angle_data = self._variable_angles.get(d_val)
-            if angle_data is None:
-                continue
-            phi_d = angle_data["phi"]
-            if is_root:
-                phi_d = self._variable_root_angles.get(d_val, phi_d)
-            cascade_ops_d = angle_data["cascade_ops"]
-
-            for pattern in itertools.combinations(range(d_max), d_val):
-                zeros = [j for j in range(d_max) if j not in pattern]
-                for z in zeros:
-                    emit_x(validity_qubits[z])
-
-                ctrl_qubits = [h_qubit_idx] + validity_qubits
-
-                if d_val > 1 and cascade_ops_d:
-                    _emit_cascade_multi_controlled(branch_reg, cascade_ops_d, ctrl_qubits, sign=-1)
-                _emit_multi_controlled_ry(self._height_qubit(depth - 1), -phi_d, ctrl_qubits)
-
-                for z in zeros:
-                    emit_x(validity_qubits[z])
-
-        # Step 3b: S_0 reflection
-        from ._gates import emit_mcz, emit_z
-        from .diffusion import _collect_qubits
-
-        h_child = _make_qbool_wrapper(self._height_qubit(depth - 1))
-        s0_qubits = _collect_qubits(h_child, branch_reg)
-        with h_control:
-            for q in s0_qubits:
-                emit_x(q)
-        all_s0_with_h = [h_qubit_idx] + s0_qubits
-        if len(all_s0_with_h) == 1:
-            emit_z(all_s0_with_h[0])
-        else:
-            emit_mcz(all_s0_with_h[-1], all_s0_with_h[:-1])
-        with h_control:
-            for q in s0_qubits:
-                emit_x(q)
-
-        # Step 3c: U forward conditional on d(x)
-        for d_val in range(1, d_max + 1):
-            angle_data = self._variable_angles.get(d_val)
-            if angle_data is None:
-                continue
-            phi_d = angle_data["phi"]
-            if is_root:
-                phi_d = self._variable_root_angles.get(d_val, phi_d)
-            cascade_ops_d = angle_data["cascade_ops"]
-
-            for pattern in itertools.combinations(range(d_max), d_val):
-                zeros = [j for j in range(d_max) if j not in pattern]
-                for z in zeros:
-                    emit_x(validity_qubits[z])
-
-                ctrl_qubits = [h_qubit_idx] + validity_qubits
-
-                _emit_multi_controlled_ry(self._height_qubit(depth - 1), phi_d, ctrl_qubits)
-                if d_val > 1 and cascade_ops_d:
-                    _emit_cascade_multi_controlled(branch_reg, cascade_ops_d, ctrl_qubits, sign=1)
-
-                for z in zeros:
-                    emit_x(validity_qubits[z])
-
-        # Step 4: Uncompute validity
         self._uncompute_children(depth, level_idx, d_max, validity)
 
     def _evaluate_children(self, depth, level_idx, d_max, validity):
