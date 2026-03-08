@@ -180,6 +180,17 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ### Active
 
+## Current Milestone: v8.0 Quantum Chess Walk Rewrite
+
+**Goal:** Rewrite the chess quantum walk to evaluate move legality in superposition (knights + kings, including check detection), replacing classical pre-filtering with quantum predicates, and optimize compile infrastructure with numpy-based qubit set operations.
+
+**Target features:**
+- Quantum move generation for knights (8 destinations/square) and kings (8 destinations/square) in superposition
+- Quantum legality predicate: piece exists on source, target not same-color occupied, king not in check after move
+- Rewritten chess_walk.py using quantum predicates instead of classical move pre-filtering
+- Compile infrastructure optimization: numpy qubit set operations in compile.py/call_graph.py, reduce Python loop overhead
+
+**Completed (v7.0):**
 - ✓ Multi-level compilation: opt=1 (call graph DAG), opt=2 (selective merge), opt=3 (full expansion) — v7.0
 - ✓ CallGraphDAG with rustworkx PyDAG, qubit overlap edges, parallel group detection — v7.0
 - ✓ Per-node gate count, depth, T-count extraction with aggregate metrics — v7.0

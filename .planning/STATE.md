@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v7.0
-milestone_name: Compile Infrastructure
-status: completed
-stopped_at: Completed 111-01-PLAN.md
-last_updated: "2026-03-08T11:25:03.486Z"
-last_activity: 2026-03-08 -- Completed 111-01 Phase 107 verification closure (6/6 requirements verified, 15/15 v7.0 complete)
+milestone: v8.0
+milestone_name: Quantum Chess Walk Rewrite
+status: defining_requirements
+stopped_at: null
+last_updated: "2026-03-08"
+last_activity: 2026-03-08 -- Milestone v8.0 started
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -21,21 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v7.0 shipped. Planning next milestone.
+**Current focus:** v8.0 Quantum Chess Walk Rewrite
 
 ## Current Position
 
-Phase: 111 of 111 (Phase 107 Verification Closure)
-Plan: 1 of 1
-Status: 111-01 Complete
-Last activity: 2026-03-08 -- Completed 111-01 Phase 107 verification closure (6/6 requirements verified, 15/15 v7.0 complete)
-
-Progress: [██████████] 100%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-03-08 — Milestone v8.0 started
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 277 (v1.0-v6.1)
+- Total plans completed: 287 (v1.0-v7.0)
 - Average duration: ~13 min/plan
 - Total execution time: ~45.7 hours
 
@@ -51,6 +49,7 @@ Progress: [██████████] 100%
 | v6.0 Quantum Walk | 97-102 | 11 | Shipped (2026-03-03) |
 | v6.1 Quantum Chess Demo | 103-106 | 8 | Complete (2026-03-05) |
 | v7.0 Compile Infrastructure | 107-111 | 10 | Complete (2026-03-08) |
+| v8.0 Chess Walk Rewrite | — | — | Defining requirements |
 
 ## Accumulated Context
 
@@ -59,48 +58,24 @@ Progress: [██████████] 100%
 See PROJECT.md Key Decisions table for full history.
 
 Recent decisions affecting current work:
-- All 6 Phase 107 requirements verified with file:line evidence (CAPI-01/03/04, CGRAPH-01/02/03)
-- Quantum chess demo compilation confirms opt=1 default works in real-world integration
-- Call graph DAG lives in Python (compile-time structure, not hot path)
-- opt_flag=1 builds DAG alongside normal expansion (no C backend changes)
-- rustworkx PyDAG for graph primitives, NumPy bitmasks for qubit overlap
-- Sparse circuit arrays deferred to v8.0 (independent C-level track)
-- DAGNode uses __slots__ + pre-computed np.uint64 bitmask for fast overlap
-- build_overlap_edges skips parent-child call edges to avoid double-counting
-- parallel_groups uses separate undirected PyGraph for clean component detection
-- __call__ refactored into __call__ + _call_inner for clean DAG try/finally
-- Capture path uses placeholder node updated after block finalization
-- opt parameter NOT in cache key (DAG building is observational only)
-- ASAP scheduling for depth: per-qubit occupancy tracking, each gate occupies max(occupied qubits)+1
-- Dual T-count formula: direct T/TDG count preferred, 7*CCX fallback when no T gates
-- Critical-path depth in aggregate: sum of per-group max depths from parallel_groups()
-- DOT cluster subgraphs only rendered when >1 parallel group
-- Fixed-width report columns: Name 20 chars left-aligned, numeric 8 chars right-aligned
-- merge_groups reuses parallel_groups pattern with threshold filter and singleton exclusion
-- _merge_and_optimize wraps _optimize_gate_list with virtual-to-physical qubit remapping
-- parametric+opt=2 guard raises ValueError immediately at construction time
-- DAG node _block_ref/_v2r_ref for direct block access during merge (avoids cache_key placeholder issue)
-- _apply_merge runs after build_overlap_edges in __call__ finally block when opt==2
-- Merged blocks keyed by frozenset of node indices for O(1) group lookup
-- Statevector.from_instruction() for exact equivalence (no AerSimulator overhead)
-- Global phase normalization via first non-zero amplitude alignment (atol=1e-10)
-- opt_level fixture patches ql.compile() function (not CompiledFunc.__init__) to distinguish user-explicit opt= from defaults
-- Selective opt_level: behavioral tests @opt_safe (28+class), sensitive tests run once at default opt level
-- gc.collect() autouse fixture between ALL tests to prevent qint.__del__ OOM from stale gate injection
+- Chess walk must evaluate move legality in superposition (not classical pre-filtering)
+- Knights + Kings move types for v8.0 (non-sliding pieces only)
+- Full legality including check detection
+- Compile infrastructure qubit_set operations to use numpy, reduce Python loop overhead
 
 ### Blockers/Concerns
 
 **Carry forward (architectural):**
-- 14-15 pre-existing test failures in test_compile.py -- unrelated to v7.0
-- Phase kickback: control qubits are NOT read-only (must track all qubits as dependencies)
-- Merge can silently corrupt quantum states -- dedicated verification phase (110) addresses this
+- 14-15 pre-existing test failures in test_compile.py — unrelated to v8.0
+- Raw predicate qubit allocation in QWalkTree: each predicate call allocates new qbools
+- QWalkTree nested `with qbool:` limitation worked around via V-gate CCRy decomposition
 
 ## Session Continuity
 
-Last session: 2026-03-08T11:10:23.208Z
-Stopped at: Completed 111-01-PLAN.md
+Last session: 2026-03-08
+Stopped at: Defining v8.0 requirements
 Resume file: None
-Resume action: v7.0 milestone fully verified (15/15 requirements)
+Resume action: Continue with requirements definition and roadmap
 
 ---
-*State updated: 2026-03-08 -- 111-01 Phase 107 verification closure (6/6 requirements verified, v7.0 milestone complete)*
+*State updated: 2026-03-08 -- Milestone v8.0 started*
