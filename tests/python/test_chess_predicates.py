@@ -43,7 +43,7 @@ def _get_result_probability(qasm_str, result_qubit_index, target_value=1):
     Parameters
     ----------
     qasm_str : str
-        OpenQASM 2.0 circuit string.
+        OpenQASM 3.0 circuit string.
     result_qubit_index : int
         Physical qubit index of the result qbool.
     target_value : int
@@ -54,10 +54,10 @@ def _get_result_probability(qasm_str, result_qubit_index, target_value=1):
     float
         Sum of |amplitude|^2 for states where result qubit has target_value.
     """
-    from qiskit import QuantumCircuit
+    import qiskit.qasm3
     from qiskit_aer import AerSimulator
 
-    qc = QuantumCircuit.from_qasm_str(qasm_str)
+    qc = qiskit.qasm3.loads(qasm_str)
     qc.save_statevector()
     sim = AerSimulator(method="statevector", max_parallel_threads=4)
     job = sim.run(qc)
@@ -86,7 +86,7 @@ class TestPieceExists:
         pred = make_piece_exists_predicate("test", 1, 0, 2, 2)
         pred(board, result)
 
-        qasm_str = ql.qasm()
+        qasm_str = ql.to_openqasm()
         result_qubit = int(result.qubits[63])
         prob_one = _get_result_probability(qasm_str, result_qubit, target_value=1)
         assert prob_one > 0.99, f"Expected result |1>, got P(1)={prob_one:.4f}"
@@ -101,7 +101,7 @@ class TestPieceExists:
         pred = make_piece_exists_predicate("test", 1, 0, 2, 2)
         pred(board, result)
 
-        qasm_str = ql.qasm()
+        qasm_str = ql.to_openqasm()
         result_qubit = int(result.qubits[63])
         prob_zero = _get_result_probability(qasm_str, result_qubit, target_value=0)
         assert prob_zero > 0.99, f"Expected result |0>, got P(0)={prob_zero:.4f}"
@@ -116,7 +116,7 @@ class TestPieceExists:
         pred = make_piece_exists_predicate("test", 2, 0, 2, 2)
         pred(board, result)
 
-        qasm_str = ql.qasm()
+        qasm_str = ql.to_openqasm()
         result_qubit = int(result.qubits[63])
         prob_zero = _get_result_probability(qasm_str, result_qubit, target_value=0)
         assert prob_zero > 0.99, f"Expected result |0> (out of bounds), got P(0)={prob_zero:.4f}"
@@ -131,17 +131,23 @@ class TestPieceExists:
         pred = make_piece_exists_predicate("test", -1, -1, 2, 2)
         pred(board, result)
 
-        qasm_str = ql.qasm()
+        qasm_str = ql.to_openqasm()
         result_qubit = int(result.qubits[63])
         prob_one = _get_result_probability(qasm_str, result_qubit, target_value=1)
         assert prob_one > 0.99, f"Expected result |1>, got P(1)={prob_one:.4f}"
 
 
 class TestCompileInverse:
-    """PRED-05: Predicates use @ql.compile(inverse=True) with working .inverse()."""
+    """PRED-05: Predicates use @ql.compile(inverse=True) with working adjoint.
 
-    def test_inverse_callable(self, clean_circuit):
-        """Create predicate, call it, then call .inverse() -- no error raised."""
+    The piece-exists predicate allocates no internal ancillas, so .inverse()
+    (which uncomputes ancillas) has no forward call record.  The correct API
+    for "run the gate sequence in reverse" is .adjoint(), which is enabled by
+    the @ql.compile(inverse=True) decorator.
+    """
+
+    def test_adjoint_callable(self, clean_circuit):
+        """Create predicate, call it, then call .adjoint() -- no error raised."""
         from chess_predicates import make_piece_exists_predicate
 
         board = make_small_board(2, 2, [(0, 0)])
@@ -150,11 +156,11 @@ class TestCompileInverse:
         pred = make_piece_exists_predicate("test", 1, 0, 2, 2)
         pred(board, result)
 
-        # Calling .inverse with same args should not raise
-        pred.inverse(board, result)
+        # Calling .adjoint with same args should not raise
+        pred.adjoint(board, result)
 
-    def test_inverse_roundtrip(self, clean_circuit):
-        """Forward then inverse should return result qbool to |0>."""
+    def test_adjoint_roundtrip(self, clean_circuit):
+        """Forward then adjoint should return result qbool to |0>."""
         from chess_predicates import make_piece_exists_predicate
 
         board = make_small_board(2, 2, [(0, 0)])
@@ -162,9 +168,9 @@ class TestCompileInverse:
 
         pred = make_piece_exists_predicate("test", 1, 0, 2, 2)
         pred(board, result)
-        pred.inverse(board, result)
+        pred.adjoint(board, result)
 
-        qasm_str = ql.qasm()
+        qasm_str = ql.to_openqasm()
         result_qubit = int(result.qubits[63])
         prob_zero = _get_result_probability(qasm_str, result_qubit, target_value=0)
         assert prob_zero > 0.99, f"Expected result |0> after roundtrip, got P(0)={prob_zero:.4f}"
