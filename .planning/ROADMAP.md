@@ -221,11 +221,11 @@ Plans:
   3. Both predicates use `@ql.compile(inverse=True)` for automatic ancilla uncomputation and compiled replay
   4. Predicates produce correct results verified against classical equivalents on small boards (2x2 or 3x3) within 17-qubit simulation limit
   5. All predicate logic uses standard ql constructs (with qbool:, operator overloading, @ql.compile) -- no raw gate emission for application logic
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 114-01: TBD
-- [ ] 114-02: TBD
+- [ ] 114-01-PLAN.md — Piece-exists predicate factory with test suite and statevector verification
+- [ ] 114-02-PLAN.md — No-friendly-capture predicate factory with classical equivalence tests
 
 ### Phase 115: Check Detection & Combined Predicate
 **Goal**: Users can evaluate full move legality including king safety in superposition, with all conditions composed into a single predicate
@@ -280,7 +280,7 @@ Phases execute in numeric order: 112 -> 113 -> 114 -> 115 -> 116
 | 107-111 | v7.0 | 10/10 | Complete | 2026-03-08 |
 | 112. Compile Infra Opt | 2/2 | Complete    | 2026-03-08 | - |
 | 113. Diffusion & Enum | 3/3 | Complete    | 2026-03-08 | - |
-| 114. Core Predicates | v8.0 | 0/TBD | Not started | - |
+| 114. Core Predicates | v8.0 | 0/2 | Not started | - |
 | 115. Check & Combined | v8.0 | 0/TBD | Not started | - |
 | 116. Walk Integration | v8.0 | 0/TBD | Not started | - |
 
