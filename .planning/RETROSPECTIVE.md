@@ -134,6 +134,51 @@
 
 ---
 
+## Milestone: v7.0 — Compile Infrastructure
+
+**Shipped:** 2026-03-08
+**Phases:** 5 | **Plans:** 10
+
+### What Was Built
+- CallGraphDAG module with rustworkx PyDAG backend, numpy bitmask overlap computation, and parallel group detection
+- Multi-level compilation: opt=1 (call graph DAG only), opt=2 (selective merge), opt=3 (full expansion, backward compat)
+- Per-node gate count, depth, T-count extraction with aggregate metrics, DOT export, and formatted compilation reports
+- Selective sequence merging with overlapping-qubit merge candidates and cross-boundary gate optimization
+- Statevector equivalence verification proving merged circuits correct at all opt levels
+- Full regression at all opt levels with GC-based OOM prevention and selective parametrization
+
+### What Worked
+- Milestone audit identified 6 orphaned Phase 107 requirements (missing VERIFICATION.md) — gap closure Phase 111 resolved all cleanly in 1 plan
+- Statevector.from_instruction() for equivalence testing avoided AerSimulator overhead and gave exact comparisons
+- GC autouse fixture in Phase 110-03 solved persistent OOM from qint.__del__ stale gate injection — pattern reusable across future test suites
+- Selective opt_level parametrization (@opt_safe marker) avoided 3x test explosion while still verifying behavioral correctness at all opt levels
+- rustworkx PyDAG and numpy bitmask overlap gave clean, fast graph primitives without reinventing graph algorithms
+
+### What Was Inefficient
+- Phase 111 (verification closure) was still needed — VERIFICATION.md not written during Phase 107 execution (recurring pattern from v5.0, v6.0)
+- Phase 110-03 (OOM fix) was reactive — the gc.collect() need could have been anticipated from qint.__del__ behavior in earlier milestones
+- Bare `except Exception: pass` in _merge_and_optimize shipped as tech debt — could have been caught by a stricter review during Phase 109
+
+### Patterns Established
+- numpy bitmask overlap for qubit set intersection (uint64 AND + popcount)
+- Builder stack context for tracking nested compiled function calls
+- opt parameter NOT in cache key (DAG building is observational, doesn't change semantics)
+- gc.collect() autouse fixture pattern for test suites with qint memory lifecycle
+- Selective parametrization via @opt_safe marker for opt-level regression testing
+
+### Key Lessons
+1. **VERIFICATION.md during execution still not automatic**: Phase 111 gap closure for Phase 107 — 4th milestone with this pattern (v5.0, v6.0, v6.1 fixed it, v7.0 regressed)
+2. **GC matters for quantum objects**: qint.__del__ triggers gate injection that causes OOM across test boundaries — gc.collect() between tests is now mandatory
+3. **Observational DAG is the right abstraction**: opt parameter doesn't change circuit semantics, just adds metadata — keeping it out of cache key was the correct design
+4. **Statevector comparison needs global phase normalization**: Two equivalent circuits may differ by a global phase factor — first-nonzero-amplitude alignment handles this cleanly
+
+### Cost Observations
+- Model mix: ~90% opus, ~10% haiku (research agents)
+- 104 commits across 4 days
+- Notable: Phases 107-109 (3 implementation phases) completed in 2 days; Phase 110 (verification) took 1.5 days due to OOM debugging; Phase 111 (closure) took <1 hour
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -146,6 +191,7 @@
 | v5.0 | 7 | 19 | Milestone audit process; gap closure phases |
 | v6.0 | 6 | 11 | Pure Python compositional module; V-gate workarounds |
 | v6.1 | 4 | 8 | Domain demo composing framework primitives; first clean audit |
+| v7.0 | 5 | 10 | Multi-level compilation; observational DAG; gc autouse for test OOM |
 
 ### Cumulative Quality
 
@@ -156,6 +202,7 @@
 | v5.0 | 20/20 | PASSED (20/20 + 7/7 + 20/20 + 8/8) | 12 non-blocking |
 | v6.0 | 18/18 | gaps_found → CLOSED (Phase 102) | 3 non-blocking |
 | v6.1 | 14/14 | PASSED (first try, no gaps) | 0 |
+| v7.0 | 15/15 | PASSED (after Phase 111 gap closure) | 1 (bare except) |
 
 ### Top Lessons (Verified Across Milestones)
 

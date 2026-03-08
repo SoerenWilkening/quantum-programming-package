@@ -1,5 +1,36 @@
 # Project Milestones: Quantum Assembly
 
+## v7.0 Compile Infrastructure (Shipped: 2026-03-08)
+
+**Delivered:** Multi-level compilation model for `@ql.compile` — rustworkx-backed call graph DAG with qubit overlap analysis and parallel group detection, three-level opt_flag (DAG only / selective merge / full expansion), DOT visualization and compilation reports, selective sequence merging with cross-boundary gate optimization, and statevector equivalence verification at all opt levels.
+
+**Phases completed:** 107-111 (10 plans total)
+
+**Key accomplishments:**
+
+- CallGraphDAG module with rustworkx PyDAG backend, DAGNode with numpy bitmask overlap computation, and parallel group detection via connected components
+- Multi-level compilation: opt=1 (DAG only), opt=2 (selective merge), opt=3 (full expansion, backward compatible)
+- Per-node gate count, depth, T-count extraction with aggregate metrics, DOT export, and formatted compilation reports
+- Selective sequence merging with overlapping-qubit merge candidate detection and cross-boundary gate optimization (QFT/IQFT cancellation)
+- Statevector equivalence verification proving merged circuits correct via Qiskit simulation for arithmetic and Grover workloads
+- Full regression at all opt levels: 186 test invocations across opt=1/2/3 with GC-based OOM prevention and selective parametrization
+
+**Stats:**
+
+- 104 commits, 103 files changed (+14,549 / -1,292 lines)
+- 5 phases, 10 plans
+- 4 days (2026-03-05 to 2026-03-08)
+
+**Known gaps (tech debt, non-blocking):**
+- Bare `except Exception: pass` in `_merge_and_optimize` (compile.py:307-308) silently swallows optimizer failures
+- 14-15 pre-existing test failures in test_compile.py (unrelated to v7.0)
+
+**Git range:** `d7f7bf5`..`388e1df`
+
+**What's next:** TBD — next milestone planning via `/gsd:new-milestone`
+
+---
+
 ## v6.1 Quantum Chess Demo (Shipped: 2026-03-05)
 
 **Delivered:** Complete manual quantum walk on a chess game tree using raw quantum_language primitives -- board encoding with legal move generation, compiled move oracles, walk register scaffolding, Montanaro diffusion operators, and compiled walk step U = R_B * R_A, with side-by-side QWalkTree comparison demonstrating framework expressiveness.

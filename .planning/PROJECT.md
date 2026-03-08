@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A quantum programming framework that enables writing quantum algorithms using standard programming constructs — operator overloading on variable-width quantum integers (qint, 1-64 bits) and quantum booleans (qbool), with Python's `with` statement implementing quantum conditionals. Operations compile to optimized quantum circuits via a C backend with Cython bindings. Supports dual arithmetic backends: QFT-based (phase rotations) and Toffoli-based (fault-tolerant, Clifford+T decomposable) with CDKM ripple-carry and Brent-Kung carry look-ahead adders, plus automatic depth/ancilla tradeoff selection. Includes Beauregard modular Toffoli arithmetic (add/sub/mul mod N) for Shor's algorithm building blocks, `@ql.compile` for function-level compilation with gate capture/replay/optimization and parametric mode for compile-once-replay-many, Grover's search with `ql.grover()` (lambda predicate oracles, adaptive BBHT search), quantum counting via `ql.count_solutions()`, iterative quantum amplitude estimation via `ql.amplitude_estimate()`, quantum walk primitives based on Montanaro 2015 backtracking speedup (QWalkTree with predicate-aware walk operators, variable branching, and iterative detection), circuit optimization, pixel-art circuit visualization scaling to 200+ qubits, T-count reporting, statistics, OpenQASM 3.0 export, and Qiskit-based verification.
+A quantum programming framework that enables writing quantum algorithms using standard programming constructs — operator overloading on variable-width quantum integers (qint, 1-64 bits) and quantum booleans (qbool), with Python's `with` statement implementing quantum conditionals. Operations compile to optimized quantum circuits via a C backend with Cython bindings. Supports dual arithmetic backends: QFT-based (phase rotations) and Toffoli-based (fault-tolerant, Clifford+T decomposable) with CDKM ripple-carry and Brent-Kung carry look-ahead adders, plus automatic depth/ancilla tradeoff selection. Includes Beauregard modular Toffoli arithmetic (add/sub/mul mod N) for Shor's algorithm building blocks, `@ql.compile` for multi-level function compilation with three opt levels (call graph DAG / selective merge / full expansion), gate capture/replay/optimization, parametric mode for compile-once-replay-many, and call graph analysis with DOT visualization. Grover's search with `ql.grover()` (lambda predicate oracles, adaptive BBHT search), quantum counting via `ql.count_solutions()`, iterative quantum amplitude estimation via `ql.amplitude_estimate()`, quantum walk primitives based on Montanaro 2015 backtracking speedup (QWalkTree with predicate-aware walk operators, variable branching, and iterative detection), circuit optimization, pixel-art circuit visualization scaling to 200+ qubits, T-count reporting, statistics, OpenQASM 3.0 export, and Qiskit-based verification.
 
 ## Core Value
 
@@ -180,18 +180,15 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ### Active
 
-## Current Milestone: v7.0 Compile Infrastructure
-
-**Goal:** Restructure `@ql.compile` from monolithic circuit generation to a multi-level compilation model with call graph DAG, selective sequence merging, and sparse circuit support for large programs.
-
-**Target features:**
-- Three-level opt_flag compilation (call graph only / selective merge / full expansion)
-- Call graph DAG with qubit dependency analysis and parallelism detection
-- Intelligent sequence merging for overlapping-qubit instruction pairs
-- DOT format call graph visualization
-- Sparse circuit arrays (auto opt-in for large circuits)
+- ✓ Multi-level compilation: opt=1 (call graph DAG), opt=2 (selective merge), opt=3 (full expansion) — v7.0
+- ✓ CallGraphDAG with rustworkx PyDAG, qubit overlap edges, parallel group detection — v7.0
+- ✓ Per-node gate count, depth, T-count extraction with aggregate metrics — v7.0
+- ✓ DOT export and formatted compilation report for call graph visualization — v7.0
+- ✓ Selective sequence merging with cross-boundary gate optimization — v7.0
+- ✓ Statevector equivalence verification at all opt levels (186 test invocations) — v7.0
 
 **Deferred features (carry forward):**
+- Sparse circuit arrays (auto dense->sparse for large circuits) — SPARSE-01/02/03
 - Resource estimation for compiled functions — ADV-01
 - Serialization of compiled functions to disk — ADV-02
 - Compiled function composition — ADV-03
@@ -229,7 +226,7 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 **Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) -> Cython bindings -> Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
 
-**Current state:** v7.0 in progress — Restructuring `@ql.compile` with multi-level compilation. Previous: v6.1 shipped quantum chess demo. Full feature set: dual arithmetic backends (QFT/Toffoli with Toffoli default), `@ql.compile` with parametric mode, `ql.grover()`, `ql.amplitude_estimate()`, `ql.count_solutions()`, QWalkTree with `detect()`, manual walk operators (chess_encoding + chess_walk modules), pixel-art visualization, Clifford+T decomposition, cross-backend verification.
+**Current state:** v7.0 shipped — Multi-level `@ql.compile` with call graph DAG (opt=1), selective sequence merging (opt=2), and full expansion (opt=3). Full feature set: dual arithmetic backends (QFT/Toffoli with Toffoli default), `@ql.compile` with parametric mode and call graph analysis/DOT visualization, `ql.grover()`, `ql.amplitude_estimate()`, `ql.count_solutions()`, QWalkTree with `detect()`, manual walk operators (chess_encoding + chess_walk modules), pixel-art visualization, Clifford+T decomposition, cross-backend verification.
 
 **Codebase:**
 - ~1,059,000 lines of code (604K C, 395K Python, 60K Cython)
@@ -406,4 +403,4 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Board qarrays separate from mega-register | Total qubit count exceeds 64-qubit qint limit | ✓ Good — multi-arg compile pattern |
 
 ---
-*Last updated: 2026-03-05 after v7.0 milestone start*
+*Last updated: 2026-03-08 after v7.0 milestone*
