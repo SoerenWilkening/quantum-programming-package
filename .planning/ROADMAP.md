@@ -168,7 +168,99 @@
 
 </details>
 
+### v8.0 Quantum Chess Walk Rewrite (In Progress)
+
+**Milestone Goal:** Rewrite the chess quantum walk to evaluate move legality in superposition using quantum predicates built from standard ql constructs, replace classical pre-filtering with all-moves enumeration and quantum validity checking, redesign diffusion for large branching factors, and optimize compile infrastructure with numpy-based qubit set operations.
+
+- [ ] **Phase 112: Compile Infrastructure Optimization** - Numpy-based qubit set operations in compile.py and call_graph.py with profiled before/after validation
+- [ ] **Phase 113: Diffusion Redesign & Move Enumeration** - Arithmetic counting circuit replacing combinatorial diffusion explosion, plus all-moves enumeration table
+- [ ] **Phase 114: Core Quantum Predicates** - Piece-exists and no-friendly-capture predicates using standard ql constructs with @ql.compile(inverse=True)
+- [ ] **Phase 115: Check Detection & Combined Predicate** - King-safety predicate via attack tables and combined move legality predicate composing all conditions
+- [ ] **Phase 116: Walk Integration & Demo** - Full walk rewrite replacing classical pre-filtering with quantum predicates, end-to-end demo as framework showcase
+
+## Phase Details
+
+### Phase 112: Compile Infrastructure Optimization
+**Goal**: Compile infrastructure uses numpy for qubit set operations, reducing Python loop overhead in compile.py and call_graph.py
+**Depends on**: Nothing (independent of chess features)
+**Requirements**: COMP-01, COMP-02, COMP-03
+**Success Criteria** (what must be TRUE):
+  1. compile.py qubit_set construction uses numpy operations (np.unique/np.concatenate) instead of Python set.update() loops
+  2. call_graph.py DAGNode overlap computation uses numpy arrays (np.intersect1d) for pairwise qubit overlap detection
+  3. All existing compile tests (186+ invocations) pass with zero regressions after numpy migration
+  4. Profiling data shows measurable improvement (or documents that overhead is negligible for current workload sizes)
+**Plans**: TBD
+
+Plans:
+- [ ] 112-01: TBD
+- [ ] 112-02: TBD
+
+### Phase 113: Diffusion Redesign & Move Enumeration
+**Goal**: Walk circuits can handle large branching factors (100+ children) without combinatorial explosion, and all geometrically possible moves are enumerated for quantum evaluation
+**Depends on**: Nothing (independent of Phase 112)
+**Requirements**: WALK-01, WALK-03
+**Success Criteria** (what must be TRUE):
+  1. All-moves enumeration table contains every geometrically possible (piece_type, src, dst) triple for knights (up to 8 per square) and kings (up to 8 per square) without legality filtering
+  2. Diffusion operator uses an arithmetic counting circuit (summing validity bits into a count register) instead of O(2^d_max) itertools.combinations pattern enumeration
+  3. Diffusion circuit generation is O(d_max) in gate count — no exponential or superlinear blowup
+  4. Existing walk tests continue to pass (diffusion redesign does not break SAT demo or small-board cases)
+**Plans**: TBD
+
+Plans:
+- [ ] 113-01: TBD
+- [ ] 113-02: TBD
+
+### Phase 114: Core Quantum Predicates
+**Goal**: Users can evaluate piece-exists and no-friendly-capture conditions in superposition using standard ql constructs
+**Depends on**: Nothing (uses existing framework primitives)
+**Requirements**: PRED-01, PRED-02, PRED-05
+**Success Criteria** (what must be TRUE):
+  1. Quantum piece-exists predicate checks whether a specific piece type occupies a source square via `with` conditional on board qarray elements, returning a qbool result
+  2. Quantum no-friendly-capture predicate rejects moves where target square is occupied by same-color piece, using `with` conditional on board qarray elements
+  3. Both predicates use `@ql.compile(inverse=True)` for automatic ancilla uncomputation and compiled replay
+  4. Predicates produce correct results verified against classical equivalents on small boards (2x2 or 3x3) within 17-qubit simulation limit
+  5. All predicate logic uses standard ql constructs (with qbool:, operator overloading, @ql.compile) -- no raw gate emission for application logic
+**Plans**: TBD
+
+Plans:
+- [ ] 114-01: TBD
+- [ ] 114-02: TBD
+
+### Phase 115: Check Detection & Combined Predicate
+**Goal**: Users can evaluate full move legality including king safety in superposition, with all conditions composed into a single predicate
+**Depends on**: Phase 114
+**Requirements**: PRED-03, PRED-04
+**Success Criteria** (what must be TRUE):
+  1. Check detection predicate verifies king is not in check after a move using pre-computed attack tables (knight L-shapes + king adjacency) evaluated via `with` conditionals on board qarray
+  2. Combined move legality predicate composes piece-exists, no-friendly-capture, and check detection using standard `with qbool:` conditional nesting and boolean operators
+  3. Combined predicate returns a single qbool indicating full move legality, usable as a validity flag for walk branching
+  4. All predicates verified correct against classical equivalents on small boards within 17-qubit simulation limit
+**Plans**: TBD
+
+Plans:
+- [ ] 115-01: TBD
+- [ ] 115-02: TBD
+
+### Phase 116: Walk Integration & Demo
+**Goal**: Chess quantum walk evaluates move legality in superposition using quantum predicates instead of classical pre-filtering, serving as a showcase of the framework's expressiveness
+**Depends on**: Phase 113, Phase 115
+**Requirements**: WALK-02, WALK-04, WALK-05
+**Success Criteria** (what must be TRUE):
+  1. evaluate_children calls the quantum legality predicate per move candidate instead of the trivial always-valid check from v6.1
+  2. Rewritten chess_walk.py integrates quantum predicates, all-moves enumeration, and redesigned diffusion into a complete walk step U = R_B * R_A
+  3. End-to-end demo generates a valid quantum circuit for the chess walk on a KNK (king-knight-king) position with quantum legality evaluation
+  4. All quantum logic in the demo uses standard ql constructs (with qbool:, operator overloading, @ql.compile, ql.array) -- no raw gate emission for application logic
+  5. Demo produces circuit statistics (qubit count, gate count, depth) demonstrating the walk circuit is constructible
+**Plans**: TBD
+
+Plans:
+- [ ] 116-01: TBD
+- [ ] 116-02: TBD
+
 ## Progress
+
+**Execution Order:**
+Phases execute in numeric order: 112 -> 113 -> 114 -> 115 -> 116
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -185,6 +277,11 @@
 | 97-102 | v6.0 | 11/11 | Complete | 2026-03-03 |
 | 103-106 | v6.1 | 8/8 | Complete | 2026-03-05 |
 | 107-111 | v7.0 | 10/10 | Complete | 2026-03-08 |
+| 112. Compile Infra Opt | v8.0 | 0/TBD | Not started | - |
+| 113. Diffusion & Enum | v8.0 | 0/TBD | Not started | - |
+| 114. Core Predicates | v8.0 | 0/TBD | Not started | - |
+| 115. Check & Combined | v8.0 | 0/TBD | Not started | - |
+| 116. Walk Integration | v8.0 | 0/TBD | Not started | - |
 
 ---
 *Roadmap created: 2026-02-02*
@@ -201,3 +298,4 @@
 *Milestone v6.0 shipped: 2026-03-03*
 *Milestone v6.1 shipped: 2026-03-05*
 *Milestone v7.0 shipped: 2026-03-08*
+*Milestone v8.0 roadmap created: 2026-03-08*

@@ -57,25 +57,25 @@ Deferred to future milestones.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PRED-01 | — | Pending |
-| PRED-02 | — | Pending |
-| PRED-03 | — | Pending |
-| PRED-04 | — | Pending |
-| PRED-05 | — | Pending |
-| WALK-01 | — | Pending |
-| WALK-02 | — | Pending |
-| WALK-03 | — | Pending |
-| WALK-04 | — | Pending |
-| WALK-05 | — | Pending |
-| COMP-01 | — | Pending |
-| COMP-02 | — | Pending |
-| COMP-03 | — | Pending |
+| PRED-01 | Phase 114 | Pending |
+| PRED-02 | Phase 114 | Pending |
+| PRED-03 | Phase 115 | Pending |
+| PRED-04 | Phase 115 | Pending |
+| PRED-05 | Phase 114 | Pending |
+| WALK-01 | Phase 113 | Pending |
+| WALK-02 | Phase 116 | Pending |
+| WALK-03 | Phase 113 | Pending |
+| WALK-04 | Phase 116 | Pending |
+| WALK-05 | Phase 116 | Pending |
+| COMP-01 | Phase 112 | Pending |
+| COMP-02 | Phase 112 | Pending |
+| COMP-03 | Phase 112 | Pending |
 
 **Coverage:**
 - v8.0 requirements: 13 total
-- Mapped to phases: 0
-- Unmapped: 13 ⚠️
+- Mapped to phases: 13/13
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-08*
-*Last updated: 2026-03-08 after initial definition*
+*Last updated: 2026-03-08 after roadmap creation*

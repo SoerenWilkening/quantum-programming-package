@@ -2,12 +2,12 @@
 gsd_state_version: 1.0
 milestone: v8.0
 milestone_name: Quantum Chess Walk Rewrite
-status: defining_requirements
+status: ready_to_plan
 stopped_at: null
 last_updated: "2026-03-08"
-last_activity: 2026-03-08 -- Milestone v8.0 started
+last_activity: 2026-03-08 -- Roadmap created for v8.0 (5 phases, 112-116)
 progress:
-  total_phases: 0
+  total_phases: 5
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -21,14 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v8.0 Quantum Chess Walk Rewrite
+**Current focus:** v8.0 Quantum Chess Walk Rewrite -- Phase 112
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-08 — Milestone v8.0 started
+Phase: 112 of 116 (Compile Infrastructure Optimization)
+Plan: --
+Status: Ready to plan
+Last activity: 2026-03-08 -- Roadmap created
+
+Progress: [..........] 0%
 
 ## Performance Metrics
 
@@ -49,7 +51,7 @@ Last activity: 2026-03-08 — Milestone v8.0 started
 | v6.0 Quantum Walk | 97-102 | 11 | Shipped (2026-03-03) |
 | v6.1 Quantum Chess Demo | 103-106 | 8 | Complete (2026-03-05) |
 | v7.0 Compile Infrastructure | 107-111 | 10 | Complete (2026-03-08) |
-| v8.0 Chess Walk Rewrite | — | — | Defining requirements |
+| v8.0 Chess Walk Rewrite | 112-116 | TBD | Ready to plan |
 
 ## Accumulated Context
 
@@ -60,22 +62,24 @@ See PROJECT.md Key Decisions table for full history.
 Recent decisions affecting current work:
 - Chess walk must evaluate move legality in superposition (not classical pre-filtering)
 - Knights + Kings move types for v8.0 (non-sliding pieces only)
-- Full legality including check detection
-- Compile infrastructure qubit_set operations to use numpy, reduce Python loop overhead
+- All predicates must use standard ql constructs -- no raw gate emission for application logic
+- Diffusion must use arithmetic counting circuit (not O(2^d_max) enumeration)
+- Compile infrastructure qubit_set operations to use numpy
 
 ### Blockers/Concerns
 
 **Carry forward (architectural):**
-- 14-15 pre-existing test failures in test_compile.py — unrelated to v8.0
-- Raw predicate qubit allocation in QWalkTree: each predicate call allocates new qbools
-- QWalkTree nested `with qbool:` limitation worked around via V-gate CCRy decomposition
+- 14-15 pre-existing test failures in test_compile.py -- unrelated to v8.0
+- Diffusion combinatorial explosion is a hard blocker for large branching (Phase 113 addresses)
+- MAXLAYERINSEQUENCE (300K) may be exceeded by chess circuits -- assess in Phase 113
+- Nested `with qbool:` limitation requires flat Toffoli-AND predicate design
 
 ## Session Continuity
 
 Last session: 2026-03-08
-Stopped at: Defining v8.0 requirements
+Stopped at: Roadmap created for v8.0
 Resume file: None
-Resume action: Continue with requirements definition and roadmap
+Resume action: Plan Phase 112 via /gsd:plan-phase 112
 
 ---
-*State updated: 2026-03-08 -- Milestone v8.0 started*
+*State updated: 2026-03-08 -- v8.0 roadmap created*
