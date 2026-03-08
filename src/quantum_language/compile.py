@@ -597,6 +597,27 @@ def _input_qubit_key(quantum_args):
     return tuple(key_parts)
 
 
+def _build_qubit_set_numpy(quantum_args, extra_values=None):
+    """Build qubit set using numpy operations (np.unique/np.concatenate).
+
+    Returns (frozenset, np.ndarray) for dual storage compatibility with DAGNode.
+    """
+    arrays = []
+    for qa in quantum_args:
+        indices = _get_quantum_arg_qubit_indices(qa)
+        if indices:
+            arrays.append(np.array(indices, dtype=np.intp))
+    if extra_values is not None:
+        vals = list(extra_values)
+        if vals:
+            arrays.append(np.array(vals, dtype=np.intp))
+    if not arrays:
+        arr = np.empty(0, dtype=np.intp)
+    else:
+        arr = np.unique(np.concatenate(arrays))
+    return frozenset(arr.tolist()), arr
+
+
 # ---------------------------------------------------------------------------
 # Return value construction for replay
 # ---------------------------------------------------------------------------
@@ -840,16 +861,15 @@ class CompiledFunc:
                 ctx = current_dag_context()
                 if ctx is not None:
                     dag, parent_idx = ctx
-                    qubit_set = set()
-                    for qa in quantum_args:
-                        qubit_set.update(_get_quantum_arg_qubit_indices(qa))
                     block = self._cache.get(cache_key)
+                    extra = None
                     if (
                         block
                         and hasattr(block, "_capture_virtual_to_real")
                         and block._capture_virtual_to_real
                     ):
-                        qubit_set.update(block._capture_virtual_to_real.values())
+                        extra = block._capture_virtual_to_real.values()
+                    qubit_set, _ = _build_qubit_set_numpy(quantum_args, extra)
                     _gates = block.gates if block else []
                     dag.add_node(
                         self._func.__name__,
@@ -882,12 +902,13 @@ class CompiledFunc:
                 ctx = current_dag_context()
                 if ctx is not None:
                     dag, parent_idx = ctx
-                    qubit_set = set()
-                    for qa in quantum_args:
-                        qubit_set.update(_get_quantum_arg_qubit_indices(qa))
                     block = self._cache.get(cache_key)
-                    if block and block._capture_virtual_to_real:
-                        qubit_set.update(block._capture_virtual_to_real.values())
+                    extra = (
+                        block._capture_virtual_to_real
+                        if (block and block._capture_virtual_to_real)
+                        else None
+                    )
+                    qubit_set, _ = _build_qubit_set_numpy(quantum_args, extra)
                     _gates = block.gates if block else []
                     node_idx = dag.add_node(
                         self._func.__name__,
@@ -1151,14 +1172,12 @@ class CompiledFunc:
             if ctx is not None:
                 dag = ctx[0]
                 node = dag._nodes[_dag_node_idx]
-                qubit_set = set()
-                for qa in quantum_args:
-                    qubit_set.update(_get_quantum_arg_qubit_indices(qa))
-                if capture_vtr:
-                    qubit_set.update(capture_vtr.values())
+                qubit_set, qubit_arr = _build_qubit_set_numpy(
+                    quantum_args, capture_vtr.values() if capture_vtr else None
+                )
                 node.func_name = self._func.__name__
-                node.qubit_set = frozenset(qubit_set)
-                node._qubit_array = np.array(sorted(node.qubit_set), dtype=np.intp)
+                node.qubit_set = qubit_set  # already frozenset from helper
+                node._qubit_array = qubit_arr
                 node.gate_count = len(virtual_gates)
                 node.depth = _compute_depth(virtual_gates)
                 node.t_count = _compute_t_count(virtual_gates)
