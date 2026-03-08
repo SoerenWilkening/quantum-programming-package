@@ -1,599 +1,462 @@
-# Architecture Research: Multi-Level Compilation Infrastructure
+# Architecture Research: Quantum Chess Walk Rewrite (v8.0)
 
-**Domain:** Quantum circuit compilation infrastructure (integration into existing framework)
-**Researched:** 2026-03-05
-**Confidence:** HIGH (based on direct source code analysis of existing architecture)
+**Domain:** Quantum move legality predicates + compile infrastructure optimization
+**Researched:** 2026-03-08
+**Confidence:** HIGH (based on direct codebase analysis of existing architecture)
 
-## Existing Architecture Summary
+## System Overview
 
-The current system is a three-layer stateless design:
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                     Python Frontend (compile.py)                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────────────────┐   │
-│  │ CompiledFunc │  │ CompiledBlock│  │ AncillaRecord         │   │
-│  │ (cache,      │  │ (virtual     │  │ (forward call         │   │
-│  │  capture,    │  │  gate list,  │  │  tracking for         │   │
-│  │  replay)     │  │  qubit map)  │  │  inverse support)     │   │
-│  └──────┬───────┘  └──────────────┘  └───────────────────────┘   │
-│         │                                                         │
-│  Current flow: capture -> extract_gate_range -> virtualise ->     │
-│                optimise -> cache -> replay via inject_remapped    │
-├──────────────────────────────────────────────────────────────────┤
-│                     Cython Bindings (_core.pyx)                    │
-│  ┌────────────────────────┐  ┌────────────────────────────────┐  │
-│  │ extract_gate_range()   │  │ inject_remapped_gates()        │  │
-│  │ (iterate layers,       │  │ (build gate_t on stack,        │  │
-│  │  build Python dicts)   │  │  remap qubits, call add_gate) │  │
-│  └────────────┬───────────┘  └────────────────┬───────────────┘  │
-│               │ Per-gate crossing              │ Per-gate crossing│
-├───────────────┴────────────────────────────────┴─────────────────┤
-│                     C Backend (optimizer.c + circuit.h)            │
-│  ┌──────────────────────────────────────────────────────────────┐ │
-│  │ add_gate():                                                  │ │
-│  │   1. allocate_more_qubits() — expand dense arrays if needed  │ │
-│  │   2. minimum_layer() — find earliest valid layer             │ │
-│  │   3. colliding_gates() — check inverse cancellation          │ │
-│  │   4. append_gate() — memcpy into sequence[layer][pos]        │ │
-│  │   5. apply_layer() — update occupancy tracking               │ │
-│  │                                                              │ │
-│  │ Dense arrays:                                                │ │
-│  │   gate_index_of_layer_and_qubits[layer][qubit] — int matrix  │ │
-│  │   occupied_layers_of_qubit[qubit][index] — per-qubit layers  │ │
-│  │   sequence[layer][gate_idx] — 2D jagged gate storage         │ │
-│  └──────────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-### Critical Architectural Facts
-
-1. **Per-gate Cython boundary crossing**: Every gate in `inject_remapped_gates()` builds a `gate_t` on the stack, remaps qubits, and calls `add_gate()` individually. No batch injection path exists.
-
-2. **Dense `gate_index_of_layer_and_qubits`**: Allocated as `int[layer][qubit]` with dynamic growth via `allocate_more_qubits()`. At 8000 max qubits and 300K max layers, this is the primary memory concern.
-
-3. **Stateless capture-replay**: `CompiledFunc._capture()` records `start_layer`/`end_layer`, then `extract_gate_range()` iterates all layers in that range pulling gate dicts. Replay via `inject_remapped_gates()` re-adds gates through `add_gate()`.
-
-4. **Virtual qubit namespace**: `CompiledBlock` stores gates in a virtual qubit space. Parameter qubits map first (positional order), then ancillas. Replay builds `virtual_to_real` mapping for each call site.
-
-5. **Layer floor**: `circuit_t.layer_floor` prevents gates from being placed before a given layer. Used by compiled functions to ensure replayed gates don't interleave with earlier content.
-
-## New Feature Integration Architecture
-
-### opt_flag=1: Call Graph DAG (Sequence-Only Mode)
-
-**What changes:** Sequences are generated in C as normal, but NOT placed into the shared circuit. A call graph DAG is built in Python tracking sequence dependencies and qubit sets.
-
-**Integration design:**
+### Current Architecture (v6.1)
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                  Python Frontend (compile.py)                      │
-│                                                                    │
-│  ┌──────────────┐     ┌──────────────────────────────────────┐    │
-│  │ CompiledFunc │     │ CallGraphDAG (NEW)                   │    │
-│  │              │────>│  nodes: Dict[str, SequenceNode]      │    │
-│  │ opt_flag=1:  │     │  edges: Set[(parent, child)]         │    │
-│  │  capture     │     │  qubit_sets: Dict[str, Set[int]]     │    │
-│  │  normally,   │     │                                      │    │
-│  │  store in    │     │  add_sequence(name, block, qubits)   │    │
-│  │  DAG instead │     │  get_parallel_groups() -> topo sort   │    │
-│  │  of circuit  │     │  overlapping_qubits(a, b) -> Set     │    │
-│  └──────────────┘     │  to_dot() -> str                     │    │
-│                       └──────────────────────────────────────┘    │
-│                                                                    │
-│  SequenceNode (NEW):                                               │
-│    name: str                                                       │
-│    block: CompiledBlock (existing — reuse virtual gate list)       │
-│    qubit_set: Set[int] (real qubits touched)                       │
-│    dependencies: List[SequenceNode] (qubit-based ordering)         │
-│    depth_contribution: int (estimated layers)                      │
-└──────────────────────────────────────────────────────────────────┘
+Classical Layer (circuit construction time)
++-----------------------------------------------------------------+
+|  chess_encoding.py                                              |
+|  +---------------------------+  +-----------------------------+ |
+|  | legal_moves_{white,black} |  | get_legal_moves_and_oracle  | |
+|  | (Python set filtering)    |  | (_make_apply_move factory)  | |
+|  +------------+--------------+  +--------------+--------------+ |
+|               |                                |                |
+|       Classical move list            @ql.compile(inverse=True)  |
+|       (branch index = move index)    apply_move(wk,bk,wn,br)   |
++-----------------------------------------------------------------+
+              |                                  |
+Quantum Layer (gate emission)                    |
++-----------------------------------------------------------------+
+|  chess_walk.py                                                  |
+|  +-----------------------+  +-------------------------------+   |
+|  | evaluate_children     |  | apply_diffusion               |   |
+|  | (per-child loop:      |  | (O(2^d_max) pattern enum      |   |
+|  |  encode branch,       |  |  via itertools.combinations)  |   |
+|  |  oracle fwd/inv,      |  |                               |   |
+|  |  TRIVIAL predicate)   |  |                               |   |
+|  +-----------------------+  +-------------------------------+   |
+|  +-------------------+  +-----------------------------------+   |
+|  | r_a / r_b         |  | walk_step (compiled U=R_B*R_A)    |   |
+|  +-------------------+  +-----------------------------------+   |
++-----------------------------------------------------------------+
+              |
+Compile Infrastructure
++-----------------------------------------------------------------+
+|  compile.py                                                     |
+|  +--------------------------------+                             |
+|  | qubit_set: Python set()        |                             |
+|  | built via repeated .update()   |                             |
+|  | converted to frozenset         |                             |
+|  +--------------------------------+                             |
+|  call_graph.py                                                  |
+|  +--------------------------------+                             |
+|  | DAGNode.bitmask: Python int    |                             |
+|  | built via loop: |= 1 << q     |                             |
+|  | overlap: frozenset intersection|                             |
+|  +--------------------------------+                             |
++-----------------------------------------------------------------+
 ```
 
-**Key integration points:**
-
-| Integration Point | Existing Component | Change Type | Details |
-|---|---|---|---|
-| Capture path | `CompiledFunc._capture()` | MODIFY | When `opt_flag=1`, after capture, register node in DAG instead of leaving gates in circuit. Must still extract gates via `extract_gate_range()`. |
-| Block reuse | `CompiledBlock` | REUSE (no change) | Virtual gate lists are already self-contained. DAG nodes wrap existing blocks. |
-| Circuit suppression | `_core.pyx` / `add_gate()` | NO CHANGE | Gates still flow through `add_gate()` during capture. The key insight: capture already works by recording layer ranges. For opt_flag=1, after capture, the gates exist in the circuit AND in the cached block. The circuit is the "working copy"; the DAG provides the logical structure. |
-| Dependency detection | NEW Python code | NEW | Compare `qubit_set` between nodes. If intersection is non-empty, add edge. Topological sort gives parallelism. |
-
-**Architectural decision: Should opt_flag=1 prevent gates from entering the circuit?**
-
-NO. The existing capture mechanism relies on gates being in the circuit to extract them via `extract_gate_range()`. Suppressing `add_gate()` would require a fundamentally different capture path (buffering gates in Python, never touching C). This is high complexity for low value.
-
-Instead: opt_flag=1 means "build the circuit as opt_flag=3 (full expansion), but ALSO build the call graph DAG as a parallel data structure." The DAG is informational for opt_flag=1 -- it becomes actionable at opt_flag=2 for selective merging.
-
-**Alternative considered and rejected:** Intercepting `add_gate()` with a "null circuit" that discards gates but tracks qubit sets. This would require either:
-- A new C-level circuit mode flag (invasive, breaks stateless design)
-- A Python-level gate buffer replacing the Cython path (duplicates existing infrastructure)
-
-Neither is justified. The existing capture path already extracts gates into Python dicts. The DAG is built from those dicts.
-
-### opt_flag=2: Selective Sequence Merging
-
-**What changes:** Python-level merge heuristic identifies overlapping-qubit sequences, expands selected ones into merged mini-circuits.
-
-**Integration design:**
+### Target Architecture (v8.0)
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                  Python Frontend (compile.py)                      │
-│                                                                    │
-│  CallGraphDAG                                                      │
-│    │                                                               │
-│    ├── identify_merge_candidates()                                 │
-│    │   Input: DAG nodes with qubit_set overlaps                    │
-│    │   Output: List[(node_a, node_b)] to merge                     │
-│    │                                                               │
-│    ├── merge_sequences(node_a, node_b) -> MergedBlock              │
-│    │   1. Union qubit sets                                         │
-│    │   2. Concatenate virtual gate lists (remap to shared space)   │
-│    │   3. Create new CompiledBlock with merged gates               │
-│    │   4. Optionally re-optimize merged gate list                  │
-│    │                                                               │
-│    └── expand_to_circuit(merged_blocks)                            │
-│        For each merged block:                                      │
-│          inject_remapped_gates(block.gates, qubit_map)             │
-│                                                                    │
-│  MergeHeuristic (NEW):                                             │
-│    - Overlap threshold: min qubit overlap ratio to consider merge   │
-│    - Size threshold: max combined gate count for merging            │
-│    - Depth benefit estimate: merged depth vs sequential depth       │
-└──────────────────────────────────────────────────────────────────┘
+Classical Layer (circuit construction time)
++-----------------------------------------------------------------+
+|  chess_encoding.py (MODIFIED)                                   |
+|  +---------------------------+  +-----------------------------+ |
+|  | Raw move destinations     |  | encode_position (unchanged) | |
+|  | knight_destinations(sq)   |  |                             | |
+|  | king_destinations(sq)     |  |                             | |
+|  | (ALL reachable squares,   |  |                             | |
+|  |  no legality filtering)   |  |                             | |
+|  +------------+--------------+  +-----------------------------+ |
++-----------------------------------------------------------------+
+              |
+Quantum Layer (gate emission)
++-----------------------------------------------------------------+
+|  chess_predicates.py (NEW)                                      |
+|  +---------------------------+  +----------------------------+  |
+|  | piece_exists_on_source    |  | target_not_friendly        |  |
+|  | (qbool = board[r,f])     |  | (qbool = ~board[r,f])      |  |
+|  +---------------------------+  +----------------------------+  |
+|  +---------------------------+  +----------------------------+  |
+|  | king_not_in_check         |  | move_is_legal (AND of all) |  |
+|  | (attack line enumeration) |  | @ql.compile(inverse=True)  |  |
+|  +---------------------------+  +----------------------------+  |
+|                                                                 |
+|  chess_walk.py (MODIFIED)                                       |
+|  +-----------------------------------------------------------+ |
+|  | evaluate_children: uses chess_predicates.move_is_legal     | |
+|  | instead of trivial always-valid predicate                  | |
+|  +-----------------------------------------------------------+ |
++-----------------------------------------------------------------+
+              |
+Compile Infrastructure (MODIFIED)
++-----------------------------------------------------------------+
+|  compile.py                                                     |
+|  +--------------------------------+                             |
+|  | qubit_set: numpy uint32 array  |                             |
+|  | built via np.union1d           |                             |
+|  | converted via np.unique        |                             |
+|  +--------------------------------+                             |
+|  call_graph.py                                                  |
+|  +--------------------------------+                             |
+|  | DAGNode.qubit_array: np.array  |                             |
+|  | overlap: np.intersect1d        |                             |
+|  | bitmask: Python int (kept)     |                             |
+|  +--------------------------------+                             |
++-----------------------------------------------------------------+
 ```
 
-**Key integration points:**
+## Component Responsibilities
 
-| Integration Point | Existing Component | Change Type | Details |
-|---|---|---|---|
-| Gate list merging | `_optimize_gate_list()` | REUSE | After concatenating gate lists from two blocks, run existing optimizer to cancel inverse pairs at the junction. |
-| Virtual qubit remapping | `_remap_gates()`, `_build_virtual_mapping()` | REUSE | Existing helpers handle qubit namespace translation. Merging two blocks requires unifying their virtual spaces. |
-| Circuit injection | `inject_remapped_gates()` | REUSE (no change) | Merged blocks are injected into a fresh circuit using the existing per-gate path. |
-| Layer floor management | `_set_layer_floor()` / `_get_layer_floor()` | REUSE | Use layer floor to ensure merged blocks are placed after their dependencies. |
+| Component | Responsibility | New vs Modified | Integration Points |
+|-----------|----------------|-----------------|-------------------|
+| `chess_predicates.py` | Quantum legality checks: piece exists, no friendly capture, no self-check | **NEW** | Uses qarray element access, qbool, calls chess_encoding for attack tables |
+| `chess_encoding.py` | Raw move destination generation (no legality filter) + board encoding | **MODIFIED** | Remove `legal_moves_*` filtering from oracle path; keep for classical use |
+| `chess_walk.py` | Walk register scaffolding, evaluate_children with real predicates | **MODIFIED** | `evaluate_children` calls `chess_predicates.move_is_legal` instead of trivial predicate |
+| `compile.py` | Gate capture/replay with numpy-based qubit set construction | **MODIFIED** | `_build_qubit_set` helper replaces 3 inline set-building blocks |
+| `call_graph.py` | DAG node with numpy qubit arrays, vectorized overlap computation | **MODIFIED** | `DAGNode` stores `qubit_array`; overlap methods use `np.intersect1d` |
 
-**Merge algorithm sketch:**
-
-```python
-def merge_sequences(dag, node_a, node_b):
-    """Merge two overlapping-qubit sequences into a single block."""
-    # 1. Determine unified qubit set
-    all_qubits = node_a.qubit_set | node_b.qubit_set
-
-    # 2. Build unified virtual mapping
-    #    Parameter qubits from both blocks map to shared virtual space
-    unified_mapping = {}
-    vidx = 0
-    for q in sorted(all_qubits):
-        unified_mapping[q] = vidx
-        vidx += 1
-
-    # 3. Remap both gate lists to unified space
-    gates_a = _remap_gates(node_a.block.gates,
-                           _compose_maps(node_a.virtual_to_real, unified_mapping))
-    gates_b = _remap_gates(node_b.block.gates,
-                           _compose_maps(node_b.virtual_to_real, unified_mapping))
-
-    # 4. Concatenate and optimize
-    merged_gates = _optimize_gate_list(gates_a + gates_b)
-
-    # 5. Build merged CompiledBlock
-    return CompiledBlock(
-        gates=merged_gates,
-        total_virtual_qubits=vidx,
-        param_qubit_ranges=[(0, vidx)],  # All qubits are "parameters"
-        internal_qubit_count=0,
-        return_qubit_range=None,
-    )
-```
-
-**Critical constraint:** Merging only works when both sequences have already been captured (their gate lists exist as Python dicts). This means the capture phase must complete for ALL sequences before merging begins. The flow is:
-
-1. Capture all sequences (gates enter circuit via normal `add_gate()` path)
-2. Extract all sequences into `CompiledBlock` objects
-3. Build DAG with qubit overlap analysis
-4. Identify merge candidates
-5. Create a NEW circuit (`ql.circuit()`)
-6. Inject merged blocks into new circuit via `inject_remapped_gates()`
-
-This "capture-then-rebuild" pattern avoids modifying the C backend.
-
-### opt_flag=3: Full Expansion (No Changes)
-
-Current behavior. All sequences expand directly into the shared circuit. No DAG construction, no merging. This is the existing `@ql.compile` path.
-
-### DOT Visualization
-
-**Integration design:**
+## Recommended Project Structure
 
 ```
-CallGraphDAG
-  └── to_dot() -> str
-      Iterate nodes and edges, emit DOT format.
-      Node labels: sequence name, gate count, qubit count.
-      Edge labels: shared qubit count.
-      Parallel groups (no edges between them) get same rank.
+src/
++-- chess_encoding.py       # Board encoding, attack tables, raw destinations
++-- chess_predicates.py     # NEW: quantum legality predicates
++-- chess_walk.py           # Walk registers, evaluate_children, r_a/r_b, walk_step
++-- quantum_language/
+    +-- compile.py          # @ql.compile with numpy qubit_set helper
+    +-- call_graph.py       # CallGraphDAG with numpy overlap
+    +-- walk.py             # QWalkTree (unchanged)
+    +-- ...
 ```
 
-**Implementation:** Pure Python, no C/Cython changes. Operates on the `CallGraphDAG` data structure. Can optionally use `graphviz` Python package for rendering, but DOT string generation requires no dependencies.
+### Structure Rationale
 
-**File location:** New module `src/quantum_language/call_graph.py` or method on `CallGraphDAG` class within compile.py.
-
-### Sparse Circuit Arrays
-
-**What changes:** Replace `gate_index_of_layer_and_qubits` dense `int[layer][qubit]` array with sparse representation when circuit exceeds memory threshold.
-
-**Integration design:**
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                     C Backend (circuit.h / optimizer.c)            │
-│                                                                    │
-│  circuit_t (MODIFIED):                                             │
-│    // Existing dense arrays (kept for small circuits):             │
-│    int **gate_index_of_layer_and_qubits;  // [layer][qubit]       │
-│                                                                    │
-│    // NEW: Sparse mode flag and data                               │
-│    int sparse_mode;  // 0=dense (default), 1=sparse               │
-│    sparse_layer_t *sparse_layers;  // array of hash maps          │
-│                                                                    │
-│  sparse_layer_t (NEW struct):                                      │
-│    // Hash map: qubit_t -> int (gate index)                        │
-│    // Only stores entries where gate_index != -1                   │
-│    qubit_t *keys;                                                  │
-│    int *values;                                                    │
-│    int count;                                                      │
-│    int capacity;                                                   │
-│                                                                    │
-│  Modified functions:                                               │
-│    add_gate() — branch on sparse_mode for lookup/update           │
-│    append_gate() — branch on sparse_mode for index storage        │
-│    colliding_gates() — branch on sparse_mode for index lookup     │
-│    merge_gates() — branch on sparse_mode for index reset          │
-│    allocate_more_qubits() — skip dense array growth in sparse     │
-│    allocate_more_layer() — allocate sparse_layer_t instead        │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-**Key integration points:**
-
-| Integration Point | Existing Component | Change Type | Details |
-|---|---|---|---|
-| Gate index lookup | `gate_index_of_layer_and_qubits[layer][qubit]` | MODIFY | 6 access sites in optimizer.c. Each needs `if (sparse_mode)` branch to use hash map lookup instead of array index. |
-| Gate index storage | `append_gate()` line 138 | MODIFY | Store in hash map instead of dense array when sparse. |
-| Gate index reset | `merge_gates()` lines 73-78 | MODIFY | Remove from hash map instead of setting to -1. |
-| Memory allocation | `allocate_more_qubits()` | MODIFY | In sparse mode, skip dense array reallocation for `gate_index_of_layer_and_qubits`. |
-| Layer allocation | `allocate_more_layer()` | MODIFY | Allocate `sparse_layer_t` entries instead of/in addition to dense rows. |
-| Auto-transition | `add_gate()` or `allocate_more_qubits()` | NEW | When `allocated_qubits * used_layer * sizeof(int)` exceeds threshold (e.g., 100MB), switch to sparse mode. |
-| Cython bindings | `extract_gate_range()` | NO CHANGE | Iterates `sequence[layer][gate_idx]` which is unchanged -- sparse mode only affects the index lookup arrays, not the gate storage. |
-
-**Hash map implementation choice:** Use open-addressing with linear probing. The key space is `qubit_t` (unsigned int), values are `int` (gate index). Load factor target: 0.7. This is simpler and cache-friendlier than chaining for the expected access pattern (frequent lookups in hot `add_gate()` path).
-
-**Transition strategy:** The circuit starts in dense mode. When the memory estimate `allocated_qubits * allocated_layer * sizeof(int)` exceeds a configurable threshold, the circuit transitions to sparse mode. This is a one-way transition (no sparse-to-dense). The transition:
-
-1. Allocate `sparse_layer_t` array for all existing layers
-2. For each layer, scan dense `gate_index_of_layer_and_qubits[layer]` and insert non-(-1) entries into the hash map
-3. Free the dense `gate_index_of_layer_and_qubits` array
-4. Set `sparse_mode = 1`
-
-**Performance note:** The sparse path adds a hash lookup per qubit per `add_gate()` call (currently a direct array index). For typical circuits (< 1000 qubits, < 10K layers), dense mode is faster. Sparse mode is a memory optimization for large circuits where the dense array would be prohibitive (e.g., 4000 qubits x 100K layers = 1.6 GB just for the index array).
-
-## Component Inventory
-
-### New Components
-
-| Component | Layer | File | Purpose |
-|---|---|---|---|
-| `CallGraphDAG` | Python | `compile.py` or new `call_graph.py` | DAG data structure for sequence dependencies |
-| `SequenceNode` | Python | Same as above | Node in call graph (wraps CompiledBlock) |
-| `MergeHeuristic` | Python | Same as above | Decision logic for which sequences to merge |
-| `sparse_layer_t` | C | `c_backend/include/sparse_index.h` (new) | Hash map for sparse gate index |
-| Sparse index API | C | `c_backend/src/sparse_index.c` (new) | `sparse_create()`, `sparse_get()`, `sparse_set()`, `sparse_remove()`, `sparse_free()` |
-
-### Modified Components
-
-| Component | Layer | File | Change |
-|---|---|---|---|
-| `CompiledFunc.__call__()` | Python | `compile.py` | Add `opt_flag` parameter routing |
-| `CompiledFunc._capture()` | Python | `compile.py` | When opt_flag=1/2, register in DAG after capture |
-| `circuit_t` | C | `circuit.h` | Add `sparse_mode`, `sparse_layers` fields |
-| `add_gate()` | C | `optimizer.c` | Branch on `sparse_mode` for index operations |
-| `append_gate()` | C | `optimizer.c` | Branch on `sparse_mode` for index storage |
-| `colliding_gates()` | C | `optimizer.c` | Branch on `sparse_mode` for index lookup |
-| `merge_gates()` | C | `optimizer.c` | Branch on `sparse_mode` for index reset |
-| `allocate_more_qubits()` | C | `circuit.c` | Skip dense index growth in sparse mode |
-| `allocate_more_layer()` | C | `circuit.c` | Allocate sparse layer entries when sparse |
-| `init_circuit()` | C | `circuit.c` | Initialize `sparse_mode=0` |
-| `free_circuit()` | C | `circuit.c` | Free sparse layers if allocated |
-
-### Unchanged Components
-
-| Component | Layer | File | Why Unchanged |
-|---|---|---|---|
-| `extract_gate_range()` | Cython | `_core.pyx` | Iterates `sequence[][]`, not index arrays |
-| `inject_remapped_gates()` | Cython | `_core.pyx` | Calls `add_gate()` per gate (sparse handled internally) |
-| `CompiledBlock` | Python | `compile.py` | Virtual gate storage is already complete |
-| `_optimize_gate_list()` | Python | `compile.py` | Operates on gate dicts, layer-agnostic |
-| `_build_virtual_mapping()` | Python | `compile.py` | Pure qubit remapping logic |
-| Gate type constants | C | `types.h` | No new gate types needed |
-| Qubit allocator | C | `qubit_allocator.h/.c` | Allocation is orthogonal to indexing |
-
-## Data Flow
-
-### opt_flag=1 Flow (Call Graph + Full Expansion)
-
-```
-User code: @ql.compile(opt_flag=1)
-    │
-    ├── f(a, b)  [first call]
-    │     │
-    │     ├── CompiledFunc.__call__(opt_flag=1)
-    │     │     │
-    │     │     ├── _capture():
-    │     │     │     ├── start_layer = get_current_layer()
-    │     │     │     ├── self._func(*args)          # gates flow to circuit via add_gate()
-    │     │     │     ├── end_layer = get_current_layer()
-    │     │     │     ├── extract_gate_range(start, end)  # pull gates as Python dicts
-    │     │     │     └── build CompiledBlock (virtual gate list)
-    │     │     │
-    │     │     ├── Register in CallGraphDAG:         # NEW
-    │     │     │     ├── node = SequenceNode(block, qubit_set)
-    │     │     │     ├── for existing_node in dag:
-    │     │     │     │     if qubit_set & existing_node.qubit_set:
-    │     │     │     │         dag.add_edge(existing_node, node)
-    │     │     │     └── dag.add_node(node)
-    │     │     │
-    │     │     └── Cache block as usual
-    │     │
-    │     └── return result
-    │
-    ├── g(c, d)  [second compiled call]
-    │     └── Same flow, DAG gains second node + edges
-    │
-    └── dag.to_dot()  # user requests visualization
-          └── Generate DOT string from nodes/edges
-```
-
-### opt_flag=2 Flow (Selective Merge)
-
-```
-Phase 1: Capture all sequences (same as opt_flag=1)
-    │
-Phase 2: Merge analysis
-    │
-    ├── dag.identify_merge_candidates()
-    │     ├── For each pair (A, B) with overlapping qubits:
-    │     │     ├── overlap_ratio = |A.qubits & B.qubits| / min(|A|, |B|)
-    │     │     ├── estimated_depth_savings = estimate_merge_benefit(A, B)
-    │     │     └── if overlap_ratio > threshold and benefit > min_benefit:
-    │     │           candidates.append((A, B))
-    │     └── Return sorted candidates
-    │
-    ├── For each merge candidate:
-    │     ├── Unify virtual qubit spaces
-    │     ├── Concatenate gate lists
-    │     ├── Run _optimize_gate_list() on junction  # reuse existing optimizer
-    │     └── Create MergedBlock (new CompiledBlock)
-    │
-Phase 3: Rebuild circuit
-    │
-    ├── ql.circuit()  # fresh circuit
-    │
-    ├── For each block in topological order:
-    │     ├── Allocate real qubits for internal/ancilla
-    │     ├── Build virtual_to_real mapping
-    │     ├── Set layer_floor (from dependency analysis)
-    │     └── inject_remapped_gates(block.gates, qubit_map)
-    │
-    └── Result: optimized circuit with merged sequences
-```
-
-### Sparse Circuit Transition Flow
-
-```
-add_gate(circ, g)
-    │
-    ├── allocate_more_qubits(circ, g)
-    │     │
-    │     ├── if !sparse_mode:
-    │     │     ├── Grow dense gate_index_of_layer_and_qubits as usual
-    │     │     ├── Check memory: if allocated_qubits * allocated_layer * 4 > THRESHOLD
-    │     │     │     └── transition_to_sparse(circ)  # one-time migration
-    │     │     └── return
-    │     │
-    │     └── if sparse_mode:
-    │           └── No dense array growth needed
-    │
-    ├── minimum_layer(circ, g, ...)
-    │     └── Uses occupied_layers_of_qubit (unchanged — not part of sparse)
-    │
-    ├── colliding_gates(circ, g, min_layer, ...)
-    │     │
-    │     ├── if !sparse_mode:
-    │     │     └── gate_index = circ->gate_index_of_layer_and_qubits[layer][qubit]
-    │     │
-    │     └── if sparse_mode:
-    │           └── gate_index = sparse_get(&circ->sparse_layers[layer], qubit)
-    │                            // returns -1 if not found
-    │
-    ├── [if inverse: merge_gates — similar sparse branch]
-    │
-    └── append_gate(circ, g, min_layer)
-          │
-          ├── memcpy gate into sequence[layer][pos]  (unchanged)
-          │
-          ├── if !sparse_mode:
-          │     └── circ->gate_index_of_layer_and_qubits[layer][target] = pos
-          │
-          └── if sparse_mode:
-                └── sparse_set(&circ->sparse_layers[layer], target, pos)
-```
+- **chess_predicates.py at src/ level:** Same level as chess_encoding.py and chess_walk.py. These are application-level modules, not framework internals. chess_predicates imports from both chess_encoding (attack tables) and quantum_language (qbool, compile).
+- **compile.py/call_graph.py modifications are internal:** The numpy optimization is transparent to callers. No API changes.
 
 ## Architectural Patterns
 
-### Pattern 1: Capture-Then-Analyze (for DAG Construction)
+### Pattern 1: Quantum Predicate as Compiled Oracle
 
-**What:** Gates flow through the existing `add_gate()` path during capture. After capture completes, the extracted gate list (already virtualized as a `CompiledBlock`) is registered in the DAG. The circuit retains the gates for opt_flag=1 (informational DAG) or is rebuilt for opt_flag=2 (merge optimization).
-
-**When to use:** Always for opt_flag=1 and opt_flag=2. This preserves the existing capture mechanism without modification.
-
+**What:** Each legality condition is a separate `@ql.compile(inverse=True)` function producing a qbool result. The top-level `move_is_legal` AND-combines them via Toffoli gates.
+**When to use:** Whenever the walk framework needs to determine child validity in superposition.
 **Trade-offs:**
-- Pro: Zero changes to C backend for DAG construction
-- Pro: Reuses existing `CompiledBlock` virtual gate lists
-- Con: For opt_flag=2, the initial circuit is built and then discarded (rebuilt with merges)
-- Con: Gates cross the Cython boundary twice (once during capture, once during rebuild)
+- PRO: Each sub-predicate is independently testable; inverse is auto-generated for uncomputation
+- PRO: Compiled predicates auto-uncompute their ancillae (solves known "raw predicate qubit allocation" limitation)
+- CON: AND-combining qbools requires explicit multi-controlled gates (framework `with qbool:` cannot nest)
+- CON: More compiled function invocations = more cache entries and DAG nodes
 
-### Pattern 2: Dual-Mode Index Storage (for Sparse Circuit)
+**Example:**
+```python
+@ql.compile(inverse=True)
+def piece_exists_on_source(board_arr, src_rank, src_file):
+    """Returns qbool |1> if board_arr[src_rank, src_file] == |1>."""
+    return board_arr[src_rank, src_file]  # Already a qbool
 
-**What:** The `gate_index_of_layer_and_qubits` lookup uses either dense arrays (direct index) or sparse hash maps, selected by a flag on `circuit_t`. All access sites branch on this flag.
+@ql.compile(inverse=True)
+def target_not_same_color(own_boards, dst_rank, dst_file):
+    """Returns qbool |1> if no same-color piece at destination."""
+    occupied = ql.qbool()
+    for board in own_boards:
+        occupied |= board[dst_rank, dst_file]
+    return ~occupied
+```
 
-**When to use:** Sparse mode activates automatically when memory exceeds a threshold.
+### Pattern 2: Classical Attack Table, Quantum Lookup
 
+**What:** Attack tables (which squares a knight/king can reach) are precomputed classically. The quantum predicate iterates these tables at circuit construction time, emitting controlled gates only for relevant squares. No quantum arithmetic for move geometry.
+**When to use:** For check detection -- "is the king attacked?" examines all squares that could attack the king.
 **Trade-offs:**
-- Pro: Small circuits pay zero overhead (dense path is unchanged)
-- Pro: Large circuits avoid OOM from the dense index matrix
-- Con: Branch prediction cost in hot `add_gate()` path (mitigated: branch is highly predictable after transition)
-- Con: Hash map lookups are slower than array indexing (~3-5x per lookup)
+- PRO: Zero quantum overhead for move enumeration (classical loop at construction time)
+- PRO: Circuit size proportional to piece count, not board size
+- CON: Board position must be known at construction time for attack table (consistent with existing oracle factory pattern)
 
-### Pattern 3: Layered opt_flag Semantics
+**Example:**
+```python
+def king_not_in_check(board_arrs, king_sq, opponent_piece_type):
+    """Quantum predicate: king on king_sq is not attacked."""
+    in_check = ql.qbool()
+    # Check opponent knight attacks on king_sq
+    for attacker_sq in knight_attacks(king_sq):
+        r, f = divmod(attacker_sq, 8)
+        in_check |= board_arrs['knights'][r, f]
+    # Check opponent king adjacency
+    for adj_sq in king_attacks(king_sq):
+        r, f = divmod(adj_sq, 8)
+        in_check |= board_arrs['king'][r, f]
+    return ~in_check  # Valid if NOT in check
+```
 
-**What:** opt_flag values form a hierarchy where higher values include lower values' behavior:
-- opt_flag=1: Build DAG (informational) + full expansion
-- opt_flag=2: Build DAG + selective merge + partial expansion
-- opt_flag=3: Full expansion only (current behavior, no DAG)
+### Pattern 3: Numpy Qubit Set Operations in Compile Infrastructure
 
-**When to use:** User-facing API parameter on `@ql.compile`.
-
+**What:** Replace Python `set()` / `frozenset` / Python-loop bitmask computation with numpy `uint32` arrays and vectorized operations in compile.py and call_graph.py.
+**When to use:** Every qubit set operation in compile infrastructure (3 sites in compile.py, 1 in call_graph.py init, 3 in call_graph.py overlap/parallel/merge).
 **Trade-offs:**
-- Pro: opt_flag=3 is zero-cost (current path, no DAG overhead)
-- Pro: opt_flag=1 adds only Python-level overhead (DAG construction)
-- Con: opt_flag=2 requires circuit rebuild (capture + rebuild = 2x circuit construction)
+- PRO: `np.intersect1d` / `np.union1d` faster than frozenset for typical qubit counts (50-300 qubits)
+- PRO: Eliminates repeated `set.update()` calls
+- CON: Python int bitmask for >64 qubits cannot be vectorized in numpy (uint64 max); bitmask loop stays as Python int
+- CON: Requires converting to/from numpy at API boundaries
+
+**Critical constraint:** The bitmask MUST remain a Python `int` because chess walk circuits exceed 64 qubits. Numpy uint64 would silently overflow. Optimize the set operations with numpy; leave bitmask as Python int.
+
+**Example:**
+```python
+# compile.py -- new helper
+def _build_qubit_set(quantum_args, capture_vtr=None):
+    """Build qubit set from quantum args + capture mapping."""
+    arrays = [_get_quantum_arg_qubit_indices(qa) for qa in quantum_args]
+    if capture_vtr:
+        arrays.append(np.array(list(capture_vtr.values()), dtype=np.uint32))
+    if arrays:
+        return np.unique(np.concatenate(arrays))
+    return np.array([], dtype=np.uint32)
+
+# call_graph.py -- DAGNode with dual storage
+class DAGNode:
+    def __init__(self, func_name, qubit_set, gate_count, cache_key, **kw):
+        self.qubit_array = np.array(sorted(qubit_set), dtype=np.uint32)
+        self.qubit_set = frozenset(qubit_set)  # Backward compat
+        # Bitmask stays as Python int for >64 qubit support
+        bitmask = 0
+        for q in self.qubit_array:
+            bitmask |= 1 << int(q)
+        self.bitmask = bitmask
+
+# call_graph.py -- vectorized overlap
+def build_overlap_edges(self):
+    for i in range(n):
+        arr_i = self._nodes[i].qubit_array
+        for j in range(i + 1, n):
+            w = len(np.intersect1d(arr_i, self._nodes[j].qubit_array))
+            if w > 0 and (i, j) not in call_pairs:
+                self._dag.add_edge(i, j, {"type": "overlap", "weight": w})
+```
+
+### Pattern 4: Predicate Integration in evaluate_children
+
+**What:** The existing evaluate_children loop replaces the trivial `reject = qbool()` (always valid) with a real quantum predicate call. The oracle itself stays unchanged -- the predicate is separate.
+**When to use:** In `evaluate_children` (chess_walk.py lines 250-328), between steps (c) oracle apply and (f) oracle inverse.
+**Trade-offs:**
+- PRO: Oracle and predicate are cleanly separated
+- PRO: Predicate is compiled, so its ancillae are auto-uncomputed
+- CON: More qubits per child evaluation = higher total qubit count
+- CON: Predicate must be uncomputed before oracle inverse
+
+**Current code (trivial predicate):**
+```python
+# Step (d) -- trivial, always valid
+reject = alloc_qbool()  # Always |0>
+reject_ctrl = _make_qbool_wrapper(reject_qubit)
+with reject_ctrl:
+    emit_x(validity_qubit)
+emit_x(validity_qubit)
+```
+
+**Target code (real predicate):**
+```python
+# Step (d) -- quantum legality check
+from chess_predicates import move_is_legal
+move_spec = move_data['moves'][i]
+src_rank, src_file = divmod(move_spec[0], 8)
+dst_rank, dst_file = divmod(move_spec[1], 8)
+
+is_legal = move_is_legal(board_arrs, src_rank, src_file, dst_rank, dst_file, side)
+legal_qubit = int(is_legal.qubits[63])
+legal_ctrl = _make_qbool_wrapper(legal_qubit)
+with legal_ctrl:
+    emit_x(validity_qubit)
+# is_legal is positive-sense: no extra flip needed
+```
+
+## Data Flow
+
+### Move Legality Check Flow (NEW)
+
+```
+Branch Register = i (child index)
+    |
+    v
+Oracle Forward: apply_move(board, branch=i)
+    |
+    v
+Board State at Child Node
+    |
+    +--> piece_exists_on_source(board, src) --> qbool p1
+    +--> target_not_friendly(board, dst)    --> qbool p2
+    +--> king_not_in_check(board, king_sq)  --> qbool p3
+    |
+    v
+validity[i] = p1 AND p2 AND p3  (via Toffoli/multi-controlled-X)
+    |
+    v
+Uncompute predicates (compiled inverse)
+    |
+    v
+Oracle Inverse: apply_move.inverse(board, branch=i)
+    |
+    v
+Board State Restored
+```
+
+### Compile Infrastructure Qubit Set Flow (MODIFIED)
+
+```
+Current:
+  quantum_args --> set() --> .update() loop --> frozenset --> Python loop bitmask
+
+Target:
+  quantum_args --> np.array(uint32) --> np.concatenate + np.unique --> frozenset + Python int bitmask
+                                           |
+                       np.intersect1d for overlap computation in call_graph.py
+```
+
+### Key Data Flows
+
+1. **Predicate evaluation flow:** For each child in evaluate_children, oracle applies move to board state in superposition, then chess_predicates checks legality on the resulting state, stores result in validity ancilla, then oracle inverse restores board.
+2. **Qubit set construction flow:** `_build_qubit_set()` collects physical qubit indices from quantum args and capture mappings into numpy arrays, concatenates, and deduplicates via `np.unique()`.
+
+## Integration Points
+
+### New Component to Existing Component
+
+| New/Modified | Integrates With | How | Notes |
+|--------------|-----------------|-----|-------|
+| `chess_predicates.py` | `chess_encoding.py` | Imports `knight_attacks`, `king_attacks` | Attack functions already exist, pure-classical |
+| `chess_predicates.py` | `quantum_language` | Uses `ql.qbool`, `ql.compile`, qarray element access | Standard framework operations |
+| `chess_predicates.py` | `chess_walk.py` | Called from `evaluate_children` step (d) | Replaces trivial predicate |
+| `chess_walk.py` (modified) | `chess_predicates.py` | Imports `move_is_legal` | New dependency |
+| `compile.py` (modified) | numpy | `np.unique`, `np.concatenate` | numpy already imported |
+| `call_graph.py` (modified) | numpy | `np.intersect1d`, `np.array` | Needs new numpy import |
+
+### Internal Boundaries
+
+| Boundary | Communication | Considerations |
+|----------|---------------|----------------|
+| chess_predicates <--> chess_walk | Function call returning qbool | Predicate must use `@ql.compile(inverse=True)` for clean uncomputation |
+| chess_predicates <--> board qarrays | Element access: `board[rank, file]` | Existing qarray indexing; no new infrastructure |
+| compile.py qubit_set <--> call_graph.py | numpy array passed to `DAGNode.__init__` | DAGNode accepts both set and numpy array |
+| chess_walk <--> move data | Dict with 'moves' key per level | v8.0 provides ALL possible destinations, not just legal ones |
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Modifying add_gate() for DAG Construction
+### Anti-Pattern 1: Embedding Legality in the Oracle
 
-**What people might do:** Add a "DAG mode" flag to `add_gate()` that buffers gates instead of placing them in the circuit.
+**What people do:** Put legality checks inside `_make_apply_move` so the oracle only applies legal moves.
+**Why it is wrong:** After depth > 0, board state is in superposition. The oracle cannot know which moves are legal at circuit construction time because legality depends on superposition state. Legality must be checked AFTER the oracle applies the move.
+**Do this instead:** Keep oracle as pure move application. Check legality via separate quantum predicate on the resulting board state.
 
-**Why it's wrong:** The existing capture mechanism already extracts gates into Python dicts via `extract_gate_range()`. Adding buffering to the C layer duplicates this functionality, adds complexity to the hot path, and breaks the stateless C backend design principle. Every subsequent feature would need to handle two code paths in C.
+### Anti-Pattern 2: Numpy for Bitmask Arithmetic on >64 Qubit Sets
 
-**Do this instead:** Use the existing capture-then-extract pattern. Build the DAG in Python from extracted gate lists.
+**What people do:** Use `np.uint64` arrays for bitmask operations assuming numpy handles arbitrary precision.
+**Why it is wrong:** Numpy integers are fixed-width. For chess walk with 100+ qubits, bit 100 cannot be represented in uint64. Silent overflow produces incorrect overlap detection.
+**Do this instead:** Use numpy only for set operations (intersect, union). Keep bitmask as Python `int`. Use `len(np.intersect1d(...))` instead of bitmask popcount for overlap weight.
 
-### Anti-Pattern 2: Sparse-by-Default
+### Anti-Pattern 3: Raw Qbool Allocation per Predicate Without Compilation
 
-**What people might do:** Start all circuits in sparse mode for uniformity.
+**What people do:** Each predicate sub-check allocates a fresh qbool without `@ql.compile`.
+**Why it is wrong:** Known limitation: "Raw predicate qubit allocation in QWalkTree: each predicate call allocates new qbools, making SAT demos infeasible at depth >= 2 without compiled predicates."
+**Do this instead:** Compile each predicate with `@ql.compile(inverse=True)`. Compiled predicates auto-uncompute ancillae. Only the final validity qbool persists.
 
-**Why it's wrong:** Hash map lookups are 3-5x slower than array indexing. For the 95% of circuits that fit in memory with dense arrays, this is pure overhead. The framework benchmarks show circuit generation speed is a competitive advantage.
+### Anti-Pattern 4: Nesting `with qbool:` for Predicate AND
 
-**Do this instead:** Start dense, auto-transition when memory threshold is exceeded. Keep dense as the fast path.
+**What people do:** Nest `with p1:` / `with p2:` blocks to AND-combine predicate results.
+**Why it is wrong:** Known limitation: "Nested quantum conditionals require quantum-quantum AND implementation (future work)" and "Framework `with qbool:` cannot nest."
+**Do this instead:** Use explicit Toffoli (CCX) gates or multi-controlled X to compute AND into an ancilla within a compiled function.
 
-### Anti-Pattern 3: Deep Merge Recursion
+## Key Architectural Decisions
 
-**What people might do:** Merge sequences transitively (A merges with B, then AB merges with C, etc.) producing one giant sequence.
+### Decision 1: Predicate Separate from Oracle
 
-**Why it's wrong:** This converges to opt_flag=3 (full expansion) with extra overhead. The value of opt_flag=2 is selective merging of specific pairs with high qubit overlap, not global circuit flattening.
+The move oracle (apply_move) must NOT include legality checking. Reasons:
+1. Oracle encodes piece movements; predicate checks legality on resulting state
+2. Separation enables independent testing of predicates
+3. Walk framework already separates "navigate to child" from "evaluate predicate"
+4. Oracle is compiled once per position; predicate evaluates per child in superposition
 
-**Do this instead:** Limit merging to direct pairs. Use a merge benefit threshold. If merging all candidates would produce a single sequence, that is opt_flag=3 -- just use opt_flag=3.
+### Decision 2: Classical Move Enumeration Stays
+
+Move ENUMERATION (which squares can a knight reach?) stays classical even though predicates are quantum. The quantum part only answers "is this reachable square actually legal given the current superposition state?" Reasons:
+1. Move geometry (L-shape, adjacency) is fixed, not state-dependent
+2. Only blocking/check conditions depend on superposition
+3. Branch register width is determined at construction time
+
+### Decision 3: Compile Infrastructure Gets Numpy via Helper Function
+
+The numpy optimization is introduced as a helper function `_build_qubit_set()` called from the 3 existing sites in compile.py (lines 843-845, 885-887, 1154-1158) and adapted DAGNode in call_graph.py. This is a refactor, not a redesign:
+1. Extract `_build_qubit_set(quantum_args, capture_vtr=None) -> np.ndarray`
+2. In DAGNode, store `qubit_array` alongside `qubit_set` for numpy-fast overlap
+3. Update `build_overlap_edges`, `parallel_groups`, `merge_groups` to use `np.intersect1d`
+4. Keep `frozenset` on DAGNode for backward compatibility
+
+### Decision 4: Keep Python Int Bitmask
+
+Bitmask remains Python `int` (not numpy). Chess walk uses 100+ qubits; numpy uint64 would overflow. The bitmask construction loop is NOT the bottleneck -- the set operations (union, intersection) are. Optimize sets with numpy; leave bitmask as Python int.
+
+## Qubit Budget Analysis
+
+For KNK endgame at depth 1:
+
+| Register | Qubits | Notes |
+|----------|--------|-------|
+| White king board | 64 (8x8 qbool) | Full board representation |
+| Black king board | 64 | |
+| White knights board | 64 | |
+| Height register | 2 (depth 0,1) | One-hot encoding |
+| Branch registers | ~4 per level | ceil(log2(max_moves)) |
+| Validity ancillae | ~8 per level | One per possible child |
+| Predicate ancillae | ~3 per child eval | Compiled, auto-uncomputed |
+| **Total** | ~210 | Exceeds 17-qubit sim limit |
+
+**Testing strategies given 17-qubit simulation constraint:**
+1. Unit-test predicates on tiny boards (2x2, 3x3) within qubit budget
+2. Test walk structure with mock predicates using fewer qubits
+3. Verify circuit structure (gate counts, qubit wiring) without simulation
+4. Use matrix_product_state simulator for medium circuits if needed
+
+## Scaling Considerations
+
+| Scale | Architecture Adjustment |
+|-------|------------------------|
+| KNK (3 pieces) | Full 8x8 board qarrays; ~200 qubits; predicates check knight+king attacks |
+| KNNK (4 pieces) | Add second knight array; ~260 qubits; predicate unchanged |
+| General endgame | Board representation needs redesign (one qarray per piece type = O(types * 64)) |
+
+### Scaling Priorities
+
+1. **First bottleneck: apply_diffusion O(2^d_max)** -- For d_max = 8 (knight moves), the inner loop runs C(8,1)+...+C(8,8) = 255 iterations. Each emits multi-controlled gates. Mitigation: Hamming-weight-based rotation (future, not blocking v8.0 correctness).
+
+2. **Second bottleneck: Qubit count** -- Each child evaluation needs oracle forward + predicate + oracle inverse. Compiled predicates auto-uncompute ancillae, but validity qbools (d_max of them) persist until uncompute_children.
 
 ## Suggested Build Order
 
 Build order follows dependency chain. Each phase is independently testable.
 
-### Phase 1: Sparse Circuit Arrays (C Backend)
+### Phase A: Compile Infrastructure Numpy (no chess dependencies)
+1. `_build_qubit_set` helper in compile.py
+2. DAGNode dual storage (`qubit_array` + `qubit_set`)
+3. Numpy overlap in call_graph.py (`np.intersect1d` in build_overlap_edges, parallel_groups, merge_groups)
+4. Verification: run existing 186+ compile tests for equivalence
 
-**Rationale:** Independent of Python changes. Unlocks large circuit support. Most isolated change -- only touches C backend with clear access-site modifications.
+### Phase B: Chess Predicates (depends on framework, not Phase A)
+1. `chess_predicates.py` module with sub-predicates
+2. Unit tests per predicate on known board positions
+3. Check detection correctness against classical attack tables
 
-**Components:**
-1. `sparse_index.h` / `sparse_index.c` -- hash map implementation
-2. Add `sparse_mode`, `sparse_layers` to `circuit_t`
-3. Modify 6 access sites in `optimizer.c` with `if (sparse_mode)` branches
-4. Add `transition_to_sparse()` function
-5. Modify `allocate_more_qubits()` and `allocate_more_layer()`
-6. Modify `init_circuit()` and `free_circuit()`
+### Phase C: Walk Integration (depends on Phase B)
+1. Modify `chess_encoding.py` for raw destination generation
+2. Modify `evaluate_children` to use `move_is_legal`
+3. Modify `prepare_walk_data` for raw destinations
+4. End-to-end test on small KNK position
 
-**Test:** Create circuits exceeding threshold, verify same gate output in sparse vs dense mode.
-
-### Phase 2: Call Graph DAG (Python)
-
-**Rationale:** Depends on nothing new in C. Uses existing `CompiledBlock`. Foundation for opt_flag=1 and opt_flag=2.
-
-**Components:**
-1. `CallGraphDAG` class with `add_node()`, `add_edge()`, `topological_sort()`
-2. `SequenceNode` wrapping `CompiledBlock` + qubit set
-3. Qubit overlap detection (`overlapping_qubits()`)
-4. Parallel group identification (`get_parallel_groups()`)
-
-**Test:** Build DAG from manually constructed CompiledBlocks, verify topology.
-
-### Phase 3: DOT Visualization (Python)
-
-**Rationale:** Depends on Phase 2 (DAG). Simple output formatting.
-
-**Components:**
-1. `to_dot()` method on `CallGraphDAG`
-2. Node/edge formatting with gate count, qubit count labels
-
-**Test:** Generate DOT from test DAG, verify valid DOT syntax.
-
-### Phase 4: opt_flag=1 Integration (Python)
-
-**Rationale:** Depends on Phase 2 (DAG). Wires DAG construction into `CompiledFunc`.
-
-**Components:**
-1. Add `opt_flag` parameter to `@ql.compile` decorator
-2. Modify `CompiledFunc.__call__()` to construct DAG when opt_flag=1
-3. Expose DAG as property on `CompiledFunc` (`.call_graph`)
-
-**Test:** `@ql.compile(opt_flag=1)` produces correct DAG alongside normal circuit.
-
-### Phase 5: Sequence Merging (Python)
-
-**Rationale:** Depends on Phase 2 (DAG) and Phase 4 (opt_flag integration). Most complex new logic.
-
-**Components:**
-1. `MergeHeuristic` with configurable thresholds
-2. `merge_sequences()` -- unify virtual spaces, concatenate, optimize
-3. `expand_to_circuit()` -- rebuild circuit from merged blocks
-4. Circuit rebuild orchestration (fresh `ql.circuit()` + inject)
-
-**Test:** Merge two sequences with known qubit overlap, verify merged circuit has fewer gates than sequential.
-
-### Phase 6: opt_flag=2 Integration (Python)
-
-**Rationale:** Depends on Phase 4 (opt_flag=1 working) and Phase 5 (merging). Wires everything together.
-
-**Components:**
-1. Modify `CompiledFunc.__call__()` for opt_flag=2 flow
-2. Add circuit rebuild step after all captures complete
-3. Handle edge cases: empty merges, single-sequence programs
-
-**Test:** End-to-end: `@ql.compile(opt_flag=2)` with overlapping sequences produces optimized circuit with correct behavior (verified via Qiskit simulation).
-
-## Scaling Considerations
-
-| Concern | Small Circuit (<100 qubits) | Medium Circuit (100-2000 qubits) | Large Circuit (2000+ qubits) |
-|---|---|---|---|
-| Index memory | Dense arrays: trivial | Dense arrays: ~100MB | Sparse transition needed |
-| DAG construction | Negligible overhead | O(n^2) pair comparison manageable | May need qubit-set indexing |
-| Merge analysis | Exhaustive pair scan OK | Heuristic filtering needed | Must limit candidate pairs |
-| Circuit rebuild (opt_flag=2) | Fast | 2x construction cost | Consider incremental merge |
-
-### First bottleneck: Dense index memory
-
-At 4000 qubits and 50K layers, `gate_index_of_layer_and_qubits` = 4000 * 50000 * 4 bytes = 800 MB. This is the first thing that breaks. Sparse mode is the fix.
-
-### Second bottleneck: Per-gate Cython crossing
-
-Each gate in `inject_remapped_gates()` builds a `gate_t` on the stack, remaps qubits, and calls `add_gate()`. For circuits with millions of gates, this is O(n) Python-C crossings. Future optimization: batch injection via a C-level function that takes a flat array of gate data. NOT needed for v7.0 -- the per-gate path works and is already optimized (stack-allocated `gate_t`, Phase 84).
+### Phase D: apply_diffusion Optimization (optional, depends on Phase C)
+1. Profile O(2^d_max) pattern enumeration
+2. If bottleneck: replace with Hamming-weight controlled rotation
 
 ## Sources
 
-- Direct source analysis of `compile.py` (1100+ lines), `_core.pyx` (1011 lines), `circuit.h` (174 lines), `optimizer.c` (217 lines), `types.h` (90 lines)
-- Existing architectural decisions documented in `.planning/PROJECT.md` (406 lines of decisions)
-- Prior architecture research in `.planning/research/ARCHITECTURE-COMPILE-DECORATOR.md`
+- Direct codebase analysis: `chess_walk.py`, `chess_encoding.py`, `compile.py`, `call_graph.py`, `walk.py`
+- PROJECT.md known limitations and key decisions
+- Montanaro 2015 (arXiv:1509.02374) for walk operator structure
 
 ---
-*Architecture research for: Multi-level quantum circuit compilation infrastructure*
-*Researched: 2026-03-05*
+*Architecture research for: Quantum Chess Walk Rewrite v8.0*
+*Researched: 2026-03-08*

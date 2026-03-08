@@ -1,214 +1,251 @@
 # Feature Research
 
-**Domain:** Multi-level quantum circuit compilation infrastructure
-**Researched:** 2026-03-05
-**Confidence:** HIGH (classical compiler analogies well-established; quantum-specific patterns verified via Qiskit/TKET/MLIR literature)
+**Domain:** Quantum chess move legality in superposition (quantum walk predicate rewrite)
+**Researched:** 2026-03-08
+**Confidence:** MEDIUM -- Novel application domain; no direct prior art for Montanaro-walk chess predicates. Confidence is HIGH for individual sub-features (knight/king move generation, bitboard-style checks) and MEDIUM for their integration into quantum predicates.
 
 ## Feature Landscape
 
 ### Table Stakes (Users Expect These)
 
-Features that any multi-level compilation system must have. Without these, the opt_flag system feels incomplete or broken.
+Features the quantum walk rewrite must have to replace the current classical pre-filtering approach.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| opt_flag=1: Call graph DAG (no placement) | Core promise of multi-level compilation. Users need to see program structure without paying full expansion cost. LLVM -O0 analogy. | MEDIUM | Captures individual instruction sequences per `@ql.compile` call, builds DAG with edges for qubit overlap and call ordering. Must integrate with existing `CompiledBlock` capture. |
-| opt_flag=3: Full expansion (current behavior) | Backward compatibility. Existing users already depend on this. Breaking it is a non-starter. | LOW | Already implemented as current default. Relabel as opt_flag=3 and ensure all existing tests pass unchanged. |
-| Qubit overlap analysis in call graph | Without knowing which sequences share qubits, the DAG is just a call tree -- useless for optimization decisions. This is what makes it a *dependency* graph, not just a *call* graph. | MEDIUM | For each pair of sequences, compute intersection of qubit sets. Store as edge weight. O(n^2) in number of sequences but n is typically small (tens, not thousands). |
-| Call graph node metadata | Each node needs: function name, gate count, qubit set, depth, ancilla count. Without metadata, the graph is not actionable. | LOW | Already available from `CompiledBlock` attributes (gates, total_virtual_qubits, param_qubit_ranges, internal_qubit_count). Just expose them. |
-| opt_flag parameter on @ql.compile | Users need a clean API to select compilation level. Must be keyword argument with sensible default (1 = call graph only). | LOW | Add `opt_flag=1` parameter to `@ql.compile` decorator and `CompiledFunc.__init__`. Route to different code paths in `__call__`. |
-| DOT-format call graph export | DOT is the universal standard for graph visualization. Graphviz renders it. Every CI/CD pipeline can consume it. Without DOT output, the call graph is invisible. | LOW | Pure Python string generation. Nodes = compiled function calls, edges = qubit dependencies. Use `graphviz` package for rendering or raw DOT string for zero-dependency mode. |
+| Quantum piece-exists predicate | Current classical approach checks source square occupancy at circuit construction time; quantum version must check qarray bit in superposition | MEDIUM | Controlled-NOT on board qarray element. Source square qbool must be \|1> for move to be valid. Single multi-controlled test per move. Depends on existing board qarrays (v6.1). |
+| Quantum same-color-capture rejection | Current approach filters `dest not in friendly_squares` classically; quantum version must check target square not occupied by friendly piece | MEDIUM | OR of same-color piece qarrays at destination square. Requires ancilla qbool for the OR result. Must uncompute cleanly. |
+| Knight move generation (8 destinations/square) | Knights have exactly 8 possible L-shaped moves (fewer at edges). Already computed classically in `chess_encoding.py`; must become quantum enumeration | HIGH | Up to 8 (src, dst) pairs per knight. Enumerate all structurally possible moves across all 64 squares, validity checked quantumly. Total possible knight moves: up to 336 across all squares (but only populated squares matter in the KNK endgame). |
+| King move generation (8 destinations/square) | Kings have exactly 8 adjacent moves (fewer at edges). Already computed classically; must become quantum enumeration | MEDIUM | Simpler than knights -- king moves are local. Up to 8 (src, dst) pairs per king. Same validity predicate structure as knight moves. |
+| All-moves enumeration in circuit | Current approach: classical list of legal moves with indices mapping to branch register values. New approach: enumerate ALL structurally possible moves (up to ~218 for KNK endgame), check validity quantumly | HIGH | Branch register must index into the full move table. Moves with invalid source/target get validity=\|0>. The upper bound comes from: 2 kings x max 8 moves + variable knights x max 8 moves per square. Key design decision: static move table computed at circuit construction time from piece types (not positions). |
+| Reversible move application oracle | Current `_make_apply_move` uses `@ql.compile(inverse=True)` with conditional CNOT flips. This pattern must extend to all enumerated moves, not just classically-filtered ones | MEDIUM | Same pattern: `with (branch == i): flip src off, flip dst on`. Scales linearly with move count. Already proven in v6.1. Invalid moves (validity=\|0>) produce no board change since the branch condition never fires for the corresponding index. |
+| Variable branching integration | D_x diffusion uses `d(x)` = count of valid children. Currently `d_max` from classical move count; must now come from quantum validity ancilla count | LOW | Already implemented in `chess_walk.py` via `evaluate_children` and `precompute_diffusion_angles`. The validity ancillae pattern is unchanged -- what changes is that validity is now computed by a real quantum predicate instead of trivially set to \|1>. |
 
 ### Differentiators (Competitive Advantage)
 
-Features that set this apart from existing quantum frameworks. Qiskit, Cirq, TKET, and PennyLane do not offer user-facing multi-level compilation with selective merging.
+Features that go beyond basic move legality replacement and represent genuine advances.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| opt_flag=2: Selective sequence merging | The killer feature. No quantum framework offers user-accessible selective inlining with domain-specific optimization (QFT/IQFT cancellation). LLVM does function inlining at -O2; this is the quantum equivalent. Merging `a += b; a += c` eliminates redundant QFT/IQFT pairs, which is a massive gate count reduction for QFT arithmetic. | HIGH | Must identify mergeable sequence pairs (heavy qubit overlap), inline their gate lists, then run `_optimize_gate_list` on the combined sequence. The QFT/IQFT cancellation already works via inverse pair cancellation in the existing optimizer -- the challenge is deciding *which* sequences to merge and handling multi-sequence chains. |
-| Parallelism detection from call graph | DAG reveals which sequences can execute simultaneously (no shared qubits = independent). This is free information from the call graph that no other framework surfaces at the user level. | LOW | Sequences with zero qubit overlap are independent. Color-code in DOT output. Report parallelism factor (max independent set size). |
-| Sparse circuit arrays (memory-adaptive) | Current circuit storage is dense: `gate_t **sequence[layer][gates_per_layer]` and `gate_index_of_layer_and_qubits[layer][qubit]` allocate for every layer x qubit combination. For 1000+ qubit circuits with 300K layers, this is GB of mostly-zero memory. Sparse storage makes large programs feasible. | HIGH | Requires C-level changes to `circuit_t`. Replace dense `gate_index_of_layer_and_qubits` with hash map or skip list. Must not regress performance for small circuits (< 200 qubits). Auto opt-in via memory monitoring (e.g., when projected allocation exceeds threshold). |
-| Merge cost estimation | Before merging, estimate gate reduction from QFT/IQFT cancellation. Users see "merging f+g saves 847 gates (23%)" in debug output. Informed decision-making. | MEDIUM | Simulate merge by concatenating gate lists and running `_optimize_gate_list` in dry-run mode. Compare before/after gate counts. |
-| Compilation report with per-level stats | At each opt level, report: total gates, total depth, total qubits, number of sequences, merge opportunities found, parallelism factor. Builds on existing debug mode. | LOW | Extend existing `CompiledFunc` debug reporting. Add structured dict output alongside print. |
+| Quantum check detection (king safety) | No existing quantum chess implementation checks whether a king is in check as a quantum predicate. Google's Quantum Chess uses measurement-based resolution (collapses superposition). This project would compute check status reversibly in superposition, preserving coherence for the walk. | HIGH | Must detect if any opponent piece attacks the king's square AFTER the proposed move. For KNK endgame: check if black king is adjacent to white king's new square (king adjacency), or if any opponent knight attacks the king. Requires computing attack sets quantumly on the post-move board state. |
+| Position-independent move enumeration | Current code hardcodes moves for a specific starting position (`get_legal_moves_and_oracle` takes explicit squares). Quantum enumeration works for ANY position in superposition -- the same circuit handles all board states arising in the walk tree | HIGH | This is the core motivation for the rewrite. Classical pre-filtering can only generate moves for known positions. At depth > 0 in the walk tree, positions exist only in superposition. Quantum predicates evaluate legality for all positions simultaneously. |
+| Compile infrastructure: numpy qubit sets | Replace Python `set.update()` loops in `compile.py` (lines 843-890, 1125-1160) and `frozenset` intersection in `call_graph.py` with numpy bitset array operations | MEDIUM | These are hot paths during compilation of large functions like the move oracle. Numpy uint64 arrays with bitwise AND/OR/popcount eliminate per-element Python iteration overhead. Qubit indices are bounded integers (typically < 1000), fitting in a compact bitset. |
+| Compiled predicate caching | The legality predicate is the same function called for every move candidate. `@ql.compile` should capture it once and replay for each enumerated move, amortizing compilation cost | MEDIUM | Requires the predicate to be parameterized by move index only (board qarrays and piece-type are structural). The factory pattern from `_make_apply_move` already demonstrates this approach. |
+| T-count-aware predicate design | Design legality predicates to minimize Toffoli/T-gate count since they run inside the walk operator (called O(sqrt(T)) times by Montanaro's detection algorithm) | MEDIUM | Every extra T gate in the predicate multiplies by walk iterations. Use AND-ancilla MCX decomposition (already in v3.0) and minimize multi-controlled gates. The existing T-count reporting (v3.0) enables data-driven optimization. |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| Automatic opt_flag selection | "Just pick the best level for me" | Optimal level depends on user intent (debugging vs. deployment vs. resource estimation). Auto-selection hides important tradeoffs and makes behavior unpredictable. | Default to opt_flag=1 (cheapest). Document when to use each level. Print suggestion in debug mode: "opt_flag=2 would save ~N gates". |
-| Cross-function optimization (global opt) | "Merge all functions across the entire program" | Combinatorial explosion. N functions = O(2^N) merge candidates. Destroys function boundaries, making debugging impossible. Classical compilers learned this lesson (whole-program optimization is a separate, expensive mode). | Merge only adjacent calls on overlapping qubits. Preserve function boundaries. Let users explicitly compose functions if they want global optimization. |
-| Lazy/deferred circuit construction | "Don't build the circuit until I ask for it" | Changes the fundamental execution model. Current architecture: operations immediately generate gates. Deferred construction requires a completely different tracing/IR approach (like JAX's jit). Massive architectural change. | opt_flag=1 already defers *placement* while still capturing sequences. This gives 80% of the benefit without changing the execution model. |
-| Incremental/partial recompilation | "Only recompile the parts I changed" | Requires dependency tracking between Python source changes and compiled sequences. Extremely complex for a framework that uses runtime tracing (not AST analysis). Classical compilers have build systems; quantum frameworks don't. | Cache invalidation on `ql.circuit()` already works. Per-function cache keys already include mode flags. This is sufficient for interactive use. |
-| Custom merge strategies (user-defined) | "Let me write my own merge rules" | Exposes internal gate representation. Creates backward-compatibility burden. Users will write fragile merge logic that breaks on gate format changes. | Provide merge heuristics that cover 95% of cases (QFT/IQFT cancellation, adjacent gate merging). Expose merge cost estimation for visibility. |
+| Full chess rule support (castling, en passant, pawn promotion) | Completeness | Massively inflates move enumeration and predicate complexity. Castling alone requires tracking whether king/rook have moved (additional state qubits). En passant requires move history register. Pawn promotion creates piece-type superposition. Scope explosion for marginal benefit in a KNK endgame demo. | Keep the KNK (kings + knights) piece set. Demonstrate the quantum predicate pattern; extending to full chess is a future module. |
+| Measurement-based move legality (Google Quantum Chess style) | Google's approach is well-documented and uses iSWAP gates for movement | Measurement collapses superposition, destroying the quantum walk structure. Montanaro's algorithm requires the predicate to be reversible (no measurement). Measurement-based legality is fundamentally incompatible with backtracking walk operators R_A/R_B. | Fully reversible predicate oracles with ancilla-based computation and clean uncomputation. |
+| Sliding piece attack detection (bishops, rooks, queens) | Natural extension of attack detection for check | Sliding pieces require ray-tracing along ranks/files/diagonals with blocking piece detection. This is O(7) checks per direction, 4-8 directions per piece, each requiring path-occupancy AND gates and ancilla chains. Qubit and gate count explodes. | Knights and kings only -- both have fixed, position-dependent attack sets computable with constant-depth circuits. No ray-tracing needed. |
+| Dynamic piece count (variable number of knights) | Generality | The branch register width and move enumeration table size depend on the maximum possible move count, which depends on piece count. Variable piece counts mean variable circuit topology, breaking `@ql.compile` caching. | Fix piece count at circuit construction time. The factory pattern already handles this -- piece count is a classical parameter to the oracle factory. |
+| Quantum board with piece-type encoding (log2 qubits per square) | Using log2(piece_types) qubits per square instead of separate qarrays per piece type for compactness | More compact encoding but makes predicate queries much harder. Checking "is there a white knight on square X?" requires decoding the piece-type register with ancillae and controlled operations. Separate qarrays allow direct single-qubit queries. | Keep the current separate-qarray-per-piece-type encoding from `chess_encoding.py`. Direct qbool access per square per piece type. |
+| Quantum move generation for ALL 64 source squares | Enumerating moves from every square even when piece types have at most a few pieces | For 2 kings + N knights, most of the 64 squares are empty. Enumerating moves from all 64 sources creates 64 x 8 = 512 entries per piece type, mostly invalid. Wastes branch register width. | Enumerate moves only from squares that CAN contain a piece of the given type. For KNK: at most ~3 source squares for white (1 king + up to 2 knights), 1 for black king. The structural move table is still position-independent because piece-exists is checked quantumly. |
 
 ## Feature Dependencies
 
 ```
-opt_flag parameter (API)
+[Board encoding as qarrays] (EXISTING v6.1)
     |
-    +-- opt_flag=1: Call graph DAG
-    |       |
-    |       +-- Qubit overlap analysis
-    |       |       |
-    |       |       +-- Parallelism detection
-    |       |
-    |       +-- Call graph node metadata
-    |       |       |
-    |       |       +-- DOT-format export
-    |       |       |
-    |       |       +-- Compilation report
-    |       |
-    |       +-- opt_flag=2: Selective merging
-    |               |
-    |               +-- requires: Qubit overlap analysis
-    |               |
-    |               +-- Merge cost estimation
+    +---> [Quantum piece-exists predicate]
+    |         |
+    |         +---> [Quantum same-color-capture rejection]
+    |         |         |
+    |         |         +---> [Combined legality predicate]
+    |         |
+    |         +---> [Quantum check detection]
+    |                   |
+    |                   +---> [Combined legality predicate (with check)]
     |
-    +-- opt_flag=3: Full expansion (existing, no new deps)
+    +---> [All-moves enumeration in circuit]
+              |
+              +---> [Knight move generation in superposition]
+              |
+              +---> [King move generation in superposition]
+              |
+              +---> [Reversible move application oracle] (EXISTING pattern v6.1)
 
-Sparse circuit arrays (independent track)
-    +-- Memory monitoring (trigger mechanism)
-    +-- C-level hash map for gate_index_of_layer_and_qubits
-    +-- Python-level auto opt-in logic
+[Combined legality predicate]
+    +---> [Variable branching integration]
+              +---> [Rewritten evaluate_children in chess_walk.py]
+                        +---> [D_x local diffusion] (EXISTING v6.1, unchanged)
+
+[Compile infrastructure: numpy qubit sets] (INDEPENDENT)
+    +--enhances--> [All-moves enumeration] (faster compilation)
+    +--enhances--> [Compiled predicate caching]
 ```
 
 ### Dependency Notes
 
-- **opt_flag=2 requires opt_flag=1:** Cannot merge sequences without first building the call graph and computing qubit overlaps. The merge decision depends on DAG structure.
-- **DOT export requires node metadata:** Graph visualization needs function names, gate counts, qubit sets to produce useful output.
-- **Parallelism detection requires qubit overlap analysis:** Independence = zero overlap. Same computation, different interpretation.
-- **Sparse arrays are independent:** Can be implemented and shipped separately from the opt_flag system. No interaction with call graph features.
-- **Merge cost estimation enhances opt_flag=2:** Not strictly required for merging, but makes merge decisions transparent and debuggable.
-- **opt_flag=3 conflicts with nothing:** It is the existing behavior, simply relabeled. All other features compose with it.
+- **Check detection requires move generation patterns:** To determine if a king is in check, you need to know what squares opponent pieces can attack. Knight attacks from a given square are fixed patterns (the 8 L-shaped offsets). King attacks are the 8 adjacent squares. Both can be precomputed as static lookup tables at circuit construction time, then the predicate checks if any opponent piece occupies one of those attacking squares.
+- **All-moves enumeration is the foundation:** Every quantum legality feature builds on having a complete enumeration of structurally possible moves in the circuit. This is the first thing to build.
+- **Numpy qubit sets are independent:** The compile infrastructure optimization has no dependency on chess features and can be built and tested in isolation. It directly benefits compilation speed of the larger move enumeration oracles.
+- **Variable branching is the integration point:** The existing `evaluate_children` / `apply_diffusion` pattern in `chess_walk.py` already supports variable branching via validity ancillae. The real quantum predicates plug into the validity computation without changing the diffusion structure.
+- **Check detection is additive:** The basic legality predicate (piece-exists AND no-friendly-capture) works without check detection. Check detection adds a third AND condition. It can be developed and tested independently, then composed into the combined predicate.
 
 ## MVP Definition
 
-### Launch With (v7.0 Core)
+### Launch With (v8.0 core)
 
-Minimum viable multi-level compilation. Validates the concept and provides immediate value.
+Minimum to demonstrate quantum move legality replacing classical pre-filtering.
 
-- [ ] opt_flag parameter on @ql.compile (API surface) -- enables the feature
-- [ ] opt_flag=1: Call graph DAG with qubit overlap edges -- the core abstraction
-- [ ] opt_flag=3: Full expansion (current behavior, relabeled) -- backward compatibility
-- [ ] Call graph node metadata (function name, gate count, qubit set, depth) -- makes DAG useful
-- [ ] DOT-format export -- makes DAG visible
-- [ ] Qubit overlap analysis -- foundation for merging and parallelism
+- [ ] All-moves enumeration table -- precompute ALL structurally possible (src, dst) pairs for knights and kings at circuit construction time, assign branch register indices
+- [ ] Quantum piece-exists predicate -- `@ql.compile` function checking `board_arr[src_rank, src_file]` for the appropriate piece-type qarray, storing result in validity ancilla
+- [ ] Quantum same-color-capture rejection -- check no friendly piece on target square
+- [ ] Combined legality predicate -- AND of piece-exists and no-friendly-capture, stored in per-move validity qbool
+- [ ] Rewritten chess_walk.py -- `evaluate_children` calls the quantum predicate instead of the trivial "all valid" pattern
+- [ ] Compile infrastructure numpy optimization -- replace `set.update()` loops with numpy bitset operations in compile.py and call_graph.py
 
-### Add After Validation (v7.x)
+### Add After Validation (v8.x)
 
-Features to add once the call graph DAG is working and users can see their program structure.
+Features to add once core quantum legality is proven correct.
 
-- [ ] opt_flag=2: Selective sequence merging -- add when call graph proves useful and merge heuristics are validated
-- [ ] Merge cost estimation -- add alongside opt_flag=2 for transparency
-- [ ] Parallelism detection -- low-cost addition once overlap analysis exists
-- [ ] Compilation report with per-level stats -- extend debug mode
+- [ ] Quantum check detection -- after-move king safety check via quantum attack set computation (knight attacks + king adjacency)
+- [ ] T-count optimization pass -- minimize T-gates in the legality predicate circuit
+- [ ] Predicate compilation caching -- ensure the legality predicate compiles once and replays efficiently per move index
 
-### Future Consideration (v8+)
+### Future Consideration (v9+)
 
-Features to defer until multi-level compilation is proven.
-
-- [ ] Sparse circuit arrays -- independent track, driven by memory pressure in real workloads. Needs C-level changes with careful performance testing.
-- [ ] Cross-function merge chains (A+B+C merged in one pass) -- needs real-world merge patterns to validate heuristics
+- [ ] Extend to additional piece types (bishops, rooks, pawns) -- requires sliding piece attack detection
+- [ ] Quantum evaluation function (material counting in superposition) -- deferred EVAL-01/EVAL-02
+- [ ] Position-independent walk for deeper tree exploration beyond depth 2
 
 ## Feature Prioritization Matrix
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| opt_flag parameter | HIGH | LOW | P1 |
-| opt_flag=1 call graph DAG | HIGH | MEDIUM | P1 |
-| opt_flag=3 full expansion | HIGH (backward compat) | LOW | P1 |
-| Qubit overlap analysis | HIGH | MEDIUM | P1 |
-| Call graph node metadata | HIGH | LOW | P1 |
-| DOT-format export | MEDIUM | LOW | P1 |
-| opt_flag=2 selective merging | HIGH | HIGH | P2 |
-| Merge cost estimation | MEDIUM | MEDIUM | P2 |
-| Parallelism detection | MEDIUM | LOW | P2 |
-| Compilation report | MEDIUM | LOW | P2 |
-| Sparse circuit arrays | MEDIUM | HIGH | P3 |
+| All-moves enumeration in circuit | HIGH | MEDIUM | P1 |
+| Quantum piece-exists predicate | HIGH | LOW | P1 |
+| Quantum same-color-capture rejection | HIGH | LOW | P1 |
+| Rewritten chess_walk.py with quantum predicates | HIGH | MEDIUM | P1 |
+| Numpy qubit set operations in compile.py/call_graph.py | MEDIUM | MEDIUM | P1 |
+| Quantum check detection (king safety) | HIGH | HIGH | P2 |
+| Compiled predicate caching | MEDIUM | LOW | P2 |
+| T-count-aware predicate design | MEDIUM | MEDIUM | P2 |
+| Sliding piece attack detection | LOW | HIGH | P3 |
+| Full chess rule support | LOW | HIGH | P3 |
 
 **Priority key:**
-- P1: Must have for v7.0 launch (call graph + visualization)
-- P2: Should have, add in v7.x (merging + analysis)
-- P3: Nice to have, needs separate investigation (sparse storage)
+- P1: Must have for v8.0 launch
+- P2: Should have, add in v8.x
+- P3: Nice to have, future consideration
 
 ## Competitor Feature Analysis
 
-| Feature | Qiskit | TKET (pytket) | Cirq | This Project |
-|---------|--------|---------------|------|--------------|
-| DAG representation | DAGCircuit (internal to transpiler, not user-facing as compilation levels) | CompilationUnit with box hierarchy (subroutines are opaque boxes) | Moment-based (no explicit DAG) | User-facing call graph DAG with qubit overlap, opt_flag selects level |
-| Optimization levels | 0-3 (transpiler passes, not compilation levels) | SequencePass chains (user-defined) | Optimizers (separate from circuit construction) | opt_flag=1/2/3 maps to call-graph/merge/expand |
-| Selective inlining | Unrolling passes (all-or-nothing per gate type) | Box decomposition (explicit, not selective) | No equivalent | Selective merging based on qubit overlap heuristic |
-| QFT/IQFT cancellation | Not at subroutine level | Not at subroutine level | Not at subroutine level | Existing `_optimize_gate_list` handles inverse pair cancellation; opt_flag=2 enables cross-sequence cancellation |
-| Visualization | DAG drawing (matplotlib, internal) | Circuit rendering (not call graph) | SVG circuit diagrams | DOT-format call graph with qubit overlap edges |
-| Sparse storage | Rust-based circuit (internal optimization) | Implicit via box hierarchy | No special sparse mode | Explicit sparse circuit arrays with auto opt-in |
+| Feature | Google Quantum Chess (Cirq) | Queens Univ. Quantum Chess | This Project (v8.0) |
+|---------|----------------------------|---------------------------|---------------------|
+| Move legality | Measurement-based collapse; iSWAP gates for movement; pieces in superposition resolved by measurement | Classical rule engine with quantum state tracking | Reversible quantum predicate; no measurement; compatible with Montanaro walk operators |
+| Superposition handling | 64-qubit board (one per square); piece-type not encoded quantumly | Per-square qubits | Separate qarrays per piece type (192 qubits for 3 piece types); structural clarity over qubit efficiency |
+| Check detection | "All superpiece kings must be in check" -- measurement-based rule | Classical | Quantum predicate computing attack sets reversibly in superposition (P2 feature) |
+| Move generation | Classical move generation + quantum execution (iSWAP) | Classical | Quantum enumeration of ALL structurally possible moves with quantum validity filtering via predicates |
+| Uncomputation | Not needed (measurement-based game, not search algorithm) | Not applicable | Full reversible uncomputation required for walk operator compatibility (R_A/R_B) |
+| Walk integration | None (interactive game, not optimization/search) | None | Montanaro backtracking walk with quantum predicates driving variable branching d(x) |
 
-**Key competitive insight:** No major quantum framework exposes multi-level compilation as a user-facing feature. They all have internal IRs (Qiskit's DAGCircuit, TKET's boxes), but users cannot choose "give me just the call graph" or "merge only these sequences." This project's opt_flag approach is genuinely novel in the quantum tooling space.
+## Qubit Budget Analysis
 
-**Classical compiler analogy (LLVM):** LLVM's -O0/-O1/-O2/-O3 is the closest analogy. -O0 = no optimization (opt_flag=1, just structure). -O2 = inlining + aggressive passes (opt_flag=2, selective merging). -O3 = full optimization (opt_flag=3, full expansion). The key difference: classical compilers inline for performance; quantum compilers merge for gate cancellation. The optimization target is different (gate count/depth vs. instruction throughput) but the architecture is the same.
+Critical constraint: the 17-qubit Qiskit/Aer simulation limit (from project memory).
+
+| Component | Qubits (minimal KNK) | Notes |
+|-----------|----------------------|-------|
+| Board qarrays (3 x 8x8 qbool) | 192 | White king + black king + white knights. Dominates qubit budget. |
+| Height register (depth=2) | 3 | One-hot encoding for 3 levels (root + 2 depths) |
+| Branch registers (2 levels) | ~8-10 | ceil(log2(move_count)) per level; move_count up to ~24 for KNK |
+| Validity ancillae | ~16-24 per level | One per enumerated move at current depth |
+| Predicate ancillae | ~2-4 per move check | piece-exists check, no-capture check, check detection temp |
+| **Total** | **~230+** | Far exceeds 17-qubit simulation limit |
+
+**Verification strategy (since simulation is infeasible for the full walk):**
+
+1. **Unit test individual predicates on tiny boards** -- e.g., 2x2 or 3x3 board qarrays (4-9 qubits per piece type) with 1-2 move candidates. Verify via statevector simulation.
+2. **Classical equivalence checking** -- for each position in the classical move table, verify that the quantum predicate produces the same validity result as `legal_moves_white`/`legal_moves_black`.
+3. **Gate-level structure inspection** -- verify compiled predicate output has expected gate count, depth, and T-count without running simulation.
+4. **Subsystem verification** -- test move application oracle, piece-exists predicate, and capture rejection independently before composing.
+5. **Small-board integration test** -- reduce to 2x2 board with 1 king + 1 knight; full walk with quantum predicates fits in ~40-50 qubits (still above 17-qubit limit but verifiable with MPS simulator).
 
 ## Detailed Feature Specifications
 
-### opt_flag=1: Call Graph DAG
+### Quantum Piece-Exists Predicate
 
-**What it produces:** A Python object (e.g., `CallGraph`) containing:
-- Nodes: one per `@ql.compile` function invocation, storing the `CompiledBlock` (gate list, qubit mapping, metadata)
-- Edges: directed edges for temporal ordering, weighted by qubit overlap count
-- No gates placed into the shared circuit
+**Interface:**
+```python
+@ql.compile(inverse=True)
+def piece_exists(piece_arr, src_rank, src_file, result_qbool):
+    """Check if piece_arr[src_rank, src_file] == |1>.
+    Store result in result_qbool via CNOT."""
+    # CNOT from piece_arr[src_rank, src_file] to result_qbool
+    with piece_arr[src_rank, src_file]:
+        ~result_qbool  # flip result if piece exists
+```
 
-**How it integrates with existing code:**
-- During `CompiledFunc.__call__`, instead of calling `inject_remapped_gates`, store the `CompiledBlock` and qubit mapping in the `CallGraph`
-- The `CompiledBlock` capture path stays identical (same `extract_gate_range`, same `_build_virtual_mapping`, same `_optimize_gate_list`)
-- Call graph is attached to the circuit or returned from a new `ql.call_graph()` API
+**Gate cost:** 1 CNOT per check. Trivially cheap.
 
-**Depends on existing infrastructure:**
-- `CompiledBlock` (stores gate sequences) -- already exists
-- `_build_virtual_mapping` (virtualizes qubit indices) -- already exists
-- `extract_gate_range` (captures gates from circuit) -- already exists
-- Cache key with mode flags (`_get_mode_flags`) -- already exists
+### Quantum Same-Color-Capture Rejection
 
-### opt_flag=2: Selective Sequence Merging
+**Interface:**
+```python
+@ql.compile(inverse=True)
+def no_friendly_capture(wk_arr, wn_arr, dst_rank, dst_file, result_qbool):
+    """Check that no friendly piece occupies (dst_rank, dst_file).
+    result_qbool = NOT(wk_arr[dst] OR wn_arr[dst])."""
+    # Compute OR of all friendly piece types at destination
+    # Use ancilla for intermediate OR
+    temp = ql.qbool()
+    with wk_arr[dst_rank, dst_file]:
+        ~temp
+    with wn_arr[dst_rank, dst_file]:
+        ~temp  # temp = wk[dst] OR wn[dst] (via two CNOTs)
+    # result = NOT temp
+    ~result_qbool  # start at |1> (valid)
+    with temp:
+        ~result_qbool  # flip to |0> if any friendly piece present
+```
 
-**What it produces:** Multiple smaller optimized circuits (or a single circuit with merged sequences where beneficial).
+**Gate cost:** ~4 CNOTs + ancilla. Still very cheap.
 
-**Merge heuristic:** For adjacent calls f(a) and g(a) where a is the same qint:
-1. Compute qubit overlap between f's gate set and g's gate set
-2. If overlap exceeds threshold (e.g., > 50% of total qubits), merge candidate
-3. Concatenate gate lists, run `_optimize_gate_list` on combined list
-4. If gate reduction exceeds minimum threshold (e.g., > 10%), accept merge
+### Quantum Check Detection (king safety)
 
-**QFT/IQFT cancellation specifics:** When QFT addition is used (`a += b; a += c`), the sequence is:
-1. QFT(a), phase rotations for b, IQFT(a), QFT(a), phase rotations for c, IQFT(a)
-2. The adjacent IQFT(a)-QFT(a) pair cancels (they are inverses)
-3. Merged: QFT(a), phase rotations for b, phase rotations for c, IQFT(a)
-4. Existing `_optimize_gate_list` already handles this via `_gates_cancel` for adjacent inverse pairs
+**Interface:**
+```python
+@ql.compile(inverse=True)
+def king_not_in_check(opponent_king_arr, opponent_knight_arr,
+                       my_king_rank, my_king_file, result_qbool):
+    """Check that no opponent piece attacks (my_king_rank, my_king_file).
 
-**This already works** at the gate level within a single `CompiledBlock`. The new capability is cross-block merging: detecting that two separate compiled function calls can be merged.
+    For each attack pattern (8 king adjacents, 8 knight L-shapes):
+    - Compute the attacking square coordinates
+    - If on-board, check if opponent piece exists there
+    - OR all attack results into a single 'in_check' ancilla
+    - result_qbool = NOT in_check
+    """
+```
 
-### Sparse Circuit Arrays
+**Gate cost:** Up to 16 CNOT checks (8 king + 8 knight attack squares) + OR reduction. Moderate cost per move, but multiplied by move count.
 
-**Problem:** The C-level `circuit_t` uses dense arrays:
-- `gate_index_of_layer_and_qubits[layer][qubit]` -- O(layers * qubits) memory
-- `occupied_layers_of_qubit[qubit][index]` -- grows with circuit depth per qubit
-- For a 1000-qubit, 100K-layer circuit: 100M entries in gate_index alone
+**Key insight:** The attack square coordinates are computable classically at circuit construction time (they depend only on the king's destination square, which is part of the move table entry). Only the "is opponent piece at attack square?" check is quantum.
 
-**Approach:** Replace `gate_index_of_layer_and_qubits` with a hash map keyed by `(layer, qubit)`. Only store entries where a gate exists. For typical quantum circuits, occupancy is < 5% (most qubits are idle at most layers).
+### All-Moves Enumeration
 
-**Auto opt-in trigger:** Monitor `allocated_layer * allocated_qubits * sizeof(int)` during `allocate_more_layer`/`allocate_more_qubits`. If projected allocation exceeds threshold (e.g., 100MB), switch to sparse representation.
+**Design:** At circuit construction time, precompute a static table of ALL structurally valid (piece_type, src_square, dst_square) triples:
+- For each square that CAN contain a white knight: 8 L-shaped destinations (filtered for board bounds)
+- For each square that CAN contain a white king: 8 adjacent destinations (filtered for board bounds)
+- For each square that CAN contain a black king: 8 adjacent destinations (filtered for board bounds)
 
-**Risk:** Hash map lookup is slower than array indexing for small circuits. Must benchmark crossover point carefully. Consider: keep dense representation for < 500 qubits, auto-switch to sparse above that.
+The "can contain" set is known at construction time from the initial position plus all possible positions reachable in the walk tree. For the KNK endgame with fixed piece count, this is all 64 squares for each piece type (worst case), but practically much smaller.
+
+**Branch register:** Width = ceil(log2(total_moves)). For KNK: ~5 bits (up to 24 moves per side per position).
 
 ## Sources
 
-- [Qiskit DAGCircuit representation](https://deepwiki.com/Qiskit/qiskit/3.3-dag-circuit-representation) -- DAG as internal IR, optimization levels 0-3
-- [TKET compilation and box hierarchy](https://docs.quantinuum.com/tket/user-guide/manual/manual_compiler.html) -- CompilationUnit, subroutine boxes, optimization passes
-- [MLIR quantum circuit transformations](https://arxiv.org/abs/2112.10677) -- Multi-level IR for quantum compilation, pattern rewrite passes
-- [QIRO: SSA-based quantum IR](https://dl.acm.org/doi/10.1145/3491247) -- Exposes data dependencies for optimization
-- [Quantum arithmetic with QFT](https://arxiv.org/pdf/1411.5949) -- Draper adder, QFT/IQFT structure that enables cancellation
-- [LLVM optimization levels](https://llvm.org/doxygen/classllvm_1_1OptimizationLevel.html) -- O0-O3 analogy for compilation levels
-- [Graphviz DOT language](https://graphviz.readthedocs.io/en/stable/manual.html) -- Standard graph visualization format
-- [Sparse tensor simulation for quantum circuits](https://arxiv.org/html/2602.04011v1) -- Sparse representations reduce memory for large circuits
-- [Quantum circuit optimization survey](https://www.mdpi.com/2624-960X/7/1/2) -- Current trends in circuit optimization
+- [Google Quantum Chess (Cirq)](https://quantumai.google/cirq/experiments/unitary/quantum_chess/concepts) -- iSWAP-based moves, measurement-based legality, controlled gates for blocking
+- [Montanaro, "Quantum walk speedup of backtracking algorithms"](https://arxiv.org/abs/1509.02374) -- Predicate oracle interface P_x, walk operator structure, O(sqrt(T)) query complexity
+- [Martiel, "Practical implementation of a quantum backtracking algorithm"](https://link.springer.com/chapter/10.1007/978-3-030-38919-2_49) -- Practical predicate oracle resource estimates, graph coloring implementation
+- [Cantwell, Quantum Chess Documentation](https://cantwellc.github.io/QuantumChessDocs/rules.html) -- Full quantum chess rule set, split/merge moves
+- [Knight Pattern - Chessprogramming wiki](https://www.chessprogramming.org/Knight_Pattern) -- Classical knight attack bitboard patterns (L-shaped offsets)
+- [Square Attacked By - Chessprogramming wiki](https://www.chessprogramming.org/Square_Attacked_By) -- Classical attack detection algorithms
+- [psitae/game-tree (GitHub)](https://github.com/psitae/game-tree) -- Quantum algorithm for game tree evaluation
+- Existing codebase: `chess_encoding.py` (classical moves), `chess_walk.py` (walk operators), `walk.py` (QWalkTree), `compile.py` (set.update loops), `call_graph.py` (frozenset overlap)
 
 ---
-*Feature research for: Multi-level quantum circuit compilation infrastructure*
-*Researched: 2026-03-05*
+*Feature research for: Quantum chess move legality in superposition*
+*Researched: 2026-03-08*
