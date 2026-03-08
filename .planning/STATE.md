@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v8.0
 milestone_name: Quantum Chess Walk Rewrite
 status: executing
-stopped_at: Completed 113-03-PLAN.md
-last_updated: "2026-03-08T19:12:42.193Z"
+stopped_at: Phase 114 context gathered
+last_updated: "2026-03-08T20:11:01.628Z"
 last_activity: 2026-03-08 -- Completed 113-03 (chess_walk.py wired to shared counting_diffusion_core)
 progress:
   total_phases: 5
@@ -87,9 +87,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08T19:10:03.058Z
-Stopped at: Completed 113-03-PLAN.md
-Resume file: None
+Last session: 2026-03-08T20:11:01.619Z
+Stopped at: Phase 114 context gathered
+Resume file: .planning/phases/114-core-quantum-predicates/114-CONTEXT.md
 Resume action: Execute next plan in phase 113 (113-04)
 
 ---
