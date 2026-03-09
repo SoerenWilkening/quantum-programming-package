@@ -201,11 +201,11 @@
   2. `emit_ccx` function emits a Toffoli gate directly without going through the heavyweight `&` operator
   3. `_toffoli_and` / `_uncompute_toffoli_and` helpers allocate an AND-ancilla qubit and clean it up via reverse Toffoli
   4. Existing single-level `with` blocks still produce correct circuits (stack depth 0 and 1 behave identically to old globals)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 117-01: TBD
-- [ ] 117-02: TBD
+- [ ] 117-01-PLAN.md -- Control stack global + gate emission primitives (emit_ccx, _toffoli_and, _uncompute_toffoli_and)
+- [ ] 117-02-PLAN.md -- Wire stack into __enter__/__exit__, compile.py, oracle.py + regression verification
 
 ### Phase 118: Nested With-Block Rewrite
 **Goal**: Users can nest `with qbool:` blocks at arbitrary depth with correct multi-controlled gate emission and automatic ancilla cleanup
@@ -282,7 +282,7 @@ Phases execute in numeric order: 117 -> 118 -> 119 -> 120 -> 121
 | 103-106 | v6.1 | 8/8 | Complete | 2026-03-05 |
 | 107-111 | v7.0 | 10/10 | Complete | 2026-03-08 |
 | 112-116 | v8.0 | 11/11 | Complete | 2026-03-09 |
-| 117. Control Stack Infrastructure | v9.0 | 0/? | Not started | - |
+| 117. Control Stack Infrastructure | v9.0 | 0/2 | Not started | - |
 | 118. Nested With-Block Rewrite | v9.0 | 0/? | Not started | - |
 | 119. Compile Compatibility | v9.0 | 0/? | Not started | - |
 | 120. 2D Qarray Support | v9.0 | 0/? | Not started | - |
