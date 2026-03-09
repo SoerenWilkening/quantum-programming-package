@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v8.0
 milestone_name: Quantum Chess Walk Rewrite
 status: completed
-stopped_at: Completed 114-02-PLAN.md (no-friendly-capture predicate)
-last_updated: "2026-03-08T20:54:46.264Z"
+stopped_at: Phase 115 context gathered
+last_updated: "2026-03-09T12:16:45.939Z"
 last_activity: 2026-03-08 -- Completed 114-02 (no-friendly-capture predicate factory)
 progress:
   total_phases: 5
@@ -92,9 +92,9 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-08T20:50:31Z
-Stopped at: Completed 114-02-PLAN.md (no-friendly-capture predicate)
-Resume file: None
+Last session: 2026-03-09T12:16:45.921Z
+Stopped at: Phase 115 context gathered
+Resume file: .planning/phases/115-check-detection-combined-predicate/115-CONTEXT.md
 Resume action: Plan Phase 115 (check detection)
 
 ---
