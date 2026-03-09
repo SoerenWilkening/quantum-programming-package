@@ -1,295 +1,254 @@
-# Stack Research
+# Stack Research: v9.0 Nested Controls & Chess Engine
 
-**Domain:** Multi-level quantum circuit compilation infrastructure (call graph DAG, sparse circuits, sequence merging)
-**Researched:** 2026-03-05
+**Domain:** Quantum programming framework -- nested control composition, 2D qarray, chess engine compilation
+**Researched:** 2026-03-09
 **Confidence:** HIGH
 
-## Executive Summary
+## Scope
 
-The v7.0 multi-level compilation milestone requires **zero new core dependencies**. The two libraries needed for DAG operations and sparse arrays -- rustworkx and scipy -- are already installed. The only new Python dependency is `pydot` (optional, for DOT graph rendering), which is a pure-Python package with minimal footprint. All new functionality operates at the Python level on virtual gate lists within `compile.py`, with no changes to the C backend or Cython bridge.
+This research covers ONLY the stack additions/changes needed for three new capabilities:
+1. Nested `with qbool:` blocks via Toffoli AND control composition at arbitrary depth
+2. 2D qarray support (`ql.qarray(dim=(8,8), dtype=ql.qbool)`)
+3. Chess engine rewrite with `ql.compile(opt=1)` in readable natural-programming style
 
-## Recommended Stack
+The existing stack (Python 3.11+, Cython 3.x, C backend, NumPy, Pillow, rustworkx, Qiskit) is validated and does NOT change.
 
-### Core Technologies (All Existing -- No Changes)
+## Key Finding: No New Dependencies Required
 
-| Technology | Version | Purpose | Why Recommended |
-|------------|---------|---------|-----------------|
-| rustworkx | 0.17.1 (installed) | Call graph DAG representation, topological sort, parallelism detection | Already installed. Written in Rust, 10-100x faster than NetworkX. Same library Qiskit uses for its own compiler DAG. `PyDAG` provides `topological_sort()`, `topological_generations()`, `dag_longest_path()` -- exactly the primitives needed for call graph analysis. |
-| scipy.sparse | 1.17.1 (installed) | Sparse circuit arrays for large gate sequences | Already installed. `dok_array` for incremental construction during gate capture, `csr_array` for fast row-sliced replay. Mature, well-tested, zero additional deps. |
-| NumPy | 2.4.2 (installed) | Qubit dependency bitmask operations for merge decisions | Already used throughout. Bitwise ops on uint64 arrays give O(1) qubit overlap detection for sequence merging, replacing O(min(A,B)) set intersection. |
-| Python | >=3.11 | All new code is pure Python in compile.py | No change. |
-| Cython | >=3.0.11,<4.0 | Existing `inject_remapped_gates()` handles Python-to-C boundary | No change. No new Cython needed. |
-| C backend | System gcc/clang | Existing `sequence_t` with 2D jagged arrays stays dense | No change. Sparse representation is Python-level only. |
+All three features are implementable with the existing stack. The work is entirely in the Python/Cython layer with no new C backend changes, no new libraries, and no version bumps needed.
 
-### Supporting Libraries (ONE new optional addition)
+---
 
-| Library | Version | Purpose | When to Use |
-|---------|---------|---------|-------------|
-| pydot | >=3.0.0 (NEW, optional) | DOT format export for call graph visualization | Required by `rustworkx.visualization.graphviz_draw()`. Pure Python, only dep is pyparsing. Lazy-import so NOT a hard runtime requirement. |
+## Feature 1: Nested `with qbool:` Blocks
 
-### Development Tools
+### Current State
 
-| Tool | Purpose | Notes |
-|------|---------|-------|
-| Graphviz (system) | Render DOT to PNG/SVG | Only needed when user calls call graph visualization. Optional system dependency: `apt install graphviz` or `brew install graphviz`. |
+The `__enter__`/`__exit__` methods on `qint` (lines 784-882 of `qint.pyx`) use three global variables:
+- `_controlled` (bool) -- whether we are in ANY control context
+- `_control_bool` (qint/qbool) -- the CURRENT control qubit
+- `_list_of_controls` (list) -- accumulated prior controls
 
-## Detailed Technology Analysis
-
-### 1. Call Graph DAG: rustworkx.PyDAG
-
-rustworkx 0.17.1 is already installed as a transitive dependency. Verified available classes and functions:
-
+On nested entry (when `_controlled` is already True), the code does:
 ```python
-import rustworkx as rx
-
-# Available DAG primitives (verified via dir(rx)):
-rx.PyDAG           # Directed acyclic graph with cycle prevention
-rx.topological_sort         # Linear-time node ordering
-rx.topological_generations  # Groups independent nodes into parallel layers
-rx.dag_longest_path         # Critical path for depth estimation
-rx.dag_longest_path_length  # Critical path length
-rx.DAGHasCycle              # Exception for cycle detection
-rx.DAGWouldCycle            # Exception for edge-add validation
-rx.TopologicalSorter        # Iterator-based topological traversal
-rx.lexicographical_topological_sort  # Deterministic ordering with key function
+_list_of_controls.append(_control_bool)
+_control_bool &= self  # Toffoli AND -- produces new qbool ancilla
 ```
 
-**Why rustworkx over alternatives:**
-
-| Factor | rustworkx | NetworkX | Custom dict |
-|--------|-----------|----------|-------------|
-| Already installed | Yes | No | N/A |
-| Performance | Rust-native, 10-100x faster | Pure Python | Depends |
-| DAG enforcement | Built-in cycle prevention | Manual check | Manual |
-| Topological sort | Built-in, multiple variants | Built-in | Must implement |
-| Parallel layer detection | `topological_generations()` | `topological_generations()` | Must implement |
-| Used by Qiskit compiler | Yes (same lib) | No | No |
-
-**Integration with compile.py:**
-
-Each `CompiledFunction` becomes a node in the `PyDAG`. Edges represent call dependencies (function A calls function B). Node payloads store `CompiledBlock` references. Edge payloads store qubit overlap information for merge decisions.
-
+On exit, it unconditionally resets:
 ```python
-class CallGraph:
-    def __init__(self):
-        self.dag = rx.PyDAG()
-        self._func_to_node = {}  # CompiledFunction -> node_index
-
-    def register_call(self, caller_func, callee_func, shared_qubits):
-        caller_idx = self._ensure_node(caller_func)
-        callee_idx = self._ensure_node(callee_func)
-        self.dag.add_edge(caller_idx, callee_idx, shared_qubits)
-
-    def execution_order(self):
-        return rx.topological_sort(self.dag)
-
-    def parallel_groups(self):
-        return rx.topological_generations(self.dag)
-
-    def critical_path_depth(self):
-        return rx.dag_longest_path_length(self.dag, lambda n: 1)
+_set_controlled(False)
+_set_control_bool(None)
 ```
 
-### 2. Sparse Circuit Arrays: scipy.sparse
+**This is broken for nesting.** The `__exit__` always resets to "not controlled" regardless of nesting depth. After exiting an inner `with`, the outer control context is lost.
 
-scipy 1.17.1 is already installed. Verified the modern array API is available:
+### What Needs to Change
 
-- `scipy.sparse.dok_array` -- Dictionary of Keys format, O(1) random insert
-- `scipy.sparse.csr_array` -- Compressed Sparse Row, O(nnz) row iteration
-- `scipy.sparse.lil_array` -- List of Lists, efficient row-wise construction
+| Component | Change | Technology | Why |
+|-----------|--------|------------|-----|
+| `_core.pyx` globals | Replace flat `_controlled`/`_control_bool` with a **control stack** | Python list (already used for `_scope_stack`) | Stack enables push/pop semantics matching nested `with` blocks. The `_list_of_controls` already partially does this but `__exit__` discards it. |
+| `qint.pyx __enter__` | Push current control state onto stack, compute AND ancilla for combined control | Toffoli AND via existing `&` operator on qbool | The `&` operator already produces correct Toffoli AND gates; current code already calls `_control_bool &= self`. The issue is state management, not gate generation. |
+| `qint.pyx __exit__` | Pop control stack, restore previous control, **uncompute AND ancilla** | Existing `reverse_circuit_range` / `_do_uncompute` | AND ancilla from `_control_bool &= self` must be uncomputed on scope exit to free the qubit. This follows the same LIFO uncomputation pattern already used for scope-local qbools. |
+| `_core.pyx circuit()` | Reset control stack on circuit init | Same as existing `_list_of_controls = []` reset | Already done for other state; add the new stack. |
 
-**When to use sparse vs dense:**
+### Stack Requirements
 
-The existing `CompiledBlock.gates` is a `list[dict]` of virtual gates. For most compiled functions (< 10K gates), this is fine. Sparse representation helps when:
+**No new libraries.** The control stack is a Python list, just like `_scope_stack`. The AND ancilla mechanism uses existing Toffoli AND (`Q_and` in C backend, `&` operator in Python). Uncomputation uses existing `reverse_circuit_range`.
 
-- Circuit has > 50K layers but most layers are sparsely populated (< 10% qubit utilization)
-- Multiple compiled blocks are merged and the combined gate list has many "holes"
-- Memory pressure from storing large compiled programs with many inactive qubits per layer
-
-**Recommended format lifecycle:**
-
-1. **Capture phase**: Use `dok_array` -- O(1) insert as gates are captured one by one
-2. **Optimization phase**: Convert to `csr_array` -- O(nnz) iteration for gate cancellation and merging
-3. **Replay phase**: Use `csr_array` -- fast row (layer) iteration for `inject_remapped_gates()`
-4. **Density threshold**: Auto-opt-in when `nnz / (layers * qubits) < 0.1`
-
-**Critical constraint: sparse is Python-level only.** The C-level `sequence_t` (types.h line 77-82) stays dense. The 2D jagged array `gate_t **seq` with `gates_per_layer[i]` is already effectively sparse (variable gates per layer). The Python-level sparse representation is for the virtual gate list in `CompiledBlock`, not the physical circuit.
-
-### 3. Sequence Merging: NumPy Bitmask Operations
-
-Qubit dependency analysis for intelligent merging uses NumPy uint64 bitmasks:
+### Data Structure Design
 
 ```python
-import numpy as np
+# In _core.pyx -- replace flat globals with stack
+cdef list _control_stack = []  # Stack of (control_bool, was_controlled) tuples
 
-def compute_qubit_mask(block: CompiledBlock) -> np.uint64:
-    """Bitmask of all virtual qubits touched by a compiled block."""
-    mask = np.uint64(0)
-    for g in block.gates:
-        mask |= np.uint64(1) << np.uint64(g["target"])
-        for c in g["controls"][:g["num_controls"]]:
-            mask |= np.uint64(1) << np.uint64(c)
-    return mask
+# __enter__ pushes:
+_control_stack.append((_control_bool, _controlled))
 
-def can_merge(block_a, block_b) -> bool:
-    """Two blocks can merge if their qubit sets overlap."""
-    return bool(block_a.qubit_mask & block_b.qubit_mask)
-
-def are_independent(block_a, block_b) -> bool:
-    """Two blocks are independent (parallelizable) if no qubit overlap."""
-    return not bool(block_a.qubit_mask & block_b.qubit_mask)
+# __exit__ pops:
+prev_control, prev_was_controlled = _control_stack.pop()
+_set_control_bool(prev_control)
+_set_controlled(prev_was_controlled)
 ```
 
-**For circuits wider than 64 virtual qubits:** Use `np.ndarray` of uint64 as a bit array. The `CompiledBlock.total_virtual_qubits` field (already exists) determines whether to use scalar uint64 or array bitmask. Most compiled functions use < 64 virtual qubits, so the fast scalar path dominates.
+### Integration Points
 
-### 4. DOT Visualization: pydot + rustworkx.visualization
+- **`compile.py`:** The `extract_gate_range` / `inject_remapped_gates` already handle arbitrary gate sequences including controlled variants. The compile decorator captures control state via `_get_controlled()` / `_get_control_bool()` -- these accessors remain unchanged; they still return the "current" top-of-stack control.
+- **`walk.py`:** The V-gate CCRy decomposition workaround in `_emit_cascade_h_controlled` becomes unnecessary once nested `with` blocks work natively. However, keep it for now as it is performance-optimized for the specific Ry gate decomposition case.
+- **C backend:** No changes. `add_gate` already handles arbitrary `NumControls` via `large_control` array. The Python layer composes the controls; the C layer just sees gate-level controls.
 
-`rustworkx.visualization.graphviz_draw()` is available (verified import succeeds). It requires:
+### Ancilla Budget
 
-1. `pydot` Python package (not currently installed)
-2. Graphviz system binary (not currently installed)
+Each nesting level allocates one AND-ancilla qubit. For depth-D nesting, D-1 ancilla qubits are needed (the first `with` uses the qbool directly, each subsequent level ANDs with the previous). These are uncomputed on `__exit__`, so the cost is transient.
 
-Both are only needed for rendering call graphs to images. DOT text output (the string format) can be generated without either, using manual string formatting:
+For the chess engine (max depth ~3-4 nested `with` blocks), this is 2-3 ancilla qubits -- negligible.
 
+---
+
+## Feature 2: 2D qarray Support
+
+### Current State
+
+The `qarray` class in `qarray.pyx` already supports:
+- `dim=(rows, cols)` construction (lines 53-80) -- **this works**
+- Multi-dimensional indexing `arr[i, j]` via `_handle_multi_index` (lines 381-457) -- **this works**
+- `__setitem__` for `arr[i, j] = value` (lines 241-283) -- **this works**
+- Row/column slicing `arr[0, :]` and `arr[:, 0]` -- **this works**
+
+The known bug from PROJECT.md is:
+> `ql.array((rows, cols))` 2D shape fails with TypeError in `_infer_width`
+
+This occurs when calling `ql.array((8, 8))` without the `dim=` keyword -- the tuple `(8, 8)` is passed as `data`, and `_infer_width` tries to call `.bit_length()` on a tuple element. The fix is either:
+1. Detect tuple-of-ints as dimension spec in `__init__` (treat `qarray((8,8))` same as `qarray(dim=(8,8))`)
+2. Or simply document that `dim=` keyword is required
+
+### What Needs to Change
+
+| Component | Change | Technology | Why |
+|-----------|--------|------------|-----|
+| `qarray.pyx __init__` | Handle `data=tuple_of_ints` as dimension constructor | Pure Python type check | Fix the TypeError by detecting `data` is a tuple of ints and routing to `dim=` codepath |
+| `_qarray_utils.py _detect_shape` | Tuple input handling | Pure Python | `_detect_shape` only handles `list`, not `tuple`. Add tuple support or convert. |
+
+### What Does NOT Need to Change
+
+The chess engine example (`examples/chess_engine.py`) already uses the correct form:
 ```python
-def call_graph_to_dot(graph: CallGraph) -> str:
-    """Export call graph as DOT format string (no dependencies needed)."""
-    lines = ["digraph CallGraph {"]
-    for node_idx in graph.dag.node_indices():
-        func = graph.dag[node_idx]
-        lines.append(f'  {node_idx} [label="{func.name}"];')
-    for edge in graph.dag.edge_list():
-        lines.append(f"  {edge[0]} -> {edge[1]};")
-    lines.append("}")
-    return "\n".join(lines)
+white_knight = ql.qarray(dim=(8, 8), dtype=ql.qbool)
 ```
 
-**Recommendation:** Implement DOT text export with zero dependencies. Add `pydot` as an optional dependency only for image rendering, lazy-imported when `graphviz_draw()` is called.
+This form already works in the existing codebase. The bug is only triggered by the positional argument form `ql.array((8, 8))`.
+
+### Stack Requirements
+
+**No new libraries.** This is a 5-10 line fix in `qarray.pyx __init__`.
+
+### Testing
+
+The existing test `test_create_from_dimensions` in `test_qarray.py` already passes for `dim=(3,3)`. Additional tests needed:
+- `ql.array((8, 8))` positional tuple form
+- Element-wise operations on 2D arrays (existing tests already cover this)
+- In-place mutation `arr[i, j] += x` (existing tests cover this)
+
+---
+
+## Feature 3: Chess Engine Compilation with `ql.compile(opt=1)`
+
+### Current State
+
+The chess engine example (`examples/chess_engine.py`) shows the target programming style:
+```python
+@ql.compile(opt=1)
+def count_legal_black_moves():
+    with black_king[*index] == 1:
+        ...
+        with white_knight[a, b]:
+            ...
+```
+
+This style requires:
+1. **Nested `with` blocks** (Feature 1 above)
+2. **2D qarray indexing** (Feature 2 above)
+3. **`@ql.compile(opt=1)` working with nested controls** -- the compile decorator must correctly capture and replay gate sequences containing nested control contexts
+
+### opt=1 Behavior
+
+The `opt` parameter controls call graph optimization level:
+- `opt=1` (default): Call graph DAG tracking, no merging. Each compiled function call is a separate node.
+- `opt=2`: Selective sequence merging based on qubit overlap.
+- `opt=3`: Full expansion (not yet implemented, deferred).
+
+For the chess engine, `opt=1` is correct -- it captures the gate sequence once and replays with qubit remapping.
+
+### What Needs to Change for Compile + Nested Controls
+
+| Component | Change | Technology | Why |
+|-----------|--------|------------|-----|
+| `compile.py` capture path | Control stack state must be saved/restored around capture | Existing `_get_controlled` / `_set_controlled` accessors | During capture, the decorated function may enter nested `with` blocks. The captured gate sequence includes all controlled gates. On replay, the same control structure is replayed via `inject_remapped_gates`. This already works for single-level controls; it needs verification for nested controls. |
+| `compile.py` controlled variant | `_make_controlled_block` must compose outer control with inner controls | Existing controlled variant derivation | When a compiled function is called inside a `with` block, each gate gets an additional control qubit. If the captured sequence already contains multi-controlled gates from nested `with` blocks, the controlled variant adds one more control level. This uses `large_control` in the C backend, which already handles arbitrary control counts. |
+
+### Integration Concern: Star Unpacking in `with` Statement
+
+The chess engine example uses `black_king[*index]` syntax. This is standard Python tuple unpacking, available since Python 3.5. It works because `__getitem__` receives the unpacked tuple. No special framework support needed.
+
+### Stack Requirements
+
+**No new libraries.** The compile infrastructure already handles all the gate capture/replay mechanics. The key dependency is Feature 1 (nested controls) working correctly at the gate generation level -- the compile decorator is agnostic to what gates are generated during capture.
+
+---
+
+## Recommended Stack (No Changes)
+
+### Core Technologies (Unchanged)
+
+| Technology | Version | Purpose | Status |
+|------------|---------|---------|--------|
+| Python | 3.11+ | Frontend, API, tests | No change |
+| Cython | >=3.0.11,<4.0 (current: 3.2.4) | Python/C bridge | No change |
+| C (C23) | gcc/clang | Backend gate engine | No change needed -- `add_gate` already handles arbitrary `NumControls` |
+| NumPy | >=1.24 | Array ops in compile/draw | No change |
+| rustworkx | 0.17.1 | Call graph DAG | No change |
+
+### Supporting Libraries (Unchanged)
+
+| Library | Version | Purpose | Status |
+|---------|---------|---------|--------|
+| Pillow | >=9.0 | Circuit visualization | No change |
+| Qiskit | >=1.0 | Verification/simulation | No change |
+| qiskit-aer | >=0.13 | Statevector simulator | No change |
+| scipy | >=1.10 | IQAE confidence intervals | No change |
+
+### Development Tools (Unchanged)
+
+| Tool | Purpose | Status |
+|------|---------|--------|
+| pytest >=7.0 | Test runner | No change |
+| ruff >=0.1.0 | Linting/formatting | No change |
+| pre-commit >=3.0 | Commit hooks | No change |
+
+## What NOT to Add
+
+| Avoid | Why | What to Do Instead |
+|-------|-----|-------------------|
+| New gate decomposition library | The V-gate CCRy decomposition in `walk.py` is a workaround for broken nesting; fixing nesting removes the need | Fix `__enter__`/`__exit__` to support proper nesting |
+| Abstract syntax tree (AST) tracing for compile | Tempting for analyzing nested control structure, but the capture-replay model works fine | Continue with capture-replay; the gate-level representation already encodes all control information |
+| New C backend functions for multi-controlled gates | `add_gate` with `large_control` already handles arbitrary control counts | No new C code needed |
+| Control flow graph library | Overkill for tracking nested `with` state | A Python list as control stack is sufficient |
+| Separate 2D array class | `qarray` already handles N-dimensional shapes internally | Fix the `__init__` bug instead |
 
 ## Installation
 
+No new packages to install. The existing development environment is sufficient:
+
 ```bash
-# No required new packages. Everything core is already installed.
-
-# Optional: for call graph image rendering
-pip install pydot>=3.0.0
-
-# Optional: system graphviz for DOT-to-image rendering
-# macOS:
-brew install graphviz
-# Ubuntu/Debian:
-apt install graphviz
+# Existing setup (unchanged)
+pip install -e ".[dev,verification]"
 ```
-
-Add to `pyproject.toml`:
-
-```toml
-[project.optional-dependencies]
-visualization = ["pydot>=3.0.0"]
-```
-
-Do NOT add pydot to core `dependencies`. It is only needed for call graph image rendering, which is a developer/debug feature. DOT text export works without it.
-
-## Alternatives Considered
-
-| Recommended | Alternative | When to Use Alternative |
-|-------------|-------------|-------------------------|
-| rustworkx PyDAG | NetworkX DiGraph | Never for this project. NetworkX is pure Python, 10-100x slower, and would add a new dependency when rustworkx is already installed. |
-| rustworkx PyDAG | Custom dict-based DAG | Only if DAG operations are trivially simple (just parent lookup). But topological sort, cycle detection, and parallelism detection justify a real graph library. |
-| scipy.sparse dok/csr | Custom sparse dict | Never. scipy.sparse handles format conversion efficiently and is already installed. |
-| scipy.sparse | Python dict of lists | Acceptable for prototyping, but scipy gives free CSR conversion for fast layer iteration during replay. |
-| pydot | pygraphviz | Never. pygraphviz requires C compiler, SWIG, and system headers at install time. pydot is pure Python. |
-| pydot | graphviz (Python package) | Acceptable alternative, but rustworkx's visualization module specifically expects pydot. |
-| NumPy uint64 bitmask | Python frozenset | For qubit dependency sets > 64 qubits. frozenset intersection is clean but O(n). Use frozenset only if readability trumps performance in prototype phase. |
-| Manual DOT string export | Full graphviz_draw() | For v7.0 MVP -- avoids pydot/graphviz dependency entirely. Add image rendering later. |
-
-## What NOT to Use
-
-| Avoid | Why | Use Instead |
-|-------|-----|-------------|
-| NetworkX | Slower, not installed, redundant with rustworkx | rustworkx PyDAG (already installed) |
-| pygraphviz | Requires C compiler, SWIG, system headers at install | pydot (pure Python) or manual DOT strings |
-| graph-tool | GPL licensed, requires C++ compilation, massive dependency | rustworkx |
-| Custom graph implementation | Reinventing topological sort, cycle detection, parallelism detection | rustworkx PyDAG |
-| Dense 2D NumPy arrays for sparse circuits | Memory explosion for large circuits with low gate density | scipy.sparse dok_array -> csr_array |
-| Modifying C-level sequence_t for sparse | Massive C refactor risking 600K lines of working C code | Keep C dense; sparse only at Python virtual gate level |
-| New Cython bindings for DAG | No performance-critical loop in DAG traversal. Python-level is sufficient | Pure Python using rustworkx |
-| pandas DataFrame for gate storage | Massive overhead for structured data that is better as dict lists or sparse arrays | list[dict] (small) or scipy.sparse (large) |
-
-## Stack Patterns by Variant
-
-**If circuit has < 10K gates (common case):**
-- Use existing `list[dict]` for `CompiledBlock.gates`
-- Use uint64 scalar bitmask for qubit overlap
-- Because overhead of sparse conversion exceeds savings
-
-**If circuit has > 50K gates with sparse qubit usage:**
-- Use `dok_array` during capture, convert to `csr_array` for replay
-- Use `np.ndarray` bit array for qubit overlap
-- Because memory savings justify conversion overhead
-
-**If call graph has < 20 compiled functions (common case):**
-- Use rustworkx PyDAG with simple topological_sort
-- Because graph is small enough that parallelism detection overhead is not justified
-
-**If call graph has > 50 compiled functions:**
-- Use `topological_generations()` for parallel layer detection
-- Use `dag_longest_path()` for critical path estimation
-- Because parallelism becomes significant at this scale
 
 ## Version Compatibility
 
-| Package A | Compatible With | Notes |
-|-----------|-----------------|-------|
-| rustworkx 0.17.1 | Python 3.9+, NumPy 2.x | Already installed and working |
-| scipy 1.17.1 | NumPy 2.4.2 | Already installed and working |
-| pydot >=3.0.0 | Python 3.9+, pyparsing 3.x | Pure Python, minimal risk |
-| Graphviz (system) | pydot 3.x | Only for rendering, not computation |
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| Cython >=3.0.11 | Python 3.11-3.14 | Current 3.2.4 is stable |
+| rustworkx 0.17.1 | Python 3.9-3.13 | Stable ABI, no update needed |
+| NumPy >=1.24 | Python 3.11+ | Current 2.4.2, no issues |
 
-## Integration Points with Existing Codebase
+## Architecture Impact Summary
 
-| Integration Point | File | What Changes |
-|-------------------|------|-------------|
-| Call graph construction | `compile.py` CompiledFunction.__call__ | Record caller-callee relationships in PyDAG when nested compilation detected |
-| Qubit dependency tracking | `compile.py` CompiledBlock | Add `qubit_mask: np.uint64` computed from gates list |
-| Sequence merging | `compile.py` _optimize_gate_list | New merge pass using bitmask overlap to identify mergeable adjacent blocks |
-| Sparse gate storage | `compile.py` CompiledBlock.gates | Optional sparse representation for blocks exceeding size threshold |
-| DOT export | New function in compile.py or separate module | `call_graph_to_dot()` returning DOT string |
-| opt_flag levels | `compile.py` compile() decorator | New `opt_flag` parameter: 0=call graph only, 1=selective merge, 2=full expansion |
-| Cython bridge | `_core.pyx` inject_remapped_gates | No change -- receives same gate dicts regardless of how they were stored |
+All three features are **Python/Cython layer changes only**:
 
-## Summary
+1. **Nested controls**: ~50-80 lines changed in `qint.pyx` (`__enter__`/`__exit__`) and ~10 lines in `_core.pyx` (control stack globals). Zero C backend changes.
+2. **2D qarray**: ~10 lines changed in `qarray.pyx __init__`. Zero C backend changes.
+3. **Chess engine compile**: Zero framework changes beyond Features 1 and 2. The compile decorator already handles the mechanics correctly once nested controls produce correct gate sequences.
 
-| Capability | Library | Status | New Dependency? |
-|------------|---------|--------|-----------------|
-| Call graph DAG | rustworkx.PyDAG | Installed | No |
-| Topological ordering | rustworkx.topological_sort | Installed | No |
-| Parallelism detection | rustworkx.topological_generations | Installed | No |
-| Cycle prevention | rustworkx.DAGWouldCycle | Installed | No |
-| Critical path | rustworkx.dag_longest_path | Installed | No |
-| DOT text export | Manual string formatting | No library needed | No |
-| DOT image rendering | pydot + system Graphviz | NEW (optional) | Yes (optional) |
-| Sparse gate arrays | scipy.sparse.dok_array/csr_array | Installed | No |
-| Qubit overlap detection | NumPy bitwise uint64 ops | Installed | No |
-| Sequence merging algorithm | Pure Python + NumPy | Installed | No |
-
-**Bottom line: Zero new core dependencies. One optional dependency (pydot) for image rendering. All critical functionality maps to already-installed libraries.**
+The total code change for the stack/infrastructure layer is approximately 60-90 lines of Python/Cython, all in existing files. No new files, no new dependencies, no build system changes.
 
 ## Sources
 
-- [rustworkx DAG tutorial](https://www.rustworkx.org/tutorial/dags.html) -- DAG API and usage patterns
-- [rustworkx visualization docs](https://www.rustworkx.org/visualization.html) -- graphviz_draw requirements (pydot)
-- [rustworkx benchmarks vs other libraries](https://www.rustworkx.org/benchmarks.html) -- performance comparison
-- [rustworkx topological_sort API](https://www.rustworkx.org/apiref/rustworkx.topological_sort.html) -- confirmed in 0.17.1
-- [rustworkx TopologicalSorter API](https://www.rustworkx.org/apiref/rustworkx.TopologicalSorter.html) -- iterator variant
-- [scipy.sparse documentation](https://docs.scipy.org/doc/scipy/reference/sparse.html) -- sparse array formats and construction patterns
-- [pydot GitHub](https://github.com/pydot/pydot) -- pure Python, pyparsing dependency
-- Verified installed versions via `pip list`: rustworkx 0.17.1, scipy 1.17.1, numpy 2.4.2
-- Verified `graphviz_draw` import succeeds, pydot not yet installed, Graphviz binary not installed
-- Verified scipy.sparse modern array API available: dok_array, csr_array, lil_array
-- Codebase: `types.h` (sequence_t structure), `compile.py` (CompiledBlock, CompiledFunction, gate list format)
+- Codebase analysis: `qint.pyx` lines 784-882 (`__enter__`/`__exit__`), `_core.pyx` lines 28-116 (control globals), `qarray.pyx` lines 38-80 (dim constructor), `compile.py` lines 725-830 (CompiledFunc), `types.h` lines 66-75 (gate_t with large_control)
+- [rustworkx 0.17.1](https://www.rustworkx.org/) -- verified current version (HIGH confidence)
+- [Cython releases](https://github.com/cython/cython/releases) -- latest stable 3.2.4 (HIGH confidence)
+- `.planning/codebase/STACK.md` -- existing stack documentation (HIGH confidence)
+- `examples/chess_engine.py` -- target chess engine style (HIGH confidence)
 
 ---
-*Stack research for: Quantum Assembly v7.0 -- Multi-level compilation infrastructure*
-*Researched: 2026-03-05*
-*Conclusion: Zero new core dependencies. rustworkx (DAG), scipy.sparse (sparse arrays), NumPy (bitmasks) are all already installed. One optional new dependency: pydot for DOT image rendering.*
+*Stack research for: v9.0 Nested Controls & Chess Engine*
+*Researched: 2026-03-09*

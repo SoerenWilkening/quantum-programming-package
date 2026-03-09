@@ -1,462 +1,477 @@
-# Architecture Research: Quantum Chess Walk Rewrite (v8.0)
+# Architecture Research: Nested Controls, 2D qarray, and Chess Engine
 
-**Domain:** Quantum move legality predicates + compile infrastructure optimization
-**Researched:** 2026-03-08
-**Confidence:** HIGH (based on direct codebase analysis of existing architecture)
+**Domain:** Quantum programming framework -- control composition, array types, compiled chess engine
+**Researched:** 2026-03-09
+**Confidence:** HIGH (all findings based on direct source code analysis)
 
-## System Overview
+## Existing Architecture Summary
 
-### Current Architecture (v6.1)
+The framework has three layers:
 
 ```
-Classical Layer (circuit construction time)
 +-----------------------------------------------------------------+
-|  chess_encoding.py                                              |
-|  +---------------------------+  +-----------------------------+ |
-|  | legal_moves_{white,black} |  | get_legal_moves_and_oracle  | |
-|  | (Python set filtering)    |  | (_make_apply_move factory)  | |
-|  +------------+--------------+  +--------------+--------------+ |
-|               |                                |                |
-|       Classical move list            @ql.compile(inverse=True)  |
-|       (branch index = move index)    apply_move(wk,bk,wn,br)   |
+|                   Python Frontend (DSL)                          |
+|  qint.pyx  qbool.pyx  qarray.pyx  compile.py  walk.py          |
+|  operator overloading, context managers, @ql.compile             |
 +-----------------------------------------------------------------+
-              |                                  |
-Quantum Layer (gate emission)                    |
+|                   Cython Bindings (_core.pyx)                    |
+|  Global state: _controlled, _control_bool, _list_of_controls    |
+|  scope_stack, current_scope_depth, qubit_allocator               |
 +-----------------------------------------------------------------+
-|  chess_walk.py                                                  |
-|  +-----------------------+  +-------------------------------+   |
-|  | evaluate_children     |  | apply_diffusion               |   |
-|  | (per-child loop:      |  | (O(2^d_max) pattern enum      |   |
-|  |  encode branch,       |  |  via itertools.combinations)  |   |
-|  |  oracle fwd/inv,      |  |                               |   |
-|  |  TRIVIAL predicate)   |  |                               |   |
-|  +-----------------------+  +-------------------------------+   |
-|  +-------------------+  +-----------------------------------+   |
-|  | r_a / r_b         |  | walk_step (compiled U=R_B*R_A)    |   |
-|  +-------------------+  +-----------------------------------+   |
-+-----------------------------------------------------------------+
-              |
-Compile Infrastructure
-+-----------------------------------------------------------------+
-|  compile.py                                                     |
-|  +--------------------------------+                             |
-|  | qubit_set: Python set()        |                             |
-|  | built via repeated .update()   |                             |
-|  | converted to frozenset         |                             |
-|  +--------------------------------+                             |
-|  call_graph.py                                                  |
-|  +--------------------------------+                             |
-|  | DAGNode.bitmask: Python int    |                             |
-|  | built via loop: |= 1 << q     |                             |
-|  | overlap: frozenset intersection|                             |
-|  +--------------------------------+                             |
+|                   C Backend (gate primitives)                    |
+|  add_gate, CQ_*/QQ_*/cCQ_*/cQQ_*, circuit_t, gate_t            |
+|  All controlled variants take a single control_qubit arg        |
 +-----------------------------------------------------------------+
 ```
 
-### Target Architecture (v8.0)
+### Control Flow for `with qbool:`
+
+Current single-level flow:
 
 ```
-Classical Layer (circuit construction time)
-+-----------------------------------------------------------------+
-|  chess_encoding.py (MODIFIED)                                   |
-|  +---------------------------+  +-----------------------------+ |
-|  | Raw move destinations     |  | encode_position (unchanged) | |
-|  | knight_destinations(sq)   |  |                             | |
-|  | king_destinations(sq)     |  |                             | |
-|  | (ALL reachable squares,   |  |                             | |
-|  |  no legality filtering)   |  |                             | |
-|  +------------+--------------+  +-----------------------------+ |
-+-----------------------------------------------------------------+
-              |
-Quantum Layer (gate emission)
-+-----------------------------------------------------------------+
-|  chess_predicates.py (NEW)                                      |
-|  +---------------------------+  +----------------------------+  |
-|  | piece_exists_on_source    |  | target_not_friendly        |  |
-|  | (qbool = board[r,f])     |  | (qbool = ~board[r,f])      |  |
-|  +---------------------------+  +----------------------------+  |
-|  +---------------------------+  +----------------------------+  |
-|  | king_not_in_check         |  | move_is_legal (AND of all) |  |
-|  | (attack line enumeration) |  | @ql.compile(inverse=True)  |  |
-|  +---------------------------+  +----------------------------+  |
-|                                                                 |
-|  chess_walk.py (MODIFIED)                                       |
-|  +-----------------------------------------------------------+ |
-|  | evaluate_children: uses chess_predicates.move_is_legal     | |
-|  | instead of trivial always-valid predicate                  | |
-|  +-----------------------------------------------------------+ |
-+-----------------------------------------------------------------+
-              |
-Compile Infrastructure (MODIFIED)
-+-----------------------------------------------------------------+
-|  compile.py                                                     |
-|  +--------------------------------+                             |
-|  | qubit_set: numpy uint32 array  |                             |
-|  | built via np.union1d           |                             |
-|  | converted via np.unique        |                             |
-|  +--------------------------------+                             |
-|  call_graph.py                                                  |
-|  +--------------------------------+                             |
-|  | DAGNode.qubit_array: np.array  |                             |
-|  | overlap: np.intersect1d        |                             |
-|  | bitmask: Python int (kept)     |                             |
-|  +--------------------------------+                             |
-+-----------------------------------------------------------------+
+__enter__(self):
+  1. if not _controlled:
+       _control_bool = self          # first level
+     else:
+       _list_of_controls.append(_control_bool)
+       _control_bool &= self         # <-- THIS CRASHES (NotImplementedError)
+  2. _controlled = True
+  3. scope_depth++, scope_stack.push([])
+
+__exit__():
+  1. scope_stack.pop() -> uncompute scope-local vars (LIFO)
+  2. scope_depth--
+  3. _controlled = False             # <-- BUG: unconditionally False
+  4. _control_bool = None            # <-- BUG: doesn't restore previous
 ```
 
-## Component Responsibilities
+### Why Nesting Currently Fails
 
-| Component | Responsibility | New vs Modified | Integration Points |
-|-----------|----------------|-----------------|-------------------|
-| `chess_predicates.py` | Quantum legality checks: piece exists, no friendly capture, no self-check | **NEW** | Uses qarray element access, qbool, calls chess_encoding for attack tables |
-| `chess_encoding.py` | Raw move destination generation (no legality filter) + board encoding | **MODIFIED** | Remove `legal_moves_*` filtering from oracle path; keep for classical use |
-| `chess_walk.py` | Walk register scaffolding, evaluate_children with real predicates | **MODIFIED** | `evaluate_children` calls `chess_predicates.move_is_legal` instead of trivial predicate |
-| `compile.py` | Gate capture/replay with numpy-based qubit set construction | **MODIFIED** | `_build_qubit_set` helper replaces 3 inline set-building blocks |
-| `call_graph.py` | DAG node with numpy qubit arrays, vectorized overlap computation | **MODIFIED** | `DAGNode` stores `qubit_array`; overlap methods use `np.intersect1d` |
+Two independent failures:
 
-## Recommended Project Structure
+1. **`_control_bool &= self`** in `__enter__` line 816 calls `__and__` (qint_bitwise.pxi line 132-133), which raises `NotImplementedError("Controlled quantum-quantum AND not yet supported")` because `_controlled` is already True.
+
+2. **`__exit__` unconditionally sets `_controlled=False`** and `_control_bool=None`, which would corrupt the outer control context even if the AND succeeded.
+
+---
+
+## Integration Design: Nested `with qbool:` Blocks
+
+### New Component: Control Stack (replaces flat globals)
+
+**Problem:** Current design uses a single `_controlled` flag and `_control_bool` reference. Nesting requires a stack.
+
+**Solution: Replace `_controlled`, `_control_bool`, `_list_of_controls` with a single `_control_stack` list.**
 
 ```
-src/
-+-- chess_encoding.py       # Board encoding, attack tables, raw destinations
-+-- chess_predicates.py     # NEW: quantum legality predicates
-+-- chess_walk.py           # Walk registers, evaluate_children, r_a/r_b, walk_step
-+-- quantum_language/
-    +-- compile.py          # @ql.compile with numpy qubit_set helper
-    +-- call_graph.py       # CallGraphDAG with numpy overlap
-    +-- walk.py             # QWalkTree (unchanged)
-    +-- ...
+Globals to replace:
+  _controlled: bool       -> len(_control_stack) > 0
+  _control_bool: qbool    -> _control_stack[-1] if _control_stack else None
+  _list_of_controls: list -> no longer needed (stack replaces it)
 ```
 
-### Structure Rationale
+New state:
+```python
+_control_stack = []   # List[qbool] -- each entry is the effective control at that depth
+```
 
-- **chess_predicates.py at src/ level:** Same level as chess_encoding.py and chess_walk.py. These are application-level modules, not framework internals. chess_predicates imports from both chess_encoding (attack tables) and quantum_language (qbool, compile).
-- **compile.py/call_graph.py modifications are internal:** The numpy optimization is transparent to callers. No API changes.
+#### Modified `__enter__`
 
-## Architectural Patterns
+```python
+def __enter__(self):
+    self._check_not_uncomputed()
 
-### Pattern 1: Quantum Predicate as Compiled Oracle
+    if _control_stack:
+        # Nested: compute AND of outer control and self
+        outer = _control_stack[-1]
+        combined = _toffoli_and(outer, self)  # New function, see below
+        _control_stack.append(combined)
+        # Track combined qbool for uncomputation on exit
+        self._combined_control = combined
+    else:
+        # Top level: self is the control
+        _control_stack.append(self)
+        self._combined_control = None
 
-**What:** Each legality condition is a separate `@ql.compile(inverse=True)` function producing a qbool result. The top-level `move_is_legal` AND-combines them via Toffoli gates.
-**When to use:** Whenever the walk framework needs to determine child validity in superposition.
-**Trade-offs:**
-- PRO: Each sub-predicate is independently testable; inverse is auto-generated for uncomputation
-- PRO: Compiled predicates auto-uncompute their ancillae (solves known "raw predicate qubit allocation" limitation)
-- CON: AND-combining qbools requires explicit multi-controlled gates (framework `with qbool:` cannot nest)
-- CON: More compiled function invocations = more cache entries and DAG nodes
+    # Scope management (unchanged)
+    current_scope_depth.set(current_scope_depth.get() + 1)
+    _scope_stack.append([])
+    if self.operation_type is not None:
+        self.creation_scope = current_scope_depth.get()
+    return self
+```
 
-**Example:**
+#### Modified `__exit__`
+
+```python
+def __exit__(self, exc_type, exc, tb):
+    # Uncompute scope-local vars (unchanged)
+    if _scope_stack:
+        scope_qbools = _scope_stack.pop()
+        scope_qbools.sort(key=lambda q: q._creation_order, reverse=True)
+        for qb in scope_qbools:
+            if not qb._is_uncomputed:
+                qb._do_uncompute(from_del=False)
+
+    current_scope_depth.set(current_scope_depth.get() - 1)
+
+    # Pop control stack
+    _control_stack.pop()
+
+    # Uncompute the combined AND ancilla if this was nested
+    if self._combined_control is not None:
+        _uncompute_toffoli_and(self._combined_control)
+        self._combined_control = None
+
+    return False
+```
+
+### New Component: `_toffoli_and` / `_uncompute_toffoli_and`
+
+**What:** Compute the AND of two qbools into a fresh ancilla qubit using a Toffoli (CCX) gate. Return a qbool wrapping the ancilla.
+
+**Where:** `_core.pyx` (close to the control state globals) or a new `_control_utils.py`.
+
+**Implementation:**
+
+```python
+def _toffoli_and(a: qbool, b: qbool) -> qbool:
+    """Compute a AND b into a fresh ancilla qubit via CCX."""
+    ancilla = qbool()  # Allocates fresh qubit, initialized to |0>
+    # CCX(a, b, ancilla): ancilla = a AND b
+    # Emit CCX gate directly (not via & operator which goes through __and__)
+    _emit_ccx(int(a.qubits[63]), int(b.qubits[63]), int(ancilla.qubits[63]))
+    ancilla._keep_flag = True  # Don't auto-uncompute
+    return ancilla
+
+def _uncompute_toffoli_and(combined: qbool):
+    """Uncompute the AND ancilla by reversing the CCX, then free the qubit."""
+    # Re-apply CCX (self-inverse) to reset ancilla to |0>
+    # Then deallocate the qubit
+    # combined already has the qubit reference
+    pass  # Details depend on how we emit CCX
+```
+
+**Critical detail:** CCX is self-inverse. `_uncompute_toffoli_and` just re-applies the same CCX gate (the two original control qubits haven't changed because we're still in the with-block exit path), which resets the ancilla to |0>, then deallocates it.
+
+**Gate emission:** We need a way to emit a raw CCX without going through the `__and__` operator (which allocates result qints, tracks dependencies, etc.). Options:
+
+1. **Use `_gates.py` emit function** -- add `emit_ccx(ctrl1, ctrl2, target)` similar to existing `emit_x`, `emit_ry`, `emit_p`, `emit_p_raw`.
+2. **Use `inject_remapped_gates` with a CCX gate dict** -- already available, just needs a helper.
+
+Option 1 is cleaner. Add `emit_ccx` to `_gates.pyx` or `_gates.py`.
+
+### Affected Modules and Changes
+
+| Module | Change Type | What Changes |
+|--------|-------------|--------------|
+| `_core.pyx` | MODIFY | Replace `_controlled`, `_control_bool`, `_list_of_controls` with `_control_stack`. Update all accessor functions. |
+| `qint.pyx` (`__enter__`/`__exit__`) | MODIFY | Rewrite to use `_control_stack` and `_toffoli_and`. Add `_combined_control` attribute. |
+| `qint.pyx` (`__init__`) | MODIFY | Replace `_get_control_bool()` checks with `_control_stack[-1]` equivalent. |
+| `qint.pxd` | MODIFY | Add `_combined_control` cdef attribute to qint. |
+| `qint_arithmetic.pxi` | MODIFY | Replace `_get_controlled()` / `_get_control_bool()` with stack-based accessors. |
+| `qint_bitwise.pxi` | NO CHANGE (or minimal) | The `& operator` itself does not need to be controlled for this feature. The AND for control composition uses direct CCX emission. |
+| `qint_comparison.pxi` | MODIFY | Same accessor replacement as arithmetic. |
+| `_gates.pyx` or `_gates.py` | MODIFY | Add `emit_ccx` function. |
+| `compile.py` | MODIFY | Replace `_get_controlled()` / `_get_control_bool()` imports. Controlled variant derivation now potentially adds >1 control. |
+| `walk.py` | SIMPLIFY | Can potentially use real `with qbool:` nesting instead of V-gate CCRy workaround. |
+
+### Accessor Function Migration
+
+Current accessors to replace:
+
+```python
+_get_controlled()       -> len(_control_stack) > 0
+_set_controlled(v)      -> REMOVE (push/pop replaces set)
+_get_control_bool()     -> _control_stack[-1] if _control_stack else None
+_set_control_bool(v)    -> REMOVE (push/pop replaces set)
+_get_list_of_controls() -> REMOVE (stack replaces list)
+_set_list_of_controls() -> REMOVE
+```
+
+**Backward compatibility:** Keep `_get_controlled()` and `_get_control_bool()` as thin wrappers over the stack to minimize churn in arithmetic/bitwise/comparison code:
+
+```python
+def _get_controlled():
+    return len(_control_stack) > 0
+
+def _get_control_bool():
+    return _control_stack[-1] if _control_stack else None
+```
+
+This means `qint_arithmetic.pxi`, `qint_comparison.pxi`, and most of `compile.py` need NO changes to their control qubit extraction code. The only changes are in `__enter__`/`__exit__` and `circuit.__init__` (reset).
+
+### Depth-N Control Composition
+
+For depth 2: `with a:` then `with b:` produces combined = a AND b (1 CCX, 1 ancilla).
+
+For depth 3: `with a:` then `with b:` (combined_ab = a AND b) then `with c:` produces combined_abc = combined_ab AND c (another CCX, another ancilla). Total: 2 ancillas, 2 CCX gates.
+
+For depth N: N-1 ancilla qubits, N-1 CCX gates. Each level adds exactly 1 ancilla.
+
+**Uncomputation order:** `__exit__` at each level uncomputes its own combined control. LIFO ordering is natural because Python `with` blocks nest correctly.
+
+### Interaction with `@ql.compile`
+
+**Capture path:** `_capture_and_cache_both` currently saves/restores `_controlled`, `_control_bool`, `_list_of_controls` when capturing in uncontrolled mode. With the stack, it saves/restores `_control_stack`:
+
+```python
+if is_controlled:
+    saved_stack = list(_control_stack)
+    _control_stack.clear()
+    try:
+        block = self._capture(...)
+    finally:
+        _control_stack[:] = saved_stack
+```
+
+**Controlled variant derivation:** `_derive_controlled_gates` already adds one control qubit to every gate. This works correctly for nested controls because the effective control qubit (from `_control_stack[-1]`) is always a single qubit -- either the original qbool or the AND-ancilla. The compile replay path in `_replay` maps `block.control_virtual_idx` to `int(_get_control_bool().qubits[63])`, which automatically picks up the correct combined control qubit.
+
+**No change needed** in `_derive_controlled_gates` or `_replay` control mapping.
+
+---
+
+## Integration Design: 2D qarray Support
+
+### Current State
+
+2D qarray already works for most operations:
+- `qarray(dim=(8,8), dtype=qbool)` -- WORKS (via `__init__` dim path)
+- `arr[rank, file]` -- WORKS (via `_handle_multi_index`)
+- `arr[rank, file] += x` -- WORKS (via `__setitem__` tuple path)
+- `arr[:, col]` slicing -- WORKS (via `_handle_multi_index`)
+- Element-wise ops -- WORKS (flattened iteration)
+
+### Known Bug: `ql.array((rows, cols))` path
+
+The `_core.pyx` `array()` function at line 335 handles `dim=tuple` by creating nested Python lists, but this goes through the OLD list-based path, not the qarray class. The `__init__.py` `array()` function wraps this correctly into `qarray(data, width=width, dtype=dtype, dim=dim)`.
+
+The real bug from PROJECT.md: "`ql.array((rows, cols))` 2D shape fails with TypeError in `_infer_width`" -- this happens when passing a tuple to `ql.array()` as the first positional argument (data), which gets interpreted as data rather than dim. The fix is to route tuple-of-ints correctly.
+
+### Changes Required
+
+| Module | Change Type | What Changes |
+|--------|-------------|--------------|
+| `__init__.py` `array()` | MODIFY | Handle case where `data` is a tuple of ints (interpret as dim), or clarify API to require `dim=` keyword. |
+| `qarray.pyx` `__init__` | VERIFY | The `dim=` keyword path already works. Verify edge cases (non-square shapes, single-row). |
+
+### No Architectural Changes
+
+2D qarray is already structurally supported. The shape metadata, flattened storage, and multi-dimensional indexing infrastructure are all in place. This is a bug fix, not a new feature.
+
+---
+
+## Integration Design: Chess Engine with `ql.compile(opt=1)`
+
+### Target Architecture
+
+The chess engine in `examples/chess_engine.py` uses the "natural programming" style that the framework was designed for. The key challenge is making it compile into a memory-efficient circuit.
+
+### How `ql.compile(opt=1)` Works
+
+opt=1 (default) builds a call graph DAG during the first call:
+1. Each `@ql.compile` function call creates a DAG node
+2. Nodes track qubit sets and gate counts
+3. `CallGraphDAG.build_overlap_edges()` computes qubit overlap between nodes
+4. The DAG is available for analysis but no automatic merging (opt=2 does merging)
+
+For the chess engine, opt=1 is appropriate because:
+- The chess function will be called once (it IS the top-level compiled function)
+- Gate sequences are captured and optimized (cancel inverse pairs, merge rotations)
+- Nested compiled calls (sub-predicates) each get their own cached blocks
+- The call graph provides visibility into the circuit structure
+
+### Chess Engine Structure
+
+```
+@ql.compile(opt=1)
+def count_legal_black_moves(board_arrays...):
+    count = ql.qint(0, width=...)
+
+    for king_pos in all_squares:
+        with black_king[king_pos]:              # Depth 1 control
+            # Try each potential move
+            for target in potential_king_moves(king_pos):
+                # Make move
+                black_king[king_pos] -= 1
+                black_king[target] += 1
+
+                # Compute attack map
+                for src in all_squares:
+                    with white_knight[src]:      # Depth 2 control (REQUIRES NESTING)
+                        for atk in knight_attacks(src):
+                            attack_map[atk] += 1
+
+                # Count if legal
+                with attack_map[target] == 0:    # Depth 2 control (REQUIRES NESTING)
+                    count += 1
+
+                # Unmake (reverse attack computation)
+                ...
+
+                # Unmake move
+                black_king[target] -= 1
+                black_king[king_pos] += 1
+
+    return count
+```
+
+### Dependency on Nested Controls
+
+The chess engine REQUIRES nested `with` blocks:
+- Outer: `with black_king[king_pos]:` (is king at this square?)
+- Inner: `with white_knight[src]:` (is knight at this square?)
+- Inner: `with attack_map[target] == 0:` (is target not attacked?)
+
+Without nested controls, the chess engine must use workarounds (explicit Toffoli AND via `&`, V-gate decomposition, or inline gate emission) as done in v6.1 and v8.0.
+
+### Memory Efficiency with `@ql.compile`
+
+The compiled function automatically:
+1. **Captures** the gate sequence on first call
+2. **Optimizes** by cancelling inverse pairs (important for make/unmake move patterns)
+3. **Caches** for replay if called again with different inputs
+4. **Tracks ancillas** for uncomputation
+
+The make/unmake pattern naturally produces many inverse-cancellable gate pairs:
+```
+black_king[target] += 1   ->   gates
+...
+black_king[target] -= 1   ->   inverse gates
+```
+
+The optimizer in `_optimize_gate_list` will cancel these during compilation.
+
+### Sub-predicate Composition
+
+The chess engine should use nested `@ql.compile` functions for sub-predicates:
+
 ```python
 @ql.compile(inverse=True)
-def piece_exists_on_source(board_arr, src_rank, src_file):
-    """Returns qbool |1> if board_arr[src_rank, src_file] == |1>."""
-    return board_arr[src_rank, src_file]  # Already a qbool
-
-@ql.compile(inverse=True)
-def target_not_same_color(own_boards, dst_rank, dst_file):
-    """Returns qbool |1> if no same-color piece at destination."""
-    occupied = ql.qbool()
-    for board in own_boards:
-        occupied |= board[dst_rank, dst_file]
-    return ~occupied
+def compute_knight_attacks(white_knight_arr, attack_map):
+    for src in range(64):
+        with white_knight_arr[src // 8, src % 8]:
+            for atk_rank, atk_file in knight_attack_table[src]:
+                attack_map[atk_rank, atk_file] += 1
+    return attack_map
 ```
 
-### Pattern 2: Classical Attack Table, Quantum Lookup
+This pattern:
+- Captures once, replays on subsequent calls
+- `inverse=True` enables clean uncomputation via `compute_knight_attacks.inverse(...)`
+- Nested compiled calls compose correctly (compile.py handles nested capture via `_capture_depth`)
 
-**What:** Attack tables (which squares a knight/king can reach) are precomputed classically. The quantum predicate iterates these tables at circuit construction time, emitting controlled gates only for relevant squares. No quantum arithmetic for move geometry.
-**When to use:** For check detection -- "is the king attacked?" examines all squares that could attack the king.
-**Trade-offs:**
-- PRO: Zero quantum overhead for move enumeration (classical loop at construction time)
-- PRO: Circuit size proportional to piece count, not board size
-- CON: Board position must be known at construction time for attack table (consistent with existing oracle factory pattern)
+### qarray as `@ql.compile` Arguments
 
-**Example:**
-```python
-def king_not_in_check(board_arrs, king_sq, opponent_piece_type):
-    """Quantum predicate: king on king_sq is not attacked."""
-    in_check = ql.qbool()
-    # Check opponent knight attacks on king_sq
-    for attacker_sq in knight_attacks(king_sq):
-        r, f = divmod(attacker_sq, 8)
-        in_check |= board_arrs['knights'][r, f]
-    # Check opponent king adjacency
-    for adj_sq in king_attacks(king_sq):
-        r, f = divmod(adj_sq, 8)
-        in_check |= board_arrs['king'][r, f]
-    return ~in_check  # Valid if NOT in check
-```
+qarray support in `@ql.compile` is already implemented (v2.1):
+- `_classify_args` detects qarray and builds cache key with `('arr', length)`
+- `_get_qarray_qubit_indices` extracts all qubit indices
+- Replay correctly maps virtual qubits to physical qubits
+- qarray return values are reconstructed from virtual-to-real mapping
 
-### Pattern 3: Numpy Qubit Set Operations in Compile Infrastructure
+For the chess engine, board arrays (8x8 qbool qarrays) can be passed directly as compiled function arguments.
 
-**What:** Replace Python `set()` / `frozenset` / Python-loop bitmask computation with numpy `uint32` arrays and vectorized operations in compile.py and call_graph.py.
-**When to use:** Every qubit set operation in compile infrastructure (3 sites in compile.py, 1 in call_graph.py init, 3 in call_graph.py overlap/parallel/merge).
-**Trade-offs:**
-- PRO: `np.intersect1d` / `np.union1d` faster than frozenset for typical qubit counts (50-300 qubits)
-- PRO: Eliminates repeated `set.update()` calls
-- CON: Python int bitmask for >64 qubits cannot be vectorized in numpy (uint64 max); bitmask loop stays as Python int
-- CON: Requires converting to/from numpy at API boundaries
+---
 
-**Critical constraint:** The bitmask MUST remain a Python `int` because chess walk circuits exceed 64 qubits. Numpy uint64 would silently overflow. Optimize the set operations with numpy; leave bitmask as Python int.
+## Build Order and Dependencies
 
-**Example:**
-```python
-# compile.py -- new helper
-def _build_qubit_set(quantum_args, capture_vtr=None):
-    """Build qubit set from quantum args + capture mapping."""
-    arrays = [_get_quantum_arg_qubit_indices(qa) for qa in quantum_args]
-    if capture_vtr:
-        arrays.append(np.array(list(capture_vtr.values()), dtype=np.uint32))
-    if arrays:
-        return np.unique(np.concatenate(arrays))
-    return np.array([], dtype=np.uint32)
+### Phase 1: Control Stack Infrastructure (No Dependencies)
 
-# call_graph.py -- DAGNode with dual storage
-class DAGNode:
-    def __init__(self, func_name, qubit_set, gate_count, cache_key, **kw):
-        self.qubit_array = np.array(sorted(qubit_set), dtype=np.uint32)
-        self.qubit_set = frozenset(qubit_set)  # Backward compat
-        # Bitmask stays as Python int for >64 qubit support
-        bitmask = 0
-        for q in self.qubit_array:
-            bitmask |= 1 << int(q)
-        self.bitmask = bitmask
+**What:** Replace flat control globals with `_control_stack`, add `emit_ccx`, implement `_toffoli_and`/`_uncompute_toffoli_and`.
 
-# call_graph.py -- vectorized overlap
-def build_overlap_edges(self):
-    for i in range(n):
-        arr_i = self._nodes[i].qubit_array
-        for j in range(i + 1, n):
-            w = len(np.intersect1d(arr_i, self._nodes[j].qubit_array))
-            if w > 0 and (i, j) not in call_pairs:
-                self._dag.add_edge(i, j, {"type": "overlap", "weight": w})
-```
+**Modified files:** `_core.pyx`, `_gates.pyx`/`_gates.py`, `qint.pxd`
 
-### Pattern 4: Predicate Integration in evaluate_children
+**Tests:** Unit test `_toffoli_and` produces correct CCX gate, verify `emit_ccx` emits gate.
 
-**What:** The existing evaluate_children loop replaces the trivial `reject = qbool()` (always valid) with a real quantum predicate call. The oracle itself stays unchanged -- the predicate is separate.
-**When to use:** In `evaluate_children` (chess_walk.py lines 250-328), between steps (c) oracle apply and (f) oracle inverse.
-**Trade-offs:**
-- PRO: Oracle and predicate are cleanly separated
-- PRO: Predicate is compiled, so its ancillae are auto-uncomputed
-- CON: More qubits per child evaluation = higher total qubit count
-- CON: Predicate must be uncomputed before oracle inverse
+**Requires rebuild:** Yes (Cython).
 
-**Current code (trivial predicate):**
-```python
-# Step (d) -- trivial, always valid
-reject = alloc_qbool()  # Always |0>
-reject_ctrl = _make_qbool_wrapper(reject_qubit)
-with reject_ctrl:
-    emit_x(validity_qubit)
-emit_x(validity_qubit)
-```
+### Phase 2: `__enter__`/`__exit__` Rewrite (Depends on Phase 1)
 
-**Target code (real predicate):**
-```python
-# Step (d) -- quantum legality check
-from chess_predicates import move_is_legal
-move_spec = move_data['moves'][i]
-src_rank, src_file = divmod(move_spec[0], 8)
-dst_rank, dst_file = divmod(move_spec[1], 8)
+**What:** Rewrite `qint.__enter__` and `qint.__exit__` to use `_control_stack` with AND composition.
 
-is_legal = move_is_legal(board_arrs, src_rank, src_file, dst_rank, dst_file, side)
-legal_qubit = int(is_legal.qubits[63])
-legal_ctrl = _make_qbool_wrapper(legal_qubit)
-with legal_ctrl:
-    emit_x(validity_qubit)
-# is_legal is positive-sense: no extra flip needed
-```
+**Modified files:** `qint.pyx` (lines 804-882)
 
-## Data Flow
+**Tests:** The xfail tests in `test_nested_with_blocks.py` should now pass. Remove xfail markers.
 
-### Move Legality Check Flow (NEW)
+**Requires rebuild:** Yes (Cython).
 
-```
-Branch Register = i (child index)
-    |
-    v
-Oracle Forward: apply_move(board, branch=i)
-    |
-    v
-Board State at Child Node
-    |
-    +--> piece_exists_on_source(board, src) --> qbool p1
-    +--> target_not_friendly(board, dst)    --> qbool p2
-    +--> king_not_in_check(board, king_sq)  --> qbool p3
-    |
-    v
-validity[i] = p1 AND p2 AND p3  (via Toffoli/multi-controlled-X)
-    |
-    v
-Uncompute predicates (compiled inverse)
-    |
-    v
-Oracle Inverse: apply_move.inverse(board, branch=i)
-    |
-    v
-Board State Restored
-```
+### Phase 3: Compile Module Compatibility (Depends on Phase 2)
 
-### Compile Infrastructure Qubit Set Flow (MODIFIED)
+**What:** Update `compile.py` save/restore of control state to use `_control_stack`. Verify controlled variant derivation still works.
 
-```
-Current:
-  quantum_args --> set() --> .update() loop --> frozenset --> Python loop bitmask
+**Modified files:** `compile.py` (save/restore in `_capture_and_cache_both`, `_auto_uncompute`)
 
-Target:
-  quantum_args --> np.array(uint32) --> np.concatenate + np.unique --> frozenset + Python int bitmask
-                                           |
-                       np.intersect1d for overlap computation in call_graph.py
-```
+**Tests:** Existing compilation tests (106 tests from v2.1). New test: compiled function inside nested `with` block.
 
-### Key Data Flows
+### Phase 4: 2D qarray Bug Fix (No Dependencies)
 
-1. **Predicate evaluation flow:** For each child in evaluate_children, oracle applies move to board state in superposition, then chess_predicates checks legality on the resulting state, stores result in validity ancilla, then oracle inverse restores board.
-2. **Qubit set construction flow:** `_build_qubit_set()` collects physical qubit indices from quantum args and capture mappings into numpy arrays, concatenates, and deduplicates via `np.unique()`.
+**What:** Fix `ql.array((rows, cols))` TypeError. Verify 2D qarray works with `dim=` keyword.
 
-## Integration Points
+**Modified files:** `__init__.py` `array()`, possibly `_qarray_utils.py` `_infer_width`
 
-### New Component to Existing Component
+**Tests:** Create 2D qarray via `ql.array(dim=(8,8), dtype=ql.qbool)`, verify shape, indexing, and element mutation.
 
-| New/Modified | Integrates With | How | Notes |
-|--------------|-----------------|-----|-------|
-| `chess_predicates.py` | `chess_encoding.py` | Imports `knight_attacks`, `king_attacks` | Attack functions already exist, pure-classical |
-| `chess_predicates.py` | `quantum_language` | Uses `ql.qbool`, `ql.compile`, qarray element access | Standard framework operations |
-| `chess_predicates.py` | `chess_walk.py` | Called from `evaluate_children` step (d) | Replaces trivial predicate |
-| `chess_walk.py` (modified) | `chess_predicates.py` | Imports `move_is_legal` | New dependency |
-| `compile.py` (modified) | numpy | `np.unique`, `np.concatenate` | numpy already imported |
-| `call_graph.py` (modified) | numpy | `np.intersect1d`, `np.array` | Needs new numpy import |
+### Phase 5: Chess Engine Rewrite (Depends on Phases 2, 3, 4)
 
-### Internal Boundaries
+**What:** Rewrite chess engine in `examples/chess_engine.py` style using nested `with` blocks, 2D qarrays, and `@ql.compile(opt=1)`.
 
-| Boundary | Communication | Considerations |
-|----------|---------------|----------------|
-| chess_predicates <--> chess_walk | Function call returning qbool | Predicate must use `@ql.compile(inverse=True)` for clean uncomputation |
-| chess_predicates <--> board qarrays | Element access: `board[rank, file]` | Existing qarray indexing; no new infrastructure |
-| compile.py qubit_set <--> call_graph.py | numpy array passed to `DAGNode.__init__` | DAGNode accepts both set and numpy array |
-| chess_walk <--> move data | Dict with 'moves' key per level | v8.0 provides ALL possible destinations, not just legal ones |
+**Modified files:** New chess engine file (or rewrite `examples/chess_engine.py`)
+
+**Tests:** Circuit-build-only tests (verify circuit builds without OOM, check gate/qubit stats).
+
+---
 
 ## Anti-Patterns
 
-### Anti-Pattern 1: Embedding Legality in the Oracle
+### Anti-Pattern 1: Using `&` Operator for Control Composition
 
-**What people do:** Put legality checks inside `_make_apply_move` so the oracle only applies legal moves.
-**Why it is wrong:** After depth > 0, board state is in superposition. The oracle cannot know which moves are legal at circuit construction time because legality depends on superposition state. Legality must be checked AFTER the oracle applies the move.
-**Do this instead:** Keep oracle as pure move application. Check legality via separate quantum predicate on the resulting board state.
+**What people do:** `combined = cond_a & cond_b; with combined: ...`
+**Why it's wrong:** The `&` operator in qint_bitwise.pxi allocates result qints, tracks dependencies, and does per-bit Toffoli AND -- designed for multi-bit integers. For 1-bit qbool control composition, this is overkill and currently doesn't support controlled context anyway.
+**Do this instead:** Use nested `with` blocks directly: `with cond_a: with cond_b: ...` -- the framework handles the Toffoli AND internally.
 
-### Anti-Pattern 2: Numpy for Bitmask Arithmetic on >64 Qubit Sets
+### Anti-Pattern 2: Modifying `_controlled` Directly
 
-**What people do:** Use `np.uint64` arrays for bitmask operations assuming numpy handles arbitrary precision.
-**Why it is wrong:** Numpy integers are fixed-width. For chess walk with 100+ qubits, bit 100 cannot be represented in uint64. Silent overflow produces incorrect overlap detection.
-**Do this instead:** Use numpy only for set operations (intersect, union). Keep bitmask as Python `int`. Use `len(np.intersect1d(...))` instead of bitmask popcount for overlap weight.
+**What people do:** Setting `_set_controlled(False)` / `_set_controlled(True)` to manipulate control state.
+**Why it's wrong:** With a control stack, the controlled state is derived from stack depth, not set independently. Setting it directly corrupts the stack invariant.
+**Do this instead:** Use `_control_stack.append()` / `_control_stack.pop()` (or the context manager protocol).
 
-### Anti-Pattern 3: Raw Qbool Allocation per Predicate Without Compilation
+### Anti-Pattern 3: Inline Gate Emission to Avoid Nested Controls
 
-**What people do:** Each predicate sub-check allocates a fresh qbool without `@ql.compile`.
-**Why it is wrong:** Known limitation: "Raw predicate qubit allocation in QWalkTree: each predicate call allocates new qbools, making SAT demos infeasible at depth >= 2 without compiled predicates."
-**Do this instead:** Compile each predicate with `@ql.compile(inverse=True)`. Compiled predicates auto-uncompute ancillae. Only the final validity qbool persists.
+**What people do:** Bypass `with qbool:` entirely by emitting controlled gates directly (as done in walk.py with V-gate CCRy decomposition).
+**Why it's wrong:** Duplicates control composition logic, fragile, hard to maintain.
+**Do this instead:** With nested controls working, use normal `with` blocks and let the framework handle gate control addition.
 
-### Anti-Pattern 4: Nesting `with qbool:` for Predicate AND
+---
 
-**What people do:** Nest `with p1:` / `with p2:` blocks to AND-combine predicate results.
-**Why it is wrong:** Known limitation: "Nested quantum conditionals require quantum-quantum AND implementation (future work)" and "Framework `with qbool:` cannot nest."
-**Do this instead:** Use explicit Toffoli (CCX) gates or multi-controlled X to compute AND into an ancilla within a compiled function.
+## Scalability Considerations
 
-## Key Architectural Decisions
+| Concern | At Depth 2 | At Depth 4 | At Depth 8+ |
+|---------|------------|------------|-------------|
+| AND ancillas | 1 qubit | 3 qubits | 7 qubits |
+| CCX gates per enter/exit | 2 (1 enter + 1 uncompute) | 6 | 14 |
+| Control qubit on all gates | 1 control | 1 control (the AND ancilla) | 1 control |
 
-### Decision 1: Predicate Separate from Oracle
+**Key insight:** Each depth level adds exactly 1 ancilla qubit and 2 CCX gates (enter + exit). The C-level gate functions always see a SINGLE control qubit (the top of the control stack), regardless of nesting depth. No changes to the C backend are needed.
 
-The move oracle (apply_move) must NOT include legality checking. Reasons:
-1. Oracle encodes piece movements; predicate checks legality on resulting state
-2. Separation enables independent testing of predicates
-3. Walk framework already separates "navigate to child" from "evaluate predicate"
-4. Oracle is compiled once per position; predicate evaluates per child in superposition
+**Gate overhead:** Each CCX is 15 gates in Clifford+T decomposition (6 CNOT + 2H + 4T + 3Tdg). At depth 8, that's 14 CCX = 210 extra gates for control composition. For chess engine circuits with millions of gates, this is negligible.
 
-### Decision 2: Classical Move Enumeration Stays
-
-Move ENUMERATION (which squares can a knight reach?) stays classical even though predicates are quantum. The quantum part only answers "is this reachable square actually legal given the current superposition state?" Reasons:
-1. Move geometry (L-shape, adjacency) is fixed, not state-dependent
-2. Only blocking/check conditions depend on superposition
-3. Branch register width is determined at construction time
-
-### Decision 3: Compile Infrastructure Gets Numpy via Helper Function
-
-The numpy optimization is introduced as a helper function `_build_qubit_set()` called from the 3 existing sites in compile.py (lines 843-845, 885-887, 1154-1158) and adapted DAGNode in call_graph.py. This is a refactor, not a redesign:
-1. Extract `_build_qubit_set(quantum_args, capture_vtr=None) -> np.ndarray`
-2. In DAGNode, store `qubit_array` alongside `qubit_set` for numpy-fast overlap
-3. Update `build_overlap_edges`, `parallel_groups`, `merge_groups` to use `np.intersect1d`
-4. Keep `frozenset` on DAGNode for backward compatibility
-
-### Decision 4: Keep Python Int Bitmask
-
-Bitmask remains Python `int` (not numpy). Chess walk uses 100+ qubits; numpy uint64 would overflow. The bitmask construction loop is NOT the bottleneck -- the set operations (union, intersection) are. Optimize sets with numpy; leave bitmask as Python int.
-
-## Qubit Budget Analysis
-
-For KNK endgame at depth 1:
-
-| Register | Qubits | Notes |
-|----------|--------|-------|
-| White king board | 64 (8x8 qbool) | Full board representation |
-| Black king board | 64 | |
-| White knights board | 64 | |
-| Height register | 2 (depth 0,1) | One-hot encoding |
-| Branch registers | ~4 per level | ceil(log2(max_moves)) |
-| Validity ancillae | ~8 per level | One per possible child |
-| Predicate ancillae | ~3 per child eval | Compiled, auto-uncomputed |
-| **Total** | ~210 | Exceeds 17-qubit sim limit |
-
-**Testing strategies given 17-qubit simulation constraint:**
-1. Unit-test predicates on tiny boards (2x2, 3x3) within qubit budget
-2. Test walk structure with mock predicates using fewer qubits
-3. Verify circuit structure (gate counts, qubit wiring) without simulation
-4. Use matrix_product_state simulator for medium circuits if needed
-
-## Scaling Considerations
-
-| Scale | Architecture Adjustment |
-|-------|------------------------|
-| KNK (3 pieces) | Full 8x8 board qarrays; ~200 qubits; predicates check knight+king attacks |
-| KNNK (4 pieces) | Add second knight array; ~260 qubits; predicate unchanged |
-| General endgame | Board representation needs redesign (one qarray per piece type = O(types * 64)) |
-
-### Scaling Priorities
-
-1. **First bottleneck: apply_diffusion O(2^d_max)** -- For d_max = 8 (knight moves), the inner loop runs C(8,1)+...+C(8,8) = 255 iterations. Each emits multi-controlled gates. Mitigation: Hamming-weight-based rotation (future, not blocking v8.0 correctness).
-
-2. **Second bottleneck: Qubit count** -- Each child evaluation needs oracle forward + predicate + oracle inverse. Compiled predicates auto-uncompute ancillae, but validity qbools (d_max of them) persist until uncompute_children.
-
-## Suggested Build Order
-
-Build order follows dependency chain. Each phase is independently testable.
-
-### Phase A: Compile Infrastructure Numpy (no chess dependencies)
-1. `_build_qubit_set` helper in compile.py
-2. DAGNode dual storage (`qubit_array` + `qubit_set`)
-3. Numpy overlap in call_graph.py (`np.intersect1d` in build_overlap_edges, parallel_groups, merge_groups)
-4. Verification: run existing 186+ compile tests for equivalence
-
-### Phase B: Chess Predicates (depends on framework, not Phase A)
-1. `chess_predicates.py` module with sub-predicates
-2. Unit tests per predicate on known board positions
-3. Check detection correctness against classical attack tables
-
-### Phase C: Walk Integration (depends on Phase B)
-1. Modify `chess_encoding.py` for raw destination generation
-2. Modify `evaluate_children` to use `move_is_legal`
-3. Modify `prepare_walk_data` for raw destinations
-4. End-to-end test on small KNK position
-
-### Phase D: apply_diffusion Optimization (optional, depends on Phase C)
-1. Profile O(2^d_max) pattern enumeration
-2. If bottleneck: replace with Hamming-weight controlled rotation
+---
 
 ## Sources
 
-- Direct codebase analysis: `chess_walk.py`, `chess_encoding.py`, `compile.py`, `call_graph.py`, `walk.py`
-- PROJECT.md known limitations and key decisions
-- Montanaro 2015 (arXiv:1509.02374) for walk operator structure
+- Direct source code analysis of:
+  - `src/quantum_language/qint.pyx` (lines 804-882: `__enter__`/`__exit__`)
+  - `src/quantum_language/_core.pyx` (control state globals, accessors)
+  - `src/quantum_language/qint_arithmetic.pxi` (controlled gate dispatch)
+  - `src/quantum_language/qint_bitwise.pxi` (`__and__` implementation)
+  - `src/quantum_language/compile.py` (controlled variant, save/restore)
+  - `src/quantum_language/qarray.pyx` (2D support, dim= constructor)
+  - `src/quantum_language/walk.py` (V-gate CCRy workaround for nesting)
+  - `src/quantum_language/__init__.py` (`array()` API)
+  - `tests/python/test_nested_with_blocks.py` (xfail tests documenting limitation)
+  - `examples/chess_engine.py` (target chess engine style)
+  - `.planning/PROJECT.md` (known limitations, bug list)
 
 ---
-*Architecture research for: Quantum Chess Walk Rewrite v8.0*
-*Researched: 2026-03-08*
+*Architecture research for: Nested quantum controls, 2D qarray, chess engine compilation*
+*Researched: 2026-03-09*
