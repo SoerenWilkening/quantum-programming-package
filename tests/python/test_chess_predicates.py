@@ -1,6 +1,7 @@
-"""Tests for chess quantum predicates: piece-exists, no-friendly-capture, and classical equivalence.
+"""Tests for chess quantum predicates: piece-exists, no-friendly-capture, check detection, and classical equivalence.
 
-Unit tests for Phase 114 requirements PRED-01, PRED-02, and PRED-05.
+Unit tests for Phase 114 requirements PRED-01, PRED-02, PRED-05
+and Phase 115 requirement PRED-03.
 Statevector tests use 2x2 boards to stay within 17-qubit simulation budget.
 """
 
@@ -412,3 +413,236 @@ class TestScaling:
         pred = make_no_friendly_capture_predicate(2, 1, 8, 8)
         # Should not raise -- just building the circuit, no simulation
         pred(piece, friendly, result)
+
+
+# ---------------------------------------------------------------------------
+# Phase 115 -- Check Detection Predicate (PRED-03)
+# ---------------------------------------------------------------------------
+
+
+class TestCheckDetection:
+    """PRED-03: Check detection predicate returns correct result on 2x2 boards."""
+
+    def test_king_safe_no_enemies(self, clean_circuit):
+        """King at (0,0), no enemy pieces -> result |1> (safe)."""
+        from chess_encoding import _KING_OFFSETS
+        from chess_predicates import make_check_detection_predicate
+
+        king = make_small_board(2, 2, [(0, 0)])
+        enemy = make_small_board(2, 2, [])  # no enemies
+        result = ql.qbool()
+
+        # enemy_attacks: check king adjacency offsets
+        enemy_attacks = [(_KING_OFFSETS, "king")]
+        pred = make_check_detection_predicate("knight", 0, 0, 2, 2, enemy_attacks)
+        pred(king, enemy, result)
+
+        qasm_str = ql.to_openqasm()
+        result_qubit = int(result.qubits[63])
+        prob_one = _get_result_probability(qasm_str, result_qubit, target_value=1)
+        assert prob_one > 0.99, f"Expected result |1> (safe), got P(1)={prob_one:.4f}"
+
+    def test_king_in_check(self, clean_circuit):
+        """King at (0,0), enemy king at (1,0) with king adjacency -> result |0> (in check)."""
+        from chess_encoding import _KING_OFFSETS
+        from chess_predicates import make_check_detection_predicate
+
+        king = make_small_board(2, 2, [(0, 0)])
+        enemy = make_small_board(2, 2, [(1, 0)])  # enemy adjacent
+        result = ql.qbool()
+
+        enemy_attacks = [(_KING_OFFSETS, "king")]
+        # Knight move: check king's current position (0,0). Enemy at (1,0) is
+        # adjacent via offset (1,0) which is in _KING_OFFSETS -> in check.
+        pred = make_check_detection_predicate("knight", 0, 0, 2, 2, enemy_attacks)
+        pred(king, enemy, result)
+
+        qasm_str = ql.to_openqasm()
+        result_qubit = int(result.qubits[63])
+        prob_zero = _get_result_probability(qasm_str, result_qubit, target_value=0)
+        assert prob_zero > 0.99, f"Expected result |0> (in check), got P(0)={prob_zero:.4f}"
+
+    def test_enemy_at_non_attacking_square(self, clean_circuit):
+        """King at (0,0), enemy at (1,1) but only checking knight L-shape offsets -> safe."""
+        from chess_encoding import _KNIGHT_OFFSETS
+        from chess_predicates import make_check_detection_predicate
+
+        king = make_small_board(2, 2, [(0, 0)])
+        enemy = make_small_board(2, 2, [(1, 1)])  # enemy at (1,1)
+        result = ql.qbool()
+
+        # Only check knight attacks -- (1,1) is NOT a valid knight attack from (0,0)
+        # on a 2x2 board (all knight offsets go out of bounds from (0,0))
+        enemy_attacks = [(_KNIGHT_OFFSETS, "knight")]
+        pred = make_check_detection_predicate("knight", 0, 0, 2, 2, enemy_attacks)
+        pred(king, enemy, result)
+
+        qasm_str = ql.to_openqasm()
+        result_qubit = int(result.qubits[63])
+        prob_one = _get_result_probability(qasm_str, result_qubit, target_value=1)
+        assert prob_one > 0.99, (
+            f"Expected result |1> (safe, no knight attacks on 2x2), got P(1)={prob_one:.4f}"
+        )
+
+    def test_king_move_checks_destination(self, clean_circuit):
+        """King move (1,0): check destination (1,0) for attacks, not current (0,0).
+
+        King at (0,0), enemy at (1,1). King moves to (1,0).
+        Check if (1,1) attacks (1,0): with king adjacency offset (0,1), yes -> in check.
+        """
+        from chess_encoding import _KING_OFFSETS
+        from chess_predicates import make_check_detection_predicate
+
+        king = make_small_board(2, 2, [(0, 0)])
+        enemy = make_small_board(2, 2, [(1, 1)])  # enemy king at (1,1)
+        result = ql.qbool()
+
+        enemy_attacks = [(_KING_OFFSETS, "king")]
+        # moving_piece_type="king", dr=1, df=0 -> check destination (0+1, 0+0) = (1,0)
+        # Enemy at (1,1), offset (0,1) from (1,0) -> attacker at (1,1). In check.
+        pred = make_check_detection_predicate("king", 1, 0, 2, 2, enemy_attacks)
+        pred(king, enemy, result)
+
+        qasm_str = ql.to_openqasm()
+        result_qubit = int(result.qubits[63])
+        prob_zero = _get_result_probability(qasm_str, result_qubit, target_value=0)
+        assert prob_zero > 0.99, (
+            f"Expected result |0> (king moves into check), got P(0)={prob_zero:.4f}"
+        )
+
+    def test_knight_move_checks_current_pos(self, clean_circuit):
+        """Knight move: check king's current position for attacks.
+
+        King at (0,0), enemy king at (1,1) (adjacent via king offsets).
+        Knight move doesn't change which square to check -> still (0,0).
+        Enemy at (1,1) attacks (0,0) via offset (1,1) in _KING_OFFSETS -> in check.
+        """
+        from chess_encoding import _KING_OFFSETS
+        from chess_predicates import make_check_detection_predicate
+
+        king = make_small_board(2, 2, [(0, 0)])
+        enemy = make_small_board(2, 2, [(1, 1)])  # enemy king diagonal
+        result = ql.qbool()
+
+        enemy_attacks = [(_KING_OFFSETS, "king")]
+        # moving_piece_type="knight" -> check king's current pos (0,0)
+        # Enemy at (1,1), offset (1,1) from (0,0) -> attacker. In check.
+        pred = make_check_detection_predicate("knight", 2, 1, 2, 2, enemy_attacks)
+        pred(king, enemy, result)
+
+        qasm_str = ql.to_openqasm()
+        result_qubit = int(result.qubits[63])
+        prob_zero = _get_result_probability(qasm_str, result_qubit, target_value=0)
+        assert prob_zero > 0.99, f"Expected result |0> (king in check), got P(0)={prob_zero:.4f}"
+
+    def test_adjoint_roundtrip(self, clean_circuit):
+        """Forward + adjoint returns result qbool to |0>."""
+        from chess_encoding import _KING_OFFSETS
+        from chess_predicates import make_check_detection_predicate
+
+        king = make_small_board(2, 2, [(0, 0)])
+        enemy = make_small_board(2, 2, [])
+        result = ql.qbool()
+
+        enemy_attacks = [(_KING_OFFSETS, "king")]
+        pred = make_check_detection_predicate("knight", 0, 0, 2, 2, enemy_attacks)
+        pred(king, enemy, result)
+        pred.adjoint(king, enemy, result)
+
+        qasm_str = ql.to_openqasm()
+        result_qubit = int(result.qubits[63])
+        prob_zero = _get_result_probability(qasm_str, result_qubit, target_value=0)
+        assert prob_zero > 0.99, f"Expected result |0> after roundtrip, got P(0)={prob_zero:.4f}"
+
+
+class TestCheckDetectionClassical:
+    """Classical equivalence verification for check detection on 2x2."""
+
+    @staticmethod
+    def _classical_check_safe(
+        king_pos, enemy_positions, enemy_attacks, moving_piece_type, dr, df, board_rows, board_cols
+    ):
+        """Classical: is king safe after move?
+
+        For king moves: check if destination (kr+dr, kf+df) is attacked.
+        For knight moves: check if king's current position is attacked.
+        Returns True if safe (not in check).
+        """
+        kr, kf = king_pos
+        if moving_piece_type == "king":
+            check_r, check_f = kr + dr, kf + df
+            if not (0 <= check_r < board_rows and 0 <= check_f < board_cols):
+                return False  # destination off-board -> not a valid move
+        else:
+            check_r, check_f = kr, kf
+
+        for enemy_idx, (offsets, _label) in enumerate(enemy_attacks):
+            for adr, adf in offsets:
+                ar, af = check_r + adr, check_f + adf
+                if 0 <= ar < board_rows and 0 <= af < board_cols:
+                    if (ar, af) in enemy_positions[enemy_idx]:
+                        return False  # attacked!
+        return True
+
+    def test_classical_equivalence_2x2(self, clean_circuit):
+        """Representative configs on 2x2 board with single enemy, king adjacency attacks."""
+        from chess_encoding import _KING_OFFSETS
+        from chess_predicates import make_check_detection_predicate
+
+        rows, cols = 2, 2
+        enemy_attacks = [(_KING_OFFSETS, "king")]
+
+        # Test configs: (king_pos, enemy_squares, moving_piece_type, dr, df)
+        configs = [
+            # Knight moves -- check king's current pos
+            ((0, 0), [(1, 0)], "knight", 2, 1),  # adjacent enemy -> unsafe
+            ((0, 0), [], "knight", 2, 1),  # no enemy -> safe
+            ((1, 1), [(0, 0)], "knight", 2, 1),  # diagonal enemy -> unsafe
+            ((1, 0), [(0, 1)], "knight", 2, 1),  # diagonal enemy -> unsafe
+            # King moves -- check destination
+            ((0, 0), [(1, 1)], "king", 1, 0),  # dest (1,0), enemy (1,1) adj -> unsafe
+            ((0, 0), [], "king", 1, 0),  # dest (1,0), no enemy -> safe
+            ((0, 0), [(0, 1)], "king", 1, 0),  # dest (1,0), enemy (0,1) adj -> unsafe
+        ]
+
+        for king_pos, enemy_sq, mtype, dr, df in configs:
+            ql.circuit()
+            king = make_small_board(rows, cols, [king_pos])
+            enemy = make_small_board(rows, cols, enemy_sq)
+            result = ql.qbool()
+
+            pred = make_check_detection_predicate(mtype, dr, df, rows, cols, enemy_attacks)
+            pred(king, enemy, result)
+
+            qasm_str = ql.to_openqasm()
+            result_qubit = int(result.qubits[63])
+
+            enemy_sets = [set(map(tuple, enemy_sq))]
+            expected = self._classical_check_safe(
+                king_pos, enemy_sets, enemy_attacks, mtype, dr, df, rows, cols
+            )
+            expected_val = 1 if expected else 0
+            prob = _get_result_probability(qasm_str, result_qubit, target_value=expected_val)
+            assert prob > 0.99, (
+                f"check_safe mismatch: king={king_pos}, enemy={enemy_sq}, "
+                f"move=({mtype},{dr},{df}), expected={expected_val}, "
+                f"P({expected_val})={prob:.4f}"
+            )
+
+
+class TestScalingPhase115:
+    """Scaling test: 8x8 check detection circuit builds without error (no simulation)."""
+
+    def test_8x8_check_detection_builds(self, clean_circuit):
+        """8x8 board, king at (4,4), enemy at (6,5), king adjacency attacks -> circuit builds."""
+        from chess_encoding import _KING_OFFSETS
+        from chess_predicates import make_check_detection_predicate
+
+        king = make_small_board(8, 8, [(4, 4)])
+        enemy = make_small_board(8, 8, [(6, 5)])
+        result = ql.qbool()
+
+        enemy_attacks = [(_KING_OFFSETS, "king")]
+        pred = make_check_detection_predicate("knight", 2, 1, 8, 8, enemy_attacks)
+        # Should not raise -- just building the circuit, no simulation
+        pred(king, enemy, result)
