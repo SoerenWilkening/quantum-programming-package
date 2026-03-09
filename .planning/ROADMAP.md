@@ -252,11 +252,11 @@ Plans:
   3. End-to-end demo generates a valid quantum circuit for the chess walk on a KNK (king-knight-king) position with quantum legality evaluation
   4. All quantum logic in the demo uses standard ql constructs (with qbool:, operator overloading, @ql.compile, ql.array) -- no raw gate emission for application logic
   5. Demo produces circuit statistics (qubit count, gate count, depth) demonstrating the walk circuit is constructible
-**Plans**: TBD
+**Plans:** 2 plans
 
 Plans:
-- [ ] 116-01: TBD
-- [ ] 116-02: TBD
+- [ ] 116-01-PLAN.md — Chess_walk.py rewrite: quantum predicates, offset-based oracle, simplified walk_step
+- [ ] 116-02-PLAN.md — Demo rewrite and circuit-build-only tests for KNK depth-2 walk
 
 ## Progress
 
@@ -282,7 +282,7 @@ Phases execute in numeric order: 112 -> 113 -> 114 -> 115 -> 116
 | 113. Diffusion & Enum | 3/3 | Complete    | 2026-03-08 | - |
 | 114. Core Predicates | 2/2 | Complete    | 2026-03-08 | - |
 | 115. Check & Combined | 2/2 | Complete    | 2026-03-09 | - |
-| 116. Walk Integration | v8.0 | 0/TBD | Not started | - |
+| 116. Walk Integration | v8.0 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-02*
