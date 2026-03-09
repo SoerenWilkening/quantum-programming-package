@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v9.0
 milestone_name: Nested Controls & Chess Engine
-status: ready_to_plan
-stopped_at: null
-last_updated: "2026-03-09"
-last_activity: 2026-03-09 -- Roadmap created for v9.0
+status: planning
+stopped_at: Phase 117 context gathered
+last_updated: "2026-03-09T17:58:25.964Z"
+last_activity: 2026-03-09 -- Roadmap created for v9.0 (5 phases, 13 requirements)
 progress:
   total_phases: 5
   completed_phases: 0
@@ -72,9 +72,9 @@ See PROJECT.md Key Decisions table for full history.
 
 ## Session Continuity
 
-Last session: 2026-03-09
-Stopped at: Roadmap created for v9.0
-Resume file: None
+Last session: 2026-03-09T17:58:25.956Z
+Stopped at: Phase 117 context gathered
+Resume file: .planning/phases/117-control-stack-infrastructure/117-CONTEXT.md
 Resume action: /gsd:plan-phase 117
 
 ---
