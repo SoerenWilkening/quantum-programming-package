@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v8.0
 milestone_name: Quantum Chess Walk Rewrite
-status: in-progress
+status: completed
 stopped_at: Completed 116-02-PLAN.md
-last_updated: "2026-03-09T13:33:40.896Z"
-last_activity: 2026-03-09 -- Completed 116-01 (walk integration quantum predicates)
+last_updated: "2026-03-09T13:36:22.580Z"
+last_activity: 2026-03-09 -- Completed 116-02 (demo rewrite and tests)
 progress:
   total_phases: 5
   completed_phases: 5
   total_plans: 11
   completed_plans: 11
-  percent: 98
+  percent: 100
 ---
 
 # Project State
