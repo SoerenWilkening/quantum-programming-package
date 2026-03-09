@@ -7,17 +7,22 @@ helpers -- no QWalkTree class.
 
 Phase 104 Plan 01: Walk register infrastructure.
 Phase 104 Plan 02: Local diffusion operator with variable branching.
+Phase 116 Plan 01: Quantum predicate integration and offset-based oracle.
 """
 
 import math
 
 import numpy as np
 
-from chess_encoding import get_legal_moves_and_oracle
-from quantum_language._gates import emit_x
+import quantum_language as ql
+from chess_encoding import (
+    _KING_OFFSETS,
+    _KNIGHT_OFFSETS,
+    build_move_table,
+)
+from chess_predicates import make_combined_predicate
 from quantum_language.qint import qint
 from quantum_language.walk import (
-    _make_qbool_wrapper,
     _plan_cascade_ops,
     counting_diffusion_core,
 )
@@ -53,10 +58,10 @@ def create_height_register(max_depth):
     Returns
     -------
     qint
-        Height register with root qubit (MSB, qubits[63]) set via emit_x.
+        Height register with root qubit set to |1>.
     """
     h = qint(0, width=max_depth + 1)
-    emit_x(int(h.qubits[63]))  # Root = MSB
+    h ^= 1  # Set root bit (depth=max_depth maps to bit 0)
     return h
 
 
@@ -139,11 +144,68 @@ def underive_board_state(board_arrs, branch_regs, oracle_per_level, depth):
         oracle_per_level[level_idx].inverse(wk, bk, wn, branch_regs[level_idx])
 
 
+# Map piece_id to board_arrs index: (wk_arr, bk_arr, wn_arr)
+BOARD_KEYS = {"wk": 0, "bk": 1, "wn": 2}
+
+
+def _make_apply_move_from_table(move_table):
+    """Create a compiled oracle from an offset-based move table.
+
+    For each branch register value i, move_table[i] = (piece_id, dr, df).
+    The oracle enumerates all 64 possible source squares for each entry and
+    conditionally applies the move when branch == i AND piece at source.
+    Off-board destinations (r+dr, f+df outside 0..7) are skipped classically
+    (no gates emitted), implementing identity for invalid moves.
+
+    Parameters
+    ----------
+    move_table : list[tuple[str, int, int]]
+        Table of (piece_id, rank_delta, file_delta) triples from build_move_table.
+
+    Returns
+    -------
+    CompiledFunc
+        A @ql.compile(inverse=True) function with signature
+        (wk_arr, bk_arr, wn_arr, branch).
+    """
+    # Classical precomputation: per branch value, list valid (board_idx, src_r, src_f, dst_r, dst_f)
+    per_branch_specs = []
+    for piece_id, dr, df in move_table:
+        board_idx = BOARD_KEYS[piece_id]
+        specs = []
+        for r in range(8):
+            for f in range(8):
+                tr, tf = r + dr, f + df
+                if 0 <= tr < 8 and 0 <= tf < 8:
+                    specs.append((board_idx, r, f, tr, tf))
+        per_branch_specs.append(specs)
+
+    @ql.compile(inverse=True)
+    def apply_move(wk_arr, bk_arr, wn_arr, branch):
+        """Apply the i-th move to the board, conditioned on branch register value.
+
+        For each branch value i, iterates all valid source squares for that
+        entry's (piece_id, dr, df) and flips source off / destination on.
+        """
+        boards = [wk_arr, bk_arr, wn_arr]
+        for i, specs in enumerate(per_branch_specs):
+            if not specs:
+                continue  # All destinations off-board for this entry
+            cond = branch == i
+            with cond:
+                for board_idx, src_r, src_f, dst_r, dst_f in specs:
+                    ~boards[board_idx][src_r, src_f]
+                    ~boards[board_idx][dst_r, dst_f]
+
+    return apply_move
+
+
 def prepare_walk_data(wk_sq, bk_sq, wn_squares, max_depth):
     """Precompute move data for each level of the walk tree.
 
     Alternates side_to_move: white at level 0 (root's children), black at
-    level 1, white at level 2, etc.
+    level 1, white at level 2, etc. Uses build_move_table for all-moves
+    enumeration and make_combined_predicate for quantum legality checking.
 
     Parameters
     ----------
@@ -159,13 +221,61 @@ def prepare_walk_data(wk_sq, bk_sq, wn_squares, max_depth):
     Returns
     -------
     list[dict]
-        One dict per level with keys: moves, move_count, branch_width, apply_move.
+        One dict per level with keys: move_table, move_count, branch_width,
+        apply_move, predicates, entry_qarray_keys.
     """
     data = []
     for level in range(max_depth):
         side = "white" if level % 2 == 0 else "black"
-        level_data = get_legal_moves_and_oracle(wk_sq, bk_sq, wn_squares, side)
-        data.append(level_data)
+
+        # Build move table for this side
+        if side == "white":
+            move_table = build_move_table([("wk", "king"), ("wn", "knight")])
+            enemy_attacks = [(_KING_OFFSETS, "bk")]
+            n_friendly = 1  # one other friendly piece besides moving piece
+            n_enemy = 1
+        else:
+            move_table = build_move_table([("bk", "king")])
+            enemy_attacks = [(_KING_OFFSETS, "wk"), (_KNIGHT_OFFSETS, "wn")]
+            n_friendly = 0  # no other black pieces in KNK
+            n_enemy = 2
+
+        move_count = len(move_table)
+        branch_width = max(1, math.ceil(math.log2(max(move_count, 1))))
+
+        # Build one combined predicate per table entry
+        predicates = []
+        entry_qarray_keys = []
+        for piece_id, dr, df in move_table:
+            piece_type = "king" if piece_id in ("wk", "bk") else "knight"
+            pred = make_combined_predicate(
+                piece_type, dr, df, 8, 8, enemy_attacks, n_friendly, n_enemy
+            )
+            predicates.append(pred)
+
+            # Determine qarray key mappings for argument resolution
+            if side == "white":
+                if piece_id == "wk":
+                    keys = {"piece": "wk", "friendly": ["wn"], "king": "wk", "enemy": ["bk"]}
+                else:  # wn
+                    keys = {"piece": "wn", "friendly": ["wk"], "king": "wk", "enemy": ["bk"]}
+            else:
+                keys = {"piece": "bk", "friendly": [], "king": "bk", "enemy": ["wk", "wn"]}
+            entry_qarray_keys.append(keys)
+
+        # Build offset-based oracle
+        apply_move = _make_apply_move_from_table(move_table)
+
+        data.append(
+            {
+                "move_table": move_table,
+                "move_count": move_count,
+                "branch_width": branch_width,
+                "apply_move": apply_move,
+                "predicates": predicates,
+                "entry_qarray_keys": entry_qarray_keys,
+            }
+        )
     return data
 
 
@@ -278,36 +388,29 @@ def evaluate_children(
     """
     from quantum_language.qbool import qbool as alloc_qbool
 
-    bw = branch_reg.width
     wk, bk, wn = board_arrs
+    height_mask = 3 << (max_depth - depth)  # bits for depth and depth-1
 
     for i in range(d_max):
-        # (a) Encode child index i in branch register (MSB-first)
-        for bit in range(bw):
-            if (i >> (bw - 1 - bit)) & 1:
-                emit_x(int(branch_reg.qubits[64 - bw + bit]))
+        # (a) Encode child index i in branch register
+        branch_reg ^= i
 
         # (b) Flip height: depth -> depth-1 (move to child level)
-        emit_x(height_qubit(h_reg, depth, max_depth))
-        emit_x(height_qubit(h_reg, depth - 1, max_depth))
+        h_reg ^= height_mask
 
         # (c) Apply oracle to derive child board state
         oracle(wk, bk, wn, branch_reg)
 
-        # (d) Quantum validity predicate: allocate reject qbool,
-        # then set validity[i] = NOT reject.
+        # (d) Quantum validity predicate: validity[i] = NOT reject.
         # For the KNK endgame with precomputed structurally valid moves,
         # all children in the oracle are valid. The predicate is trivially
         # satisfied (reject = |0>, validity = |1>). The quantum predicate
         # is still necessary to support the variable-branching D_x pattern
         # where d(x) counts valid children via these ancillae.
         reject = alloc_qbool()
-        reject_qubit = int(reject.qubits[63])
-        validity_qubit = int(validity[i].qubits[63])
-        reject_ctrl = _make_qbool_wrapper(reject_qubit)
-        with reject_ctrl:
-            emit_x(validity_qubit)
-        emit_x(validity_qubit)  # Flip: validity=|1> means valid
+        with reject:
+            validity[i] ^= 1
+        validity[i] ^= 1  # Flip: validity=|1> means valid
 
         # (e) Uncompute predicate (adjoint of trivial predicate is identity)
 
@@ -315,13 +418,10 @@ def evaluate_children(
         oracle.inverse(wk, bk, wn, branch_reg)
 
         # (g) Undo height flip
-        emit_x(height_qubit(h_reg, depth - 1, max_depth))
-        emit_x(height_qubit(h_reg, depth, max_depth))
+        h_reg ^= height_mask
 
         # (h) Undo branch register encoding
-        for bit in range(bw):
-            if (i >> (bw - 1 - bit)) & 1:
-                emit_x(int(branch_reg.qubits[64 - bw + bit]))
+        branch_reg ^= i
 
 
 def uncompute_children(
@@ -354,42 +454,31 @@ def uncompute_children(
     """
     from quantum_language.qbool import qbool as alloc_qbool
 
-    bw = branch_reg.width
     wk, bk, wn = board_arrs
+    height_mask = 3 << (max_depth - depth)  # bits for depth and depth-1
 
     for i in reversed(range(d_max)):
         # Navigate to child i
-        for bit in range(bw):
-            if (i >> (bw - 1 - bit)) & 1:
-                emit_x(int(branch_reg.qubits[64 - bw + bit]))
-
-        emit_x(height_qubit(h_reg, depth, max_depth))
-        emit_x(height_qubit(h_reg, depth - 1, max_depth))
+        branch_reg ^= i
+        h_reg ^= height_mask
 
         # Re-apply oracle
         oracle(wk, bk, wn, branch_reg)
 
         # Re-evaluate predicate (trivial)
         reject = alloc_qbool()
-        reject_qubit = int(reject.qubits[63])
-        validity_qubit = int(validity[i].qubits[63])
 
         # Undo validity store (reverse order: X then CNOT)
-        emit_x(validity_qubit)
-        reject_ctrl = _make_qbool_wrapper(reject_qubit)
-        with reject_ctrl:
-            emit_x(validity_qubit)
+        validity[i] ^= 1
+        with reject:
+            validity[i] ^= 1
 
         # Uncompute oracle
         oracle.inverse(wk, bk, wn, branch_reg)
 
         # Undo navigation
-        emit_x(height_qubit(h_reg, depth - 1, max_depth))
-        emit_x(height_qubit(h_reg, depth, max_depth))
-
-        for bit in range(bw):
-            if (i >> (bw - 1 - bit)) & 1:
-                emit_x(int(branch_reg.qubits[64 - bw + bit]))
+        h_reg ^= height_mask
+        branch_reg ^= i
 
 
 # ---------------------------------------------------------------------------
