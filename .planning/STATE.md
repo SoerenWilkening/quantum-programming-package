@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v8.0
 milestone_name: Quantum Chess Walk Rewrite
 status: completed
-stopped_at: Phase 115 context gathered
-last_updated: "2026-03-09T12:16:45.939Z"
-last_activity: 2026-03-08 -- Completed 114-02 (no-friendly-capture predicate factory)
+stopped_at: Completed 115-02-PLAN.md (combined move legality predicate)
+last_updated: "2026-03-09T12:54:07.589Z"
+last_activity: 2026-03-09 -- Completed 115-02 (combined move legality predicate)
 progress:
   total_phases: 5
-  completed_phases: 3
-  total_plans: 7
-  completed_plans: 7
+  completed_phases: 4
+  total_plans: 9
+  completed_plans: 9
   percent: 100
 ---
 

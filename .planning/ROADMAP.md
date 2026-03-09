@@ -281,7 +281,7 @@ Phases execute in numeric order: 112 -> 113 -> 114 -> 115 -> 116
 | 112. Compile Infra Opt | 2/2 | Complete    | 2026-03-08 | - |
 | 113. Diffusion & Enum | 3/3 | Complete    | 2026-03-08 | - |
 | 114. Core Predicates | 2/2 | Complete    | 2026-03-08 | - |
-| 115. Check & Combined | 2/2 | Complete   | 2026-03-09 | - |
+| 115. Check & Combined | 2/2 | Complete    | 2026-03-09 | - |
 | 116. Walk Integration | v8.0 | 0/TBD | Not started | - |
 
 ---
