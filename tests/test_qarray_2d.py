@@ -192,7 +192,7 @@ class TestQarray2DErrorMessages:
         _c = ql.circuit()
         arr = ql.qarray([[1, 2], [3, 4]], width=8)
         q_idx = ql.qint(0, width=4)
-        with pytest.raises(TypeError, match="quantum indexing"):
+        with pytest.raises(TypeError, match="(?i)quantum indexing"):
             arr[q_idx, 0]
 
     def test_qint_index_not_notimplementederror(self):

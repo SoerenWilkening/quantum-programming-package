@@ -252,7 +252,25 @@ cdef class qarray:
         """
         if isinstance(key, int):
             if len(self._shape) > 1:
-                raise NotImplementedError("Row assignment for multi-dimensional arrays not yet supported")
+                # Row assignment for multi-dimensional arrays
+                if key < 0:
+                    key += self._shape[0]
+                if not 0 <= key < self._shape[0]:
+                    raise IndexError(f"Row index {key} out of bounds for array with {self._shape[0]} rows")
+                cols = self._shape[1]
+                start = key * cols
+                if isinstance(value, qarray):
+                    if len((<qarray>value)._elements) != cols:
+                        raise ValueError(
+                            f"Cannot assign {len((<qarray>value)._elements)} elements to row of length {cols}"
+                        )
+                    for i in range(cols):
+                        self._elements[start + i] = (<qarray>value)._elements[i]
+                else:
+                    # Broadcast scalar to all positions in the row
+                    for i in range(cols):
+                        self._elements[start + i] = value
+                return
             if key < 0:
                 key += len(self._elements)
             if not 0 <= key < len(self._elements):
@@ -454,6 +472,11 @@ cdef class qarray:
             return self.__getitem__(key[0])
 
         else:
+            # Check if any element in the key is a qint (quantum index)
+            if any(isinstance(k, qint) for k in key):
+                raise TypeError(
+                    "Quantum indexing with qint is not supported; use classical int indices"
+                )
             raise NotImplementedError(f"Complex slicing pattern not yet supported: {key}")
 
     def __repr__(self):
