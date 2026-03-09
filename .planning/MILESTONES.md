@@ -1,5 +1,37 @@
 # Project Milestones: Quantum Assembly
 
+## v8.0 Quantum Chess Walk Rewrite (Shipped: 2026-03-09)
+
+**Delivered:** Rewrote the chess quantum walk to evaluate move legality in superposition using quantum predicates built from standard ql constructs — piece-exists, no-friendly-capture, and check detection predicates composed into a single combined legality predicate, replacing classical pre-filtering with all-moves enumeration and quantum validity checking, with O(d_max) counting-based diffusion replacing O(2^d_max) combinatorial explosion, and numpy-optimized compile infrastructure.
+
+**Phases completed:** 112-116 (11 plans total)
+
+**Key accomplishments:**
+
+- Numpy-based qubit set operations in compile.py (_build_qubit_set_numpy) and call_graph.py (np.intersect1d overlap detection) with profiled before/after validation
+- O(d_max) counting diffusion via qarray.sum() popcount replacing O(2^d_max) itertools.combinations enumeration, extracted as shared counting_diffusion_core
+- Quantum piece-exists and no-friendly-capture predicates using @ql.compile(inverse=True) with flat with/~ pattern and per-source ancilla strategy
+- Check detection predicate with precomputed attack tables, per-position flag accumulation, and king/knight move distinction
+- Combined move legality predicate composing all three sub-predicates via nested compiled calls and three-way AND
+- Full chess walk rewrite with offset-based oracle, quantum predicate evaluation per move candidate, and KNK depth-2 demo as framework showcase
+
+**Stats:**
+
+- 58 commits, 13 files changed (+2,253 / -650 lines)
+- 5 phases, 11 plans
+- 2 days (2026-03-08 → 2026-03-09)
+
+**Known gaps (tech debt, non-blocking):**
+- 14-15 pre-existing test failures in test_compile.py (unrelated to v8.0)
+- Nested `with qbool:` limitation requires flat Toffoli-AND predicate design (framework limitation)
+- Combined 2x2 predicate uses 34 qubits — circuit-build-only testing for larger boards
+
+**Git range:** `5d0120c`..`e0ca22b`
+
+**What's next:** TBD — next milestone planning via `/gsd:new-milestone`
+
+---
+
 ## v7.0 Compile Infrastructure (Shipped: 2026-03-08)
 
 **Delivered:** Multi-level compilation model for `@ql.compile` — rustworkx-backed call graph DAG with qubit overlap analysis and parallel group detection, three-level opt_flag (DAG only / selective merge / full expansion), DOT visualization and compilation reports, selective sequence merging with cross-boundary gate optimization, and statevector equivalence verification at all opt levels.

@@ -2,7 +2,7 @@
 
 ## What This Is
 
-A quantum programming framework that enables writing quantum algorithms using standard programming constructs — operator overloading on variable-width quantum integers (qint, 1-64 bits) and quantum booleans (qbool), with Python's `with` statement implementing quantum conditionals. Operations compile to optimized quantum circuits via a C backend with Cython bindings. Supports dual arithmetic backends: QFT-based (phase rotations) and Toffoli-based (fault-tolerant, Clifford+T decomposable) with CDKM ripple-carry and Brent-Kung carry look-ahead adders, plus automatic depth/ancilla tradeoff selection. Includes Beauregard modular Toffoli arithmetic (add/sub/mul mod N) for Shor's algorithm building blocks, `@ql.compile` for multi-level function compilation with three opt levels (call graph DAG / selective merge / full expansion), gate capture/replay/optimization, parametric mode for compile-once-replay-many, and call graph analysis with DOT visualization. Grover's search with `ql.grover()` (lambda predicate oracles, adaptive BBHT search), quantum counting via `ql.count_solutions()`, iterative quantum amplitude estimation via `ql.amplitude_estimate()`, quantum walk primitives based on Montanaro 2015 backtracking speedup (QWalkTree with predicate-aware walk operators, variable branching, and iterative detection), circuit optimization, pixel-art circuit visualization scaling to 200+ qubits, T-count reporting, statistics, OpenQASM 3.0 export, and Qiskit-based verification.
+A quantum programming framework that enables writing quantum algorithms using standard programming constructs — operator overloading on variable-width quantum integers (qint, 1-64 bits) and quantum booleans (qbool), with Python's `with` statement implementing quantum conditionals. Operations compile to optimized quantum circuits via a C backend with Cython bindings. Supports dual arithmetic backends: QFT-based (phase rotations) and Toffoli-based (fault-tolerant, Clifford+T decomposable) with CDKM ripple-carry and Brent-Kung carry look-ahead adders, plus automatic depth/ancilla tradeoff selection. Includes Beauregard modular Toffoli arithmetic (add/sub/mul mod N) for Shor's algorithm building blocks, `@ql.compile` for multi-level function compilation with three opt levels (call graph DAG / selective merge / full expansion), gate capture/replay/optimization, parametric mode for compile-once-replay-many, and call graph analysis with DOT visualization. Grover's search with `ql.grover()` (lambda predicate oracles, adaptive BBHT search), quantum counting via `ql.count_solutions()`, iterative quantum amplitude estimation via `ql.amplitude_estimate()`, quantum walk primitives based on Montanaro 2015 backtracking speedup (QWalkTree with predicate-aware walk operators, variable branching, and iterative detection), chess quantum walk demo evaluating move legality in superposition via quantum predicates (piece-exists, no-friendly-capture, check detection) composed into combined legality checks using standard ql constructs, circuit optimization, pixel-art circuit visualization scaling to 200+ qubits, T-count reporting, statistics, OpenQASM 3.0 export, and Qiskit-based verification.
 
 ## Core Value
 
@@ -178,25 +178,16 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - ✓ Walk operators R_A/R_B with height-controlled diffusion cascade and compiled walk step U = R_B * R_A — v6.1
 - ✓ Manual walk demo with circuit stats and QWalkTree comparison script — v6.1
 
+- ✓ Numpy-based qubit set operations in compile.py and call_graph.py with profiled validation — v8.0
+- ✓ O(d_max) counting diffusion replacing O(2^d_max) combinatorial enumeration — v8.0
+- ✓ Quantum piece-exists predicate using @ql.compile(inverse=True) with with/~ pattern — v8.0
+- ✓ Quantum no-friendly-capture predicate with per-source ancilla and Toffoli AND — v8.0
+- ✓ Check detection predicate with precomputed attack tables and per-position flag accumulation — v8.0
+- ✓ Combined move legality predicate composing all sub-predicates via nested compiled calls — v8.0
+- ✓ Chess walk rewrite with quantum predicate evaluation replacing classical pre-filtering — v8.0
+- ✓ KNK depth-2 walk demo as framework showcase with circuit-build-only tests — v8.0
+
 ### Active
-
-## Current Milestone: v8.0 Quantum Chess Walk Rewrite
-
-**Goal:** Rewrite the chess quantum walk to evaluate move legality in superposition (knights + kings, including check detection), replacing classical pre-filtering with quantum predicates, and optimize compile infrastructure with numpy-based qubit set operations.
-
-**Target features:**
-- Quantum move generation for knights (8 destinations/square) and kings (8 destinations/square) in superposition
-- Quantum legality predicate: piece exists on source, target not same-color occupied, king not in check after move
-- Rewritten chess_walk.py using quantum predicates instead of classical move pre-filtering
-- Compile infrastructure optimization: numpy qubit set operations in compile.py/call_graph.py, reduce Python loop overhead
-
-**Completed (v7.0):**
-- ✓ Multi-level compilation: opt=1 (call graph DAG), opt=2 (selective merge), opt=3 (full expansion) — v7.0
-- ✓ CallGraphDAG with rustworkx PyDAG, qubit overlap edges, parallel group detection — v7.0
-- ✓ Per-node gate count, depth, T-count extraction with aggregate metrics — v7.0
-- ✓ DOT export and formatted compilation report for call graph visualization — v7.0
-- ✓ Selective sequence merging with cross-boundary gate optimization — v7.0
-- ✓ Statevector equivalence verification at all opt levels (186 test invocations) — v7.0
 
 **Deferred features (carry forward):**
 - Sparse circuit arrays (auto dense->sparse for large circuits) — SPARSE-01/02/03
@@ -217,6 +208,9 @@ Write quantum algorithms in natural programming style that compiles to efficient
 - Subspace optimization for walk operators — ADV-WALK-01
 - QPE-based detection with formal precision guarantees — ADV-WALK-03
 - CSP-to-predicate compiler (auto CNF to accept/reject) — ADV-WALK-04
+- Sliding piece move generation (bishops, rooks, queens) with ray-tracing circuits — PIECE-01
+- Special move rules (castling, en passant, pawn promotion) — PIECE-02
+- Compiled predicate caching for amortized cost across walk iterations — WADV-01
 - Piece value evaluation function (material counting) — EVAL-01
 - Minimax value accumulation across tree depth — EVAL-02
 - Classical Monte Carlo tree walk verification — VERIF-01/VERIF-02
@@ -237,7 +231,7 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 **Architecture:** Three-layer stateless design — C backend (gate primitives, circuit management, integer operations) -> Cython bindings -> Python frontend (qint/qbool classes, operator overloading). All functions take explicit parameters; no global state.
 
-**Current state:** v7.0 shipped — Multi-level `@ql.compile` with call graph DAG (opt=1), selective sequence merging (opt=2), and full expansion (opt=3). Full feature set: dual arithmetic backends (QFT/Toffoli with Toffoli default), `@ql.compile` with parametric mode and call graph analysis/DOT visualization, `ql.grover()`, `ql.amplitude_estimate()`, `ql.count_solutions()`, QWalkTree with `detect()`, manual walk operators (chess_encoding + chess_walk modules), pixel-art visualization, Clifford+T decomposition, cross-backend verification.
+**Current state:** v8.0 shipped — Chess quantum walk rewritten with quantum predicates evaluating move legality in superposition. Full feature set: dual arithmetic backends (QFT/Toffoli with Toffoli default), `@ql.compile` with parametric mode, multi-level compilation (call graph DAG / selective merge / full expansion), `ql.grover()`, `ql.amplitude_estimate()`, `ql.count_solutions()`, QWalkTree with `detect()`, chess walk with quantum legality predicates (piece-exists, no-friendly-capture, check detection), O(d_max) counting diffusion, pixel-art visualization, Clifford+T decomposition, cross-backend verification.
 
 **Codebase:**
 - ~1,059,000 lines of code (604K C, 395K Python, 60K Cython)
@@ -414,4 +408,17 @@ Write quantum algorithms in natural programming style that compiles to efficient
 | Board qarrays separate from mega-register | Total qubit count exceeds 64-qubit qint limit | ✓ Good — multi-arg compile pattern |
 
 ---
-*Last updated: 2026-03-08 after v7.0 milestone*
+| Numpy qubit_set with negligible perf delta | Architectural consistency over raw speed at current scale | ✓ Good — centralized _build_qubit_set_numpy |
+| DAGNode dual-storage (frozenset + numpy) | API compat + fast overlap via np.intersect1d | ✓ Good — backward compatible |
+| Counting diffusion via qarray.sum() popcount | O(d_max) replaces O(2^d_max) combinatorial enumeration | ✓ Good — scales to 100+ children |
+| .adjoint() over .inverse() for predicates | Ancilla-free reversal, no forward tracking needed | ✓ Good — clean predicate uncomputation |
+| & operator for Toffoli AND (not nested with) | Framework `with qbool:` cannot nest — & gives Toffoli | ✓ Good — works around framework limitation |
+| Per-source ancilla in no-friendly-capture | Avoids & operator ancilla-reuse interference in loops | ✓ Good — correct for all board sizes |
+| Per-position attack_flag in check detection | Prevents ancilla overflow on large attack tables | ✓ Good — scalable check evaluation |
+| Nested @ql.compile for sub-predicate composition | Sub-predicates compose without inlining logic | ✓ Good — modular predicate design |
+| Offset-based oracle (all 64 src squares) | Classical off-board filtering per branch value | ✓ Good — covers full board |
+| One combined predicate per move table entry | piece_type varies within white levels | ✓ Good — correct per-move evaluation |
+| MAX_DEPTH=2 for KNK demo | White move + black response, tractable circuit size | ✓ Good — demonstrates full walk |
+
+---
+*Last updated: 2026-03-09 after v8.0 milestone*

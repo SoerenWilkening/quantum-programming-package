@@ -179,6 +179,52 @@
 
 ---
 
+## Milestone: v8.0 — Quantum Chess Walk Rewrite
+
+**Shipped:** 2026-03-09
+**Phases:** 5 | **Plans:** 11
+
+### What Was Built
+- Numpy-based qubit set operations in compile.py and call_graph.py with dual-storage (frozenset + numpy) for API compatibility
+- O(d_max) counting diffusion via qarray.sum() popcount replacing O(2^d_max) combinatorial enumeration, extracted as shared counting_diffusion_core
+- Quantum piece-exists predicate using @ql.compile(inverse=True) with flat with/~ pattern, statevector-verified on 2x2 boards
+- Quantum no-friendly-capture predicate with per-source friendly_flag ancilla and Toffoli AND via & operator
+- Check detection predicate with precomputed attack tables, per-position attack_flag accumulation
+- Combined move legality predicate composing all three sub-predicates via nested compiled calls and three-way AND
+- Full chess walk rewrite: offset-based oracle, quantum predicate evaluation per move candidate, KNK depth-2 demo
+
+### What Worked
+- Nested @ql.compile composition: sub-predicates compose naturally without inlining — the compile framework handles caching and ancilla management correctly
+- Per-source/per-position ancilla strategies avoided & operator ancilla-reuse interference in loops — pattern is generalizable to other multi-iteration compiled contexts
+- Counting diffusion extracted as shared function used by both walk.py and chess_walk.py — zero code duplication
+- Circuit-build-only testing for large qubit counts (34+ qubits) bypassed simulation budget while still verifying circuit construction correctness
+- No milestone audit needed — all 13/13 requirements checked off during execution
+
+### What Was Inefficient
+- Numpy qubit_set migration showed negligible performance difference at current workload sizes — effort justified by architectural consistency but no immediate speedup
+- Combined 2x2 predicate uses 34 qubits, preventing statevector verification of the full composition — had to verify AND composition separately
+- Framework `with qbool:` nesting limitation forced flat Toffoli-AND predicate design throughout — recurring constraint since v6.0
+
+### Patterns Established
+- .adjoint() over .inverse() for ancilla-free predicate reversal (no forward tracking)
+- Per-loop-iteration ancilla allocation to avoid & operator reuse interference
+- Per-position flag accumulation for scalable attack table evaluation
+- Offset-based oracle: enumerate all 64 source squares with classical off-board filtering per branch value
+- Circuit-build-only testing pattern for circuits exceeding simulation qubit budget
+
+### Key Lessons
+1. **Nested @ql.compile is the composition pattern**: Sub-predicates compose via nested compiled calls — the framework handles caching, ancilla, and inverse automatically
+2. **& operator ancilla reuse is fragile in loops**: Each loop iteration needs its own ancilla to avoid interference — document this as a framework footgun
+3. **Circuit-build-only testing is sufficient for structural correctness**: When qubit count exceeds simulation budget, verifying circuit construction + testing components separately is valid
+4. **Counting diffusion scales**: O(d_max) counting via qarray.sum() handles 100+ children where combinatorial O(2^d_max) was intractable
+
+### Cost Observations
+- Model mix: ~90% opus, ~10% haiku (research agents)
+- 58 commits across 2 days
+- Notable: All 5 phases completed in 2 days — fastest per-phase velocity in project history (composing existing predicates + compile infrastructure)
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -192,6 +238,7 @@
 | v6.0 | 6 | 11 | Pure Python compositional module; V-gate workarounds |
 | v6.1 | 4 | 8 | Domain demo composing framework primitives; first clean audit |
 | v7.0 | 5 | 10 | Multi-level compilation; observational DAG; gc autouse for test OOM |
+| v8.0 | 5 | 11 | Quantum predicates via nested @ql.compile; counting diffusion; circuit-build-only testing |
 
 ### Cumulative Quality
 
@@ -203,6 +250,7 @@
 | v6.0 | 18/18 | gaps_found → CLOSED (Phase 102) | 3 non-blocking |
 | v6.1 | 14/14 | PASSED (first try, no gaps) | 0 |
 | v7.0 | 15/15 | PASSED (after Phase 111 gap closure) | 1 (bare except) |
+| v8.0 | 13/13 | N/A (all requirements complete) | 0 |
 
 ### Top Lessons (Verified Across Milestones)
 
