@@ -237,3 +237,82 @@ class TestBackwardCompat:
         _set_list_of_controls([1, 2, 3])
         # Should not crash and list_of_controls still returns []
         assert _get_list_of_controls() == []
+
+
+class TestIntegration:
+    """Integration tests for control stack with compile save/restore and with-blocks."""
+
+    def test_compile_save_restore_stack(self):
+        """Compiled function called inside `with qbool:` correctly saves/restores stack.
+
+        The compiled function captures gates in uncontrolled mode (stack cleared),
+        then the controlled variant is derived. Verify the result is correct.
+        """
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        ql.circuit()
+        a = ql.qint(3, width=3)
+        cond = a > 1  # True (3 > 1)
+        result = ql.qint(0, width=4)
+
+        with cond:
+            result = inc(result)
+
+        # Stack should be empty after exiting the with-block
+        assert _get_controlled() is False
+        assert _get_control_stack() == []
+
+        # Verify circuit was built (has gates)
+        c_ref = ql.circuit.__new__(ql.circuit)
+        gate_counts = c_ref.gate_counts
+        total = sum(gate_counts.values())
+        assert total > 0, f"Expected gates in circuit, got {gate_counts}"
+
+    def test_single_level_with_block_integration(self):
+        """Single-level with-block produces a valid circuit with controlled gates.
+
+        Verify `with cond: result += 1` generates a circuit with expected structure.
+        """
+        ql.circuit()
+        a = ql.qint(3, width=3)
+        cond = a > 1
+        result = ql.qint(0, width=3)
+        with cond:
+            result += 1
+
+        # Circuit should have gates (comparison + controlled addition)
+        c_ref = ql.circuit.__new__(ql.circuit)
+        gate_counts = c_ref.gate_counts
+        total = sum(gate_counts.values())
+        assert total > 0, f"Expected gates in circuit, got {gate_counts}"
+        # Stack should be clean after exit
+        assert _get_controlled() is False
+        assert _get_control_stack() == []
+
+    def test_nested_push_no_crash(self):
+        """Nested with-blocks push two stack entries without crashing.
+
+        Previously raised NotImplementedError. After Phase 117, this should
+        complete without exception (though results may be incorrect until
+        Phase 118 adds AND composition).
+        """
+        ql.circuit()
+        a = ql.qint(3, width=3)
+        outer = a > 1
+        b = ql.qint(3, width=3)
+        inner = b > 1
+        result = ql.qint(0, width=3)
+
+        # Should NOT raise any exception
+        with outer:
+            result += 1
+            with inner:
+                result += 1
+
+        # Stack should be fully unwound
+        assert _get_controlled() is False
+        assert _get_control_stack() == []

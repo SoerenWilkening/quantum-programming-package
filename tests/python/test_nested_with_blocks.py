@@ -5,10 +5,10 @@ Verifies behavior of nested `with qbool:` blocks:
 - Outer-only operations should execute when outer is True regardless of inner
 - When outer is False, nothing should execute (including inner block)
 
-Current limitation: Nested with-blocks raise NotImplementedError because
-`__enter__` performs `_control_bool &= self` which calls `__and__`, and
-controlled quantum-quantum AND is not yet implemented. All nested tests
-are marked xfail to document this limitation.
+Phase 117 status: Nested with-blocks push stack entries (no longer raise
+NotImplementedError), but lack AND composition -- only the inner control
+qubit gates inner operations. Phase 118 will add AND-ancilla composition.
+All nested tests are marked xfail (strict=False) to document this.
 
 Single-level conditional tests (which DO work) are included as regression
 baselines to ensure the non-nested path remains functional.
@@ -135,19 +135,19 @@ class TestSingleLevelConditional:
 class TestNestedWithBlocks:
     """Tests for 2-level nested quantum conditionals.
 
-    Known limitation: Nested with-blocks currently raise NotImplementedError
-    because __enter__ performs _control_bool &= self, which calls __and__,
-    and controlled quantum-quantum AND is not yet implemented.
+    Phase 117 status: Nested with-blocks now push two stack entries
+    (no longer raise NotImplementedError), but only the inner control
+    qubit is used for gating (no AND composition yet). This means inner
+    operations are controlled on the inner condition only, not both.
 
-    All tests are marked xfail to document this limitation. When controlled
-    QQ AND is implemented, these tests will start passing and should have
-    their xfail markers removed.
+    Phase 118 will add AND-ancilla composition so inner operations are
+    controlled on (outer AND inner). Until then, tests may produce wrong
+    results and are marked xfail with strict=False.
     """
 
     @pytest.mark.xfail(
-        raises=NotImplementedError,
-        reason="Nested with-blocks require controlled QQ AND (not yet implemented)",
-        strict=True,
+        reason="Phase 117: nested with-blocks push stack entries but lack AND composition (Phase 118)",
+        strict=False,
     )
     def test_nested_both_true(self):
         """Both outer and inner conditions True.
@@ -178,9 +178,8 @@ class TestNestedWithBlocks:
         assert actual == 3, f"Expected 3 (1+2), got {actual}"
 
     @pytest.mark.xfail(
-        raises=NotImplementedError,
-        reason="Nested with-blocks require controlled QQ AND (not yet implemented)",
-        strict=True,
+        reason="Phase 117: nested with-blocks push stack entries but lack AND composition (Phase 118)",
+        strict=False,
     )
     def test_nested_outer_true_inner_false(self):
         """Outer True, inner False: only outer-gated ops execute.
@@ -211,9 +210,8 @@ class TestNestedWithBlocks:
         assert actual == 1, f"Expected 1 (outer only), got {actual}"
 
     @pytest.mark.xfail(
-        raises=NotImplementedError,
-        reason="Nested with-blocks require controlled QQ AND (not yet implemented)",
-        strict=True,
+        reason="Phase 117: nested with-blocks push stack entries but lack AND composition (Phase 118)",
+        strict=False,
     )
     def test_nested_outer_false_inner_true(self):
         """Outer False blocks everything including inner block.
@@ -244,9 +242,8 @@ class TestNestedWithBlocks:
         assert actual == 0, f"Expected 0 (outer blocks all), got {actual}"
 
     @pytest.mark.xfail(
-        raises=NotImplementedError,
-        reason="Nested with-blocks require controlled QQ AND (not yet implemented)",
-        strict=True,
+        reason="Phase 117: nested with-blocks push stack entries but lack AND composition (Phase 118)",
+        strict=False,
     )
     def test_nested_both_false(self):
         """Both conditions False: no operations execute.
@@ -277,9 +274,8 @@ class TestNestedWithBlocks:
         assert actual == 0, f"Expected 0 (both false), got {actual}"
 
     @pytest.mark.xfail(
-        raises=NotImplementedError,
-        reason="Nested with-blocks require controlled QQ AND (not yet implemented)",
-        strict=True,
+        reason="Phase 117: nested with-blocks push stack entries but lack AND composition (Phase 118)",
+        strict=False,
     )
     def test_nested_subtraction(self):
         """Nested conditional subtraction: both True.
@@ -310,9 +306,8 @@ class TestNestedWithBlocks:
         assert actual == 1, f"Expected 1 (3-1-1), got {actual}"
 
     @pytest.mark.xfail(
-        raises=NotImplementedError,
-        reason="Nested with-blocks require controlled QQ AND (not yet implemented)",
-        strict=True,
+        reason="Phase 117: nested with-blocks push stack entries but lack AND composition (Phase 118)",
+        strict=False,
     )
     def test_nested_assignment_in_inner_only(self):
         """Arithmetic only in inner block: both True.
