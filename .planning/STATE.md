@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-08)
 
 **Core value:** Write quantum algorithms in natural programming style that compiles to efficient, memory-optimized quantum circuits.
-**Current focus:** v8.0 Quantum Chess Walk Rewrite -- Phase 114
+**Current focus:** v8.0 Quantum Chess Walk Rewrite -- Phase 115
 
 ## Current Position
 
-Phase: 114 of 116 (Core Quantum Predicates)
-Plan: 2 of 2 complete
-Status: Phase 114 complete
-Last activity: 2026-03-08 -- Completed 114-02 (no-friendly-capture predicate factory)
+Phase: 115 of 116 (Check Detection & Combined Predicate)
+Plan: 1 of 2 complete
+Status: In progress
+Last activity: 2026-03-09 -- Completed 115-01 (check detection predicate factory)
 
-Progress: [##########] 100%
+Progress: [#####-----] 50%
 
 ## Performance Metrics
 
@@ -81,6 +81,7 @@ Recent decisions affecting current work:
 - [Phase 114]: Used .adjoint() instead of .inverse() for ancilla-free predicate reversal
 - [Phase 114]: Nested with qbool raises NotImplementedError; use & operator for Toffoli AND instead
 - [Phase 114]: Per-source friendly_flag ancilla avoids & operator ancilla-reuse interference in loops
+- [Phase 115]: Per-position attack_flag accumulation instead of per-attacker enemy_flag to avoid & operator ancilla overflow on large attack tables
 
 ### Blockers/Concerns
 
@@ -92,10 +93,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-09T12:16:45.921Z
-Stopped at: Phase 115 context gathered
-Resume file: .planning/phases/115-check-detection-combined-predicate/115-CONTEXT.md
-Resume action: Plan Phase 115 (check detection)
+Last session: 2026-03-09T12:43:20Z
+Stopped at: Completed 115-01-PLAN.md (check detection predicate)
+Resume file: .planning/phases/115-check-detection-combined-predicate/115-02-PLAN.md
+Resume action: Execute 115-02 (combined predicate)
 
 ---
 *State updated: 2026-03-08 -- 113-03 complete (chess_walk.py shared counting diffusion)*

@@ -11,7 +11,7 @@ Requirements for the Quantum Chess Walk Rewrite milestone. The chess walk serves
 
 - [x] **PRED-01**: Quantum piece-exists predicate checks whether a specific piece type occupies a source square in superposition using `with` conditional and qarray element access
 - [x] **PRED-02**: Quantum no-friendly-capture predicate rejects moves where target square is occupied by same-color piece, using `with` conditional on board qarray elements
-- [ ] **PRED-03**: Quantum check detection predicate verifies king is not in check after a move using pre-computed attack tables (knight L-shapes + king adjacency) evaluated via `with` conditionals on board qarray
+- [x] **PRED-03**: Quantum check detection predicate verifies king is not in check after a move using pre-computed attack tables (knight L-shapes + king adjacency) evaluated via `with` conditionals on board qarray
 - [ ] **PRED-04**: Combined move legality predicate composes piece-exists, no-friendly-capture, and check detection using standard `with qbool:` conditional nesting and boolean operators
 - [x] **PRED-05**: All predicates use `@ql.compile(inverse=True)` for automatic ancilla uncomputation and compiled replay
 
@@ -59,7 +59,7 @@ Deferred to future milestones.
 |-------------|-------|--------|
 | PRED-01 | Phase 114 | Complete |
 | PRED-02 | Phase 114 | Complete |
-| PRED-03 | Phase 115 | Pending |
+| PRED-03 | Phase 115 | Complete |
 | PRED-04 | Phase 115 | Pending |
 | PRED-05 | Phase 114 | Complete |
 | WALK-01 | Phase 113 | Complete |

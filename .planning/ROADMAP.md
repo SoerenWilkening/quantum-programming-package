@@ -236,7 +236,7 @@ Plans:
   2. Combined move legality predicate composes piece-exists, no-friendly-capture, and check detection using standard `with qbool:` conditional nesting and boolean operators
   3. Combined predicate returns a single qbool indicating full move legality, usable as a validity flag for walk branching
   4. All predicates verified correct against classical equivalents on small boards within 17-qubit simulation limit
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 - [ ] 115-01-PLAN.md — Check detection predicate factory with attack table precomputation and statevector tests
@@ -281,7 +281,7 @@ Phases execute in numeric order: 112 -> 113 -> 114 -> 115 -> 116
 | 112. Compile Infra Opt | 2/2 | Complete    | 2026-03-08 | - |
 | 113. Diffusion & Enum | 3/3 | Complete    | 2026-03-08 | - |
 | 114. Core Predicates | 2/2 | Complete    | 2026-03-08 | - |
-| 115. Check & Combined | v8.0 | 0/2 | Not started | - |
+| 115. Check & Combined | 1/2 | In Progress|  | - |
 | 116. Walk Integration | v8.0 | 0/TBD | Not started | - |
 
 ---
