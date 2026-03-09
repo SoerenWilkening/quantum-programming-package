@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-03-08)
 ## Current Position
 
 Phase: 115 of 116 (Check Detection & Combined Predicate)
-Plan: 1 of 2 complete
-Status: In progress
-Last activity: 2026-03-09 -- Completed 115-01 (check detection predicate factory)
+Plan: 2 of 2 complete
+Status: completed
+Last activity: 2026-03-09 -- Completed 115-02 (combined move legality predicate)
 
-Progress: [#####-----] 50%
+Progress: [##########] 100%
 
 ## Performance Metrics
 
@@ -82,6 +82,8 @@ Recent decisions affecting current work:
 - [Phase 114]: Nested with qbool raises NotImplementedError; use & operator for Toffoli AND instead
 - [Phase 114]: Per-source friendly_flag ancilla avoids & operator ancilla-reuse interference in loops
 - [Phase 115]: Per-position attack_flag accumulation instead of per-attacker enemy_flag to avoid & operator ancilla overflow on large attack tables
+- [Phase 115]: Nested @ql.compile calls work for sub-predicate composition -- no need to inline sub-predicate logic
+- [Phase 115]: Combined 2x2 predicate uses 34 qubits -- circuit-build-only testing + separate AND composition verification
 
 ### Blockers/Concerns
 
@@ -93,10 +95,10 @@ Recent decisions affecting current work:
 
 ## Session Continuity
 
-Last session: 2026-03-09T12:43:20Z
-Stopped at: Completed 115-01-PLAN.md (check detection predicate)
-Resume file: .planning/phases/115-check-detection-combined-predicate/115-02-PLAN.md
-Resume action: Execute 115-02 (combined predicate)
+Last session: 2026-03-09T12:50:09Z
+Stopped at: Completed 115-02-PLAN.md (combined move legality predicate)
+Resume file: .planning/phases/116-walk-integration/116-01-PLAN.md
+Resume action: Execute Phase 116 (walk integration)
 
 ---
 *State updated: 2026-03-08 -- 113-03 complete (chess_walk.py shared counting diffusion)*

@@ -175,7 +175,7 @@
 - [x] **Phase 112: Compile Infrastructure Optimization** - Numpy-based qubit set operations in compile.py and call_graph.py with profiled before/after validation (completed 2026-03-08)
 - [x] **Phase 113: Diffusion Redesign & Move Enumeration** - Arithmetic counting circuit replacing combinatorial diffusion explosion, plus all-moves enumeration table (completed 2026-03-08)
 - [x] **Phase 114: Core Quantum Predicates** - Piece-exists and no-friendly-capture predicates using standard ql constructs with @ql.compile(inverse=True) (completed 2026-03-08)
-- [ ] **Phase 115: Check Detection & Combined Predicate** - King-safety predicate via attack tables and combined move legality predicate composing all conditions
+- [x] **Phase 115: Check Detection & Combined Predicate** - King-safety predicate via attack tables and combined move legality predicate composing all conditions (completed 2026-03-09)
 - [ ] **Phase 116: Walk Integration & Demo** - Full walk rewrite replacing classical pre-filtering with quantum predicates, end-to-end demo as framework showcase
 
 ## Phase Details
@@ -236,7 +236,7 @@ Plans:
   2. Combined move legality predicate composes piece-exists, no-friendly-capture, and check detection using standard `with qbool:` conditional nesting and boolean operators
   3. Combined predicate returns a single qbool indicating full move legality, usable as a validity flag for walk branching
   4. All predicates verified correct against classical equivalents on small boards within 17-qubit simulation limit
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [ ] 115-01-PLAN.md — Check detection predicate factory with attack table precomputation and statevector tests
@@ -281,7 +281,7 @@ Phases execute in numeric order: 112 -> 113 -> 114 -> 115 -> 116
 | 112. Compile Infra Opt | 2/2 | Complete    | 2026-03-08 | - |
 | 113. Diffusion & Enum | 3/3 | Complete    | 2026-03-08 | - |
 | 114. Core Predicates | 2/2 | Complete    | 2026-03-08 | - |
-| 115. Check & Combined | 1/2 | In Progress|  | - |
+| 115. Check & Combined | 2/2 | Complete   | 2026-03-09 | - |
 | 116. Walk Integration | v8.0 | 0/TBD | Not started | - |
 
 ---
