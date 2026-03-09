@@ -189,6 +189,16 @@ Write quantum algorithms in natural programming style that compiles to efficient
 
 ### Active
 
+**Current Milestone: v9.0 Nested Controls & Chess Engine**
+
+**Goal:** Enable arbitrary-depth nested `with qbool:` blocks via Toffoli AND control composition, fix 2D qarray support, and rewrite the chess engine in readable natural-programming style that compiles with `ql.compile(opt=1)`.
+
+**Target features:**
+- Nested `with` blocks with Toffoli AND control composition (arbitrary depth)
+- 2D qarray support (`ql.qarray(dim=(8,8), dtype=ql.qbool)`)
+- Chess engine rewrite in readable format matching examples/chess_engine.py style
+- Circuit-build-only compilation via `ql.compile(opt=1)`
+
 **Deferred features (carry forward):**
 - Sparse circuit arrays (auto dense->sparse for large circuits) — SPARSE-01/02/03
 - Resource estimation for compiled functions — ADV-01
