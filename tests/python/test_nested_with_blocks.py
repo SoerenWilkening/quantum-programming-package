@@ -344,3 +344,251 @@ class TestNestedWithBlocks:
         with pytest.raises(TypeError, match="qbool.*1-bit"):
             with x:
                 pass
+
+
+class TestThreeLevelNesting:
+    """Tests for 3+ level nested quantum conditionals (CTRL-01 arbitrary depth).
+
+    Phase 118 AND-composition chains: at depth N, each __enter__ calls
+    _toffoli_and(current_ctrl, self) to produce an AND-ancilla that becomes
+    the active control. 3-level nesting produces 2 AND-ancillas (triply-
+    controlled operations). 4-level nesting produces 3 AND-ancillas.
+
+    All tests use qbool(True/False) conditions and 2-bit result registers
+    to stay well under 17-qubit simulation limit.
+
+    Qubit budgets:
+    - 3-level: 3 conds + 2 result + 2 AND-ancillas = 7 qubits
+    - 4-level: 4 conds + 2 result + 3 AND-ancillas = 9 qubits
+    """
+
+    def test_three_level_all_true(self):
+        """3 nested with-blocks, all True.
+
+        c1=True, c2=True, c3=True
+        Outer: result += 1; innermost: result += 2
+        Expected: 3 (1 + 2)
+        Qubits: 3 conds + 2 result + 2 AND = 7
+        """
+        gc.collect()
+        ql.circuit()
+        c1 = ql.qbool(True)
+        c2 = ql.qbool(True)
+        c3 = ql.qbool(True)
+        result = ql.qint(0, width=2)
+        with c1:
+            result += 1
+            with c2:
+                with c3:
+                    result += 2
+
+        result_start = result.allocated_start
+        result_width = result.width
+        qasm = ql.to_openqasm()
+        _keepalive = [c1, c2, c3, result]
+
+        num_qubits = _get_num_qubits(qasm)
+        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
+        assert actual == 3, f"Expected 3 (1+2), got {actual}"
+
+    def test_three_level_outer_false(self):
+        """3 nested with-blocks, outer False blocks everything.
+
+        c1=False, c2=True, c3=True
+        Outer blocks all ops. Expected: 0
+        """
+        gc.collect()
+        ql.circuit()
+        c1 = ql.qbool(False)
+        c2 = ql.qbool(True)
+        c3 = ql.qbool(True)
+        result = ql.qint(0, width=2)
+        with c1:
+            result += 1
+            with c2:
+                with c3:
+                    result += 2
+
+        result_start = result.allocated_start
+        result_width = result.width
+        qasm = ql.to_openqasm()
+        _keepalive = [c1, c2, c3, result]
+
+        num_qubits = _get_num_qubits(qasm)
+        actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
+        assert actual == 0, f"Expected 0 (outer blocks all), got {actual}"
+
+    def test_three_level_middle_false(self):
+        """3 nested with-blocks, middle False blocks inner.
+
+        c1=True, c2=False, c3=True
+        Outer arithmetic executes, middle and inner blocked.
+        with c1: result += 1; with c2: with c3: result += 2
+        Expected: 1 (only outer op)
+        """
+        gc.collect()
+        ql.circuit()
+        c1 = ql.qbool(True)
+        c2 = ql.qbool(False)
+        c3 = ql.qbool(True)
+        result = ql.qint(0, width=2)
+        with c1:
+            result += 1
+            with c2:
+                with c3:
+                    result += 2
+
+        result_start = result.allocated_start
+        result_width = result.width
+        qasm = ql.to_openqasm()
+        _keepalive = [c1, c2, c3, result]
+
+        num_qubits = _get_num_qubits(qasm)
+        actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
+        assert actual == 1, f"Expected 1 (outer only, middle blocks inner), got {actual}"
+
+    def test_three_level_inner_false(self):
+        """3 nested with-blocks, innermost False.
+
+        c1=True, c2=True, c3=False
+        with c1: result += 1; with c2: result += 1; with c3: result += 1
+        Expected: 2 (outer + middle, innermost blocked)
+        """
+        gc.collect()
+        ql.circuit()
+        c1 = ql.qbool(True)
+        c2 = ql.qbool(True)
+        c3 = ql.qbool(False)
+        result = ql.qint(0, width=2)
+        with c1:
+            result += 1
+            with c2:
+                result += 1
+                with c3:
+                    result += 1
+
+        result_start = result.allocated_start
+        result_width = result.width
+        qasm = ql.to_openqasm()
+        _keepalive = [c1, c2, c3, result]
+
+        num_qubits = _get_num_qubits(qasm)
+        actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
+        assert actual == 2, f"Expected 2 (outer + middle, inner blocked), got {actual}"
+
+    def test_three_level_arithmetic_each_depth(self):
+        """3 nested with-blocks, all True, arithmetic at each depth.
+
+        c1=True, c2=True, c3=True
+        Outer: result += 1; Middle (inside c2 outside c3): result += 1;
+        Innermost: result += 1
+        Expected: 3 (fits in 2 bits)
+        """
+        gc.collect()
+        ql.circuit()
+        c1 = ql.qbool(True)
+        c2 = ql.qbool(True)
+        c3 = ql.qbool(True)
+        result = ql.qint(0, width=2)
+        with c1:
+            result += 1
+            with c2:
+                result += 1
+                with c3:
+                    result += 1
+
+        result_start = result.allocated_start
+        result_width = result.width
+        qasm = ql.to_openqasm()
+        _keepalive = [c1, c2, c3, result]
+
+        num_qubits = _get_num_qubits(qasm)
+        actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
+        assert actual == 3, f"Expected 3 (1+1+1), got {actual}"
+
+    def test_four_level_smoke(self):
+        """4 nested with-blocks, all True, add at deepest level.
+
+        c1=c2=c3=c4=True, result += 1 at deepest level only.
+        Expected: 1
+        Qubits: 4 conds + 2 result + 3 AND = 9
+        """
+        gc.collect()
+        ql.circuit()
+        c1 = ql.qbool(True)
+        c2 = ql.qbool(True)
+        c3 = ql.qbool(True)
+        c4 = ql.qbool(True)
+        result = ql.qint(0, width=2)
+        with c1:
+            with c2:
+                with c3:
+                    with c4:
+                        result += 1
+
+        result_start = result.allocated_start
+        result_width = result.width
+        qasm = ql.to_openqasm()
+        _keepalive = [c1, c2, c3, c4, result]
+
+        num_qubits = _get_num_qubits(qasm)
+        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
+        assert actual == 1, f"Expected 1 (4-level all true), got {actual}"
+
+    def test_four_level_mixed(self):
+        """4 nested with-blocks, deepest False blocks its operation.
+
+        c1=True, c2=True, c3=True, c4=False
+        result += 1 at deepest level. Expected: 0 (deepest blocked)
+        """
+        gc.collect()
+        ql.circuit()
+        c1 = ql.qbool(True)
+        c2 = ql.qbool(True)
+        c3 = ql.qbool(True)
+        c4 = ql.qbool(False)
+        result = ql.qint(0, width=2)
+        with c1:
+            with c2:
+                with c3:
+                    with c4:
+                        result += 1
+
+        result_start = result.allocated_start
+        result_width = result.width
+        qasm = ql.to_openqasm()
+        _keepalive = [c1, c2, c3, c4, result]
+
+        num_qubits = _get_num_qubits(qasm)
+        actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
+        assert actual == 0, f"Expected 0 (deepest blocked), got {actual}"
+
+    def test_three_level_all_false(self):
+        """3 nested with-blocks, all False.
+
+        c1=False, c2=False, c3=False
+        with c1: result += 1; with c2: with c3: result += 2
+        Expected: 0
+        """
+        gc.collect()
+        ql.circuit()
+        c1 = ql.qbool(False)
+        c2 = ql.qbool(False)
+        c3 = ql.qbool(False)
+        result = ql.qint(0, width=2)
+        with c1:
+            result += 1
+            with c2:
+                with c3:
+                    result += 2
+
+        result_start = result.allocated_start
+        result_width = result.width
+        qasm = ql.to_openqasm()
+        _keepalive = [c1, c2, c3, result]
+
+        num_qubits = _get_num_qubits(qasm)
+        actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
+        assert actual == 0, f"Expected 0 (all false), got {actual}"
