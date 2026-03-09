@@ -1,87 +1,75 @@
-"""Smoke tests for demo scripts (demo.py and chess_comparison.py).
+"""Tests for demo.py -- circuit-build-only tests for KNK depth-2 walk.
 
-The walk step compilation is memory-intensive (~8GB+), so the smoke test
-patches walk_step to avoid OOM in CI environments. The pre-walk sections
-(position, legal moves, register construction, tree structure) run for real.
+These tests verify that the demo constructs a valid quantum circuit
+and that supporting data structures are correct. No simulation is
+performed.
 """
-
-from unittest.mock import patch
 
 import pytest
 
-import chess_walk
+from chess_encoding import build_move_table
 
 
-@pytest.fixture(autouse=True)
-def _reset_walk_cache():
-    """Reset chess_walk module-level compiled function cache between tests."""
-    chess_walk._walk_compiled_fn = None
-    yield
-    chess_walk._walk_compiled_fn = None
+def test_demo_move_tables():
+    """Verify build_move_table produces correct entry counts for KNK position."""
+    white_table = build_move_table([("wk", "king"), ("wn", "knight")])
+    assert len(white_table) == 16, f"White table should have 16 entries, got {len(white_table)}"
+
+    black_table = build_move_table([("bk", "king")])
+    assert len(black_table) == 8, f"Black table should have 8 entries, got {len(black_table)}"
 
 
-def test_demo_main(clean_circuit):
-    """demo.main() runs end-to-end and returns a stats dict with non-zero values.
+def test_demo_prepare_walk_data_structure(clean_circuit):
+    """Verify prepare_walk_data returns proper structure for KNK depth-2."""
+    from chess_walk import prepare_walk_data
 
-    Patches walk_step to avoid memory-heavy compilation while still
-    exercising all other demo sections (position, moves, registers, stats).
-    The patched walk_step emits a few gates so circuit stats are non-zero.
+    data = prepare_walk_data(28, 60, [18], 2)
+
+    assert isinstance(data, list), "prepare_walk_data must return a list"
+    assert len(data) == 2, f"Expected 2 levels, got {len(data)}"
+
+    # Check required keys in each dict
+    required_keys = {
+        "move_table",
+        "move_count",
+        "branch_width",
+        "apply_move",
+        "predicates",
+        "entry_qarray_keys",
+    }
+    for level_idx, level_data in enumerate(data):
+        assert isinstance(level_data, dict), f"Level {level_idx} must be a dict"
+        for key in required_keys:
+            assert key in level_data, f"Level {level_idx} missing key: {key}"
+
+    # Level 0 (white): 16 moves, 4 branch bits
+    assert data[0]["move_count"] == 16
+    assert data[0]["branch_width"] == 4
+    assert len(data[0]["predicates"]) == 16
+
+    # Level 1 (black): 8 moves, 3 branch bits
+    assert data[1]["move_count"] == 8
+    assert data[1]["branch_width"] == 3
+    assert len(data[1]["predicates"]) == 8
+
+
+@pytest.mark.slow
+def test_demo_circuit_builds(clean_circuit):
+    """demo.main() builds a valid circuit and returns stats.
+
+    This test runs the full circuit build (no simulation). It may take
+    significant time (10-60s) and memory. Marked as slow -- skip with
+    ``pytest -m 'not slow'``.
     """
     from demo import main
 
-    def _fake_walk_step(h_reg, branch_regs, board_arrs, oracle_per_level, move_data, max_depth):
-        """Lightweight stand-in: emit a handful of X gates to produce non-zero stats."""
-        from quantum_language._gates import emit_x
-
-        # Emit a few gates on walk qubits so circuit stats are non-zero
-        w = max_depth + 1
-        for i in range(w):
-            emit_x(int(h_reg.qubits[64 - w + i]))
-
-    with patch("demo.walk_step", side_effect=_fake_walk_step):
-        stats = main(visualize=False)
+    stats = main(visualize=False)
 
     assert isinstance(stats, dict), "main() must return a dict"
-    for key in ("qubit_count", "gate_count", "depth"):
+    for key in ("qubit_count", "gate_count", "depth", "build_time"):
         assert key in stats, f"Missing key: {key}"
-        assert stats[key] > 0, f"{key} must be > 0, got {stats[key]}"
-
-
-def test_comparison_main(clean_circuit):
-    """chess_comparison.main() runs end-to-end and returns a results dict.
-
-    Patches both manual walk_step (demo.py) and QWalkTree.walk_step to
-    avoid memory-heavy compilation while still verifying the comparison
-    script produces correct output structure.
-    """
-    from chess_comparison import main
-
-    chess_walk._walk_compiled_fn = None
-
-    def _fake_walk_step(h_reg, branch_regs, board_arrs, oracle_per_level, move_data, max_depth):
-        """Lightweight stand-in: emit a handful of X gates to produce non-zero stats."""
-        from quantum_language._gates import emit_x
-
-        w = max_depth + 1
-        for i in range(w):
-            emit_x(int(h_reg.qubits[64 - w + i]))
-
-    def _fake_qwt_walk_step(self):
-        """Lightweight stand-in for QWalkTree.walk_step: emit X gates on height register."""
-        from quantum_language._gates import emit_x
-
-        w = self.max_depth + 1
-        for i in range(w):
-            emit_x(int(self.height_register.qubits[64 - w + i]))
-
-    with (
-        patch("demo.walk_step", side_effect=_fake_walk_step),
-        patch("quantum_language.walk.QWalkTree.walk_step", _fake_qwt_walk_step),
-    ):
-        results = main()
-
-    assert isinstance(results, dict), "main() must return a dict"
-    assert "manual" in results, "Missing key: manual"
-    assert "api" in results, "Missing key: api"
-    assert results["manual"]["qubit_count"] > 0, "manual qubit_count must be > 0"
-    assert results["api"]["qubit_count"] > 0, "api qubit_count must be > 0"
+    assert stats["qubit_count"] > 0
+    assert stats["gate_count"] > 0
+    assert stats["depth"] > 0
+    assert stats["build_time"] >= 0
+    assert "gate_counts" in stats
