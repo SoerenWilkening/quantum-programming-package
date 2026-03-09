@@ -53,7 +53,8 @@ from ._core import (
 
 
 import math
-from ._gates import emit_p, emit_p_raw
+from ._gates import emit_p, emit_p_raw, _toffoli_and, _uncompute_toffoli_and
+from ._core import _get_control_stack
 
 
 cpdef void _set_layer_floor_to_used():
@@ -804,10 +805,24 @@ cdef class qint(circuit):
 		Creates controlled quantum gates where this qint acts as control.
 		"""
 		self._check_not_uncomputed()
+
+		# Phase 118: Enforce qbool-only (width=1) for with-block conditions
+		if self.bits != 1:
+			raise TypeError(
+				f"with-block condition must be a qbool (1-bit), "
+				f"got {self.bits}-bit qint"
+			)
+
 		_scope_stack = _get_scope_stack()
 
-		# Phase 117: Push control entry onto stack (single-level, no AND-ancilla)
-		_push_control(self, None)
+		# Phase 118: AND-composition at depth >= 1
+		if _get_controlled():
+			current_ctrl = _get_control_bool()
+			and_ancilla = _toffoli_and(current_ctrl.qubits[63], self.qubits[63])
+			_push_control(self, and_ancilla)
+		else:
+			# Single-level: no AND needed (backward compatible)
+			_push_control(self, None)
 
 		# Phase 19: Scope management - push new scope frame
 		current_scope_depth.set(current_scope_depth.get() + 1)
@@ -862,6 +877,14 @@ cdef class qint(circuit):
 			for qbool_obj in scope_qbools:
 				if not qbool_obj._is_uncomputed:
 					qbool_obj._do_uncompute(from_del=False)
+
+		# Phase 118: Uncompute AND-ancilla if present
+		_cs = _get_control_stack()
+		qbool_ref, and_ancilla = _cs[-1]
+		if and_ancilla is not None:
+			outer_entry = _cs[-2]
+			outer_ctrl = outer_entry[1] if outer_entry[1] is not None else outer_entry[0]
+			_uncompute_toffoli_and(and_ancilla, outer_ctrl.qubits[63], qbool_ref.qubits[63])
 
 		# Phase 19: Decrement scope depth
 		current_scope_depth.set(current_scope_depth.get() - 1)
