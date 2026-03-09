@@ -4,8 +4,8 @@ milestone: v9.0
 milestone_name: Nested Controls & Chess Engine
 current_plan: 2
 status: executing
-stopped_at: Completed 117-02-PLAN.md
-last_updated: "2026-03-09T19:02:16.139Z"
+stopped_at: Phase 118 context gathered
+last_updated: "2026-03-09T19:26:21.976Z"
 last_activity: 2026-03-09
 progress:
   total_phases: 5
@@ -79,9 +79,9 @@ See PROJECT.md Key Decisions table for full history.
 
 ## Session Continuity
 
-Last session: 2026-03-09T18:58:13.656Z
-Stopped at: Completed 117-02-PLAN.md
-Resume file: None
+Last session: 2026-03-09T19:26:21.950Z
+Stopped at: Phase 118 context gathered
+Resume file: .planning/phases/118-nested-with-block-rewrite/118-CONTEXT.md
 Resume action: /gsd:plan-phase 117
 
 ---
