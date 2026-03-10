@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "Quantum_Assembly",
+  "project_id": "44d63344-cd86-45e0-b4e7-5d215121187b"
+}
