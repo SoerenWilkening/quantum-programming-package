@@ -259,11 +259,11 @@ Plans:
   3. Move legality checking (piece-exists, no-friendly-capture, check detection) is implemented using nested `with` blocks and compiled sub-predicates
   4. Walk operators (R_A, R_B) and diffusion are present in readable style matching the framework's natural-programming paradigm
   5. Running the script produces circuit statistics (gate count, depth, qubit count) without requiring quantum simulation
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 121-01: TBD
-- [ ] 121-02: TBD
+- [ ] 121-01-PLAN.md -- opt=1 DAG-only replay fix in compile.py (OOM prevention + DAG stats)
+- [ ] 121-02-PLAN.md -- Chess engine rewrite with nested with-blocks, 2D qarrays, walk operators
 
 ## Progress
 
@@ -286,7 +286,7 @@ Phases execute in numeric order: 117 -> 118 -> 119 -> 120 -> 121
 | 118. Nested With-Block Rewrite | 2/2 | Complete    | 2026-03-09 | - |
 | 119. Compile Compatibility | 1/1 | Complete    | 2026-03-09 | - |
 | 120. 2D Qarray Support | 1/1 | Complete    | 2026-03-09 | - |
-| 121. Chess Engine Rewrite | v9.0 | 0/? | Not started | - |
+| 121. Chess Engine Rewrite | v9.0 | 0/2 | Not started | - |
 
 ---
 *Roadmap created: 2026-02-02*
