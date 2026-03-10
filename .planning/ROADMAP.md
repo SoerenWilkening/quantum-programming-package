@@ -286,7 +286,7 @@ Phases execute in numeric order: 117 -> 118 -> 119 -> 120 -> 121
 | 118. Nested With-Block Rewrite | 2/2 | Complete    | 2026-03-09 | - |
 | 119. Compile Compatibility | 1/1 | Complete    | 2026-03-09 | - |
 | 120. 2D Qarray Support | 1/1 | Complete    | 2026-03-09 | - |
-| 121. Chess Engine Rewrite | 2/2 | Complete   | 2026-03-10 | - |
+| 121. Chess Engine Rewrite | 2/2 | Complete    | 2026-03-10 | - |
 
 ---
 *Roadmap created: 2026-02-02*
