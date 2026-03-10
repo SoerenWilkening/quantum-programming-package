@@ -124,6 +124,6 @@ class TestOpt1DagOnlyReplay:
 
         # Return qubits should be different from input qubits (new allocation)
         # and different from the first call's return qubits
-        assert r2.qubits != r1.qubits, (
+        assert not (r2.qubits == r1.qubits).all(), (
             "Replay return should have different qubit indices than capture return"
         )

@@ -794,8 +794,10 @@ class CompiledFunc:
         if _building_dag:
             ctx = current_dag_context()
             if ctx is None:
-                # Top-level call: create fresh DAG
-                self._call_graph = CallGraphDAG()
+                # Top-level call: create fresh DAG (or reuse for opt=1
+                # which accumulates nodes across calls for DAG-only mode)
+                if self._opt != 1 or self._call_graph is None:
+                    self._call_graph = CallGraphDAG()
                 push_dag_context(self._call_graph, None)
                 _is_top_level_dag = True
 
@@ -1487,8 +1489,12 @@ class CompiledFunc:
         start_layer = get_current_layer()
         _set_layer_floor(start_layer)
 
-        # Inject remapped gates
-        inject_remapped_gates(block.gates, virtual_to_real)
+        # Inject remapped gates (skip for opt=1 DAG-only replay)
+        if self._opt != 1:
+            inject_remapped_gates(block.gates, virtual_to_real)
+        # opt=1: DAG-only replay -- skip gate injection.
+        # The DAG node (recorded in _call_inner) stores gate count, depth,
+        # T-count from the cached block. No flat circuit expansion needed.
 
         end_layer = get_current_layer()
         # Restore layer_floor
