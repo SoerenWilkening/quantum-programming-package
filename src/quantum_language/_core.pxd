@@ -50,6 +50,25 @@ cdef extern from "toffoli_arithmetic_ops.h":
 	sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value)
 	sequence_t *toffoli_cCQ_add_ks(int bits, int64_t value)
 	void toffoli_sequence_free(sequence_t *seq)
+	int bk_cla_ancilla_count(int bits)
+
+cdef extern from "toffoli_sequences.h":
+	int TOFFOLI_HARDCODED_MAX_WIDTH
+	const sequence_t *get_hardcoded_toffoli_clifft_QQ_add(int bits)
+	const sequence_t *get_hardcoded_toffoli_clifft_cQQ_add(int bits)
+	const sequence_t *get_hardcoded_toffoli_clifft_CQ_inc(int bits)
+	const sequence_t *get_hardcoded_toffoli_clifft_cCQ_inc(int bits)
+	const sequence_t *get_hardcoded_toffoli_clifft_cla_QQ_add(int bits)
+	const sequence_t *get_hardcoded_toffoli_clifft_cla_cQQ_add(int bits)
+	const sequence_t *get_hardcoded_toffoli_clifft_cla_CQ_inc(int bits)
+	const sequence_t *get_hardcoded_toffoli_clifft_cla_cCQ_inc(int bits)
+
+cdef extern from "toffoli_addition_internal.h":
+	sequence_t *copy_hardcoded_sequence(const sequence_t *src)
+
+cdef extern from "gate.h":
+	void x(gate_t *g, qubit_t target)
+	void cx(gate_t *g, qubit_t target, qubit_t control)
 
 	# Toffoli Division (Phase 91)
 	void toffoli_divmod_cq(circuit_t *circ, const unsigned int *dividend_qubits,
@@ -256,30 +275,6 @@ cdef extern from "optimizer.h":
 	# Gate injection for capture-replay
 	void add_gate(circuit_t *circ, gate_t *g)
 
-cdef extern from "hot_path_add.h":
-	void hot_path_add_qq(
-		circuit_t *circ,
-		const unsigned int *self_qubits,
-		int self_bits,
-		const unsigned int *other_qubits,
-		int other_bits,
-		int invert,
-		int controlled,
-		unsigned int control_qubit,
-		const unsigned int *ancilla,
-		int num_ancilla
-	) nogil
-	void hot_path_add_cq(
-		circuit_t *circ,
-		const unsigned int *self_qubits,
-		int self_bits,
-		int64_t classical_value,
-		int invert,
-		int controlled,
-		unsigned int control_qubit,
-		const unsigned int *ancilla,
-		int num_ancilla
-	) nogil
 
 cdef extern from "hot_path_mul.h":
 	void hot_path_mul_qq(

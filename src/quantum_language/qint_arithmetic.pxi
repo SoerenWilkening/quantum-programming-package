@@ -5,25 +5,25 @@
 	@cython.boundscheck(False)
 	@cython.wraparound(False)
 	cdef addition_inplace(self, other, int invert=False):
-		# Phase 60-03: Thin Cython wrapper -- all hot-path logic moved to C
-		# (hot_path_add.c). We only extract qubit indices from Python objects
-		# here, then call the C function with nogil.
-		# Phase 93: Mark that arithmetic has been performed (freezes tradeoff option)
+		# Cython-level addition: calls sequence generators directly,
+		# with Toffoli dispatch (CLA/RCA, BK/KS, Clifford+T) handled
+		# in toffoli_dispatch.pxi. No C hot path -- all logic in Cython.
 		_mark_arithmetic_performed()
-		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
+		cdef circuit_s *_circ = <circuit_s*><unsigned long long>_get_circuit()
 		cdef bint _controlled = _get_controlled()
 		cdef object _control_bool = _get_control_bool()
 		cdef unsigned int self_qa[64]
 		cdef unsigned int other_qa[64]
-		cdef unsigned int ancilla_qa[128]
+		cdef unsigned int qa[256]
 		cdef int self_bits = self.bits
 		cdef int self_offset = 64 - self_bits
 		cdef int i
 		cdef int64_t classical_value = 0
 		cdef unsigned int control_qubit = 0
-		cdef int num_ancilla = NUMANCILLY
-		cdef unsigned int[:] ancilla_arr
 		cdef unsigned int[:] control_qubits
+		cdef sequence_t *seq
+		cdef int result_bits
+		cdef unsigned int[:] arr
 
 		# Extract self qubits (right-aligned in 64-element array)
 		for i in range(self_bits):
@@ -34,18 +34,30 @@
 			control_qubits = (<qint> _control_bool).qubits
 			control_qubit = control_qubits[63]
 
-		# Extract ancilla qubits
-		ancilla_arr = _get_ancilla()
-		for i in range(num_ancilla):
-			ancilla_qa[i] = ancilla_arr[i]
-
 		if type(other) == int:
 			classical_value = <int64_t>other
-			with nogil:
-				hot_path_add_cq(_circuit, self_qa, self_bits,
-								classical_value,
-								invert, _controlled, control_qubit,
-								ancilla_qa, num_ancilla)
+
+			# Toffoli dispatch for CQ
+			if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
+				_toffoli_dispatch_cq(_circ, self_qa, self_bits,
+				                     classical_value, invert,
+				                     _controlled, control_qubit)
+				return self
+
+			# QFT path: build qubit array and call sequence generator
+			pos = 0
+			for i in range(self_bits):
+				qa[pos] = self_qa[i]
+				pos += 1
+			if _controlled:
+				qa[pos] = control_qubit
+				pos += 1
+				seq = cCQ_add(self_bits, classical_value)
+			else:
+				seq = CQ_add(self_bits, classical_value)
+			if seq == NULL:
+				return self
+			run_instruction(seq, qa, invert, <circuit_t*>_circ, 0)
 			return self
 
 		if not isinstance(other, qint):
@@ -58,11 +70,31 @@
 		for i in range(other_bits):
 			other_qa[i] = other_qubits_mv[other_offset + i]
 
-		with nogil:
-			hot_path_add_qq(_circuit, self_qa, self_bits,
-							other_qa, other_bits,
-							invert, _controlled, control_qubit,
-							ancilla_qa, num_ancilla)
+		result_bits = self_bits if self_bits > other_bits else other_bits
+
+		# Toffoli dispatch for QQ
+		if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
+			_toffoli_dispatch_qq(_circ, self_qa, self_bits,
+			                     other_qa, other_bits, invert,
+			                     _controlled, control_qubit, result_bits)
+			return self
+
+		# QFT path: build qubit array and call sequence generator
+		pos = 0
+		for i in range(self_bits):
+			qa[pos] = self_qa[i]
+			pos += 1
+		for i in range(other_bits):
+			qa[pos] = other_qa[i]
+			pos += 1
+		if _controlled:
+			qa[2 * result_bits] = control_qubit
+			seq = cQQ_add(result_bits)
+		else:
+			seq = QQ_add(result_bits)
+		if seq == NULL:
+			return self
+		run_instruction(seq, qa, invert, <circuit_t*>_circ, 0)
 		return self
 
 	def __add__(self, other: qint | int):

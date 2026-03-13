@@ -5,6 +5,7 @@
 
 cimport cython
 from libc.stdint cimport int64_t
+from libc.string cimport memset
 
 import sys
 import warnings
@@ -13,7 +14,7 @@ import numpy as np
 
 # C-level imports for type declarations
 from ._core cimport (
-    circuit, circuit_t, circuit_s, sequence_t,
+    circuit, circuit_t, circuit_s, sequence_t, gate_t,
     INTEGERSIZE, NUMANCILLY,
     init_circuit, Q_not, run_instruction,
     circuit_get_allocator, allocator_alloc, allocator_free,
@@ -26,8 +27,22 @@ from ._core cimport (
     CQ_equal_width, cCQ_equal_width,
     print_circuit as c_print_circuit,
     hot_path_mul_qq, hot_path_mul_cq,
-    hot_path_add_qq, hot_path_add_cq,
     toffoli_divmod_cq, toffoli_divmod_qq,
+    toffoli_QQ_add, toffoli_CQ_add, toffoli_cQQ_add, toffoli_cCQ_add,
+    toffoli_QQ_add_bk, toffoli_QQ_add_ks,
+    toffoli_CQ_add_bk, toffoli_CQ_add_ks,
+    toffoli_cQQ_add_bk, toffoli_cQQ_add_ks,
+    toffoli_cCQ_add_bk, toffoli_cCQ_add_ks,
+    toffoli_sequence_free,
+    bk_cla_ancilla_count,
+    TOFFOLI_HARDCODED_MAX_WIDTH,
+    get_hardcoded_toffoli_clifft_QQ_add, get_hardcoded_toffoli_clifft_cQQ_add,
+    get_hardcoded_toffoli_clifft_CQ_inc, get_hardcoded_toffoli_clifft_cCQ_inc,
+    get_hardcoded_toffoli_clifft_cla_QQ_add, get_hardcoded_toffoli_clifft_cla_cQQ_add,
+    get_hardcoded_toffoli_clifft_cla_CQ_inc, get_hardcoded_toffoli_clifft_cla_cCQ_inc,
+    copy_hardcoded_sequence,
+    add_gate,
+    x as gate_x, cx as gate_cx,
 )
 
 # Python-level imports for global state access via accessor functions
@@ -129,6 +144,8 @@ class _PhaseProxy:
 			return self.__iadd__(math.pi)
 		raise ValueError("phase *= only supports -1")
 
+
+include "toffoli_dispatch.pxi"
 
 cdef class qint(circuit):
 	"""Quantum integer with arithmetic, bitwise, and comparison operations.

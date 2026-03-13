@@ -40,8 +40,6 @@ c_sources = [
     f"{C_BACKEND}/execution.c",
     # Hot path migrations (Phase 60, 74 split)
     f"{C_BACKEND}/hot_path_mul.c",
-    f"{C_BACKEND}/hot_path_add.c",
-    f"{C_BACKEND}/hot_path_add_toffoli.c",
     # Toffoli arithmetic (Phase 66, 68, 74 split)
     f"{C_BACKEND}/ToffoliAdditionHelpers.c",
     f"{C_BACKEND}/ToffoliAdditionCDKM.c",
