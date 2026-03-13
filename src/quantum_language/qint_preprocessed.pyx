@@ -27,7 +27,6 @@ from ._core cimport (
     print_circuit as c_print_circuit,
     hot_path_mul_qq, hot_path_mul_cq,
     hot_path_add_qq, hot_path_add_cq,
-    hot_path_ixor_qq, hot_path_ixor_cq,
     toffoli_divmod_cq, toffoli_divmod_qq,
 )
 
@@ -2161,28 +2160,31 @@ cdef class qint(circuit):
 		>>> a ^= 0b0110
 		>>> # a now represents |1010>
 		"""
-		# Phase 60-04: Thin Cython wrapper -- all hot-path logic moved to C
-		# (hot_path_xor.c). We only extract qubit indices from Python objects
-		# here, then call the C function with nogil.
+		cdef sequence_t *seq
+		cdef unsigned int[:] arr
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _controlled = _get_controlled()
-		cdef unsigned int self_qa[64]
-		cdef unsigned int other_qa[64]
 		cdef int self_bits = self.bits
 		cdef int self_offset = 64 - self_bits
 		cdef int i
-		cdef int64_t classical_value = 0
+		cdef int xor_bits
 
-		# Extract self qubits (right-aligned in 64-element array)
-		for i in range(self_bits):
-			self_qa[i] = self.qubits[self_offset + i]
+		# Phase 18: Check for use-after-uncompute
+		self._check_not_uncomputed()
+		if isinstance(other, qint):
+			(<qint>other)._check_not_uncomputed()
 
 		if type(other) == int:
 			if _controlled:
 				raise NotImplementedError("Controlled classical-quantum XOR not yet supported")
-			classical_value = <int64_t>other
-			with nogil:
-				hot_path_ixor_cq(_circuit, self_qa, self_bits, classical_value)
+
+			# CQ path: for each set bit in classical value, apply Q_not(1)
+			for i in range(self_bits):
+				if ((<int64_t>other) >> i) & 1:
+					qubit_array[0] = self.qubits[self_offset + i]
+					arr = qubit_array
+					seq = Q_not(1)
+					run_instruction(seq, &arr[0], False, _circuit, 0)
 			return self
 
 		if not isinstance(other, qint):
@@ -2191,16 +2193,24 @@ cdef class qint(circuit):
 		if _controlled:
 			raise NotImplementedError("Controlled quantum-quantum XOR not yet supported")
 
-		# Extract other qubits for quantum-quantum XOR
+		# QQ path: self ^= other using Q_xor
+		# Layout: [0..xor_bits-1] = self (target), [xor_bits..2*xor_bits-1] = other (source)
 		cdef int other_bits = (<qint>other).bits
 		cdef int other_offset = 64 - other_bits
-		cdef unsigned int[:] other_qubits_mv = (<qint>other).qubits
-		for i in range(other_bits):
-			other_qa[i] = other_qubits_mv[other_offset + i]
+		cdef unsigned int[:] other_qubits = (<qint>other).qubits
+		xor_bits = self_bits if self_bits < other_bits else other_bits
 
-		with nogil:
-			hot_path_ixor_qq(_circuit, self_qa, self_bits,
-							other_qa, other_bits)
+		# Phase 84: Validate qubit_array bounds before writes
+		validate_qubit_slots(2 * xor_bits, "__ixor__")
+
+		for i in range(xor_bits):
+			qubit_array[i] = self.qubits[self_offset + i]
+		for i in range(xor_bits):
+			qubit_array[xor_bits + i] = other_qubits[other_offset + i]
+
+		arr = qubit_array
+		seq = Q_xor(xor_bits)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 		return self
 
 	def __rxor__(self, other):

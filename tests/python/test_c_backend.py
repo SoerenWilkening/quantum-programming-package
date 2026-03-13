@@ -10,7 +10,6 @@ Test targets correspond to the Makefile in tests/c/:
 - test_comparison: Integer comparison operations
 - test_hot_path_add: Hot-path addition (C-level fast addition sequences)
 - test_hot_path_mul: Hot-path multiplication (C-level fast multiplication sequences)
-- test_hot_path_xor: Hot-path XOR (C-level fast bitwise sequences)
 """
 
 import os
@@ -140,9 +139,3 @@ class TestCBackend:
         """
         _compile_and_run("test_hot_path_mul")
 
-    def test_c_hot_path_xor(self):
-        """Hot-path XOR sequences (C-level fast bitwise operations).
-
-        Tests the optimized C-level XOR/bitwise sequences for correctness.
-        """
-        _compile_and_run("test_hot_path_xor")

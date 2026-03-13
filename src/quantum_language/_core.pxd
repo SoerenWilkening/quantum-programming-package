@@ -281,21 +281,6 @@ cdef extern from "hot_path_add.h":
 		int num_ancilla
 	) nogil
 
-cdef extern from "hot_path_xor.h":
-	void hot_path_ixor_qq(
-		circuit_t *circ,
-		const unsigned int *self_qubits,
-		int self_bits,
-		const unsigned int *other_qubits,
-		int other_bits
-	) nogil
-	void hot_path_ixor_cq(
-		circuit_t *circ,
-		const unsigned int *self_qubits,
-		int self_bits,
-		int64_t classical_value
-	) nogil
-
 cdef extern from "hot_path_mul.h":
 	void hot_path_mul_qq(
 		circuit_t *circ,

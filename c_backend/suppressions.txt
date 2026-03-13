@@ -22,7 +22,6 @@ unusedFunction:c_backend/src/execution.c
 unusedFunction:c_backend/src/gate.c
 unusedFunction:c_backend/src/hot_path_add.c
 unusedFunction:c_backend/src/hot_path_mul.c
-unusedFunction:c_backend/src/hot_path_xor.c
 unusedFunction:c_backend/src/qubit_allocator.c
 unusedFunction:c_backend/src/sequences/toffoli_add_seq_dispatch.c
 

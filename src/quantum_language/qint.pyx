@@ -27,7 +27,6 @@ from ._core cimport (
     print_circuit as c_print_circuit,
     hot_path_mul_qq, hot_path_mul_cq,
     hot_path_add_qq, hot_path_add_cq,
-    hot_path_ixor_qq, hot_path_ixor_cq,
     toffoli_divmod_cq, toffoli_divmod_qq,
 )
 
