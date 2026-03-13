@@ -820,6 +820,53 @@ def get_current_layer():
 	return circ.used_layer
 
 
+def get_gate_count():
+	"""Get the running gate count from the current circuit.
+
+	This returns the ``gate_count`` field maintained by ``run_instruction()``
+	in both normal and tracking-only modes.  It is distinct from
+	``circuit.gate_count`` (which iterates layers to count stored gates);
+	this counter also accumulates gates counted during tracking-only
+	execution where no gates are physically added to the circuit.
+
+	Returns
+	-------
+	int
+		Running gate count.
+
+	Examples
+	--------
+	>>> c = circuit()
+	>>> a = qint(5, width=4)
+	>>> get_gate_count() > 0
+	True
+	"""
+	cdef circuit_s *circ
+	_validate_circuit()
+	circ = <circuit_s*>_circuit
+	return circ.gate_count
+
+
+def reset_gate_count():
+	"""Reset the running gate count to zero.
+
+	Useful before a tracking-only execution pass to measure the gate cost
+	of a specific code section.
+
+	Examples
+	--------
+	>>> c = circuit()
+	>>> a = qint(5, width=4)
+	>>> reset_gate_count()
+	>>> get_gate_count()
+	0
+	"""
+	cdef circuit_s *circ
+	_validate_circuit()
+	circ = <circuit_s*>_circuit
+	circ.gate_count = 0
+
+
 def extract_gate_range(int start_layer, int end_layer):
 	"""Extract gates from circuit layers [start_layer, end_layer) as Python list of dicts.
 

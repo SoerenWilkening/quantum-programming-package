@@ -43,7 +43,9 @@ from ._core import (
     circuit,
     circuit_stats,
     get_current_layer,
+    get_gate_count,
     option,
+    reset_gate_count,
     reverse_instruction_range,
 )
 from .amplitude_estimation import amplitude_estimate
@@ -206,6 +208,8 @@ __all__ = [
     # State (also in ql.state subpackage)
     "circuit_stats",
     "get_current_layer",
+    "get_gate_count",
+    "reset_gate_count",
     "reverse_instruction_range",
     # Subpackage
     "state",
