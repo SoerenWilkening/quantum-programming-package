@@ -825,14 +825,21 @@ def get_gate_count():
 
 	This returns the ``gate_count`` field maintained by ``run_instruction()``
 	in both normal and tracking-only modes.  It is distinct from
-	``circuit.gate_count`` (which iterates layers to count stored gates);
-	this counter also accumulates gates counted during tracking-only
-	execution where no gates are physically added to the circuit.
+	``circuit.gate_count`` (which iterates stored layers); the two counters
+	may differ in either direction.
+
+	.. note::
+
+	   Gates emitted by hot-path functions (``hot_path_add``,
+	   ``hot_path_mul``, etc.) call ``add_gate()`` directly without going
+	   through ``run_instruction`` and are **not** included in this count.
+	   Conversely, in tracking-only mode this counter accumulates gates
+	   that are never physically stored in the circuit.
 
 	Returns
 	-------
 	int
-		Running gate count.
+		Running gate count (via ``run_instruction`` only).
 
 	Examples
 	--------
