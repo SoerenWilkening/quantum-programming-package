@@ -42,7 +42,7 @@ void hot_path_ixor_qq(circuit_t *circ, const unsigned int *self_qubits, int self
         return;
     }
 
-    run_instruction(seq, qa, 0, circ);
+    run_instruction(seq, qa, 0, circ, 0);
 }
 
 void hot_path_ixor_cq(circuit_t *circ, const unsigned int *self_qubits, int self_bits,
@@ -64,7 +64,7 @@ void hot_path_ixor_cq(circuit_t *circ, const unsigned int *self_qubits, int self
             if (seq == NULL) {
                 return;
             }
-            run_instruction(seq, qa, 0, circ);
+            run_instruction(seq, qa, 0, circ, 0);
         }
     }
 }

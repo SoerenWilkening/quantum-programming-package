@@ -87,7 +87,7 @@ void hot_path_add_qq(circuit_t *circ, const unsigned int *self_qubits, int self_
         return;
     }
 
-    run_instruction(seq, qa, invert, circ);
+    run_instruction(seq, qa, invert, circ, 0);
 }
 
 void hot_path_add_cq(circuit_t *circ, const unsigned int *self_qubits, int self_bits,
@@ -141,5 +141,5 @@ void hot_path_add_cq(circuit_t *circ, const unsigned int *self_qubits, int self_
         return;
     }
 
-    run_instruction(seq, qa, invert, circ);
+    run_instruction(seq, qa, invert, circ, 0);
 }

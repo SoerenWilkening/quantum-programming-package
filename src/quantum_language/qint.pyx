@@ -352,7 +352,7 @@ cdef class qint(circuit):
 						qubit_array[0] = self.qubits[qubit_idx]
 						arr = qubit_array
 						seq = Q_not(1)
-						run_instruction(seq, &arr[0], False, _circuit)
+						run_instruction(seq, &arr[0], False, _circuit, 0)
 
 			# Keep backward compat tracking (deprecated, remove later)
 			# Note: _smallest_allocated_qubit and ancilla numpy array still updated

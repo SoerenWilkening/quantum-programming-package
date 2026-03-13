@@ -101,7 +101,7 @@ static void toffoli_qq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
         toff_seq = toffoli_QQ_add(result_bits);
         if (toff_seq == NULL)
             return;
-        run_instruction(toff_seq, qa, invert, circ);
+        run_instruction(toff_seq, qa, invert, circ, 0);
         return;
     }
 
@@ -132,7 +132,7 @@ static void toffoli_qq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
                     precompiled_toffoli_clifft_cla_QQ_add[result_bits] = seq;
                 }
                 if (seq) {
-                    run_instruction((sequence_t *)seq, tqa, invert, circ);
+                    run_instruction((sequence_t *)seq, tqa, invert, circ, 0);
                     allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count);
                     return;
                 }
@@ -149,7 +149,7 @@ static void toffoli_qq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
                 precompiled_toffoli_clifft_QQ_add[result_bits] = seq;
             }
             if (seq) {
-                run_instruction((sequence_t *)seq, tqa, invert, circ);
+                run_instruction((sequence_t *)seq, tqa, invert, circ, 0);
                 allocator_free(circ->allocator, ct_ancilla, 1);
                 return;
             }
@@ -184,7 +184,7 @@ static void toffoli_qq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
                 toff_seq = toffoli_QQ_add_ks(result_bits);
             }
             if (toff_seq != NULL) {
-                run_instruction(toff_seq, tqa, 0, circ); /* invert=0: forward */
+                run_instruction(toff_seq, tqa, 0, circ, 0); /* invert=0: forward */
                 allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count);
 
                 /* Step 3: CQ increment a += 1 (two's complement correction) */
@@ -200,7 +200,7 @@ static void toffoli_qq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
                     inc_qa[2 * self_bits] = inc_ancilla + self_bits;
                     sequence_t *inc_seq = toffoli_CQ_add(self_bits, 1);
                     if (inc_seq != NULL) {
-                        run_instruction(inc_seq, inc_qa, 0, circ);
+                        run_instruction(inc_seq, inc_qa, 0, circ, 0);
                         toffoli_sequence_free(inc_seq);
                     }
                     allocator_free(circ->allocator, inc_ancilla, self_bits + 1);
@@ -241,7 +241,7 @@ static void toffoli_qq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
                 toff_seq = toffoli_QQ_add_ks(result_bits);
             }
             if (toff_seq != NULL) {
-                run_instruction(toff_seq, tqa, invert, circ);
+                run_instruction(toff_seq, tqa, invert, circ, 0);
                 allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count);
                 return;
             }
@@ -263,7 +263,7 @@ static void toffoli_qq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
         allocator_free(circ->allocator, ancilla_qubit, 1);
         return;
     }
-    run_instruction(toff_seq, tqa, invert, circ);
+    run_instruction(toff_seq, tqa, invert, circ, 0);
     allocator_free(circ->allocator, ancilla_qubit, 1);
 }
 
@@ -291,7 +291,7 @@ static void toffoli_qq_cont(circuit_t *circ, const unsigned int *self_qubits, in
                 precompiled_toffoli_clifft_cQQ_add[1] = seq;
             }
             if (seq) {
-                run_instruction((sequence_t *)seq, tqa, invert, circ);
+                run_instruction((sequence_t *)seq, tqa, invert, circ, 0);
                 return;
             }
         }
@@ -299,7 +299,7 @@ static void toffoli_qq_cont(circuit_t *circ, const unsigned int *self_qubits, in
         toff_seq = toffoli_cQQ_add(result_bits);
         if (toff_seq == NULL)
             return;
-        run_instruction(toff_seq, tqa, invert, circ);
+        run_instruction(toff_seq, tqa, invert, circ, 0);
         return;
     }
 
@@ -332,7 +332,7 @@ static void toffoli_qq_cont(circuit_t *circ, const unsigned int *self_qubits, in
                     precompiled_toffoli_clifft_cla_cQQ_add[result_bits] = seq;
                 }
                 if (seq) {
-                    run_instruction((sequence_t *)seq, tqa, invert, circ);
+                    run_instruction((sequence_t *)seq, tqa, invert, circ, 0);
                     allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count + 1);
                     return;
                 }
@@ -352,7 +352,7 @@ static void toffoli_qq_cont(circuit_t *circ, const unsigned int *self_qubits, in
                 precompiled_toffoli_clifft_cQQ_add[result_bits] = seq;
             }
             if (seq) {
-                run_instruction((sequence_t *)seq, tqa, invert, circ);
+                run_instruction((sequence_t *)seq, tqa, invert, circ, 0);
                 allocator_free(circ->allocator, ct_ancilla, 2);
                 return;
             }
@@ -389,7 +389,7 @@ static void toffoli_qq_cont(circuit_t *circ, const unsigned int *self_qubits, in
                 toff_seq = toffoli_cQQ_add_ks(result_bits);
             }
             if (toff_seq != NULL) {
-                run_instruction(toff_seq, tqa, 0, circ); /* invert=0: forward */
+                run_instruction(toff_seq, tqa, 0, circ, 0); /* invert=0: forward */
                 allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count + 1);
 
                 /* Step 3: Controlled CQ increment ctrl: a += 1 */
@@ -407,7 +407,7 @@ static void toffoli_qq_cont(circuit_t *circ, const unsigned int *self_qubits, in
                     inc_qa[2 * self_bits + 2] = inc_ancilla + self_bits + 1;
                     sequence_t *inc_seq = toffoli_cCQ_add(self_bits, 1);
                     if (inc_seq != NULL) {
-                        run_instruction(inc_seq, inc_qa, 0, circ);
+                        run_instruction(inc_seq, inc_qa, 0, circ, 0);
                         toffoli_sequence_free(inc_seq);
                     }
                     allocator_free(circ->allocator, inc_ancilla, self_bits + 2);
@@ -452,7 +452,7 @@ static void toffoli_qq_cont(circuit_t *circ, const unsigned int *self_qubits, in
                 toff_seq = toffoli_cQQ_add_ks(result_bits);
             }
             if (toff_seq != NULL) {
-                run_instruction(toff_seq, tqa, invert, circ);
+                run_instruction(toff_seq, tqa, invert, circ, 0);
                 allocator_free(circ->allocator, cla_ancilla, cla_ancilla_count + 1);
                 return;
             }
@@ -474,7 +474,7 @@ static void toffoli_qq_cont(circuit_t *circ, const unsigned int *self_qubits, in
         allocator_free(circ->allocator, ancilla_qubit, 2);
         return;
     }
-    run_instruction(toff_seq, tqa, invert, circ);
+    run_instruction(toff_seq, tqa, invert, circ, 0);
     allocator_free(circ->allocator, ancilla_qubit, 2);
 }
 
@@ -524,7 +524,7 @@ static void toffoli_cq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
         toff_seq = toffoli_CQ_add(self_bits, classical_value);
         if (toff_seq == NULL)
             return;
-        run_instruction(toff_seq, qa, invert, circ);
+        run_instruction(toff_seq, qa, invert, circ, 0);
         toffoli_sequence_free(toff_seq);
         return;
     }
@@ -559,7 +559,7 @@ static void toffoli_cq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
                 if (seq) {
                     sequence_t *copy = copy_hardcoded_sequence(seq);
                     if (copy) {
-                        run_instruction(copy, tqa, invert, circ);
+                        run_instruction(copy, tqa, invert, circ, 0);
                         toffoli_sequence_free(copy);
                         allocator_free(circ->allocator, cq_cla_ancilla, total_ancilla);
                         return;
@@ -588,7 +588,7 @@ static void toffoli_cq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
             if (seq) {
                 sequence_t *copy = copy_hardcoded_sequence(seq);
                 if (copy) {
-                    run_instruction(copy, tqa, invert, circ);
+                    run_instruction(copy, tqa, invert, circ, 0);
                     toffoli_sequence_free(copy);
                     allocator_free(circ->allocator, ct_temp, self_bits + 1);
                     return;
@@ -624,7 +624,7 @@ static void toffoli_cq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
                 toff_seq = toffoli_CQ_add_ks(self_bits, negated);
             }
             if (toff_seq != NULL) {
-                run_instruction(toff_seq, tqa, 0, circ); /* invert=0: forward */
+                run_instruction(toff_seq, tqa, 0, circ, 0); /* invert=0: forward */
                 toffoli_sequence_free(toff_seq);
                 allocator_free(circ->allocator, cq_cla_ancilla, total_ancilla);
                 return;
@@ -655,7 +655,7 @@ static void toffoli_cq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
                 toff_seq = toffoli_CQ_add_ks(self_bits, classical_value);
             }
             if (toff_seq != NULL) {
-                run_instruction(toff_seq, tqa, invert, circ);
+                run_instruction(toff_seq, tqa, invert, circ, 0);
                 toffoli_sequence_free(toff_seq);
                 allocator_free(circ->allocator, cq_cla_ancilla, total_ancilla);
                 return;
@@ -684,7 +684,7 @@ static void toffoli_cq_uncont(circuit_t *circ, const unsigned int *self_qubits, 
             allocator_free(circ->allocator, temp_start, self_bits + 1);
             return;
         }
-        run_instruction(toff_seq, tqa, invert, circ);
+        run_instruction(toff_seq, tqa, invert, circ, 0);
         toffoli_sequence_free(toff_seq);
         allocator_free(circ->allocator, temp_start, self_bits + 1);
     }
@@ -705,7 +705,7 @@ static void toffoli_cq_cont(circuit_t *circ, const unsigned int *self_qubits, in
         toff_seq = toffoli_cCQ_add(self_bits, classical_value);
         if (toff_seq == NULL)
             return;
-        run_instruction(toff_seq, tqa, invert, circ);
+        run_instruction(toff_seq, tqa, invert, circ, 0);
         toffoli_sequence_free(toff_seq);
         return;
     }
@@ -742,7 +742,7 @@ static void toffoli_cq_cont(circuit_t *circ, const unsigned int *self_qubits, in
                 if (seq) {
                     sequence_t *copy = copy_hardcoded_sequence(seq);
                     if (copy) {
-                        run_instruction(copy, cla_qa, invert, circ);
+                        run_instruction(copy, cla_qa, invert, circ, 0);
                         toffoli_sequence_free(copy);
                         allocator_free(circ->allocator, cla_start, total_cla_ancilla);
                         return;
@@ -773,7 +773,7 @@ static void toffoli_cq_cont(circuit_t *circ, const unsigned int *self_qubits, in
             if (seq) {
                 sequence_t *copy = copy_hardcoded_sequence(seq);
                 if (copy) {
-                    run_instruction(copy, tqa, invert, circ);
+                    run_instruction(copy, tqa, invert, circ, 0);
                     toffoli_sequence_free(copy);
                     allocator_free(circ->allocator, ct_temp, self_bits + 2);
                     return;
@@ -813,7 +813,7 @@ static void toffoli_cq_cont(circuit_t *circ, const unsigned int *self_qubits, in
                 toff_seq = toffoli_cCQ_add_ks(self_bits, negated);
             }
             if (toff_seq != NULL) {
-                run_instruction(toff_seq, cla_qa, 0, circ); /* invert=0: forward */
+                run_instruction(toff_seq, cla_qa, 0, circ, 0); /* invert=0: forward */
                 toffoli_sequence_free(toff_seq);
                 allocator_free(circ->allocator, cla_start, total_cla_ancilla);
                 return;
@@ -854,7 +854,7 @@ static void toffoli_cq_cont(circuit_t *circ, const unsigned int *self_qubits, in
                 toff_seq = toffoli_cCQ_add_ks(self_bits, classical_value);
             }
             if (toff_seq != NULL) {
-                run_instruction(toff_seq, cla_qa, invert, circ);
+                run_instruction(toff_seq, cla_qa, invert, circ, 0);
                 toffoli_sequence_free(toff_seq);
                 allocator_free(circ->allocator, cla_start, total_cla_ancilla);
                 return;
@@ -885,7 +885,7 @@ static void toffoli_cq_cont(circuit_t *circ, const unsigned int *self_qubits, in
             allocator_free(circ->allocator, temp_start, self_bits + 2);
             return;
         }
-        run_instruction(toff_seq, tqa, invert, circ);
+        run_instruction(toff_seq, tqa, invert, circ, 0);
         toffoli_sequence_free(toff_seq);
         allocator_free(circ->allocator, temp_start, self_bits + 2);
     }

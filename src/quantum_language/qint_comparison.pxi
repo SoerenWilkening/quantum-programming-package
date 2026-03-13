@@ -164,7 +164,7 @@
 							qubit_array[start + i] = and_anc_start + i
 
 			arr = qubit_array
-			run_instruction(seq, &arr[0], False, _circuit)
+			run_instruction(seq, &arr[0], False, _circuit, 0)
 
 			# Free AND-ancilla after use
 			if num_and_anc > 0 and _circuit_initialized and and_anc_start != <unsigned int>(-1):
@@ -292,7 +292,7 @@
 				qubit_array[1] = self.qubits[64 - operand_bits + i_bit]
 				arr = qubit_array
 				seq = Q_xor(1)
-				run_instruction(seq, &arr[0], False, _circuit)
+				run_instruction(seq, &arr[0], False, _circuit, 0)
 
 			# Copy other's bits to temp_other (LSB-aligned)
 			operand_bits = (<qint>other).bits
@@ -301,7 +301,7 @@
 				qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]
 				arr = qubit_array
 				seq = Q_xor(1)
-				run_instruction(seq, &arr[0], False, _circuit)
+				run_instruction(seq, &arr[0], False, _circuit, 0)
 
 			# Subtract: temp_self -= temp_other
 			temp_self -= temp_other
@@ -415,7 +415,7 @@
 				qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]
 				arr = qubit_array
 				seq = Q_xor(1)
-				run_instruction(seq, &arr[0], False, _circuit)
+				run_instruction(seq, &arr[0], False, _circuit, 0)
 
 			# Copy self's bits to temp_self (LSB-aligned)
 			operand_bits = self.bits
@@ -424,7 +424,7 @@
 				qubit_array[1] = self.qubits[64 - operand_bits + i_bit]
 				arr = qubit_array
 				seq = Q_xor(1)
-				run_instruction(seq, &arr[0], False, _circuit)
+				run_instruction(seq, &arr[0], False, _circuit, 0)
 
 			# Subtract: temp_other -= temp_self
 			temp_other -= temp_self

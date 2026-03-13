@@ -96,7 +96,7 @@ static int div_cq_add(circuit_t *circ, const unsigned int *reg_qubits, int reg_b
             return -1;
         unsigned int tqa[1];
         tqa[0] = reg_qubits[0];
-        run_instruction(seq, tqa, 0, circ);
+        run_instruction(seq, tqa, 0, circ, 0);
         toffoli_sequence_free(seq);
         return 0;
     }
@@ -131,7 +131,7 @@ static int div_cq_add(circuit_t *circ, const unsigned int *reg_qubits, int reg_b
         allocator_free(circ->allocator, temp_start, reg_bits);
         return -1;
     }
-    run_instruction(seq, tqa, 0, circ);
+    run_instruction(seq, tqa, 0, circ, 0);
     toffoli_sequence_free(seq);
 
     allocator_free(circ->allocator, carry, 1);
@@ -201,7 +201,7 @@ static int div_ccq_add(circuit_t *circ, const unsigned int *reg_qubits, int reg_
         allocator_free(circ->allocator, temp_start, reg_bits);
         return -1;
     }
-    run_instruction(seq, tqa, 0, circ);
+    run_instruction(seq, tqa, 0, circ, 0);
     toffoli_sequence_free(seq);
 
     allocator_free(circ->allocator, and_anc, 1);
@@ -378,7 +378,7 @@ static int div_qq_add(circuit_t *circ, const unsigned int *target_qubits,
         sequence_t *seq = toffoli_QQ_add(1);
         if (seq == NULL)
             return -1;
-        run_instruction(seq, tqa, invert, circ);
+        run_instruction(seq, tqa, invert, circ, 0);
         return 0;
     }
 
@@ -402,7 +402,7 @@ static int div_qq_add(circuit_t *circ, const unsigned int *target_qubits,
         allocator_free(circ->allocator, carry, 1);
         return -1;
     }
-    run_instruction(seq, tqa, invert, circ);
+    run_instruction(seq, tqa, invert, circ, 0);
     allocator_free(circ->allocator, carry, 1);
     return 0;
 }
@@ -461,7 +461,7 @@ static int div_cqq_add(circuit_t *circ, const unsigned int *target_qubits,
         allocator_free(circ->allocator, carry, 1);
         return -1;
     }
-    run_instruction(seq, tqa, invert, circ);
+    run_instruction(seq, tqa, invert, circ, 0);
     allocator_free(circ->allocator, and_anc, 1);
     allocator_free(circ->allocator, carry, 1);
     return 0;

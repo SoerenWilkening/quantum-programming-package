@@ -189,10 +189,10 @@ cdef extern from "validation.h":
 
 cdef extern from "execution.h":
 	void qubit_mapping(unsigned int qubit_arrray[], circuit_t *circ);
-	void run_instruction(sequence_t *res, const unsigned int qubit_array[], int invert, circuit_t *circ);
+	void run_instruction(sequence_t *res, const unsigned int qubit_array[], int invert, circuit_t *circ, int tracking_only);
 	void reverse_circuit_range(circuit_t *circ, int start_layer, int end_layer);
 	# Validated entry points for Cython boundary (Phase 84)
-	int validated_run_instruction(sequence_t *res, const unsigned int qubit_array[], int invert, circuit_t *circ);
+	int validated_run_instruction(sequence_t *res, const unsigned int qubit_array[], int invert, circuit_t *circ, int tracking_only);
 	int validated_reverse_circuit_range(circuit_t *circ, int start_layer, int end_layer);
 
 cdef extern from "qubit_allocator.h":
@@ -210,6 +210,7 @@ cdef extern from "qubit_allocator.h":
 		int toffoli_decompose          # 0=off (CCX in output), 1=on (decompose to Clifford+T)
 		int tradeoff_auto_threshold    # Width threshold for auto CLA
 		int tradeoff_min_depth         # 1 = min_depth mode (CLA subtraction enabled)
+		size_t gate_count              # Running gate count (tracking_only + normal path)
 
 	ctypedef struct allocator_stats_t:
 		unsigned int peak_allocated

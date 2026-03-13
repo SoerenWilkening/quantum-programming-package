@@ -352,7 +352,7 @@ cdef class qint(circuit):
 						qubit_array[0] = self.qubits[qubit_idx]
 						arr = qubit_array
 						seq = Q_not(1)
-						run_instruction(seq, &arr[0], False, _circuit)
+						run_instruction(seq, &arr[0], False, _circuit, 0)
 
 			# Keep backward compat tracking (deprecated, remove later)
 			# Note: _smallest_allocated_qubit and ancilla numpy array still updated
@@ -1811,7 +1811,7 @@ cdef class qint(circuit):
 				seq = Q_and(result_bits)
 
 		arr = qubit_array
-		run_instruction(seq, &arr[0], False, _circuit)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 
 		# Capture end layer
 		result._start_layer = start_layer
@@ -1968,7 +1968,7 @@ cdef class qint(circuit):
 				seq = Q_or(result_bits)
 
 		arr = qubit_array
-		run_instruction(seq, &arr[0], False, _circuit)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 
 		# Capture end layer
 		result._start_layer = start_layer
@@ -2101,7 +2101,7 @@ cdef class qint(circuit):
 			qubit_array[self.bits + i] = self.qubits[self_offset + i]
 		arr = qubit_array
 		seq = Q_xor(self.bits)  # XOR self into result (copying self to result)
-		run_instruction(seq, &arr[0], False, _circuit)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 
 		# Now XOR other into result
 		if type(other) == int:
@@ -2113,7 +2113,7 @@ cdef class qint(circuit):
 						qubit_array[0] = result_qubits[64 - result_bits + i]
 						arr = qubit_array
 						seq = Q_not(1)
-						run_instruction(seq, &arr[0], False, _circuit)
+						run_instruction(seq, &arr[0], False, _circuit, 0)
 		else:
 			other_offset = 64 - (<qint>other).bits
 			for i in range((<qint>other).bits):
@@ -2128,7 +2128,7 @@ cdef class qint(circuit):
 				seq = Q_xor((<qint>other).bits)
 
 			arr = qubit_array
-			run_instruction(seq, &arr[0], False, _circuit)
+			run_instruction(seq, &arr[0], False, _circuit, 0)
 
 		# Capture end layer
 		result._start_layer = start_layer
@@ -2255,7 +2255,7 @@ cdef class qint(circuit):
 			seq = Q_not(self.bits)
 
 		arr = qubit_array
-		run_instruction(seq, &arr[0], False, _circuit)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 
 		return self
 
@@ -2325,7 +2325,7 @@ cdef class qint(circuit):
 		qubit_array[self.bits:2*self.bits] = self.qubits[self_offset:64]
 		arr = qubit_array
 		seq = Q_xor(self.bits)
-		run_instruction(seq, &arr[0], False, _circuit)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 
 		# Layer tracking for uncomputation
 		result._start_layer = start_layer
@@ -2399,7 +2399,7 @@ cdef class qint(circuit):
 		qubit_array[self.bits:2*self.bits] = self.qubits[self_offset:64]
 		arr = qubit_array
 		seq = Q_xor(self.bits)
-		run_instruction(seq, &arr[0], False, _circuit)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 
 	def __getitem__(self, item: int):
 		"""Access individual qubit as qbool: self[index]
@@ -2597,7 +2597,7 @@ cdef class qint(circuit):
 							qubit_array[start + i] = and_anc_start + i
 
 			arr = qubit_array
-			run_instruction(seq, &arr[0], False, _circuit)
+			run_instruction(seq, &arr[0], False, _circuit, 0)
 
 			# Free AND-ancilla after use
 			if num_and_anc > 0 and _circuit_initialized and and_anc_start != <unsigned int>(-1):
@@ -2725,7 +2725,7 @@ cdef class qint(circuit):
 				qubit_array[1] = self.qubits[64 - operand_bits + i_bit]
 				arr = qubit_array
 				seq = Q_xor(1)
-				run_instruction(seq, &arr[0], False, _circuit)
+				run_instruction(seq, &arr[0], False, _circuit, 0)
 
 			# Copy other's bits to temp_other (LSB-aligned)
 			operand_bits = (<qint>other).bits
@@ -2734,7 +2734,7 @@ cdef class qint(circuit):
 				qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]
 				arr = qubit_array
 				seq = Q_xor(1)
-				run_instruction(seq, &arr[0], False, _circuit)
+				run_instruction(seq, &arr[0], False, _circuit, 0)
 
 			# Subtract: temp_self -= temp_other
 			temp_self -= temp_other
@@ -2848,7 +2848,7 @@ cdef class qint(circuit):
 				qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]
 				arr = qubit_array
 				seq = Q_xor(1)
-				run_instruction(seq, &arr[0], False, _circuit)
+				run_instruction(seq, &arr[0], False, _circuit, 0)
 
 			# Copy self's bits to temp_self (LSB-aligned)
 			operand_bits = self.bits
@@ -2857,7 +2857,7 @@ cdef class qint(circuit):
 				qubit_array[1] = self.qubits[64 - operand_bits + i_bit]
 				arr = qubit_array
 				seq = Q_xor(1)
-				run_instruction(seq, &arr[0], False, _circuit)
+				run_instruction(seq, &arr[0], False, _circuit, 0)
 
 			# Subtract: temp_other -= temp_self
 			temp_other -= temp_self

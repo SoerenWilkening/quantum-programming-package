@@ -5,6 +5,7 @@
 #        make test_hot_path_xor && ./test_hot_path_xor
 #        make test_reverse_circuit && ./test_reverse_circuit
 #        make test_allocator_block && ./test_allocator_block
+#        make test_tracking_only && ./test_tracking_only
 
 CC = gcc
 CFLAGS = -Wall -Wextra -g -I../../c_backend/include
@@ -95,6 +96,16 @@ REVERSE_SRCS = $(BACKEND_SRC)/execution.c \
                $(BACKEND_SRC)/circuit_stats.c \
                $(BACKEND_SRC)/circuit_optimizer.c
 
+# Sources for tracking_only tests (circuit + execution, no arithmetic)
+TRACKING_SRCS = $(BACKEND_SRC)/execution.c \
+                $(BACKEND_SRC)/optimizer.c \
+                $(BACKEND_SRC)/gate.c \
+                $(BACKEND_SRC)/qubit_allocator.c \
+                $(BACKEND_SRC)/circuit_allocations.c \
+                $(BACKEND_SRC)/circuit_output.c \
+                $(BACKEND_SRC)/circuit_stats.c \
+                $(BACKEND_SRC)/circuit_optimizer.c
+
 # Test targets
 test_comparison: test_comparison.c $(BACKEND_SRCS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
@@ -111,6 +122,9 @@ test_hot_path_xor: test_hot_path_xor.c $(XOR_SRCS)
 test_reverse_circuit: test_reverse_circuit.c $(REVERSE_SRCS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
+test_tracking_only: test_tracking_only.c $(TRACKING_SRCS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
 test_allocator_block: test_allocator_block.c $(ALLOC_SRCS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
@@ -119,7 +133,7 @@ test_allocator_block_debug: test_allocator_block.c $(ALLOC_SRCS)
 
 .PHONY: clean
 clean:
-	rm -f test_comparison test_hot_path_mul test_hot_path_add test_hot_path_xor test_reverse_circuit test_allocator_block test_allocator_block_debug
+	rm -f test_comparison test_hot_path_mul test_hot_path_add test_hot_path_xor test_reverse_circuit test_tracking_only test_allocator_block test_allocator_block_debug
 
 .PHONY: run
 run: test_comparison

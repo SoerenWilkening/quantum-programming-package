@@ -14,6 +14,7 @@ circuit_t *init_circuit() {
     circ->used = 0;
     circ->used_layer = 0;
     circ->layer_floor = 0;
+    circ->gate_count = 0;
     circ->toff_decomp = DONTDECOMPOSETOFFOLI;
     circ->arithmetic_mode = ARITH_TOFFOLI;
     circ->cla_override = 0;            // Auto: use CLA when width >= threshold

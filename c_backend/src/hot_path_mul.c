@@ -78,7 +78,7 @@ void hot_path_mul_qq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bi
         return;
     }
 
-    run_instruction(seq, qa, 0, circ);
+    run_instruction(seq, qa, 0, circ, 0);
 }
 
 void hot_path_mul_cq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bits,
@@ -137,5 +137,5 @@ void hot_path_mul_cq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bi
         return;
     }
 
-    run_instruction(seq, qa, 0, circ);
+    run_instruction(seq, qa, 0, circ, 0);
 }

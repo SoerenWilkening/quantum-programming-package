@@ -11,10 +11,21 @@
 #include <assert.h>
 
 // apply the sequences to the desired qubits
-void run_instruction(sequence_t *res, const qubit_t qubit_array[], int invert, circuit_t *circ) {
+// tracking_only: when non-zero, counts gates in circ->gate_count without calling add_gate()
+void run_instruction(sequence_t *res, const qubit_t qubit_array[], int invert, circuit_t *circ,
+                     int tracking_only) {
 
     if (res == NULL)
         return;
+
+    // Fast path: count gates without building the circuit
+    if (tracking_only) {
+        for (int layer_index = 0; layer_index < res->used_layer; ++layer_index) {
+            circ->gate_count += res->gates_per_layer[layer_index];
+        }
+        return;
+    }
+
     int direction = (invert) ? -1 : 1;
 
     //    printf("%d %d\n", direction, invert);
@@ -63,6 +74,7 @@ void run_instruction(sequence_t *res, const qubit_t qubit_array[], int invert, c
             }
 
             add_gate(circ, &g);
+            circ->gate_count++;
             // NOTE: Do NOT free g.large_control here. The circuit takes ownership
             // of the allocated large_control via memcpy in append_gate (Phase 67).
             // free_circuit handles cleanup of all large_control arrays.
@@ -136,11 +148,11 @@ void reverse_circuit_range(circuit_t *circ, int start_layer, int end_layer) {
 // Internal C-to-C calls continue to use the originals directly.
 
 int validated_run_instruction(sequence_t *res, const qubit_t qubit_array[], int invert,
-                              circuit_t *circ) {
+                              circuit_t *circ, int tracking_only) {
     if (circ == NULL)
         return QV_NULL_CIRC;
     // NULL res is already handled (no-op) by run_instruction, so no error
-    run_instruction(res, qubit_array, invert, circ);
+    run_instruction(res, qubit_array, invert, circ, tracking_only);
     return QV_OK;
 }
 

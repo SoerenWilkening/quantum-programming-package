@@ -135,7 +135,7 @@
 				seq = Q_and(result_bits)
 
 		arr = qubit_array
-		run_instruction(seq, &arr[0], False, _circuit)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 
 		# Capture end layer
 		result._start_layer = start_layer
@@ -292,7 +292,7 @@
 				seq = Q_or(result_bits)
 
 		arr = qubit_array
-		run_instruction(seq, &arr[0], False, _circuit)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 
 		# Capture end layer
 		result._start_layer = start_layer
@@ -425,7 +425,7 @@
 			qubit_array[self.bits + i] = self.qubits[self_offset + i]
 		arr = qubit_array
 		seq = Q_xor(self.bits)  # XOR self into result (copying self to result)
-		run_instruction(seq, &arr[0], False, _circuit)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 
 		# Now XOR other into result
 		if type(other) == int:
@@ -437,7 +437,7 @@
 						qubit_array[0] = result_qubits[64 - result_bits + i]
 						arr = qubit_array
 						seq = Q_not(1)
-						run_instruction(seq, &arr[0], False, _circuit)
+						run_instruction(seq, &arr[0], False, _circuit, 0)
 		else:
 			other_offset = 64 - (<qint>other).bits
 			for i in range((<qint>other).bits):
@@ -452,7 +452,7 @@
 				seq = Q_xor((<qint>other).bits)
 
 			arr = qubit_array
-			run_instruction(seq, &arr[0], False, _circuit)
+			run_instruction(seq, &arr[0], False, _circuit, 0)
 
 		# Capture end layer
 		result._start_layer = start_layer
@@ -579,7 +579,7 @@
 			seq = Q_not(self.bits)
 
 		arr = qubit_array
-		run_instruction(seq, &arr[0], False, _circuit)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 
 		return self
 
@@ -649,7 +649,7 @@
 		qubit_array[self.bits:2*self.bits] = self.qubits[self_offset:64]
 		arr = qubit_array
 		seq = Q_xor(self.bits)
-		run_instruction(seq, &arr[0], False, _circuit)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 
 		# Layer tracking for uncomputation
 		result._start_layer = start_layer
@@ -723,7 +723,7 @@
 		qubit_array[self.bits:2*self.bits] = self.qubits[self_offset:64]
 		arr = qubit_array
 		seq = Q_xor(self.bits)
-		run_instruction(seq, &arr[0], False, _circuit)
+		run_instruction(seq, &arr[0], False, _circuit, 0)
 
 	def __getitem__(self, item: int):
 		"""Access individual qubit as qbool: self[index]

@@ -329,7 +329,7 @@ void toffoli_mul_cq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bit
                 free(bin);
                 return;
             }
-            run_instruction(toff_seq, tqa, 0, circ);
+            run_instruction(toff_seq, tqa, 0, circ, 0);
         } else {
             /* General case: uncontrolled addition of width bits */
             qubit_t ancilla = allocator_alloc(circ->allocator, 1, true);
@@ -365,7 +365,7 @@ void toffoli_mul_cq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bit
                 free(bin);
                 return;
             }
-            run_instruction(toff_seq, tqa, 0, circ);
+            run_instruction(toff_seq, tqa, 0, circ, 0);
             allocator_free(circ->allocator, ancilla, 1);
         }
     }
@@ -484,7 +484,7 @@ void toffoli_cmul_qq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bi
                 allocator_free(circ->allocator, carry, 1);
                 return;
             }
-            run_instruction(toff_seq, tqa, 0, circ);
+            run_instruction(toff_seq, tqa, 0, circ, 0);
             allocator_free(circ->allocator, inner_and, 1);
 
             /* Step 3: Uncompute AND: and_anc = 0 (CCX is self-inverse).
@@ -564,7 +564,7 @@ void toffoli_cmul_cq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bi
                 free(bin);
                 return;
             }
-            run_instruction(toff_seq, tqa, 0, circ);
+            run_instruction(toff_seq, tqa, 0, circ, 0);
         } else {
             /* General case: controlled addition using toffoli_cQQ_add.
              * Phase 74-03: cQQ_add now expects AND-ancilla at [2*width+2].
@@ -597,7 +597,7 @@ void toffoli_cmul_cq(circuit_t *circ, const unsigned int *ret_qubits, int ret_bi
                 free(bin);
                 return;
             }
-            run_instruction(toff_seq, tqa, 0, circ);
+            run_instruction(toff_seq, tqa, 0, circ, 0);
             allocator_free(circ->allocator, cq_and, 1);
         }
     }
