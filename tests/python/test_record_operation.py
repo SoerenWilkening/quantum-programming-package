@@ -303,8 +303,8 @@ class TestCompileCaptureRecording:
         # These operations happen outside compile -- no DAG context
         c = a + b
         d = a & b
-        # No DAG should exist
-        # Just verify no crash occurred
+        # Verify no DAG context is active
+        assert current_dag_context() is None
 
     def test_replay_does_not_double_record(self):
         """Cache replay path does NOT record operation-level nodes."""
@@ -447,9 +447,7 @@ class TestRecordedNodeMetadata:
         dag = inc.call_graph
         for node in dag.nodes:
             if node.operation_type and node.qubit_mapping:
-                assert set(node.qubit_mapping).issubset(
-                    node.qubit_set | set(node.qubit_mapping)
-                )
+                assert set(node.qubit_mapping).issubset(node.qubit_set)
 
     def test_bitmask_consistent_with_qubit_set(self):
         ql.circuit()

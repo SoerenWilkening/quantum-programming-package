@@ -89,14 +89,19 @@ class TestOpt1DagOnlyReplay:
 
         dag = inc._call_graph
         assert dag is not None, "opt=1 should build a call graph DAG"
-        assert dag.node_count == 3, f"Expected 3 DAG nodes, got {dag.node_count}"
+        assert dag.node_count >= 3, f"Expected >= 3 DAG nodes, got {dag.node_count}"
 
         agg = dag.aggregate()
         assert agg["gates"] > 0, "Aggregate gate count should be positive"
-        # All 3 calls do the same operation, so each node should have same gate count
-        gate_counts = [n.gate_count for n in dag.nodes]
+        # All 3 top-level call nodes do the same operation, so each should
+        # have the same gate count.  Operation-level nodes have gate_count=0
+        # and must be excluded.
+        gate_counts = [
+            n.gate_count for n in dag.nodes
+            if not n.operation_type or n.operation_type == ""
+        ]
         assert len(set(gate_counts)) == 1, (
-            f"All nodes should have same gate count, got {gate_counts}"
+            f"All call nodes should have same gate count, got {gate_counts}"
         )
         # Total gates = 3 * per-call gates
         assert agg["gates"] == 3 * gate_counts[0], (
