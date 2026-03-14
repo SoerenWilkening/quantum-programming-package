@@ -50,10 +50,8 @@ from .call_graph import (
     _compute_t_count,
     _dag_builder_stack,
     current_dag_context,
-    get_tracking_only,
     pop_dag_context,
     push_dag_context,
-    set_tracking_only,
 )
 from .qint import qint
 
@@ -734,7 +732,6 @@ class CompiledFunc:
         parametric=False,
         opt=1,
         merge_threshold=1,
-        simulate=False,
     ):
         functools.update_wrapper(self, func)
         self._func = func
@@ -749,7 +746,6 @@ class CompiledFunc:
         self._parametric = parametric
         self._opt = opt
         self._merge_threshold = merge_threshold
-        self._simulate = simulate
         self._merged_blocks = None
         if self._parametric and self._opt == 2:
             raise ValueError("parametric=True is not supported with opt=2")
@@ -905,10 +901,11 @@ class CompiledFunc:
             _track_fwd = self._inverse_func is not None
             block = self._cache[cache_key]
             result = self._replay(block, quantum_args, track_forward=_track_fwd)
-            # opt=1 DAG-only: gate injection is skipped in _replay, so
-            # manually credit the gate count so get_gate_count() reflects
-            # the logical cost of this replay.
-            if self._opt == 1 and block is not None:
+            # Manually credit the gate count when simulate=False (no gates
+            # injected) or opt=1 (inject_remapped_gates/add_gate does not
+            # increment gate_count) so get_gate_count() reflects the
+            # logical cost of this replay.
+            if (not option('simulate') or self._opt == 1) and block is not None:
                 _replay_count = (
                     block.original_gate_count
                     if block.original_gate_count
@@ -1070,8 +1067,9 @@ class CompiledFunc:
         # Record start layer
         start_layer = get_current_layer()
 
-        # For tracking_only mode, record gate count before execution
-        _use_tracking = not self._simulate and self._opt == 1
+        # Check if circuit is in tracking-only mode (simulate=False).
+        # Gate count is used to compute per-block cost when gates aren't stored.
+        _use_tracking = not option('simulate')
         _gate_count_before = get_gate_count() if _use_tracking else 0
 
         # Collect parameter qubit indices BEFORE execution
@@ -1090,38 +1088,28 @@ class CompiledFunc:
                 )
                 push_dag_context(dag, _dag_node_idx)
 
-        # Set tracking_only mode when simulate=False (call-graph-only execution).
-        # Gates are counted via run_instruction's tracking_only path but not
-        # stored in the global circuit.
-        _use_tracking = not self._simulate and self._opt == 1
-        _saved_tracking = get_tracking_only()
-        if _use_tracking:
-            set_tracking_only(1)
-
         # Execute function normally (gates flow to circuit as usual,
-        # or in tracking_only mode when simulate=False)
+        # or in tracking-only mode when ql.option('simulate') is False)
         try:
             result = self._func(*args, **kwargs)
         except Exception:
             # Do NOT cache partial result -- let exception propagate
             raise
         finally:
-            if _use_tracking:
-                set_tracking_only(_saved_tracking)
             if _dag_node_idx is not None:
                 pop_dag_context()
 
         # Record end layer
         end_layer = get_current_layer()
 
-        # In tracking_only mode, compute gate count from circ->gate_count
+        # In tracking-only mode, compute gate count from circ->gate_count
         # difference (gates were counted but not stored in the circuit).
         _tracking_gate_count = 0
         if _use_tracking:
             _tracking_gate_count = get_gate_count() - _gate_count_before
 
-        # Extract captured gates (empty in tracking_only mode since
-        # gates are counted but not stored)
+        # Extract captured gates (empty in tracking-only mode (simulate=False)
+        # since gates are counted but not stored)
         raw_gates = extract_gate_range(start_layer, end_layer)
 
         # Build virtual mapping
@@ -1542,12 +1530,9 @@ class CompiledFunc:
         start_layer = get_current_layer()
         _set_layer_floor(start_layer)
 
-        # Inject remapped gates (skip for opt=1 DAG-only replay)
-        if self._opt != 1:
+        # Inject remapped gates (skip when simulate=False)
+        if option('simulate'):
             inject_remapped_gates(block.gates, virtual_to_real)
-        # opt=1: DAG-only replay -- skip gate injection.
-        # The DAG node (recorded in _call_inner) stores gate count, depth,
-        # T-count from the cached block. No flat circuit expansion needed.
 
         end_layer = get_current_layer()
         # Restore layer_floor
@@ -2019,7 +2004,6 @@ def compile(
     parametric=False,
     opt=1,
     merge_threshold=1,
-    simulate=False,
 ):
     """Decorator that compiles a quantum function for cached gate replay.
 
@@ -2057,18 +2041,19 @@ def compile(
         detects this automatically on the second call with a different
         classical value and falls back to per-value caching for
         correctness.  No user action is required.
-    simulate : bool
-        If True, gates are emitted to the global circuit during capture.
-        If False (default) and ``opt=1``, the capture phase passes
-        ``tracking_only=1`` to ``run_instruction()`` so gates are counted
-        but not stored.  This enables call-graph-only execution mode
-        (PRD R7.1): the DAG records gate counts, depth, and T-count per
-        operation, but the flat circuit remains empty.
 
     Returns
     -------
     CompiledFunc or decorator
         CompiledFunc wrapper or decorator function.
+
+    Notes
+    -----
+    Gate simulation is controlled by ``ql.option('simulate')``, not by a
+    per-function parameter.  When ``simulate`` is False (default), gates
+    are counted but not stored in the circuit.  Set
+    ``ql.option('simulate', True)`` before calling compiled functions to
+    enable full circuit construction.
 
     Examples
     --------
@@ -2080,11 +2065,6 @@ def compile(
     >>> @ql.compile(max_cache=16)
     ... def multiply(x, y):
     ...     return x * y
-
-    >>> @ql.compile(simulate=False, opt=1)
-    ... def add_val(x, val):
-    ...     x += val
-    ...     return x
     """
 
     def decorator(fn):
@@ -2099,7 +2079,6 @@ def compile(
             parametric=parametric,
             opt=opt,
             merge_threshold=merge_threshold,
-            simulate=simulate,
         )
 
     if func is not None:
@@ -2115,7 +2094,6 @@ def compile(
             parametric=parametric,
             opt=opt,
             merge_threshold=merge_threshold,
-            simulate=simulate,
         )
     # Called as @ql.compile() or @ql.compile(max_cache=N)
     return decorator

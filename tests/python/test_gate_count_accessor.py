@@ -37,8 +37,8 @@ class TestGetGateCount:
         get_gate_count() only tracks gates emitted via run_instruction().
         circuit.gate_count (via circuit_gate_count) counts all stored gates
         including those from hot-path functions that bypass run_instruction.
-        The two may differ in either direction depending on which code paths
-        are used.
+        The two may differ: when simulate=False (default), stored count is 0
+        while running count is positive.  When simulate=True, both are positive.
         """
         c = ql.circuit()
         a = ql.qint(5, width=4)
@@ -46,9 +46,13 @@ class TestGetGateCount:
         _ = a + b
         running = ql.get_gate_count()
         stored = c.gate_count
-        # Both should be positive after operations
+        # Running count should always be positive
         assert running > 0
-        assert stored > 0
+        # Stored count depends on simulate option
+        if ql.option('simulate'):
+            assert stored > 0
+        else:
+            assert stored == 0
 
     def test_gate_count_monotonically_increases(self):
         """Gate count never decreases during normal execution."""
@@ -131,15 +135,15 @@ class TestResetGateCount:
 
 
 class TestPxdDeclarations:
-    """Verify that .pxd declarations for tracking_only and gate_count are
+    """Verify that .pxd declarations for simulate and gate_count are
     functional by exercising the code paths they enable."""
 
     def test_run_instruction_tracking_only_declared(self):
-        """run_instruction with tracking_only=0 works (normal path).
+        """run_instruction with 4-arg signature works (normal path).
 
-        This indirectly verifies the .pxd declaration includes the
-        tracking_only parameter, since all qint operations go through
-        run_instruction(..., tracking_only=0).
+        This indirectly verifies the .pxd declaration matches the
+        current run_instruction(seq, qubit_array, invert, circ)
+        signature, since all qint operations go through it.
         """
         ql.circuit()
         a = ql.qint(5, width=4)
