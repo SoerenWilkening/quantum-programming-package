@@ -631,6 +631,7 @@ def record_operation(
     operation_type: str,
     qubit_indices: tuple | list,
     *,
+    gate_count: int = 0,
     sequence_ptr: int = 0,
     invert: bool = False,
 ) -> int | None:
@@ -649,6 +650,9 @@ def record_operation(
         ``"xor"``, ``"eq"``).
     qubit_indices : tuple or list of int
         Physical qubit indices passed to ``run_instruction``.
+    gate_count : int
+        Number of gates in the operation, typically read from
+        ``sequence_t.total_gate_count`` after ``run_instruction``.
     sequence_ptr : int
         C pointer to the ``sequence_t`` (cast to Python int via
         ``<unsigned long long>``).  Default 0 means pointer not captured.
@@ -671,7 +675,7 @@ def record_operation(
     return dag.add_node(
         operation_type,
         qubit_set,
-        0,  # gate_count -- not known at primitive level
+        gate_count,
         (),  # cache_key -- not applicable for primitives
         parent_index=parent_idx,
         sequence_ptr=sequence_ptr,

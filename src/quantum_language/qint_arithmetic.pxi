@@ -24,6 +24,7 @@
 		cdef sequence_t *seq
 		cdef int result_bits
 		cdef int pos
+		cdef size_t gc_before, gc_delta
 
 		# Extract self qubits (right-aligned in 64-element array)
 		for i in range(self_bits):
@@ -39,13 +40,16 @@
 
 			# Toffoli dispatch for CQ
 			if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
+				gc_before = _circ.gate_count
 				_toffoli_dispatch_cq(_circ, self_qa, self_bits,
 				                     classical_value, invert,
 				                     _controlled, control_qubit)
+				gc_delta = _circ.gate_count - gc_before
 				_record_operation(
 					"add_cq",
 					tuple(self_qa[i] for i in range(self_bits))
 					+ ((control_qubit,) if _controlled else ()),
+					gate_count=gc_delta,
 					invert=bool(invert),
 				)
 				return self
@@ -63,10 +67,11 @@
 				seq = CQ_add(self_bits, classical_value)
 			if seq == NULL:
 				return self
-			run_instruction(seq, qa, invert, <circuit_t*>_circ, _get_tracking_only())
+			run_instruction(seq, qa, invert, <circuit_t*>_circ)
 			_record_operation(
 				"add_cq",
 				tuple(qa[i] for i in range(pos)),
+				gate_count=seq.total_gate_count,
 				sequence_ptr=<unsigned long long>seq,
 				invert=bool(invert),
 			)
@@ -86,14 +91,17 @@
 
 		# Toffoli dispatch for QQ
 		if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
+			gc_before = _circ.gate_count
 			_toffoli_dispatch_qq(_circ, self_qa, self_bits,
 			                     other_qa, other_bits, invert,
 			                     _controlled, control_qubit, result_bits)
+			gc_delta = _circ.gate_count - gc_before
 			_record_operation(
 				"add_qq",
 				tuple(self_qa[i] for i in range(self_bits))
 				+ tuple(other_qa[i] for i in range(other_bits))
 				+ ((control_qubit,) if _controlled else ()),
+				gate_count=gc_delta,
 				invert=bool(invert),
 			)
 			return self
@@ -113,10 +121,11 @@
 			seq = QQ_add(result_bits)
 		if seq == NULL:
 			return self
-		run_instruction(seq, qa, invert, <circuit_t*>_circ, _get_tracking_only())
+		run_instruction(seq, qa, invert, <circuit_t*>_circ)
 		_record_operation(
 			"add_qq",
 			tuple(qa[i] for i in range(pos + (1 if _controlled else 0))),
+			gate_count=seq.total_gate_count,
 			sequence_ptr=<unsigned long long>seq,
 			invert=bool(invert),
 		)
@@ -587,6 +596,7 @@
 		cdef int result_bits = (<qint>ret).bits
 		cdef sequence_t *seq
 		cdef int pos
+		cdef size_t gc_before, gc_delta
 
 		# Extract ret qubits (right-aligned in 64-element array)
 		for i in range(result_bits):
@@ -606,6 +616,7 @@
 
 			# Toffoli dispatch for CQ
 			if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
+				gc_before = _circ.gate_count
 				if _controlled:
 					toffoli_cmul_cq(<circuit_t*>_circ, ret_qa, result_bits,
 					                self_qa, self_bits, classical_value,
@@ -613,11 +624,13 @@
 				else:
 					toffoli_mul_cq(<circuit_t*>_circ, ret_qa, result_bits,
 					               self_qa, self_bits, classical_value)
+				gc_delta = _circ.gate_count - gc_before
 				_record_operation(
 					"mul_cq",
 					tuple(ret_qa[i] for i in range(result_bits))
 					+ tuple(self_qa[i] for i in range(self_bits))
 					+ ((control_qubit,) if _controlled else ()),
+					gate_count=gc_delta,
 				)
 				return ret
 
@@ -637,10 +650,11 @@
 				seq = CQ_mul(result_bits, classical_value)
 			if seq == NULL:
 				return ret
-			run_instruction(seq, qa, 0, <circuit_t*>_circ, _get_tracking_only())
+			run_instruction(seq, qa, 0, <circuit_t*>_circ)
 			_record_operation(
 				"mul_cq",
 				tuple(qa[i] for i in range(pos)),
+				gate_count=seq.total_gate_count,
 				sequence_ptr=<unsigned long long>seq,
 			)
 			return ret
@@ -657,6 +671,7 @@
 
 		# Toffoli dispatch for QQ
 		if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
+			gc_before = _circ.gate_count
 			if _controlled:
 				toffoli_cmul_qq(<circuit_t*>_circ, ret_qa, result_bits,
 				                self_qa, self_bits, other_qa, other_bits,
@@ -664,12 +679,14 @@
 			else:
 				toffoli_mul_qq(<circuit_t*>_circ, ret_qa, result_bits,
 				               self_qa, self_bits, other_qa, other_bits)
+			gc_delta = _circ.gate_count - gc_before
 			_record_operation(
 				"mul_qq",
 				tuple(ret_qa[i] for i in range(result_bits))
 				+ tuple(self_qa[i] for i in range(self_bits))
 				+ tuple(other_qa[i] for i in range(other_bits))
 				+ ((control_qubit,) if _controlled else ()),
+				gate_count=gc_delta,
 			)
 			return ret
 
@@ -692,10 +709,11 @@
 			seq = QQ_mul(result_bits)
 		if seq == NULL:
 			return ret
-		run_instruction(seq, qa, 0, <circuit_t*>_circ, _get_tracking_only())
+		run_instruction(seq, qa, 0, <circuit_t*>_circ)
 		_record_operation(
 			"mul_qq",
 			tuple(qa[i] for i in range(pos)),
+			gate_count=seq.total_gate_count,
 			sequence_ptr=<unsigned long long>seq,
 		)
 		return ret
