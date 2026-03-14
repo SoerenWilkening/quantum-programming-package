@@ -40,6 +40,7 @@ __version__ = "0.1.0"
 # (Users can also access via ql.state.X)
 from ._core import (
     AVAILABLE_PASSES,
+    add_gate_count,
     circuit,
     circuit_stats,
     get_current_layer,

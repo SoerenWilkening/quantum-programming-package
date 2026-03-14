@@ -855,6 +855,24 @@ def get_gate_count():
 	return circ.gate_count
 
 
+def add_gate_count(int n):
+	"""Add *n* to the running gate count without emitting gates.
+
+	Used by replay paths (e.g. ``opt=1`` DAG-only mode) that skip gate
+	injection but still need ``get_gate_count()`` to reflect the logical
+	gate cost.
+
+	Parameters
+	----------
+	n : int
+		Number of gates to add to the counter.
+	"""
+	cdef circuit_s *circ
+	_validate_circuit()
+	circ = <circuit_s*>_circuit
+	circ.gate_count += n
+
+
 def reset_gate_count():
 	"""Reset the running gate count to zero.
 

@@ -37,6 +37,7 @@ from ._core import (
     _register_cache_clear_hook,
     _set_control_stack,
     _set_layer_floor,
+    add_gate_count,
     extract_gate_range,
     get_current_layer,
     get_gate_count,
@@ -733,7 +734,7 @@ class CompiledFunc:
         parametric=False,
         opt=1,
         merge_threshold=1,
-        simulate=True,
+        simulate=False,
     ):
         functools.update_wrapper(self, func)
         self._func = func
@@ -902,13 +903,26 @@ class CompiledFunc:
             # Move to end (most recently used)
             self._cache.move_to_end(cache_key)
             _track_fwd = self._inverse_func is not None
-            result = self._replay(self._cache[cache_key], quantum_args, track_forward=_track_fwd)
-            # Record DAG node for replay path (no nesting -- body not re-executed)
-            if _building_dag:
+            block = self._cache[cache_key]
+            result = self._replay(block, quantum_args, track_forward=_track_fwd)
+            # opt=1 DAG-only: gate injection is skipped in _replay, so
+            # manually credit the gate count so get_gate_count() reflects
+            # the logical cost of this replay.
+            if self._opt == 1 and block is not None:
+                _replay_count = (
+                    block.original_gate_count
+                    if block.original_gate_count
+                    else len(block.gates)
+                )
+                if _replay_count:
+                    add_gate_count(_replay_count)
+            # Record DAG node for replay path (no nesting -- body not
+            # re-executed).  Skip for opt=1: the DAG was fully built
+            # during capture and should not grow on subsequent calls.
+            if _building_dag and self._opt != 1:
                 ctx = current_dag_context()
                 if ctx is not None:
                     dag, parent_idx = ctx
-                    block = self._cache.get(cache_key)
                     extra = (
                         block._capture_virtual_to_real
                         if (block and block._capture_virtual_to_real)
@@ -2005,7 +2019,7 @@ def compile(
     parametric=False,
     opt=1,
     merge_threshold=1,
-    simulate=True,
+    simulate=False,
 ):
     """Decorator that compiles a quantum function for cached gate replay.
 
@@ -2044,8 +2058,8 @@ def compile(
         classical value and falls back to per-value caching for
         correctness.  No user action is required.
     simulate : bool
-        If True (default), gates are emitted to the global circuit during
-        capture.  If False and ``opt=1``, the capture phase passes
+        If True, gates are emitted to the global circuit during capture.
+        If False (default) and ``opt=1``, the capture phase passes
         ``tracking_only=1`` to ``run_instruction()`` so gates are counted
         but not stored.  This enables call-graph-only execution mode
         (PRD R7.1): the DAG records gate counts, depth, and T-count per

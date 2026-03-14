@@ -4,7 +4,7 @@ Access via: from quantum_language.state import ...
 Or: import quantum_language as ql; ql.state.circuit_stats()
 """
 
-from .quantum_language._core import (
+from .._core import (
     circuit_stats,
     get_current_layer,
     get_gate_count,
