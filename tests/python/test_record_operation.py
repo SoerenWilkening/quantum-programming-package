@@ -92,8 +92,11 @@ class TestRecordOperation:
         child = record_operation("add_cq", (0, 1))
         edges = dag.dag.edge_list()
         assert (parent, child) in edges
-        edge_data = dag.dag.get_edge_data(parent, child)
-        assert edge_data == {"type": "call"}
+        # Multiple edges may exist (call + execution_order); verify a call
+        # edge is present among them.
+        edge_indices = dag.dag.edge_indices_from_endpoints(parent, child)
+        edge_types = [dag.dag.get_edge_data_by_index(e).get("type") for e in edge_indices]
+        assert "call" in edge_types
 
     def test_no_parent_no_edge(self):
         dag = CallGraphDAG()

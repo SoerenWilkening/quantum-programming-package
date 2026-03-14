@@ -173,6 +173,7 @@ class CallGraphDAG:
     def __init__(self):
         self._dag: rx.PyDAG = rx.PyDAG()
         self._nodes: list[DAGNode] = []
+        self._qubit_last_node: dict[int, int] = {}
 
     # -- Node management ----------------------------------------------------
 
@@ -233,7 +234,34 @@ class CallGraphDAG:
         self._nodes.append(node)
         if parent_index is not None:
             self._dag.add_edge(parent_index, idx, {"type": "call"})
+        # Build execution-order edges for nodes with qubit information.
+        if qubit_set:
+            self._connect_by_execution_order(idx, node.qubit_set)
         return idx
+
+    def _connect_by_execution_order(self, node_idx: int, qubit_set: frozenset) -> None:
+        """Add execution-order edges from predecessor nodes to *node_idx*.
+
+        For each qubit in *qubit_set*, look up the last node that touched it
+        in ``_qubit_last_node``.  Collect the unique set of parent node
+        indices.  Add an ``{"type": "execution_order"}`` edge from each
+        parent to *node_idx*.  If no parents are found the node is an
+        execution-order root (first to touch these qubits).
+
+        After adding edges, update ``_qubit_last_node[q] = node_idx`` for
+        every qubit in *qubit_set*.
+        """
+        parents: set[int] = set()
+        for q in qubit_set:
+            prev = self._qubit_last_node.get(q)
+            if prev is not None:
+                parents.add(prev)
+
+        for p in parents:
+            self._dag.add_edge(p, node_idx, {"type": "execution_order"})
+
+        for q in qubit_set:
+            self._qubit_last_node[q] = node_idx
 
     # -- Overlap edge computation -------------------------------------------
 
@@ -251,9 +279,12 @@ class CallGraphDAG:
         # Collect existing call-edge pairs to skip
         call_pairs: set[tuple[int, int]] = set()
         for src, tgt in self._dag.edge_list():
-            edge_data = self._dag.get_edge_data(src, tgt)
-            if isinstance(edge_data, dict) and edge_data.get("type") == "call":
-                call_pairs.add((min(src, tgt), max(src, tgt)))
+            edge_indices = self._dag.edge_indices_from_endpoints(src, tgt)
+            for eidx in edge_indices:
+                edata = self._dag.get_edge_data_by_index(eidx)
+                if isinstance(edata, dict) and edata.get("type") == "call":
+                    call_pairs.add((min(src, tgt), max(src, tgt)))
+                    break
 
         for i in range(n):
             arr_i = self._nodes[i]._qubit_array
@@ -415,15 +446,18 @@ class CallGraphDAG:
             for idx in range(len(self._nodes)):
                 lines.append(_emit_node(idx))
 
-        # Edges
-        for src, tgt in self._dag.edge_list():
-            edge_data = self._dag.get_edge_data(src, tgt)
+        # Edges (iterate by index to handle multi-edges correctly)
+        for eidx in self._dag.edge_indices():
+            src, tgt = self._dag.get_edge_endpoints_by_index(eidx)
+            edge_data = self._dag.get_edge_data_by_index(eidx)
             if isinstance(edge_data, dict):
                 if edge_data.get("type") == "call":
                     lines.append(f'  n{src} -> n{tgt} [label="call"];')
                 elif edge_data.get("type") == "overlap":
                     w = edge_data.get("weight", 0)
                     lines.append(f'  n{src} -> n{tgt} [style=dashed, label="{w} qubits"];')
+                elif edge_data.get("type") == "execution_order":
+                    lines.append(f'  n{src} -> n{tgt} [label="exec"];')
 
         lines.append("}")
         return "\n".join(lines)
@@ -495,6 +529,16 @@ class CallGraphDAG:
     def node_count(self) -> int:
         """Return number of nodes in the DAG."""
         return len(self._nodes)
+
+    def execution_order_edges(self) -> list[tuple[int, int]]:
+        """Return all execution-order edges as (src, tgt) pairs."""
+        result = []
+        for eidx in self._dag.edge_indices():
+            edata = self._dag.get_edge_data_by_index(eidx)
+            if isinstance(edata, dict) and edata.get("type") == "execution_order":
+                src, tgt = self._dag.get_edge_endpoints_by_index(eidx)
+                result.append((src, tgt))
+        return result
 
     @property
     def dag(self) -> rx.PyDAG:
