@@ -10,16 +10,27 @@
 #include "validation.h"
 #include <assert.h>
 
+// Compute total_gate_count as sum of gates_per_layer.
+// Call after sequence is fully built (all layers populated).
+void sequence_compute_total_gate_count(sequence_t *seq) {
+    if (seq == NULL)
+        return;
+    num_t total = 0;
+    for (int i = 0; i < (int)seq->used_layer; ++i) {
+        total += seq->gates_per_layer[i];
+    }
+    seq->total_gate_count = total;
+}
+
 // apply the sequences to the desired qubits
-// tracking_only: when non-zero, counts gates in circ->gate_count without calling add_gate()
-void run_instruction(sequence_t *res, const qubit_t qubit_array[], int invert, circuit_t *circ,
-                     int tracking_only) {
+// When circ->simulate is 0, counts gates in circ->gate_count without calling add_gate()
+void run_instruction(sequence_t *res, const qubit_t qubit_array[], int invert, circuit_t *circ) {
 
     if (res == NULL)
         return;
 
     // Fast path: count gates without building the circuit
-    if (tracking_only) {
+    if (!circ->simulate) {
         for (int layer_index = 0; layer_index < res->used_layer; ++layer_index) {
             circ->gate_count += res->gates_per_layer[layer_index];
         }
@@ -148,11 +159,11 @@ void reverse_circuit_range(circuit_t *circ, int start_layer, int end_layer) {
 // Internal C-to-C calls continue to use the originals directly.
 
 int validated_run_instruction(sequence_t *res, const qubit_t qubit_array[], int invert,
-                              circuit_t *circ, int tracking_only) {
+                              circuit_t *circ) {
     if (circ == NULL)
         return QV_NULL_CIRC;
     // NULL res is already handled (no-op) by run_instruction, so no error
-    run_instruction(res, qubit_array, invert, circ, tracking_only);
+    run_instruction(res, qubit_array, invert, circ);
     return QV_OK;
 }
 

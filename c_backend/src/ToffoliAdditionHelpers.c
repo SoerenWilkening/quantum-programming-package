@@ -28,6 +28,7 @@ sequence_t *alloc_sequence(int num_layers) {
 
     seq->num_layer = num_layers;
     seq->used_layer = 0;
+    seq->total_gate_count = 0;
     seq->gates_per_layer = calloc(num_layers, sizeof(num_t));
     if (seq->gates_per_layer == NULL) {
         free(seq);
@@ -77,6 +78,7 @@ sequence_t *copy_hardcoded_sequence(const sequence_t *src) {
 
     dst->num_layer = src->num_layer;
     dst->used_layer = src->used_layer;
+    dst->total_gate_count = src->total_gate_count;
     dst->gates_per_layer = calloc(n, sizeof(num_t));
     dst->seq = calloc(n, sizeof(gate_t *));
     if (dst->gates_per_layer == NULL || dst->seq == NULL) {

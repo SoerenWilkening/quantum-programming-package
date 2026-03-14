@@ -3,6 +3,7 @@
 #        make test_reverse_circuit && ./test_reverse_circuit
 #        make test_allocator_block && ./test_allocator_block
 #        make test_tracking_only && ./test_tracking_only
+#        make test_sequence_gate_count && ./test_sequence_gate_count
 
 CC = gcc
 CFLAGS = -Wall -Wextra -g -I../../c_backend/include
@@ -48,6 +49,17 @@ TRACKING_SRCS = $(BACKEND_SRC)/execution.c \
                 $(BACKEND_SRC)/circuit_stats.c \
                 $(BACKEND_SRC)/circuit_optimizer.c
 
+# Sources for sequence_gate_count tests (circuit + execution + ToffoliAdditionHelpers)
+SEQ_COUNT_SRCS = $(BACKEND_SRC)/execution.c \
+                 $(BACKEND_SRC)/optimizer.c \
+                 $(BACKEND_SRC)/gate.c \
+                 $(BACKEND_SRC)/qubit_allocator.c \
+                 $(BACKEND_SRC)/circuit_allocations.c \
+                 $(BACKEND_SRC)/circuit_output.c \
+                 $(BACKEND_SRC)/circuit_stats.c \
+                 $(BACKEND_SRC)/circuit_optimizer.c \
+                 $(BACKEND_SRC)/ToffoliAdditionHelpers.c
+
 # Test targets
 test_comparison: test_comparison.c $(BACKEND_SRCS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
@@ -59,6 +71,9 @@ test_reverse_circuit: test_reverse_circuit.c $(REVERSE_SRCS)
 test_tracking_only: test_tracking_only.c $(TRACKING_SRCS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
+test_sequence_gate_count: test_sequence_gate_count.c $(SEQ_COUNT_SRCS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
 test_allocator_block: test_allocator_block.c $(ALLOC_SRCS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
@@ -67,7 +82,7 @@ test_allocator_block_debug: test_allocator_block.c $(ALLOC_SRCS)
 
 .PHONY: clean
 clean:
-	rm -f test_comparison test_reverse_circuit test_tracking_only test_allocator_block test_allocator_block_debug
+	rm -f test_comparison test_reverse_circuit test_tracking_only test_sequence_gate_count test_allocator_block test_allocator_block_debug
 
 .PHONY: run
 run: test_comparison

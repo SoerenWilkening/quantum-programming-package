@@ -79,6 +79,7 @@ typedef struct {
     num_t num_layer;
     num_t used_layer;
     num_t *gates_per_layer;
+    num_t total_gate_count;
 } sequence_t;
 
 // ======================================================
