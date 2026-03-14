@@ -22,6 +22,7 @@
  */
 
 #include "Integer.h"
+#include "execution.h"
 #include "gate.h"
 #include "toffoli_addition_internal.h"
 #include "toffoli_arithmetic_ops.h"
@@ -422,9 +423,13 @@ sequence_t *toffoli_QQ_add(int bits) {
     if (bits <= TOFFOLI_HARDCODED_MAX_WIDTH) {
         const sequence_t *hardcoded = get_hardcoded_toffoli_QQ_add(bits);
         if (hardcoded != NULL) {
-            // SAFETY: Const cast is safe -- static sequences have program lifetime
-            precompiled_toffoli_QQ_add[bits] = (sequence_t *)hardcoded;
-            return (sequence_t *)hardcoded;
+            // Copy into mutable memory so total_gate_count can be computed
+            sequence_t *copy = copy_hardcoded_sequence(hardcoded);
+            if (copy != NULL) {
+                sequence_compute_total_gate_count(copy);
+                precompiled_toffoli_QQ_add[bits] = copy;
+                return copy;
+            }
         }
     }
 
@@ -437,6 +442,7 @@ sequence_t *toffoli_QQ_add(int bits) {
         // a[0] ^= b[0]: CNOT(target=0, control=1)
         cx(&seq->seq[0][seq->gates_per_layer[0]++], 0, 1);
         seq->used_layer = 1;
+        sequence_compute_total_gate_count(seq);
 
         precompiled_toffoli_QQ_add[bits] = seq;
         return seq;
@@ -474,6 +480,7 @@ sequence_t *toffoli_QQ_add(int bits) {
     emit_UMA(seq, &layer, ancilla, bits + 0, 0);
 
     seq->used_layer = layer;
+    sequence_compute_total_gate_count(seq);
 
     // Cache and return
     precompiled_toffoli_QQ_add[bits] = seq;
@@ -502,7 +509,10 @@ sequence_t *toffoli_CQ_add(int bits, int64_t value) {
     if (value == 1 && bits <= TOFFOLI_HARDCODED_MAX_WIDTH) {
         const sequence_t *hardcoded = get_hardcoded_toffoli_CQ_inc(bits);
         if (hardcoded != NULL) {
-            return copy_hardcoded_sequence(hardcoded);
+            sequence_t *copy = copy_hardcoded_sequence(hardcoded);
+            if (copy != NULL)
+                sequence_compute_total_gate_count(copy);
+            return copy;
         }
     }
 
@@ -523,6 +533,7 @@ sequence_t *toffoli_CQ_add(int bits, int64_t value) {
             }
             x(&seq->seq[0][seq->gates_per_layer[0]++], 0);
             seq->used_layer = 1;
+            sequence_compute_total_gate_count(seq);
             free(bin);
             return seq;
         } else {
@@ -534,6 +545,7 @@ sequence_t *toffoli_CQ_add(int bits, int64_t value) {
             }
             seq->num_layer = 0;
             seq->used_layer = 0;
+            seq->total_gate_count = 0;
             seq->gates_per_layer = NULL;
             seq->seq = NULL;
             free(bin);
@@ -586,6 +598,7 @@ sequence_t *toffoli_CQ_add(int bits, int64_t value) {
     }
 
     seq->used_layer = layer;
+    sequence_compute_total_gate_count(seq);
 
 #ifdef DEBUG
     /* Assertion: verify layer count matches expectation */
@@ -625,13 +638,16 @@ sequence_t *toffoli_cQQ_add(int bits) {
 
     // Phase 74-05: Use MCX-decomposed hardcoded cQQ sequences for widths 1-8.
     // These contain only CCX (max 2 controls) via AND-ancilla decomposition.
-    // Static const arrays, zero dynamic allocation.
+    // Copy into mutable memory so total_gate_count can be computed.
     if (bits <= TOFFOLI_HARDCODED_MAX_WIDTH) {
         const sequence_t *hardcoded = get_hardcoded_toffoli_decomp_cQQ_add(bits);
         if (hardcoded != NULL) {
-            // SAFETY: Const cast is safe -- static sequences have program lifetime
-            precompiled_toffoli_cQQ_add[bits] = (sequence_t *)hardcoded;
-            return (sequence_t *)hardcoded;
+            sequence_t *copy = copy_hardcoded_sequence(hardcoded);
+            if (copy != NULL) {
+                sequence_compute_total_gate_count(copy);
+                precompiled_toffoli_cQQ_add[bits] = copy;
+                return copy;
+            }
         }
     }
 
@@ -644,6 +660,7 @@ sequence_t *toffoli_cQQ_add(int bits) {
         // controlled a[0] ^= b[0]: CCX(target=0, ctrl1=1, ctrl2=2)
         ccx(&seq->seq[0][seq->gates_per_layer[0]++], 0, 1, 2);
         seq->used_layer = 1;
+        sequence_compute_total_gate_count(seq);
 
         precompiled_toffoli_cQQ_add[bits] = seq;
         return seq;
@@ -683,6 +700,7 @@ sequence_t *toffoli_cQQ_add(int bits) {
     emit_cUMA(seq, &layer, ancilla, bits + 0, 0, ext_ctrl, and_anc);
 
     seq->used_layer = layer;
+    sequence_compute_total_gate_count(seq);
 
     // Cache and return
     precompiled_toffoli_cQQ_add[bits] = seq;
@@ -730,6 +748,7 @@ sequence_t *toffoli_cCQ_add(int bits, int64_t value) {
             }
             cx(&seq->seq[0][seq->gates_per_layer[0]++], 0, 1);
             seq->used_layer = 1;
+            sequence_compute_total_gate_count(seq);
             free(bin);
             return seq;
         } else {
@@ -741,6 +760,7 @@ sequence_t *toffoli_cCQ_add(int bits, int64_t value) {
             }
             seq->num_layer = 0;
             seq->used_layer = 0;
+            seq->total_gate_count = 0;
             seq->gates_per_layer = NULL;
             seq->seq = NULL;
             free(bin);
@@ -798,6 +818,7 @@ sequence_t *toffoli_cCQ_add(int bits, int64_t value) {
     }
 
     seq->used_layer = layer;
+    sequence_compute_total_gate_count(seq);
 
 #ifdef DEBUG
     /* Assertion: verify layer count matches expectation */

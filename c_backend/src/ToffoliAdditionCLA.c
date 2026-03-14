@@ -18,6 +18,7 @@
  */
 
 #include "Integer.h"
+#include "execution.h"
 #include "gate.h"
 #include "toffoli_addition_internal.h"
 #include "toffoli_arithmetic_ops.h"
@@ -384,6 +385,7 @@ sequence_t *toffoli_QQ_add_bk(int bits) {
     }
 
     seq->used_layer = layer;
+    sequence_compute_total_gate_count(seq);
 
     /* Cache and return */
     precompiled_toffoli_QQ_add_bk[bits] = seq;
@@ -589,6 +591,7 @@ sequence_t *toffoli_CQ_add_bk(int bits, int64_t value) {
     }
 
     seq->used_layer = layer;
+    sequence_compute_total_gate_count(seq);
 
 #ifdef DEBUG
     if (layer != num_layers) {
@@ -797,6 +800,7 @@ sequence_t *toffoli_cQQ_add_bk(int bits) {
     }
 
     seq->used_layer = layer;
+    sequence_compute_total_gate_count(seq);
 
     /* Cache and return */
     precompiled_toffoli_cQQ_add_bk[bits] = seq;
@@ -999,6 +1003,7 @@ sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value) {
     }
 
     seq->used_layer = layer;
+    sequence_compute_total_gate_count(seq);
 
 #ifdef DEBUG
     if (layer != num_layers) {

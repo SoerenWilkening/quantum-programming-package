@@ -49,7 +49,7 @@ TRACKING_SRCS = $(BACKEND_SRC)/execution.c \
                 $(BACKEND_SRC)/circuit_stats.c \
                 $(BACKEND_SRC)/circuit_optimizer.c
 
-# Sources for sequence_gate_count tests (circuit + execution + ToffoliAdditionHelpers)
+# Sources for sequence_gate_count tests (circuit + execution + Toffoli CDKM + sequences)
 SEQ_COUNT_SRCS = $(BACKEND_SRC)/execution.c \
                  $(BACKEND_SRC)/optimizer.c \
                  $(BACKEND_SRC)/gate.c \
@@ -58,7 +58,10 @@ SEQ_COUNT_SRCS = $(BACKEND_SRC)/execution.c \
                  $(BACKEND_SRC)/circuit_output.c \
                  $(BACKEND_SRC)/circuit_stats.c \
                  $(BACKEND_SRC)/circuit_optimizer.c \
-                 $(BACKEND_SRC)/ToffoliAdditionHelpers.c
+                 $(BACKEND_SRC)/ToffoliAdditionHelpers.c \
+                 $(BACKEND_SRC)/ToffoliAdditionCDKM.c \
+                 $(BACKEND_SRC)/Integer.c \
+                 $(wildcard $(BACKEND_SRC)/sequences/*.c)
 
 # Test targets
 test_comparison: test_comparison.c $(BACKEND_SRCS)

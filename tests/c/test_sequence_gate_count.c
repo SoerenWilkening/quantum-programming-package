@@ -10,6 +10,10 @@
  * 5. copy_hardcoded_sequence copies total_gate_count
  * 6. sequence_compute_total_gate_count handles NULL
  * 7. sequence_compute_total_gate_count handles empty sequence (0 used layers)
+ * 8. toffoli_QQ_add computes total_gate_count at creation
+ * 9. toffoli_CQ_add computes total_gate_count at creation
+ * 10. toffoli_cQQ_add computes total_gate_count at creation
+ * 11. toffoli_cCQ_add computes total_gate_count at creation
  */
 
 #include <assert.h>
@@ -21,6 +25,7 @@
 #include "execution.h"
 #include "gate.h"
 #include "toffoli_addition_internal.h"
+#include "toffoli_arithmetic_ops.h"
 
 /* Helper: free a sequence allocated via alloc_sequence */
 static void free_test_sequence(sequence_t *seq) {
@@ -205,6 +210,106 @@ static void test_compute_total_empty(void) {
     printf("PASS\n");
 }
 
+/* ------------------------------------------------------------------ */
+/* Test 8: toffoli_QQ_add computes total_gate_count at creation         */
+/* ------------------------------------------------------------------ */
+static void test_toffoli_qq_add_total(void) {
+    printf("test_toffoli_qq_add_total... ");
+    fflush(stdout);
+
+    /* 1-bit: single CNOT => total_gate_count = 1 */
+    sequence_t *seq1 = toffoli_QQ_add(1);
+    assert(seq1 != NULL);
+    assert(seq1->total_gate_count == 1 && "toffoli_QQ_add(1) should have total_gate_count=1");
+
+    /* 2-bit: CDKM adder, 6*2=12 layers, 1 gate each => total_gate_count = 12 */
+    sequence_t *seq2 = toffoli_QQ_add(2);
+    assert(seq2 != NULL);
+    assert(seq2->total_gate_count > 0 && "toffoli_QQ_add(2) should have total_gate_count > 0");
+    assert(seq2->total_gate_count == seq2->used_layer &&
+           "toffoli_QQ_add should have 1 gate per layer");
+
+    /* Do NOT free cached sequences */
+    printf("PASS\n");
+}
+
+/* ------------------------------------------------------------------ */
+/* Test 9: toffoli_CQ_add computes total_gate_count at creation         */
+/* ------------------------------------------------------------------ */
+static void test_toffoli_cq_add_total(void) {
+    printf("test_toffoli_cq_add_total... ");
+    fflush(stdout);
+
+    /* 1-bit, value=1: X gate => total_gate_count = 1 */
+    sequence_t *seq1 = toffoli_CQ_add(1, 1);
+    assert(seq1 != NULL);
+    assert(seq1->total_gate_count == 1 && "toffoli_CQ_add(1,1) should have total_gate_count=1");
+    toffoli_sequence_free(seq1);
+
+    /* 1-bit, value=0: identity => total_gate_count = 0 */
+    sequence_t *seq0 = toffoli_CQ_add(1, 0);
+    assert(seq0 != NULL);
+    assert(seq0->total_gate_count == 0 && "toffoli_CQ_add(1,0) should have total_gate_count=0");
+    toffoli_sequence_free(seq0);
+
+    /* 2-bit, value=1: inline CQ CDKM => total_gate_count > 0 */
+    sequence_t *seq2 = toffoli_CQ_add(2, 1);
+    assert(seq2 != NULL);
+    assert(seq2->total_gate_count > 0 && "toffoli_CQ_add(2,1) should have total_gate_count > 0");
+    toffoli_sequence_free(seq2);
+
+    printf("PASS\n");
+}
+
+/* ------------------------------------------------------------------ */
+/* Test 10: toffoli_cQQ_add computes total_gate_count at creation       */
+/* ------------------------------------------------------------------ */
+static void test_toffoli_cqq_add_total(void) {
+    printf("test_toffoli_cqq_add_total... ");
+    fflush(stdout);
+
+    /* 1-bit: single CCX => total_gate_count = 1 */
+    sequence_t *seq1 = toffoli_cQQ_add(1);
+    assert(seq1 != NULL);
+    assert(seq1->total_gate_count == 1 && "toffoli_cQQ_add(1) should have total_gate_count=1");
+
+    /* 2-bit: decomposed controlled CDKM => total_gate_count > 0 */
+    sequence_t *seq2 = toffoli_cQQ_add(2);
+    assert(seq2 != NULL);
+    assert(seq2->total_gate_count > 0 && "toffoli_cQQ_add(2) should have total_gate_count > 0");
+
+    /* Do NOT free cached sequences */
+    printf("PASS\n");
+}
+
+/* ------------------------------------------------------------------ */
+/* Test 11: toffoli_cCQ_add computes total_gate_count at creation       */
+/* ------------------------------------------------------------------ */
+static void test_toffoli_ccq_add_total(void) {
+    printf("test_toffoli_ccq_add_total... ");
+    fflush(stdout);
+
+    /* 1-bit, value=1: CX gate => total_gate_count = 1 */
+    sequence_t *seq1 = toffoli_cCQ_add(1, 1);
+    assert(seq1 != NULL);
+    assert(seq1->total_gate_count == 1 && "toffoli_cCQ_add(1,1) should have total_gate_count=1");
+    toffoli_sequence_free(seq1);
+
+    /* 1-bit, value=0: identity => total_gate_count = 0 */
+    sequence_t *seq0 = toffoli_cCQ_add(1, 0);
+    assert(seq0 != NULL);
+    assert(seq0->total_gate_count == 0 && "toffoli_cCQ_add(1,0) should have total_gate_count=0");
+    toffoli_sequence_free(seq0);
+
+    /* 2-bit, value=1: inline cCQ CDKM => total_gate_count > 0 */
+    sequence_t *seq2 = toffoli_cCQ_add(2, 1);
+    assert(seq2 != NULL);
+    assert(seq2->total_gate_count > 0 && "toffoli_cCQ_add(2,1) should have total_gate_count > 0");
+    toffoli_sequence_free(seq2);
+
+    printf("PASS\n");
+}
+
 int main(void) {
     printf("=== sequence_t total_gate_count unit tests ===\n\n");
 
@@ -215,7 +320,11 @@ int main(void) {
     test_copy_preserves_total();
     test_compute_total_null();
     test_compute_total_empty();
+    test_toffoli_qq_add_total();
+    test_toffoli_cq_add_total();
+    test_toffoli_cqq_add_total();
+    test_toffoli_ccq_add_total();
 
-    printf("\n=== ALL 7 TESTS PASSED ===\n");
+    printf("\n=== ALL 11 TESTS PASSED ===\n");
     return 0;
 }

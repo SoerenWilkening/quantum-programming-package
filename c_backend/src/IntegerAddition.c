@@ -3,7 +3,9 @@
 //
 
 #include "Integer.h"
+#include "execution.h"
 #include "sequences.h"
+#include "toffoli_addition_internal.h"
 
 // Legacy globals for backward compatibility (point to INTEGERSIZE versions)
 sequence_t *precompiled_QQ_add = NULL;
@@ -67,6 +69,7 @@ sequence_t *CQ_add(int bits, int64_t value) {
     if (bits <= HARDCODED_MAX_WIDTH && precompiled_CQ_add_width[bits] == NULL) {
         sequence_t *hardcoded = get_hardcoded_CQ_add(bits);
         if (hardcoded != NULL) {
+            sequence_compute_total_gate_count(hardcoded);
             precompiled_CQ_add_width[bits] = hardcoded;
         }
     }
@@ -134,6 +137,8 @@ sequence_t *CQ_add(int bits, int64_t value) {
 
     QFT_inverse(add, bits);
 
+    sequence_compute_total_gate_count(add);
+
     // Cache the sequence
     precompiled_CQ_add_width[bits] = add;
 
@@ -157,21 +162,23 @@ sequence_t *QQ_add(int bits) {
         return NULL;
     }
 
+    // Check cache (covers both hardcoded and dynamically generated)
+    if (precompiled_QQ_add_width[bits] != NULL)
+        return precompiled_QQ_add_width[bits];
+
     // Use hardcoded sequences for widths 1-16
     if (bits <= HARDCODED_MAX_WIDTH) {
         const sequence_t *hardcoded = get_hardcoded_QQ_add(bits);
         if (hardcoded != NULL) {
-            // SAFETY: Const cast is safe here because:
-            // 1. Static sequences have program lifetime (never freed)
-            // 2. Caller should never free returned sequences anyway
-            // 3. Cast needed only because existing API returns non-const
-            return (sequence_t *)hardcoded;
+            // Copy into mutable memory so total_gate_count can be computed
+            sequence_t *copy = copy_hardcoded_sequence(hardcoded);
+            if (copy != NULL) {
+                sequence_compute_total_gate_count(copy);
+                precompiled_QQ_add_width[bits] = copy;
+                return copy;
+            }
         }
     }
-
-    // Check cache for dynamically generated (widths > HARDCODED_MAX_WIDTH)
-    if (precompiled_QQ_add_width[bits] != NULL)
-        return precompiled_QQ_add_width[bits];
 
     sequence_t *add = malloc(sizeof(sequence_t));
     if (add == NULL) {
@@ -226,6 +233,8 @@ sequence_t *QQ_add(int bits) {
     }
     add->used_layer += bits;
     QFT_inverse(add, bits);
+
+    sequence_compute_total_gate_count(add);
 
     // Cache the sequence
     precompiled_QQ_add_width[bits] = add;
@@ -284,6 +293,7 @@ sequence_t *cCQ_add(int bits, int64_t value) {
     if (bits <= HARDCODED_MAX_WIDTH && precompiled_cCQ_add_width[bits] == NULL) {
         sequence_t *hardcoded = get_hardcoded_cCQ_add(bits);
         if (hardcoded != NULL) {
+            sequence_compute_total_gate_count(hardcoded);
             precompiled_cCQ_add_width[bits] = hardcoded;
         }
     }
@@ -350,6 +360,8 @@ sequence_t *cCQ_add(int bits, int64_t value) {
 
     QFT_inverse(add, bits);
 
+    sequence_compute_total_gate_count(add);
+
     // Cache the sequence
     precompiled_cCQ_add_width[bits] = add;
 
@@ -374,21 +386,23 @@ sequence_t *cQQ_add(int bits) {
         return NULL;
     }
 
+    // Check cache (covers both hardcoded and dynamically generated)
+    if (precompiled_cQQ_add_width[bits] != NULL)
+        return precompiled_cQQ_add_width[bits];
+
     // Use hardcoded sequences for widths 1-16
     if (bits <= HARDCODED_MAX_WIDTH) {
         const sequence_t *hardcoded = get_hardcoded_cQQ_add(bits);
         if (hardcoded != NULL) {
-            // SAFETY: Const cast is safe here because:
-            // 1. Static sequences have program lifetime (never freed)
-            // 2. Caller should never free returned sequences anyway
-            // 3. Cast needed only because existing API returns non-const
-            return (sequence_t *)hardcoded;
+            // Copy into mutable memory so total_gate_count can be computed
+            sequence_t *copy = copy_hardcoded_sequence(hardcoded);
+            if (copy != NULL) {
+                sequence_compute_total_gate_count(copy);
+                precompiled_cQQ_add_width[bits] = copy;
+                return copy;
+            }
         }
     }
-
-    // Check cache for dynamically generated (widths > HARDCODED_MAX_WIDTH)
-    if (precompiled_cQQ_add_width[bits] != NULL)
-        return precompiled_cQQ_add_width[bits];
 
     sequence_t *add = malloc(sizeof(sequence_t));
     if (add == NULL) {
@@ -481,6 +495,8 @@ sequence_t *cQQ_add(int bits) {
     add->used_layer = layer + 1;
     QFT_inverse(add, bits);
 
+    sequence_compute_total_gate_count(add);
+
     // Cache the sequence
     precompiled_cQQ_add_width[bits] = add;
 
@@ -525,6 +541,8 @@ sequence_t *P_add_param(double phase_value) {
     // Apply phase gate with explicit parameter value
     p(&seq->seq[0][0], 0, phase_value);
 
+    sequence_compute_total_gate_count(seq);
+
     return seq;
 }
 
@@ -563,6 +581,8 @@ sequence_t *cP_add_param(double phase_value) {
 
     // Apply controlled phase gate with explicit parameter value
     cp(&seq->seq[0][0], 0, 1, phase_value);
+
+    sequence_compute_total_gate_count(seq);
 
     return seq;
 }
