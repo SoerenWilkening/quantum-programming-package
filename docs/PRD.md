@@ -4,6 +4,8 @@
 
 Quantum Assembly is a Python framework that enables developers to write quantum algorithms using familiar programming constructs — arithmetic operators, comparisons, conditionals — without ever touching quantum gates. The framework compiles this high-level code into optimized quantum circuits automatically.
 
+**Current milestone**: Redesign the call graph to use execution-order edges and store gate counts on sequences, making the compilation pipeline ready for streaming execution and accurate resource estimation.
+
 **Next milestone**: Extend the framework to solve classical two-player perfect-information games (chess) using quantum walk-based minimax tree evaluation, achieving a quadratic speedup over classical approaches.
 
 ---
@@ -117,38 +119,62 @@ A structured API for defining and running verification checks.
 
 ### P2 — Nice to Have
 
-#### R7: Circuit Compilation Improvements
+#### R7: Circuit Compilation Pipeline *(promoted from P2)*
 
-Reduce memory footprint of circuit representation.
+Call graph-based compilation pipeline with accurate resource tracking.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R7.1 | Call graph DAG tracks compiled operations with qubit sets and gate metadata. | **Done** |
+| R7.2 | Tracking-only mode: count gates without simulating (no state vector). | **Done** |
+| R7.3 | Gate counting on replay: cached sequences report correct counts. | **Done** |
+| R7.4 | Cython operations wired to call graph recording during `@ql.compile`. | **Done** |
+| R7.5 | Execution-order edges: edges represent sequential ordering, absence of edges means parallelism. Edge from A→B iff B runs after A and they share qubits. | **New** |
+| R7.6 | Flat operation DAG: no wrapper/function nodes. Operations are direct DAG nodes. | **New** |
+| R7.7 | Graph immutability: after capture, the call graph is frozen. Replay reads only. | **New** |
+| R7.8 | Gate counts on sequences: `sequence_t` stores `total_gate_count`, computed at creation time. | **New** |
+| R7.9 | Hardcoded counts: all precompiled/hardcoded sequences include correct gate counts. | **New** |
+| R7.10 | Gate counts flow from C sequences through `_record_operation` into `DAGNode`. | **New** |
+
+#### R8: Future Compilation Improvements
 
 | ID | Requirement |
 |----|-------------|
-| R7.1 | Call graph-based instruction storage instead of full gate lists. |
-| R7.2 | Complete and working optimization flags (`opt=0`, `opt=1`, `opt=2`). |
-| R7.3 | Streaming gate application (gates applied to QPU without full circuit storage). |
+| R8.1 | Complete and working optimization flags (`opt=0`, `opt=1`, `opt=2`). |
+| R8.2 | Streaming gate application (gates applied to QPU without full circuit storage). |
 
-#### R8: Code Maintenance
+#### R9: Code Maintenance
 
 General improvements to the existing codebase.
 
 | ID | Requirement |
 |----|-------------|
-| R8.1 | Performance optimization of hot paths in gate emission. |
-| R8.2 | Memory footprint reduction. |
-| R8.3 | Stability improvements and edge case fixes. |
-| R8.4 | Reduction of generated sequence file bloat. |
+| R9.1 | Performance optimization of hot paths in gate emission. |
+| R9.2 | Memory footprint reduction. |
+| R9.3 | Stability improvements and edge case fixes. |
+| R9.4 | Reduction of generated sequence file bloat. |
 
-#### R9: Codebase Cleanup
+#### R10: Codebase Cleanup
 
 | ID | Requirement |
 |----|-------------|
-| R9.1 | Remove dead code and unused modules. |
-| R9.2 | Consolidate duplicated logic. |
-| R9.3 | Standardize naming conventions across Python and C layers. |
+| R10.1 | Remove dead code and unused modules. |
+| R10.2 | Consolidate duplicated logic. |
+| R10.3 | Standardize naming conventions across Python and C layers. |
 
 ---
 
 ## 5. Success Criteria
+
+### 5.0 Call Graph & Compilation Pipeline
+
+- 10 consecutive additions on the same integer produce exactly 10 edges (linear chain), not C(10,2) = 45 overlap edges.
+- Operations on disjoint qubits produce parallel branches (no edges between them).
+- An operation touching qubits from two independent branches produces edges to both (merge node).
+- All nodes reachable from root.
+- Graph is unchanged after replay of a compiled function.
+- All sequences (including hardcoded) report non-zero gate counts that match actual gate content.
+- DAGNode.gate_count is populated from sequence data, not hardcoded to 0.
 
 ### 5.1 Classical Verification Mode
 
@@ -210,6 +236,21 @@ General improvements to the existing codebase.
 ---
 
 ## 8. Milestones
+
+### Milestone 0: Call Graph & Compilation Pipeline *(active)*
+
+**Completed:**
+- Call graph DAG (CallGraphDAG, DAGNode, rustworkx-backed)
+- Tracking-only mode (gate counting without simulation)
+- Gate counting on replay of cached sequences
+- Cython operations wired to call graph recording
+
+**In progress:**
+- Execution-order edges (replace overlap edges with qubit-aware sequential edges)
+- Flat operation DAG (remove wrapper/function nodes)
+- Graph immutability after capture
+- Gate counts stored on `sequence_t`, including hardcoded sequences
+- Gate counts wired through `_record_operation` → `DAGNode`
 
 ### Milestone 1: Classical Verification Foundation
 

@@ -1,3 +1,15 @@
+## Required Reading
+
+Before starting any implementation work, **scan these files** for context:
+
+- `docs/PRD.md` — Product requirements for the call-graph-only execution model
+- `docs/IMPLEMENTATION_PLAN.md` — 8-module implementation plan with dependencies, file changes, and tests
+- `AGENTS.md` — Workflow rules, issue tracking with bd (beads), and session completion checklist
+
+Use **bd (beads)** for all task tracking. Run `bd ready --json` to see available work. See `AGENTS.md` for full bd workflow.
+
+---
+
 # Claude Code Project Instructions
 
 ## Quantum Assembly Programming Guide
