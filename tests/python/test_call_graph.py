@@ -273,85 +273,6 @@ class TestAddNode:
 
 
 # ---------------------------------------------------------------------------
-# CallGraphDAG.build_overlap_edges tests
-# ---------------------------------------------------------------------------
-
-
-class TestBuildOverlapEdges:
-    """Tests for qubit overlap edge computation."""
-
-    def test_overlapping_nodes_get_edge(self):
-        dag = CallGraphDAG()
-        dag.add_node("f", {0, 1, 2}, 10, ())
-        dag.add_node("g", {1, 2, 3}, 8, ())
-        dag.build_overlap_edges()
-        # Should have an overlap edge between node 0 and node 1
-        edges = dag.dag.edge_list()
-        assert (0, 1) in edges
-
-    def test_overlap_edge_weight_is_intersection_size(self):
-        dag = CallGraphDAG()
-        dag.add_node("f", {0, 1, 2}, 10, ())
-        dag.add_node("g", {1, 2, 3}, 8, ())
-        dag.build_overlap_edges()
-        # Intersection is {1, 2} -> weight = 2
-        # Multiple edges may exist; find the overlap one specifically.
-        edge_indices = dag.dag.edge_indices_from_endpoints(0, 1)
-        overlap_data = None
-        for eidx in edge_indices:
-            edata = dag.dag.get_edge_data_by_index(eidx)
-            if isinstance(edata, dict) and edata.get("type") == "overlap":
-                overlap_data = edata
-                break
-        assert overlap_data is not None, "No overlap edge found"
-        assert overlap_data["weight"] == 2
-
-    def test_disjoint_nodes_no_edge(self):
-        dag = CallGraphDAG()
-        dag.add_node("f", {0, 1}, 10, ())
-        dag.add_node("g", {2, 3}, 8, ())
-        dag.build_overlap_edges()
-        edges = dag.dag.edge_list()
-        # Filter to only overlap edges (no call edges expected either)
-        assert len(edges) == 0
-
-    def test_overlap_edges_coexist_with_execution_order(self):
-        """build_overlap_edges adds overlap edges even when execution_order edges exist."""
-        dag = CallGraphDAG()
-        p = dag.add_node("op1", {0, 1, 2}, 20, ())
-        c = dag.add_node("op2", {0, 1}, 5, ())
-        dag.build_overlap_edges()
-        edge_indices = dag.dag.edge_indices_from_endpoints(p, c)
-        edge_types = [dag.dag.get_edge_data_by_index(e).get("type") for e in edge_indices]
-        assert "execution_order" in edge_types
-        assert "overlap" in edge_types
-
-    def test_multiple_overlaps(self):
-        dag = CallGraphDAG()
-        dag.add_node("a", {0, 1}, 5, ())
-        dag.add_node("b", {1, 2}, 5, ())
-        dag.add_node("c", {2, 3}, 5, ())
-        dag.build_overlap_edges()
-        edges = dag.dag.edge_list()
-        # a-b overlap on {1}, b-c overlap on {2}, a-c disjoint
-        overlap_edges = [(s, t) for s, t in edges]
-        assert (0, 1) in overlap_edges  # a-b
-        assert (1, 2) in overlap_edges  # b-c
-        assert (0, 2) not in overlap_edges  # a-c disjoint
-
-    def test_empty_dag_handles_gracefully(self):
-        dag = CallGraphDAG()
-        dag.build_overlap_edges()  # Should not raise
-        assert dag.node_count == 0
-
-    def test_single_node_handles_gracefully(self):
-        dag = CallGraphDAG()
-        dag.add_node("f", {0}, 1, ())
-        dag.build_overlap_edges()  # Should not raise
-        assert len(dag.dag.edge_list()) == 0
-
-
-# ---------------------------------------------------------------------------
 # CallGraphDAG.parallel_groups tests
 # ---------------------------------------------------------------------------
 
@@ -790,15 +711,6 @@ class TestDot:
         dot = dag.to_dot()
         assert 'label="exec"' in dot
         assert 'label="call"' not in dot
-
-    def test_overlap_edge_dashed(self):
-        dag = CallGraphDAG()
-        dag.add_node("f", {0, 1, 2}, 10, ())
-        dag.add_node("g", {1, 2, 3}, 8, ())
-        dag.build_overlap_edges()
-        dot = dag.to_dot()
-        assert "style=dashed" in dot
-        assert "qubits" in dot
 
     def test_multiple_groups_have_clusters(self):
         dag = CallGraphDAG()

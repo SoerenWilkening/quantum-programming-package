@@ -2,9 +2,10 @@
 
 Provides CallGraphDAG (rustworkx-backed directed graph), DAGNode (per-invocation
 metadata with pre-computed qubit bitmask), and a module-level builder stack for
-nested call tracking during @ql.compile execution.
+operation recording during @ql.compile execution.
 
-The overlap computation uses numpy intersect1d on sorted arrays for arbitrary qubit counts.
+Edges represent execution ordering: operations sharing qubits are linked
+incrementally during capture via a last_node_per_qubit map.
 """
 
 from __future__ import annotations
@@ -258,25 +259,6 @@ class CallGraphDAG:
         for q in qubit_set:
             self._qubit_last_node[q] = node_idx
 
-    # -- Overlap edge computation -------------------------------------------
-
-    def build_overlap_edges(self) -> None:
-        """Compute qubit overlap edges between all node pairs.
-
-        For each pair (i, j) where i < j, computes bitmask AND + popcount.
-        If weight > 0, adds an edge with data ``{'type': 'overlap', 'weight': w}``.
-        """
-        n = len(self._nodes)
-        if n < 2:
-            return
-
-        for i in range(n):
-            arr_i = self._nodes[i]._qubit_array
-            for j in range(i + 1, n):
-                w = len(np.intersect1d(arr_i, self._nodes[j]._qubit_array))
-                if w > 0:
-                    self._dag.add_edge(i, j, {"type": "overlap", "weight": w})
-
     # -- Parallel group detection -------------------------------------------
 
     def parallel_groups(self) -> list[set[int]]:
@@ -379,8 +361,7 @@ class CallGraphDAG:
 
         Nodes are rendered as boxes with multi-line labels showing function
         name, gate count, depth, qubit count, and T-count. Execution-order
-        edges are solid arrows labeled "exec"; overlap edges are dashed
-        arrows labeled with shared qubit count. When multiple parallel
+        edges are solid arrows labeled "exec". When multiple parallel
         groups exist, each group is wrapped in a ``subgraph cluster_N``
         with dotted border.
 
@@ -434,10 +415,7 @@ class CallGraphDAG:
             src, tgt = self._dag.get_edge_endpoints_by_index(eidx)
             edge_data = self._dag.get_edge_data_by_index(eidx)
             if isinstance(edge_data, dict):
-                if edge_data.get("type") == "overlap":
-                    w = edge_data.get("weight", 0)
-                    lines.append(f'  n{src} -> n{tgt} [style=dashed, label="{w} qubits"];')
-                elif edge_data.get("type") == "execution_order":
+                if edge_data.get("type") == "execution_order":
                     lines.append(f'  n{src} -> n{tgt} [label="exec"];')
 
         lines.append("}")

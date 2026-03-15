@@ -42,7 +42,6 @@ import pytest
 
 import quantum_language as ql
 from quantum_language._core import extract_gate_range, get_current_layer
-from quantum_language.call_graph import CallGraphDAG
 
 NUM_REPLAYS = 50
 
@@ -264,29 +263,6 @@ def _bench_qubit_set_construction(n_functions, qubits_per_func, qubit_range):
     return statistics.median(timings_ns) / 1000  # microseconds
 
 
-def _bench_overlap_detection(n_nodes, qubit_range):
-    """Benchmark build_overlap_edges on a CallGraphDAG with random qubit sets.
-
-    Returns median time in microseconds over 10 iterations.
-    """
-    rng = np.random.default_rng(42)
-
-    timings_ns = []
-    for _ in range(10):
-        dag = CallGraphDAG()
-        for i in range(n_nodes):
-            n_qubits = rng.integers(2, 8)
-            qubits = set(rng.choice(qubit_range, size=n_qubits, replace=False).tolist())
-            dag.add_node(f"func_{i}", qubits, rng.integers(10, 100), (i,))
-
-        start = time.perf_counter_ns()
-        dag.build_overlap_edges()
-        end = time.perf_counter_ns()
-        timings_ns.append(end - start)
-
-    return statistics.median(timings_ns) / 1000  # microseconds
-
-
 @pytest.mark.benchmark
 def test_qubit_set_construction_benchmark():
     """POST-MIGRATION: Profile qubit_set construction (numpy path via _build_qubit_set_numpy)."""
@@ -299,19 +275,4 @@ def test_qubit_set_construction_benchmark():
     print(f"  POST-MIGRATION large  (50 funcs, 10 qubits):  {large_us:>8.1f} us (median)")
 
     assert small_us >= 0, "timing should be non-negative"
-    assert large_us >= 0, "timing should be non-negative"
-
-
-@pytest.mark.benchmark
-def test_overlap_detection_benchmark():
-    """POST-MIGRATION: Profile overlap detection (numpy np.intersect1d path)."""
-    print("\n--- POST-MIGRATION: Overlap Detection ---")
-
-    medium_us = _bench_overlap_detection(n_nodes=20, qubit_range=50)
-    print(f"  POST-MIGRATION medium (20 nodes, range 50):   {medium_us:>8.1f} us (median)")
-
-    large_us = _bench_overlap_detection(n_nodes=50, qubit_range=100)
-    print(f"  POST-MIGRATION large  (50 nodes, range 100):  {large_us:>8.1f} us (median)")
-
-    assert medium_us >= 0, "timing should be non-negative"
     assert large_us >= 0, "timing should be non-negative"

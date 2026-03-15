@@ -377,3 +377,51 @@ class TestComplexScenario:
         assert _has_exec_edge(dag, root, b)
         assert not _has_exec_edge(dag, a, b)
         assert len(edges) == 2
+
+
+# ---------------------------------------------------------------------------
+# Step 0.3: No overlap edge type
+# ---------------------------------------------------------------------------
+
+
+class TestNoOverlapEdgeType:
+    """After removing build_overlap_edges(), no overlap edges should exist."""
+
+    def test_no_overlap_edge_type(self):
+        """No edge in the DAG has type == 'overlap'."""
+        dag = CallGraphDAG()
+        dag.add_node("op1", {0, 1, 2}, 10, ())
+        dag.add_node("op2", {1, 2, 3}, 8, ())
+        dag.add_node("op3", {0, 3}, 5, ())
+        for eidx in dag.dag.edge_indices():
+            edata = dag.dag.get_edge_data_by_index(eidx)
+            if isinstance(edata, dict):
+                assert edata.get("type") != "overlap", (
+                    f"Found unexpected 'overlap' edge: {edata}"
+                )
+
+    def test_edge_set_matches_execution_order(self):
+        """Edge set is identical to the Step 0.1 execution-order algorithm output."""
+        dag = CallGraphDAG()
+        # Build a mixed topology: chain + branch + merge
+        i0 = dag.add_node("a", {0, 1}, 5, ())
+        i1 = dag.add_node("b", {0, 1}, 5, ())  # chains after a
+        i2 = dag.add_node("c", {2, 3}, 5, ())   # independent branch
+        i3 = dag.add_node("merge", {1, 2}, 5, ())  # merges b and c
+
+        # All edges should be execution_order type only
+        all_edges = dag.dag.edge_list()
+        for eidx in dag.dag.edge_indices():
+            edata = dag.dag.get_edge_data_by_index(eidx)
+            assert edata.get("type") == "execution_order"
+
+        exec_edges = dag.execution_order_edges()
+        assert (i0, i1) in exec_edges
+        assert (i1, i3) in exec_edges
+        assert (i2, i3) in exec_edges
+        assert len(exec_edges) == 3
+
+    def test_no_build_overlap_edges_method(self):
+        """CallGraphDAG no longer has a build_overlap_edges() method."""
+        dag = CallGraphDAG()
+        assert not hasattr(dag, "build_overlap_edges")
