@@ -800,7 +800,7 @@ class CompiledFunc:
                 # which accumulates nodes across calls for DAG-only mode)
                 if self._opt != 1 or self._call_graph is None:
                     self._call_graph = CallGraphDAG()
-                push_dag_context(self._call_graph, None)
+                push_dag_context(self._call_graph)
                 _is_top_level_dag = True
 
         try:
@@ -860,9 +860,8 @@ class CompiledFunc:
             )
             # Record DAG node for parametric path
             if _building_dag:
-                ctx = current_dag_context()
-                if ctx is not None:
-                    dag, parent_idx = ctx
+                dag = current_dag_context()
+                if dag is not None:
                     block = self._cache.get(cache_key)
                     extra = None
                     if (
@@ -878,7 +877,6 @@ class CompiledFunc:
                         qubit_set,
                         len(_gates),
                         cache_key,
-                        parent_index=parent_idx,
                         depth=_compute_depth(_gates),
                         t_count=_compute_t_count(_gates),
                     )
@@ -917,9 +915,8 @@ class CompiledFunc:
             # re-executed).  Skip for opt=1: the DAG was fully built
             # during capture and should not grow on subsequent calls.
             if _building_dag and self._opt != 1:
-                ctx = current_dag_context()
-                if ctx is not None:
-                    dag, parent_idx = ctx
+                dag = current_dag_context()
+                if dag is not None:
                     extra = (
                         block._capture_virtual_to_real
                         if (block and block._capture_virtual_to_real)
@@ -937,7 +934,6 @@ class CompiledFunc:
                         qubit_set,
                         _node_gate_count,
                         cache_key,
-                        parent_index=parent_idx,
                         depth=_compute_depth(_gates),
                         t_count=_compute_t_count(_gates),
                     )
@@ -1077,27 +1073,11 @@ class CompiledFunc:
         for qa in quantum_args:
             param_qubit_indices.append(_get_quantum_arg_qubit_indices(qa))
 
-        # DAG: push placeholder node so nested compiled calls see us as parent
-        _dag_node_idx = None
-        if self._opt != 3:
-            ctx = current_dag_context()
-            if ctx is not None:
-                dag, parent_idx = ctx
-                _dag_node_idx = dag.add_node(
-                    self._func.__name__, set(), 0, (), parent_index=parent_idx
-                )
-                push_dag_context(dag, _dag_node_idx)
-
         # Execute function normally (gates flow to circuit as usual,
-        # or in tracking-only mode when ql.option('simulate') is False)
-        try:
-            result = self._func(*args, **kwargs)
-        except Exception:
-            # Do NOT cache partial result -- let exception propagate
-            raise
-        finally:
-            if _dag_node_idx is not None:
-                pop_dag_context()
+        # or in tracking-only mode when ql.option('simulate') is False).
+        # Operations inside the body are recorded as direct DAG nodes
+        # via record_operation() — no wrapper/placeholder node.
+        result = self._func(*args, **kwargs)
 
         # Record end layer
         end_layer = get_current_layer()
@@ -1203,34 +1183,6 @@ class CompiledFunc:
         block._capture_virtual_to_real = capture_vtr
         block.return_type = return_type
         block._return_qarray_element_widths = return_qarray_element_widths
-
-        # DAG: update placeholder node with real data now that capture is done
-        if _dag_node_idx is not None:
-            ctx = current_dag_context()
-            if ctx is not None:
-                dag = ctx[0]
-                node = dag._nodes[_dag_node_idx]
-                qubit_set, qubit_arr = _build_qubit_set_numpy(
-                    quantum_args, capture_vtr.values() if capture_vtr else None
-                )
-                node.func_name = self._func.__name__
-                node.qubit_set = qubit_set  # already frozenset from helper
-                node._qubit_array = qubit_arr
-                node.gate_count = (
-                    _tracking_gate_count if _use_tracking
-                    else len(virtual_gates)
-                )
-                node.depth = _compute_depth(virtual_gates)
-                node.t_count = _compute_t_count(virtual_gates)
-                # cache_key not available here; left as placeholder ()
-                # Store block ref for merge support (opt=2)
-                node._block_ref = block
-                node._v2r_ref = capture_vtr
-                # Recompute bitmask (Python int for >64 qubit support)
-                bitmask = 0
-                for q in qubit_set:
-                    bitmask |= 1 << q
-                node.bitmask = bitmask
 
         return block
 

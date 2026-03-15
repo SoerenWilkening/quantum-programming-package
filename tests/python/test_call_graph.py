@@ -242,23 +242,22 @@ class TestAddNode:
         assert len(dag.nodes) == 1
         assert dag.nodes[0].func_name == "f"
 
-    def test_add_node_with_parent_creates_call_edge(self):
+    def test_add_node_creates_execution_order_edge(self):
         dag = CallGraphDAG()
-        p = dag.add_node("parent", {0, 1, 2}, 20, ())
-        c = dag.add_node("child", {0, 1}, 5, (), parent_index=p)
-        # The underlying PyDAG should have an edge from parent to child
-        edges = dag.dag.edge_list()
+        p = dag.add_node("op1", {0, 1, 2}, 20, ())
+        c = dag.add_node("op2", {0, 1}, 5, ())
+        # Overlapping qubits should produce an execution_order edge
+        edges = dag.execution_order_edges()
         assert (p, c) in edges
 
-    def test_add_node_with_parent_edge_has_call_type(self):
+    def test_no_call_edge_type(self):
         dag = CallGraphDAG()
-        p = dag.add_node("parent", {0, 1}, 10, ())
-        c = dag.add_node("child", {0}, 5, (), parent_index=p)
-        # Multiple edges may exist (call + execution_order); verify a call
-        # edge is present among them.
-        edge_indices = dag.dag.edge_indices_from_endpoints(p, c)
-        edge_types = [dag.dag.get_edge_data_by_index(e).get("type") for e in edge_indices]
-        assert "call" in edge_types
+        dag.add_node("op1", {0, 1}, 10, ())
+        dag.add_node("op2", {0}, 5, ())
+        # No "call" edge type should exist
+        for eidx in dag.dag.edge_indices():
+            edata = dag.dag.get_edge_data_by_index(eidx)
+            assert edata.get("type") != "call"
 
     def test_node_count_property(self):
         dag = CallGraphDAG()
@@ -316,19 +315,16 @@ class TestBuildOverlapEdges:
         # Filter to only overlap edges (no call edges expected either)
         assert len(edges) == 0
 
-    def test_skip_parent_child_pairs(self):
-        """build_overlap_edges should NOT add overlap edges for parent-child pairs
-        that already have a 'call' edge."""
+    def test_overlap_edges_coexist_with_execution_order(self):
+        """build_overlap_edges adds overlap edges even when execution_order edges exist."""
         dag = CallGraphDAG()
-        p = dag.add_node("parent", {0, 1, 2}, 20, ())
-        c = dag.add_node("child", {0, 1}, 5, (), parent_index=p)
+        p = dag.add_node("op1", {0, 1, 2}, 20, ())
+        c = dag.add_node("op2", {0, 1}, 5, ())
         dag.build_overlap_edges()
-        # Verify no overlap edge was added (call + execution_order edges
-        # may exist but no overlap).
         edge_indices = dag.dag.edge_indices_from_endpoints(p, c)
         edge_types = [dag.dag.get_edge_data_by_index(e).get("type") for e in edge_indices]
-        assert "overlap" not in edge_types
-        assert "call" in edge_types
+        assert "execution_order" in edge_types
+        assert "overlap" in edge_types
 
     def test_multiple_overlaps(self):
         dag = CallGraphDAG()
@@ -431,17 +427,16 @@ class TestBuilderStack:
 
     def test_push_and_current(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         ctx = current_dag_context()
         assert ctx is not None
-        assert ctx[0] is dag
-        assert ctx[1] is None
+        assert ctx is dag
 
     def test_push_pop_returns_context(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=5)
+        push_dag_context(dag)
         result = pop_dag_context()
-        assert result == (dag, 5)
+        assert result is dag
 
     def test_pop_empties_stack(self):
         dag = CallGraphDAG()
@@ -450,21 +445,17 @@ class TestBuilderStack:
         assert current_dag_context() is None
 
     def test_nested_push_pop(self):
-        dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
-        push_dag_context(dag, parent_index=0)
-        push_dag_context(dag, parent_index=1)
+        dag1 = CallGraphDAG()
+        dag2 = CallGraphDAG()
+        push_dag_context(dag1)
+        push_dag_context(dag2)
 
         ctx = current_dag_context()
-        assert ctx == (dag, 1)
-
-        pop_dag_context()
-        ctx = current_dag_context()
-        assert ctx == (dag, 0)
+        assert ctx is dag2
 
         pop_dag_context()
         ctx = current_dag_context()
-        assert ctx == (dag, None)
+        assert ctx is dag1
 
         pop_dag_context()
         assert current_dag_context() is None
@@ -503,7 +494,8 @@ class TestCompileDAGIntegration:
         assert add_one.call_graph is not None
         assert add_one.call_graph.node_count >= 1
         node = add_one.call_graph.nodes[0]
-        assert node.func_name == "add_one"
+        # Operations are direct nodes — func_name is the operation type
+        assert "add" in node.func_name
         assert len(node.qubit_set) > 0
 
     def test_opt3_no_dag(self):
@@ -534,7 +526,7 @@ class TestCompileDAGIntegration:
         assert add_one.call_graph.node_count >= 1
 
     def test_dag_node_metadata(self):
-        """DAG node contains correct function name, qubit set, gate count."""
+        """DAG node contains correct operation type, qubit set, gate count."""
         ql.circuit()
 
         @ql.compile(opt=1)
@@ -547,7 +539,8 @@ class TestCompileDAGIntegration:
         dag = inc.call_graph
         assert dag is not None
         node = dag.nodes[0]
-        assert node.func_name == "inc"
+        # Operations are direct nodes; func_name matches operation_type
+        assert "add" in node.func_name
         # Should have at least 4 qubits (width=4)
         assert len(node.qubit_set) >= 4
         assert node.gate_count > 0
@@ -569,13 +562,12 @@ class TestCompileDAGIntegration:
         a = qint(1, width=4)
         f(a)
         g(a)
-        # f's DAG has f plus any primitive operations recorded during capture.
         dag = f.call_graph
         assert dag is not None
-        # At least 1 node for the compiled function itself
+        # At least 1 operation node from capture
         assert dag.node_count >= 1
-        # The top-level node should be named "f"
-        assert dag.nodes[0].func_name == "f"
+        # Operation nodes have operation_type set
+        assert dag.nodes[0].operation_type != ""
 
     def test_disjoint_qubits_no_overlap_edge(self):
         """Two compiled functions on disjoint qubits produce no overlap edge."""
@@ -593,8 +585,8 @@ class TestCompileDAGIntegration:
         dag = wrapper.call_graph
         assert dag is not None
 
-    def test_nested_calls_parent_child(self):
-        """Nested compiled calls (f calls g) produce parent-child edge in DAG."""
+    def test_nested_calls_flat_dag(self):
+        """Nested compiled calls (f calls g) produce flat DAG with no call edges."""
         ql.circuit()
 
         @ql.compile(opt=1)
@@ -611,12 +603,12 @@ class TestCompileDAGIntegration:
         outer(a)
         dag = outer.call_graph
         assert dag is not None
-        # Should have at least 2 nodes (outer capture + inner)
-        assert dag.node_count >= 2
-        # Check for call edge (parent-child)
-        edges = dag.dag.edge_list()
-        call_edges = [(s, t) for s, t in edges if dag.dag.get_edge_data(s, t).get("type") == "call"]
-        assert len(call_edges) >= 1
+        # Should have operation nodes (no wrapper nodes)
+        assert dag.node_count >= 1
+        # No "call" edge type anywhere
+        for eidx in dag.dag.edge_indices():
+            edata = dag.dag.get_edge_data_by_index(eidx)
+            assert edata.get("type") != "call"
 
     def test_parallel_groups_real_circuit(self):
         """parallel_groups correctly identifies groups in a real circuit with multiple calls."""
@@ -665,6 +657,7 @@ class TestCompileDAGIntegration:
         a = qint(2, width=4)
         f(a)
         dag1 = f.call_graph
+        first_count = dag1.node_count
 
         b = qint(3, width=4)
         f(b)
@@ -673,12 +666,13 @@ class TestCompileDAGIntegration:
         # opt=1 accumulates nodes into the same DAG across calls
         assert dag1 is dag2
         assert dag2 is not None
-        # At least 2 top-level call nodes (capture + replay), plus
-        # primitive operation nodes recorded during capture
-        assert dag2.node_count >= 2
+        # At least 1 operation node from capture
+        assert first_count >= 1
+        # opt=1 skips DAG recording on replay, so count stays same
+        assert dag2.node_count == first_count
 
-    def test_dag_node_has_depth_and_t_count(self):
-        """After compile(opt=1), DAGNode has depth > 0 and gate_count > 0."""
+    def test_dag_node_has_gate_count(self):
+        """After compile(opt=1), operation DAGNode has gate_count > 0."""
         ql.circuit()
 
         @ql.compile(opt=1)
@@ -692,7 +686,6 @@ class TestCompileDAGIntegration:
         assert dag is not None
         node = dag.nodes[0]
         assert node.gate_count > 0
-        assert node.depth > 0
 
     def test_nested_call_has_depth_t_count(self):
         """Capture path: inner node has correct depth/t_count after finalization."""
@@ -739,7 +732,8 @@ class TestCompileDAGIntegration:
         dot = dag.to_dot()
         assert dot.startswith("digraph CallGraph {")
         assert dot.rstrip().endswith("}")
-        assert "inc" in dot
+        # Operation nodes contain operation type (e.g. "add_cq"), not function name
+        assert "add" in dot
 
     def test_opt_does_not_affect_cache_key(self):
         """opt parameter does NOT affect cache key (opt=1 and opt=3 share cache)."""
@@ -789,13 +783,13 @@ class TestDot:
         assert "qubits: 3" in dot
         assert "T-count: 3" in dot
 
-    def test_call_edge_solid(self):
+    def test_exec_edge_in_dot(self):
         dag = CallGraphDAG()
-        p = dag.add_node("parent", {0, 1, 2}, 20, ())
-        dag.add_node("child", {0, 1}, 5, (), parent_index=p)
+        dag.add_node("op1", {0, 1, 2}, 20, ())
+        dag.add_node("op2", {0, 1}, 5, ())
         dot = dag.to_dot()
-        # Both call and execution_order edges are present.
-        assert 'label="call"' in dot or 'label="exec"' in dot
+        assert 'label="exec"' in dot
+        assert 'label="call"' not in dot
 
     def test_overlap_edge_dashed(self):
         dag = CallGraphDAG()
@@ -902,5 +896,6 @@ class TestReport:
         assert dag is not None
         report = dag.report()
         assert "Compilation Report:" in report
-        assert "inc" in report
+        # Operation nodes show operation type (e.g. "add_cq"), not function name
+        assert "add" in report
         assert "TOTAL" in report

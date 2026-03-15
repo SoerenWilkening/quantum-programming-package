@@ -169,11 +169,11 @@ class TestAddNodePassthrough:
         assert node.depth == 10
         assert node.t_count == 7
 
-    def test_add_node_with_parent_and_metadata(self):
+    def test_add_node_with_metadata(self):
         dag = CallGraphDAG()
-        p = dag.add_node("parent", {0, 1, 2}, 20, ())
+        dag.add_node("op1", {0, 1, 2}, 20, ())
         c = dag.add_node(
-            "child", {0, 1}, 5, (), parent_index=p,
+            "op2", {0, 1}, 5, (),
             sequence_ptr=999, qubit_mapping=(0, 1),
             operation_type="xor", invert=True,
         )
@@ -181,6 +181,6 @@ class TestAddNodePassthrough:
         assert child_node.sequence_ptr == 999
         assert child_node.operation_type == "xor"
         assert child_node.invert is True
-        # Call edge still exists
-        edges = dag.dag.edge_list()
-        assert (p, c) in edges
+        # Execution-order edge from shared qubits
+        edges = dag.execution_order_edges()
+        assert (0, c) in edges

@@ -183,7 +183,6 @@ class CallGraphDAG:
         qubit_set,
         gate_count: int,
         cache_key: tuple,
-        parent_index: int | None = None,
         *,
         depth: int = 0,
         t_count: int = 0,
@@ -204,8 +203,6 @@ class CallGraphDAG:
             Number of gates.
         cache_key : tuple
             Cache key for this compiled variant.
-        parent_index : int or None
-            If not None, add a hierarchical 'call' edge from parent to this node.
         depth : int
             Circuit depth for this node.
         t_count : int
@@ -232,8 +229,6 @@ class CallGraphDAG:
         )
         idx = self._dag.add_node(node)
         self._nodes.append(node)
-        if parent_index is not None:
-            self._dag.add_edge(parent_index, idx, {"type": "call"})
         # Build execution-order edges for nodes with qubit information.
         if qubit_set:
             self._connect_by_execution_order(idx, node.qubit_set)
@@ -269,31 +264,18 @@ class CallGraphDAG:
         """Compute qubit overlap edges between all node pairs.
 
         For each pair (i, j) where i < j, computes bitmask AND + popcount.
-        If weight > 0 and no existing 'call' edge exists between them,
-        adds an edge with data ``{'type': 'overlap', 'weight': w}``.
+        If weight > 0, adds an edge with data ``{'type': 'overlap', 'weight': w}``.
         """
         n = len(self._nodes)
         if n < 2:
             return
-
-        # Collect existing call-edge pairs to skip
-        call_pairs: set[tuple[int, int]] = set()
-        for src, tgt in self._dag.edge_list():
-            edge_indices = self._dag.edge_indices_from_endpoints(src, tgt)
-            for eidx in edge_indices:
-                edata = self._dag.get_edge_data_by_index(eidx)
-                if isinstance(edata, dict) and edata.get("type") == "call":
-                    call_pairs.add((min(src, tgt), max(src, tgt)))
-                    break
 
         for i in range(n):
             arr_i = self._nodes[i]._qubit_array
             for j in range(i + 1, n):
                 w = len(np.intersect1d(arr_i, self._nodes[j]._qubit_array))
                 if w > 0:
-                    pair = (i, j)
-                    if pair not in call_pairs:
-                        self._dag.add_edge(i, j, {"type": "overlap", "weight": w})
+                    self._dag.add_edge(i, j, {"type": "overlap", "weight": w})
 
     # -- Parallel group detection -------------------------------------------
 
@@ -396,10 +378,11 @@ class CallGraphDAG:
         """Return a DOT-language string representing the call graph.
 
         Nodes are rendered as boxes with multi-line labels showing function
-        name, gate count, depth, qubit count, and T-count. Call edges are
-        solid arrows labeled "call"; overlap edges are dashed arrows labeled
-        with shared qubit count. When multiple parallel groups exist, each
-        group is wrapped in a ``subgraph cluster_N`` with dotted border.
+        name, gate count, depth, qubit count, and T-count. Execution-order
+        edges are solid arrows labeled "exec"; overlap edges are dashed
+        arrows labeled with shared qubit count. When multiple parallel
+        groups exist, each group is wrapped in a ``subgraph cluster_N``
+        with dotted border.
 
         Returns
         -------
@@ -451,9 +434,7 @@ class CallGraphDAG:
             src, tgt = self._dag.get_edge_endpoints_by_index(eidx)
             edge_data = self._dag.get_edge_data_by_index(eidx)
             if isinstance(edge_data, dict):
-                if edge_data.get("type") == "call":
-                    lines.append(f'  n{src} -> n{tgt} [label="call"];')
-                elif edge_data.get("type") == "overlap":
+                if edge_data.get("type") == "overlap":
                     w = edge_data.get("weight", 0)
                     lines.append(f'  n{src} -> n{tgt} [style=dashed, label="{w} qubits"];')
                 elif edge_data.get("type") == "execution_order":
@@ -556,46 +537,44 @@ class CallGraphDAG:
 # Builder stack (module-level, mirrors _capture_depth pattern)
 # ---------------------------------------------------------------------------
 
-_dag_builder_stack: list[tuple[CallGraphDAG, int | None]] = []
-"""Stack of (CallGraphDAG, parent_node_index_or_None) tuples.
+_dag_builder_stack: list[CallGraphDAG] = []
+"""Stack of CallGraphDAG instances.
 
-Used during @ql.compile execution to track the active DAG and current
-parent node for nested call recording.
+Used during @ql.compile execution to track the active DAG for
+operation recording.
 """
 
-def push_dag_context(dag: CallGraphDAG, parent_index: int | None = None) -> None:
+def push_dag_context(dag: CallGraphDAG) -> None:
     """Push a DAG context onto the builder stack.
 
     Parameters
     ----------
     dag : CallGraphDAG
         The DAG being built.
-    parent_index : int or None
-        Node index of the current parent (for nested calls).
     """
-    _dag_builder_stack.append((dag, parent_index))
+    _dag_builder_stack.append(dag)
 
 
-def pop_dag_context() -> tuple[CallGraphDAG, int | None] | None:
+def pop_dag_context() -> CallGraphDAG | None:
     """Pop the top DAG context from the builder stack.
 
     Returns
     -------
-    tuple of (CallGraphDAG, int or None) or None
-        The popped context, or None if stack was empty.
+    CallGraphDAG or None
+        The popped DAG, or None if stack was empty.
     """
     if not _dag_builder_stack:
         return None
     return _dag_builder_stack.pop()
 
 
-def current_dag_context() -> tuple[CallGraphDAG, int | None] | None:
+def current_dag_context() -> CallGraphDAG | None:
     """Return the top of the builder stack without popping.
 
     Returns
     -------
-    tuple of (CallGraphDAG, int or None) or None
-        The current context, or None if stack is empty.
+    CallGraphDAG or None
+        The current DAG, or None if stack is empty.
     """
     if not _dag_builder_stack:
         return None
@@ -647,7 +626,7 @@ def record_operation(
     if not _dag_builder_stack:
         return None
 
-    dag, parent_idx = _dag_builder_stack[-1]
+    dag = _dag_builder_stack[-1]
 
     qubit_mapping = tuple(qubit_indices)
     qubit_set = frozenset(qubit_mapping)
@@ -657,7 +636,6 @@ def record_operation(
         qubit_set,
         gate_count,
         (),  # cache_key -- not applicable for primitives
-        parent_index=parent_idx,
         sequence_ptr=sequence_ptr,
         qubit_mapping=qubit_mapping,
         operation_type=operation_type,

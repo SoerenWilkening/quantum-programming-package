@@ -37,7 +37,7 @@ class TestRecordOperation:
 
     def test_with_context_returns_node_index(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         result = record_operation("add_cq", (0, 1, 2, 3))
         assert result is not None
         assert isinstance(result, int)
@@ -45,69 +45,64 @@ class TestRecordOperation:
 
     def test_records_operation_type(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("mul_qq", (0, 1, 2))
         node = dag.nodes[0]
         assert node.operation_type == "mul_qq"
 
     def test_records_qubit_mapping(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("xor", (5, 6, 7, 8))
         node = dag.nodes[0]
         assert node.qubit_mapping == (5, 6, 7, 8)
 
     def test_records_qubit_set(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("and", (3, 1, 4, 1, 5))
         node = dag.nodes[0]
         assert node.qubit_set == frozenset({1, 3, 4, 5})
 
     def test_records_sequence_ptr(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("add_cq", (0, 1), sequence_ptr=0xDEAD)
         node = dag.nodes[0]
         assert node.sequence_ptr == 0xDEAD
 
     def test_records_invert_true(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("add_cq", (0, 1), invert=True)
         node = dag.nodes[0]
         assert node.invert is True
 
     def test_records_invert_false_default(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("add_cq", (0, 1))
         node = dag.nodes[0]
         assert node.invert is False
 
-    def test_parent_edge_created(self):
+    def test_execution_order_edge_created(self):
         dag = CallGraphDAG()
-        parent = dag.add_node("compiled_fn", {0, 1}, 0, ())
-        push_dag_context(dag, parent_index=parent)
-        child = record_operation("add_cq", (0, 1))
-        edges = dag.dag.edge_list()
-        assert (parent, child) in edges
-        # Multiple edges may exist (call + execution_order); verify a call
-        # edge is present among them.
-        edge_indices = dag.dag.edge_indices_from_endpoints(parent, child)
-        edge_types = [dag.dag.get_edge_data_by_index(e).get("type") for e in edge_indices]
-        assert "call" in edge_types
+        push_dag_context(dag)
+        i0 = record_operation("add_cq", (0, 1))
+        i1 = record_operation("add_cq", (0, 1))
+        edges = dag.execution_order_edges()
+        assert (i0, i1) in edges
 
-    def test_no_parent_no_edge(self):
+    def test_single_op_no_edge(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("xor", (0, 1))
         edges = dag.dag.edge_list()
         assert len(edges) == 0
 
     def test_multiple_operations_recorded(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("add_cq", (0, 1, 2, 3))
         record_operation("mul_cq", (4, 5, 6, 7))
         record_operation("xor", (0, 4))
@@ -118,21 +113,21 @@ class TestRecordOperation:
 
     def test_func_name_matches_operation_type(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("eq_cq", (0, 1, 2))
         node = dag.nodes[0]
         assert node.func_name == "eq_cq"
 
     def test_gate_count_zero_for_primitive(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("add_qq", (0, 1, 2, 3))
         node = dag.nodes[0]
         assert node.gate_count == 0
 
     def test_list_qubit_indices_accepted(self):
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         result = record_operation("add_cq", [0, 1, 2])
         assert result is not None
         node = dag.nodes[0]
@@ -160,9 +155,9 @@ class TestCompileCaptureRecording:
         inc(a)
         dag = inc.call_graph
         assert dag is not None
-        # Should have the compiled function node plus operation nodes
-        assert dag.node_count >= 2
-        # Check for add operation among children
+        # Should have operation nodes (no wrapper node)
+        assert dag.node_count >= 1
+        # Check for add operation
         op_types = [n.operation_type for n in dag.nodes]
         assert any("add" in op for op in op_types), f"Expected add op, got {op_types}"
 
@@ -188,7 +183,7 @@ class TestCompileCaptureRecording:
         # (return value qubit mapping issue). Test via direct DAG context.
         ql.circuit()
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         try:
             a = qint(3, width=4)
             a *= 2
@@ -251,8 +246,8 @@ class TestCompileCaptureRecording:
                 f"Operation {node.operation_type} has empty qubit_mapping"
             )
 
-    def test_operation_parented_to_compile_node(self):
-        """Recorded operations are children of the compiled function node."""
+    def test_operations_are_direct_dag_nodes(self):
+        """Recorded operations are direct DAG nodes with no wrapper."""
         ql.circuit()
 
         @ql.compile(opt=1)
@@ -264,17 +259,14 @@ class TestCompileCaptureRecording:
         inc(a)
         dag = inc.call_graph
         assert dag is not None
-        # The first node (index 0) is the compiled function
-        assert dag.nodes[0].func_name == "inc"
-        # Check for call edges from the compile node to operation nodes
-        edges = dag.dag.edge_list()
-        call_edges = [
-            (s, t) for s, t in edges
-            if dag.dag.get_edge_data(s, t).get("type") == "call"
-        ]
-        # At least one call edge from the compile node (index 0)
-        children_of_inc = [t for s, t in call_edges if s == 0]
-        assert len(children_of_inc) > 0
+        # All nodes should be operation nodes (no wrapper/placeholder)
+        assert dag.node_count >= 1
+        op_nodes = [n for n in dag.nodes if n.operation_type]
+        assert len(op_nodes) == dag.node_count
+        # No "call" edge type anywhere
+        for eidx in dag.dag.edge_indices():
+            edata = dag.dag.get_edge_data_by_index(eidx)
+            assert edata.get("type") != "call"
 
     def test_subtraction_invert_flag(self):
         """In-place subtraction records with invert=True."""
@@ -310,7 +302,7 @@ class TestCompileCaptureRecording:
         assert current_dag_context() is None
 
     def test_replay_does_not_double_record(self):
-        """Cache replay path does NOT record operation-level nodes."""
+        """opt=1: replay does NOT record additional nodes (DAG frozen after capture)."""
         ql.circuit()
 
         @ql.compile(opt=1)
@@ -323,11 +315,11 @@ class TestCompileCaptureRecording:
         capture_count = inc.call_graph.node_count
 
         b = qint(5, width=4)
-        inc(b)  # Replay (should add 1 node for replay, not re-record operations)
+        inc(b)  # Replay (opt=1 skips DAG recording)
         replay_count = inc.call_graph.node_count
 
-        # Replay adds 1 top-level node, NOT operation-level nodes
-        assert replay_count == capture_count + 1
+        # opt=1 does not grow the DAG on replay
+        assert replay_count == capture_count
 
     def test_multiple_operations_in_one_compile(self):
         """Multiple operations in a single compiled function all get recorded."""
@@ -404,7 +396,7 @@ class TestCompileCaptureRecording:
         # (return value qubit mapping issue). Test via direct DAG context.
         ql.circuit()
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         try:
             a = qint(6, width=4)
             a //= 3
@@ -434,8 +426,7 @@ class TestRecordedNodeMetadata:
         inc(a)
         dag = inc.call_graph
         for node in dag.nodes:
-            if node.operation_type:
-                assert len(node.qubit_set) > 0
+            assert len(node.qubit_set) > 0
 
     def test_qubit_mapping_matches_qubit_set(self):
         ql.circuit()

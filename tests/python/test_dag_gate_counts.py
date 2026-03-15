@@ -34,7 +34,7 @@ class TestRecordOperationGateCount:
     def test_default_gate_count_is_zero(self):
         """Without gate_count kwarg, DAGNode.gate_count defaults to 0."""
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("add_cq", (0, 1, 2))
         node = dag.nodes[0]
         assert node.gate_count == 0
@@ -42,7 +42,7 @@ class TestRecordOperationGateCount:
     def test_gate_count_passed_through(self):
         """gate_count kwarg is stored on the DAGNode."""
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("add_cq", (0, 1, 2), gate_count=42)
         node = dag.nodes[0]
         assert node.gate_count == 42
@@ -50,7 +50,7 @@ class TestRecordOperationGateCount:
     def test_gate_count_large_value(self):
         """Large gate_count values are preserved."""
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("mul_qq", (0, 1, 2, 3), gate_count=100000)
         node = dag.nodes[0]
         assert node.gate_count == 100000
@@ -58,7 +58,7 @@ class TestRecordOperationGateCount:
     def test_gate_count_with_other_kwargs(self):
         """gate_count works alongside sequence_ptr and invert."""
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation(
             "add_qq", (0, 1, 2, 3),
             gate_count=55,
@@ -73,7 +73,7 @@ class TestRecordOperationGateCount:
     def test_aggregate_uses_gate_counts(self):
         """CallGraphDAG.aggregate() sums gate_counts from recorded operations."""
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         record_operation("add_cq", (0, 1), gate_count=10)
         record_operation("mul_cq", (2, 3), gate_count=20)
         pop_dag_context()
@@ -163,7 +163,7 @@ class TestMultiplicationDAGGateCount:
         """After a *= 2 with DAG context, the mul DAG node has gate_count > 0."""
         ql.circuit()
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         try:
             a = qint(3, width=4)
             a *= 2
@@ -189,7 +189,7 @@ class TestBitwiseDAGGateCount:
         """After a & b with DAG context, the and DAG node has gate_count > 0."""
         ql.circuit()
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         try:
             a = qint(0b1101, width=4)
             b = qint(0b1011, width=4)
@@ -207,7 +207,7 @@ class TestBitwiseDAGGateCount:
         """After a | b with DAG context, the or DAG node has gate_count > 0."""
         ql.circuit()
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         try:
             a = qint(0b1100, width=4)
             b = qint(0b0011, width=4)
@@ -225,7 +225,7 @@ class TestBitwiseDAGGateCount:
         """After a ^ b with DAG context, the xor DAG node has gate_count > 0."""
         ql.circuit()
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         try:
             a = qint(0b1100, width=4)
             b = qint(0b0110, width=4)
@@ -243,7 +243,7 @@ class TestBitwiseDAGGateCount:
         """After a ^= 5 with DAG context, the ixor_cq DAG node has gate_count > 0."""
         ql.circuit()
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         try:
             a = qint(0b1100, width=4)
             a ^= 5
@@ -260,7 +260,7 @@ class TestBitwiseDAGGateCount:
         """After ~a with DAG context, the not DAG node has gate_count > 0."""
         ql.circuit()
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         try:
             a = qint(0b1010, width=4)
             ~a
@@ -286,7 +286,7 @@ class TestComparisonDAGGateCount:
         """After a == 5 with DAG context, the eq_cq DAG node has gate_count > 0."""
         ql.circuit()
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         try:
             a = qint(5, width=4)
             _ = (a == 5)
@@ -312,7 +312,7 @@ class TestDivisionDAGGateCount:
         """After a // 3 with DAG context, the divmod_cq DAG node has gate_count > 0."""
         ql.circuit()
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         try:
             a = qint(7, width=4)
             _ = a // 3
@@ -329,7 +329,7 @@ class TestDivisionDAGGateCount:
         """After a % 3 with DAG context, the divmod_cq DAG node has gate_count > 0."""
         ql.circuit()
         dag = CallGraphDAG()
-        push_dag_context(dag, parent_index=None)
+        push_dag_context(dag)
         try:
             a = qint(7, width=4)
             _ = a % 3
