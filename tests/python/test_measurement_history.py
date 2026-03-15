@@ -9,7 +9,6 @@ Step 1.5 of Phase 1: Measurement Trigger [Quantum_Assembly-2ab.5].
 import gc
 
 import quantum_language as ql
-from quantum_language.history_graph import HistoryGraph
 
 
 # ---------------------------------------------------------------------------
