@@ -23,6 +23,7 @@ CLASSICAL = 1
 
 cdef circuit_t *_circuit
 cdef bint _circuit_initialized = False
+cdef bint _circuit_active = False
 cdef int _num_qubits = 0
 
 cdef list _control_stack = []
@@ -61,6 +62,15 @@ def _set_circuit_initialized(bint value):
 	"""Set circuit initialization flag."""
 	global _circuit_initialized
 	_circuit_initialized = value
+
+def _get_circuit_active():
+	"""Check if a circuit is actively being built."""
+	return _circuit_active
+
+def _set_circuit_active(bint value):
+	"""Set circuit-active flag."""
+	global _circuit_active
+	_circuit_active = value
 
 def _get_num_qubits():
 	"""Get current qubit count."""
@@ -432,7 +442,7 @@ cdef class circuit:
 		>>> b = qint(3)
 		>>> result = a + b
 		"""
-		global _circuit_initialized, _circuit, _num_qubits, _int_counter, _smallest_allocated_qubit, _control_stack, _global_creation_counter, _scope_stack, _tradeoff_policy, _arithmetic_ops_performed
+		global _circuit_initialized, _circuit, _circuit_active, _num_qubits, _int_counter, _smallest_allocated_qubit, _control_stack, _global_creation_counter, _scope_stack, _tradeoff_policy, _arithmetic_ops_performed
 		# Only reset circuit when called directly as circuit(), not from subclass super().__init__()
 		if type(self) is circuit:
 			if _circuit_initialized:
@@ -440,6 +450,7 @@ cdef class circuit:
 				free_circuit(<circuit_t*>_circuit)
 			_circuit = init_circuit()
 			_circuit_initialized = True
+			_circuit_active = True
 			# Reset all Python-level global state
 			_num_qubits = 0
 			_int_counter = 0

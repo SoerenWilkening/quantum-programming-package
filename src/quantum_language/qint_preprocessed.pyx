@@ -48,6 +48,7 @@ from ._core cimport (
 # Python-level imports for global state access via accessor functions
 from ._core import (
     _get_circuit, _get_circuit_initialized, _set_circuit_initialized,
+    _get_circuit_active,
     _get_num_qubits, _set_num_qubits,
     _get_int_counter, _set_int_counter, _increment_int_counter,
     _get_controlled, _set_controlled,
@@ -1465,12 +1466,12 @@ cdef class qint(circuit):
 		c_print_circuit(circ)
 
 	def __del__(self):
-		"""Automatic uncomputation on garbage collection with mode awareness.
+		"""Automatic uncomputation on garbage collection with circuit guard.
 
-		When a qbool goes out of scope, automatically:
-		1. Cascade uncomputation through dependencies (LIFO order)
-		2. Reverse the gates that created this qbool
-		3. Free the allocated qubits back to the pool
+		When a qint/qbool's refcount hits zero mid-circuit, __del__
+		triggers uncomputation via the per-variable history graph.
+		A circuit-active guard prevents firing during Python shutdown
+		or after circuit finalization.
 
 		Mode behavior:
 		- EAGER mode (qubit_saving=True): Always uncompute immediately when GC runs.
@@ -1483,9 +1484,25 @@ cdef class qint(circuit):
 		Follows Python best practice: exceptions in __del__ print warnings only.
 		For deterministic cleanup, use explicit .uncompute() instead.
 		"""
+		# Circuit guard: skip uncomputation when circuit is not active
+		# (during Python shutdown or after circuit finalization)
+		if not _get_circuit_active():
+			return
+
 		# Phase 20: Check .keep() flag
 		if hasattr(self, '_keep_flag') and self._keep_flag:
 			return  # User opted out
+
+		# Step 1.4: History-based uncomputation via __del__
+		# If this variable has history entries, uncompute them in reverse
+		# and cascade to orphaned children.
+		if hasattr(self, 'history') and self.history:
+			try:
+				self.history.uncompute(_run_inverted_on_circuit)
+			except Exception as e:
+				import sys
+				print(f"Warning: __del__ history uncomputation failed: {e}",
+				      file=sys.stderr)
 
 		# Phase 20: Mode-based decision - EAGER vs LAZY have different behavior
 		if self._uncompute_mode:
