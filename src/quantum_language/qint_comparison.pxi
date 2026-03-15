@@ -90,6 +90,15 @@
 			result._start_layer = start_layer
 			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+			# Step 1.2: Record operation into result's per-variable history
+			_r_offset_h = 64 - (<qint>result).bits
+			_self_offset_h = 64 - self.bits
+			_other_offset_h = 64 - (<qint>other).bits
+			_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
+				+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits)) \
+				+ tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
+			result.history.append(0, _qm)
+
 			if _circuit_initialized:
 				(<circuit_s*>_circuit).layer_floor = _saved_floor
 			return result
@@ -188,6 +197,13 @@
 			# Phase 41: Layer tracking for uncomputation
 			result._start_layer = start_layer
 			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+
+			# Step 1.2: Record operation into result's per-variable history
+			_r_offset_h = 64 - (<qint>result).bits
+			_self_offset_h = 64 - self.bits
+			_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
+				+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+			result.history.append(<unsigned long long>seq, _qm)
 
 			if _circuit_initialized:
 				(<circuit_s*>_circuit).layer_floor = _saved_floor
@@ -327,6 +343,19 @@
 			# no layer tracking, so there is no double-reversal risk.
 			result._start_layer = start_layer
 			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+
+			# Step 1.2: Record operation into result's per-variable history
+			_r_offset_h = 64 - (<qint>result).bits
+			_self_offset_h = 64 - self.bits
+			_other_offset_h = 64 - (<qint>other).bits
+			_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
+				+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits)) \
+				+ tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
+			result.history.append(0, _qm)
+			# Add widened temporaries as weakref children
+			result.history.add_child(temp_self)
+			result.history.add_child(temp_other)
+
 			if _circuit_initialized:
 				(<circuit_s*>_circuit).layer_floor = _saved_floor_lt
 			return result
@@ -450,6 +479,19 @@
 			# no layer tracking, so there is no double-reversal risk.
 			result._start_layer = start_layer
 			result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+
+			# Step 1.2: Record operation into result's per-variable history
+			_r_offset_h = 64 - (<qint>result).bits
+			_self_offset_h = 64 - self.bits
+			_other_offset_h = 64 - (<qint>other).bits
+			_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
+				+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits)) \
+				+ tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
+			result.history.append(0, _qm)
+			# Add widened temporaries as weakref children
+			result.history.add_child(temp_other)
+			result.history.add_child(temp_self)
+
 			if _circuit_initialized:
 				(<circuit_s*>_circuit).layer_floor = _saved_floor_gt
 			return result

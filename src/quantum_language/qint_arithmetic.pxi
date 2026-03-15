@@ -190,6 +190,18 @@
 		if type(other) == qint:
 			a.add_dependency(other)
 
+		# Step 1.2: Record operation into result's per-variable history
+		_self_offset_h = 64 - self.bits
+		_a_offset_h = 64 - (<qint>a).bits
+		_qm = tuple((<qint>a).qubits[_a_offset_h + i] for i in range((<qint>a).bits)) \
+			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+		if type(other) == qint:
+			_other_offset_h = 64 - (<qint>other).bits
+			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
+		(<qint>a).history.append(0, _qm)
+		if type(other) == qint and (<qint>other).bits < result_width:
+			(<qint>a).history.add_child(padded_other)
+
 		if _circ_init:
 			(<circuit_s*>_circ).layer_floor = _saved_floor_add
 		return a
@@ -249,6 +261,18 @@
 		a.add_dependency(self)
 		if type(other) == qint:
 			a.add_dependency(other)
+
+		# Step 1.2: Record operation into result's per-variable history
+		_self_offset_h = 64 - self.bits
+		_a_offset_h = 64 - (<qint>a).bits
+		_qm = tuple((<qint>a).qubits[_a_offset_h + i] for i in range((<qint>a).bits)) \
+			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+		if type(other) == qint:
+			_other_offset_h = 64 - (<qint>other).bits
+			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
+		(<qint>a).history.append(0, _qm)
+		if type(other) == qint and (<qint>other).bits < result_width:
+			(<qint>a).history.add_child(padded_other)
 
 		if _circ_init:
 			(<circuit_s*>_circ).layer_floor = _saved_floor_radd
@@ -335,6 +359,18 @@
 		if type(other) == qint:
 			a.add_dependency(other)
 
+		# Step 1.2: Record operation into result's per-variable history
+		_self_offset_h = 64 - self.bits
+		_a_offset_h = 64 - (<qint>a).bits
+		_qm = tuple((<qint>a).qubits[_a_offset_h + i] for i in range((<qint>a).bits)) \
+			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+		if type(other) == qint:
+			_other_offset_h = 64 - (<qint>other).bits
+			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
+		(<qint>a).history.append(0, _qm)
+		if type(other) == qint and (<qint>other).bits < result_width:
+			(<qint>a).history.add_child(padded_other)
+
 		if _circ_init:
 			(<circuit_s*>_circ).layer_floor = _saved_floor_sub
 		return a
@@ -395,6 +431,13 @@
 		result.operation_type = 'NEG'
 		result.add_dependency(self)
 
+		# Step 1.2: Record operation into result's per-variable history
+		_self_offset_h = 64 - self.bits
+		_r_offset_h = 64 - (<qint>result).bits
+		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
+			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+		(<qint>result).history.append(0, _qm)
+
 		if _circ_init:
 			(<circuit_s*>_circ).layer_floor = _saved_floor_neg
 		return result
@@ -443,6 +486,16 @@
 		result.add_dependency(self)
 		if type(other) == qint:
 			result.add_dependency(other)
+
+		# Step 1.2: Record operation into result's per-variable history
+		_self_offset_h = 64 - self.bits
+		_r_offset_h = 64 - (<qint>result).bits
+		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
+			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+		if type(other) == qint:
+			_other_offset_h = 64 - (<qint>other).bits
+			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
+		(<qint>result).history.append(0, _qm)
 
 		if _circ_init:
 			(<circuit_s*>_circ).layer_floor = _saved_floor_rsub
@@ -495,6 +548,13 @@
 		result._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
 		result.operation_type = 'LSHIFT'
 		result.add_dependency(self)
+
+		# Step 1.2: Record operation into result's per-variable history
+		_self_offset_h = 64 - self.bits
+		_r_offset_h = 64 - (<qint>result).bits
+		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
+			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+		(<qint>result).history.append(0, _qm)
 
 		if _circ_init:
 			(<circuit_s*>_circ).layer_floor = _saved_floor_lsh
@@ -556,6 +616,13 @@
 		result._end_layer = (<circuit_s*>_circ).used_layer if _circ_init else 0
 		result.operation_type = 'RSHIFT'
 		result.add_dependency(self)
+
+		# Step 1.2: Record operation into result's per-variable history
+		_self_offset_h = 64 - self.bits
+		_r_offset_h = 64 - (<qint>result).bits
+		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
+			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+		(<qint>result).history.append(0, _qm)
 
 		if _circ_init:
 			(<circuit_s*>_circ).layer_floor = _saved_floor_rsh
@@ -787,6 +854,16 @@
 		if isinstance(other, qint):
 			result.add_dependency(other)
 
+		# Step 1.2: Record operation into result's per-variable history
+		_self_offset_h = 64 - self.bits
+		_r_offset_h = 64 - (<qint>result).bits
+		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
+			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+		if isinstance(other, qint):
+			_other_offset_h = 64 - (<qint>other).bits
+			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
+		(<qint>result).history.append(0, _qm)
+
 		if _circ_init:
 			(<circuit_s*>_circ).layer_floor = _saved_floor_mul
 		return result
@@ -847,6 +924,16 @@
 		result.add_dependency(self)
 		if isinstance(other, qint):
 			result.add_dependency(other)
+
+		# Step 1.2: Record operation into result's per-variable history
+		_self_offset_h = 64 - self.bits
+		_r_offset_h = 64 - (<qint>result).bits
+		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
+			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+		if isinstance(other, qint):
+			_other_offset_h = 64 - (<qint>other).bits
+			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
+		(<qint>result).history.append(0, _qm)
 
 		if _circ_init:
 			(<circuit_s*>_circ).layer_floor = _saved_floor_rmul

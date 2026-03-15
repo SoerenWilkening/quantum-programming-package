@@ -150,6 +150,16 @@
 		result._start_layer = start_layer
 		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
 
+		# Step 1.2: Record operation into result's per-variable history
+		_r_offset_h = 64 - result_bits
+		_self_offset_h = 64 - self.bits
+		_qm = tuple(result_qubits[_r_offset_h + i] for i in range(result_bits)) \
+			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+		if type(other) != int and isinstance(other, qint):
+			_other_offset_h = 64 - (<qint>other).bits
+			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
+		result.history.append(<unsigned long long>seq, _qm)
+
 		if _circuit_initialized:
 			(<circuit_s*>_circuit).layer_floor = _saved_floor_and
 		return result
@@ -315,6 +325,16 @@
 		# Capture end layer
 		result._start_layer = start_layer
 		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+
+		# Step 1.2: Record operation into result's per-variable history
+		_r_offset_h = 64 - result_bits
+		_self_offset_h = 64 - self.bits
+		_qm = tuple(result.qubits[_r_offset_h + i] for i in range(result_bits)) \
+			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+		if type(other) != int and isinstance(other, qint):
+			_other_offset_h = 64 - (<qint>other).bits
+			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
+		result.history.append(<unsigned long long>seq, _qm)
 
 		if _circuit_initialized:
 			(<circuit_s*>_circuit).layer_floor = _saved_floor_or
@@ -491,6 +511,15 @@
 		# Capture end layer
 		result._start_layer = start_layer
 		result._end_layer = (<circuit_s*>_circuit).used_layer if _circuit_initialized else 0
+
+		# Step 1.2: Record operation into result's per-variable history
+		_self_offset_h = 64 - self.bits
+		_qm = tuple(result_qubits[result_offset + i] for i in range(result_bits)) \
+			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+		if type(other) != int and isinstance(other, qint):
+			_other_offset_h = 64 - (<qint>other).bits
+			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
+		result.history.append(0, _qm)
 
 		if _circuit_initialized:
 			(<circuit_s*>_circuit).layer_floor = _saved_floor_xor
