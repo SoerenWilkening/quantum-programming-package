@@ -7,7 +7,6 @@ Step 1.1 of Phase 1: Per-Variable History Graph [Quantum_Assembly-2ab.1].
 """
 
 import gc
-import weakref
 
 import quantum_language as ql
 from quantum_language.history_graph import HistoryGraph
