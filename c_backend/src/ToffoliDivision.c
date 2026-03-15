@@ -48,11 +48,13 @@
 static void div_emit_ccx(circuit_t *circ, qubit_t target, qubit_t ctrl1, qubit_t ctrl2) {
     if (circ->toffoli_decompose) {
         emit_ccx_clifford_t(circ, target, ctrl1, ctrl2);
+        circ->gate_count += 15; /* 15 gates in Clifford+T CCX decomposition */
     } else {
         gate_t g;
         memset(&g, 0, sizeof(gate_t));
         ccx(&g, target, ctrl1, ctrl2);
         add_gate(circ, &g);
+        circ->gate_count++;
     }
 }
 
@@ -61,6 +63,7 @@ static void div_emit_cx(circuit_t *circ, qubit_t target, qubit_t control) {
     memset(&g, 0, sizeof(gate_t));
     cx(&g, target, control);
     add_gate(circ, &g);
+    circ->gate_count++;
 }
 
 static void div_emit_x(circuit_t *circ, qubit_t target) {
@@ -68,6 +71,7 @@ static void div_emit_x(circuit_t *circ, qubit_t target) {
     memset(&g, 0, sizeof(gate_t));
     x(&g, target);
     add_gate(circ, &g);
+    circ->gate_count++;
 }
 
 /* ========================================================================== */

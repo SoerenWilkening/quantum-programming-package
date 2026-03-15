@@ -83,11 +83,13 @@ static void emit_ccx_or_clifford_t(circuit_t *circ, qubit_t target, qubit_t ctrl
                                    int decompose) {
     if (decompose) {
         emit_ccx_clifford_t(circ, target, ctrl1, ctrl2);
+        circ->gate_count += 15; /* 15 gates in Clifford+T CCX decomposition */
     } else {
         gate_t g;
         memset(&g, 0, sizeof(gate_t));
         ccx(&g, target, ctrl1, ctrl2);
         add_gate(circ, &g);
+        circ->gate_count++;
     }
 }
 
