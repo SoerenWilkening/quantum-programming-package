@@ -231,6 +231,9 @@ class WalkConfig:
     make_move : callable, optional
         ``@ql.compile(inverse=True)`` function transforming state by a
         classical move index.
+    undo_move : callable, optional
+        Explicit inverse of ``make_move``.  If not provided, the counting
+        module falls back to ``make_move.adjoint``.
     is_valid : callable, optional
         Quantum predicate returning ``qbool``.
     is_marked : callable, optional
@@ -251,6 +254,7 @@ class WalkConfig:
     max_depth: int
     num_moves: int
     make_move: Optional[Callable] = None
+    undo_move: Optional[Callable] = None
     is_valid: Optional[Callable] = None
     is_marked: Optional[Callable] = None
     state: Optional[Any] = None
