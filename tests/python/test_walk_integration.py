@@ -2,9 +2,8 @@
 
 Exercises walk() and walk_diffusion() on realistic SAT-like problems,
 verifying:
-- 2-variable SAT detection (satisfiable formula -> True)
-- Unsatisfiable formula -> False
-- Classical brute-force agrees with quantum result
+- walk() returns (WalkConfig, WalkRegisters) with is_marked set
+- walk_step with marking produces valid unitary operator
 - walk_diffusion usable standalone
 - Custom walk via diffusion building block
 
@@ -30,6 +29,8 @@ from quantum_language.walk_diffusion import (
     walk_diffusion_fixed,
     walk_diffusion_with_regs,
 )
+from quantum_language.walk_operators import walk_step
+from quantum_language.walk_registers import WalkRegisters
 from quantum_language.walk_search import walk
 
 
@@ -138,236 +139,233 @@ def _sat_single_solution(state):
 
 
 # ---------------------------------------------------------------------------
-# Classical brute-force solver
+# Group 1: walk() Returns Correct Config and Registers
 # ---------------------------------------------------------------------------
 
 
-def _classical_sat_has_solution(predicate, num_bits):
-    """Classical brute-force: check if any assignment satisfies predicate."""
-    for val in range(1 << num_bits):
-        if predicate(val):
-            return True
-    return False
-
-
-def _classical_sat_count_solutions(predicate, num_bits):
-    """Classical brute-force: count satisfying assignments."""
-    count = 0
-    for val in range(1 << num_bits):
-        if predicate(val):
-            count += 1
-    return count
-
-
-# ---------------------------------------------------------------------------
-# Group 1: 2-Variable SAT Detection (Satisfiable)
-# ---------------------------------------------------------------------------
-
-
-class TestSAT2VarSatisfiable:
-    """Binary SAT detected: satisfiable 2-variable formula returns True.
+class TestWalkReturnsConfigAndRegisters:
+    """walk() returns (WalkConfig, WalkRegisters) with correct setup.
 
     Tree: max_depth=2, num_moves=2
-    Walk qubits: 3 height + 2 branch + 2 count = 7 <= 11 <= 17
+    Walk qubits: 3 height + 2 branch + 2 count = 7 <= 17
     """
 
-    def test_satisfiable_formula_detected(self):
-        """walk() detects satisfiable 2-var SAT formula.
-
-        Predicate: (x0 OR x1) AND (NOT x0 OR x1)
-        Has 2 satisfying assignments -> walk returns True.
-        """
+    def test_returns_tuple(self):
+        """walk() returns a 2-tuple."""
         result = walk(
-            _sat_2var_satisfiable,
-            max_depth=2, num_moves=2, max_iterations=16,
+            _sat_2var_satisfiable, max_depth=2, num_moves=2,
         )
-        assert result is True
+        assert isinstance(result, tuple)
+        assert len(result) == 2
 
-    def test_satisfiable_returns_bool_type(self):
-        """walk() returns exactly bool True, not truthy integer."""
-        result = walk(
-            _sat_2var_satisfiable,
-            max_depth=2, num_moves=2, max_iterations=16,
+    def test_config_type(self):
+        """First element is WalkConfig."""
+        config, _ = walk(
+            _sat_2var_satisfiable, max_depth=2, num_moves=2,
         )
-        assert isinstance(result, bool)
-        assert result is True
+        assert isinstance(config, WalkConfig)
 
-    def test_satisfiable_qubit_budget(self):
+    def test_registers_type(self):
+        """Second element is WalkRegisters."""
+        _, regs = walk(
+            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        )
+        assert isinstance(regs, WalkRegisters)
+
+    def test_config_has_is_marked(self):
+        """Config has is_marked set to the SAT predicate."""
+        config, _ = walk(
+            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        )
+        assert config.is_marked is _sat_2var_satisfiable
+
+    def test_config_parameters(self):
+        """Config has correct max_depth and num_moves."""
+        config, _ = walk(
+            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        )
+        assert config.max_depth == 2
+        assert config.num_moves == 2
+
+    def test_registers_initialized(self):
+        """Registers are initialized at root (init_root already called)."""
+        _, regs = walk(
+            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        )
+        # init_root was already called, so calling again should raise
+        import pytest
+        with pytest.raises(RuntimeError, match="init_root.*already"):
+            regs.init_root()
+
+    def test_qubit_budget(self):
         """2-var SAT walk uses <= 11 qubits (framework registers only)."""
-        config = WalkConfig(max_depth=2, num_moves=2)
+        config, _ = walk(
+            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        )
         total = config.total_walk_qubits()
         assert total <= 11, f"2-var SAT uses {total} qubits, expected <= 11"
 
-    def test_all_satisfy_detected(self):
-        """Tautology (all assignments satisfy) is also detected.
-
-        Predicate returns True for all patterns -> walk returns True.
-        """
-        result = walk(
-            _sat_2var_all_satisfy,
-            max_depth=2, num_moves=2, max_iterations=16,
-        )
-        assert result is True
-
-    def test_single_solution_detected(self):
-        """Single satisfying assignment (state==2) is detected.
-
-        1 of 4 leaf patterns is marked -> walk returns True.
-        """
-        result = walk(
-            _sat_single_solution,
-            max_depth=2, num_moves=2, max_iterations=16,
-        )
-        assert result is True
-
 
 # ---------------------------------------------------------------------------
-# Group 2: Unsatisfiable Formula Returns False
+# Group 2: walk_step with Marking Produces Valid Operator
 # ---------------------------------------------------------------------------
 
 
-class TestSATUnsatisfiable:
-    """Unsatisfiable formula returns False.
+class TestWalkStepWithMarking:
+    """walk_step on walk()-returned config produces valid unitary.
 
-    Tree: max_depth=2, num_moves=2
-    Walk qubits: 7 <= 17
+    Verifies norm preservation and correct gate emission.
     """
 
-    def test_unsatisfiable_returns_false(self):
-        """walk() returns False for unsatisfiable formula.
+    def test_walk_step_preserves_norm(self):
+        """walk_step on walk() output preserves statevector norm.
 
-        Predicate: x0 AND (NOT x0) -- impossible.
+        Qubits: 7 <= 17
         """
-        result = walk(
-            _sat_2var_unsatisfiable,
-            max_depth=2, num_moves=2, max_iterations=16,
+        config, regs = walk(
+            _sat_2var_satisfiable, max_depth=2, num_moves=2,
         )
-        assert result is False
+        walk_step(config, regs)
 
-    def test_unsatisfiable_returns_bool_type(self):
-        """walk() returns exactly bool False, not falsy value."""
-        result = walk(
-            _sat_2var_unsatisfiable,
-            max_depth=2, num_moves=2, max_iterations=16,
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"Walk step should preserve norm, got {norm}"
         )
-        assert isinstance(result, bool)
-        assert result is False
 
-    def test_never_marked_returns_false(self):
-        """Predicate that always returns False -> walk returns False."""
-        result = walk(
-            lambda state: False,
-            max_depth=2, num_moves=2, max_iterations=16,
+    def test_multiple_walk_steps_preserve_norm(self):
+        """Multiple walk steps preserve norm.
+
+        Qubits: 7 <= 17
+        """
+        config, regs = walk(
+            _sat_single_solution, max_depth=2, num_moves=2,
         )
-        assert result is False
-
-    def test_unsatisfiable_deterministic(self):
-        """Repeated calls on unsatisfiable formula always return False."""
-        results = []
         for _ in range(3):
-            r = walk(
-                _sat_2var_unsatisfiable,
-                max_depth=2, num_moves=2, max_iterations=16,
-            )
-            results.append(r)
-        assert all(r is False for r in results)
+            walk_step(config, regs)
 
-
-# ---------------------------------------------------------------------------
-# Group 3: Classical-Quantum Agreement
-# ---------------------------------------------------------------------------
-
-
-class TestClassicalQuantumAgreement:
-    """Classical brute force matches quantum result.
-
-    For each predicate, verify:
-    - classical_has_solution agrees with walk() return value
-    - Both use the same predicate function
-    """
-
-    def test_satisfiable_agreement(self):
-        """Classical and quantum agree: satisfiable formula -> True."""
-        predicate = _sat_2var_satisfiable
-        num_bits = 2  # max_depth=2, num_moves=2 -> 2 branch bits
-
-        classical_result = _classical_sat_has_solution(predicate, num_bits)
-        quantum_result = walk(
-            predicate, max_depth=2, num_moves=2, max_iterations=16,
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"Multiple walk steps should preserve norm, got {norm}"
         )
-        assert classical_result == quantum_result
-        assert classical_result is True
 
-    def test_unsatisfiable_agreement(self):
-        """Classical and quantum agree: unsatisfiable formula -> False."""
-        predicate = _sat_2var_unsatisfiable
-        num_bits = 2
+    def test_walk_step_emits_gates(self):
+        """walk_step on walk() output emits gates (non-trivial).
 
-        classical_result = _classical_sat_has_solution(predicate, num_bits)
-        quantum_result = walk(
-            predicate, max_depth=2, num_moves=2, max_iterations=16,
-        )
-        assert classical_result == quantum_result
-        assert classical_result is False
-
-    def test_single_solution_agreement(self):
-        """Classical and quantum agree: single solution -> True."""
-        predicate = _sat_single_solution
-        num_bits = 2
-
-        classical_result = _classical_sat_has_solution(predicate, num_bits)
-        classical_count = _classical_sat_count_solutions(predicate, num_bits)
-        quantum_result = walk(
-            predicate, max_depth=2, num_moves=2, max_iterations=16,
-        )
-        assert classical_count == 1
-        assert classical_result == quantum_result
-        assert classical_result is True
-
-    def test_tautology_agreement(self):
-        """Classical and quantum agree: tautology (all satisfy) -> True."""
-        predicate = _sat_2var_all_satisfy
-        num_bits = 2
-
-        classical_result = _classical_sat_has_solution(predicate, num_bits)
-        classical_count = _classical_sat_count_solutions(predicate, num_bits)
-        quantum_result = walk(
-            predicate, max_depth=2, num_moves=2, max_iterations=16,
-        )
-        assert classical_count == 4
-        assert classical_result == quantum_result
-        assert classical_result is True
-
-    def test_never_marked_agreement(self):
-        """Classical and quantum agree: nothing marked -> False."""
-        predicate = lambda state: False
-        num_bits = 2
-
-        classical_result = _classical_sat_has_solution(predicate, num_bits)
-        quantum_result = walk(
-            predicate, max_depth=2, num_moves=2, max_iterations=16,
-        )
-        assert classical_result == quantum_result
-        assert classical_result is False
-
-    def test_parametric_predicates_agreement(self):
-        """Agreement across a family of threshold predicates.
-
-        For threshold t in {0, 1, 2, 3, 4}, predicate is state >= t.
-        Classical and quantum should agree on each.
+        Verify by comparing QASM length before and after walk_step.
         """
-        for threshold in range(5):
-            predicate = lambda s, t=threshold: s >= t
-            num_bits = 2
+        config, regs = walk(
+            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        )
+        qasm_before = ql.to_openqasm()
+        walk_step(config, regs)
+        qasm_after = ql.to_openqasm()
+        assert len(qasm_after) > len(qasm_before), (
+            "walk_step should emit gates (QASM should grow)"
+        )
 
-            classical = _classical_sat_has_solution(predicate, num_bits)
-            quantum = walk(
-                predicate, max_depth=2, num_moves=2, max_iterations=16,
-            )
-            assert classical == quantum, (
-                f"Disagreement at threshold={threshold}: "
-                f"classical={classical}, quantum={quantum}"
-            )
+    def test_never_marked_matches_standard_walk(self):
+        """Config with never-marking predicate matches standard walk.
+
+        When is_marked always returns False (or is_marked is set but
+        state is not), the walk should behave identically to the
+        standard walk.
+
+        Qubits: 7 <= 17
+        """
+        # Standard walk (no marking)
+        _init_circuit()
+        config_std = WalkConfig(max_depth=2, num_moves=2)
+        regs_std = WalkRegisters(config_std)
+        regs_std.init_root()
+        walk_step(config_std, regs_std)
+        sv_std = _simulate_statevector(ql.to_openqasm())
+
+        # walk() without state (marking not active)
+        config_w, regs_w = walk(
+            lambda s: False, max_depth=2, num_moves=2,
+        )
+        walk_step(config_w, regs_w)
+        sv_w = _simulate_statevector(ql.to_openqasm())
+
+        assert np.allclose(sv_std, sv_w, atol=1e-10), (
+            "Walk without state should match standard walk"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Group 3: Unsatisfiable and Edge Cases
+# ---------------------------------------------------------------------------
+
+
+class TestWalkEdgeCases:
+    """Edge cases for walk() new API."""
+
+    def test_unsatisfiable_predicate(self):
+        """walk() with unsatisfiable predicate still returns valid config.
+
+        Qubits: 7 <= 17
+        """
+        config, regs = walk(
+            _sat_2var_unsatisfiable, max_depth=2, num_moves=2,
+        )
+        assert config.is_marked is _sat_2var_unsatisfiable
+        walk_step(config, regs)
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6
+
+    def test_tautology_predicate(self):
+        """walk() with tautology predicate returns valid config.
+
+        Qubits: 7 <= 17
+        """
+        config, regs = walk(
+            _sat_2var_all_satisfy, max_depth=2, num_moves=2,
+        )
+        assert config.is_marked is _sat_2var_all_satisfy
+
+    def test_depth3_binary(self):
+        """walk() works with depth=3 binary tree.
+
+        Walk qubits: 4 height + 3 branch + 2 count = 9 <= 17
+        """
+        config, regs = walk(
+            lambda s: s == 7, max_depth=3, num_moves=2,
+        )
+        assert config.max_depth == 3
+        walk_step(config, regs)
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6
+
+    def test_ternary_depth2(self):
+        """walk() works with ternary tree.
+
+        Walk qubits: 3 height + 4 branch (2 per level) + 2 count = 9 <= 17
+        """
+        config, regs = walk(
+            lambda s: s == 5, max_depth=2, num_moves=3,
+        )
+        assert config.num_moves == 3
+        total = config.total_walk_qubits()
+        assert total <= 17, f"Ternary depth=2 uses {total} qubits"
+
+    def test_walk_with_custom_max_iterations(self):
+        """walk() accepts custom max_iterations without error.
+
+        Qubits: 7 <= 17
+        """
+        config, regs = walk(
+            _sat_2var_satisfiable,
+            max_depth=2, num_moves=2, max_iterations=1,
+        )
+        assert isinstance(config, WalkConfig)
 
 
 # ---------------------------------------------------------------------------
@@ -684,38 +682,37 @@ class TestCustomWalkViaDiffusion:
 class TestEndToEndScenarios:
     """Full end-to-end scenarios combining multiple walk features."""
 
-    def test_sweep_binary_predicates(self):
-        """Sweep all 2-bit predicates: classical and quantum always agree.
+    def test_walk_step_on_various_predicates(self):
+        """walk_step on walk() output works with various predicates.
 
-        There are 16 possible 2-bit predicates (2^4 truth tables).
-        For each, verify classical brute-force matches walk() result.
-
-        This is the strongest classical-quantum agreement test.
+        Test that walk_step produces valid norm for different predicates.
         """
-        num_bits = 2
-        num_patterns = 1 << num_bits  # 4
-
-        for truth_table in range(1 << num_patterns):  # 0..15
-            predicate = lambda s, tt=truth_table: bool((tt >> s) & 1)
-
-            classical = _classical_sat_has_solution(predicate, num_bits)
-            quantum = walk(
-                predicate, max_depth=2, num_moves=2, max_iterations=16,
-            )
-            assert classical == quantum, (
-                f"Disagreement for truth_table={truth_table:04b}: "
-                f"classical={classical}, quantum={quantum}"
+        predicates = [
+            _sat_2var_satisfiable,
+            _sat_2var_unsatisfiable,
+            _sat_2var_all_satisfy,
+            _sat_single_solution,
+        ]
+        for pred in predicates:
+            config, regs = walk(pred, max_depth=2, num_moves=2)
+            walk_step(config, regs)
+            qasm = ql.to_openqasm()
+            sv = _simulate_statevector(qasm)
+            norm = np.linalg.norm(sv)
+            assert abs(norm - 1.0) < 1e-6, (
+                f"Norm should be 1.0 for predicate {pred.__name__}, "
+                f"got {norm}"
             )
 
     def test_walk_consistency_across_runs(self):
-        """walk() produces deterministic results across 3 runs."""
+        """walk() produces consistent config across 3 runs."""
         results = []
         for _ in range(3):
-            r = walk(
+            c, r = walk(
                 _sat_2var_satisfiable,
-                max_depth=2, num_moves=2, max_iterations=16,
+                max_depth=2, num_moves=2,
             )
-            results.append(r)
+            results.append((c.max_depth, c.num_moves))
         assert all(r == results[0] for r in results)
 
     def test_walk_and_diffusion_same_import(self):
@@ -725,62 +722,33 @@ class TestEndToEndScenarios:
         assert callable(w)
         assert callable(wd)
 
-    def test_satisfiable_depth2_ternary(self):
-        """Satisfiable SAT on ternary tree (num_moves=3).
+    def test_depth3_binary_walk_step(self):
+        """Walk step on depth=3 binary tree preserves norm.
 
-        Predicate marks state==5 (one of 9 leaves in depth=2 ternary tree).
-        Walk qubits: 3 height + 4 branch (2 per level) + 2 count = 9 <= 17
-
-        Note: ternary tree detection dynamics differ from binary.
-        The algorithm may or may not detect a single marked leaf
-        depending on the overlap threshold.  We verify the return
-        type is bool.
+        Walk qubits: 4 height + 3 branch + 2 count = 9 <= 17
         """
-        config = WalkConfig(max_depth=2, num_moves=3)
-        total = config.total_walk_qubits()
-        assert total <= 17, f"Ternary depth=2 uses {total} qubits"
-
-        result = walk(
-            lambda s: s == 5,
-            max_depth=2, num_moves=3, max_iterations=16,
+        config, regs = walk(
+            lambda s: s == 7, max_depth=3, num_moves=2,
         )
-        assert isinstance(result, bool)
+        walk_step(config, regs)
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6
 
-    def test_depth3_binary_satisfiable(self):
-        """3-var binary tree: detect feasible assignment.
-
-        Predicate marks state==7 (all 3 bits set).
-        Walk qubits: 4 height + 3 branch + 2 count = 9 <= 15 <= 17
-        """
-        result = walk(
-            lambda s: s == 7,
-            max_depth=3, num_moves=2, max_iterations=16,
-        )
-        assert result is True
-
-    def test_depth3_binary_none_marked(self):
-        """3-var binary tree: nothing marked -> False.
+    def test_depth3_binary_no_marks_walk_step(self):
+        """Walk step on depth=3 binary tree with no marks.
 
         Walk qubits: 9 <= 17
         """
-        result = walk(
-            lambda s: False,
-            max_depth=3, num_moves=2, max_iterations=16,
+        config, regs = walk(
+            lambda s: False, max_depth=3, num_moves=2,
         )
-        assert result is False
-
-    def test_walk_with_custom_max_iterations(self):
-        """walk() respects custom max_iterations parameter.
-
-        With max_iterations=1, only power=1 is tested. For the
-        satisfiable formula, this may or may not detect (depends
-        on threshold). Key: no crash, returns bool.
-        """
-        result = walk(
-            _sat_2var_satisfiable,
-            max_depth=2, num_moves=2, max_iterations=1,
-        )
-        assert isinstance(result, bool)
+        walk_step(config, regs)
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6
 
     def test_walk_diffusion_then_walk_no_interference(self):
         """Using walk_diffusion standalone does not interfere with walk().
@@ -796,9 +764,10 @@ class TestEndToEndScenarios:
             undo_move=_undo_move_flip,
         )
 
-        # Now run walk() -- should create its own circuits internally
-        result = walk(
+        # Now run walk() -- creates its own circuit internally
+        config, regs = walk(
             _sat_2var_satisfiable,
-            max_depth=2, num_moves=2, max_iterations=16,
+            max_depth=2, num_moves=2,
         )
-        assert result is True
+        assert isinstance(config, WalkConfig)
+        assert isinstance(regs, WalkRegisters)

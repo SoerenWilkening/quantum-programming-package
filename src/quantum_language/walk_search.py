@@ -1,22 +1,20 @@
-"""Full quantum walk search with detection (Montanaro 2015).
+"""Quantum walk search: build marked walk configuration (Montanaro 2015).
 
 Public API: ``walk(is_marked, max_depth, num_moves, *, state=None, make_move=None, is_valid=None, max_iterations=None)``
 
-Algorithm
----------
-The detection algorithm modifies the walk step U = R_B * R_A by
-incorporating a marking oracle phase flip at the leaf level (depth 0).
-Standard R_A skips depth 0 (leaves have no children); for detection,
-R_A' applies a phase flip on marked leaf patterns before R_A.
+Builds a :class:`WalkConfig` with the ``is_marked`` predicate set and
+allocates walk registers ready for use with :func:`walk_step`.  The
+marking predicate is evaluated **quantumly** via the infrastructure in
+``walk_operators._apply_local_diffusion``: marked nodes receive identity
+(D_x = I), unmarked nodes receive the standard diffusion operator.
 
-The marking oracle is evaluated classically to determine which branch
-patterns correspond to marked leaves, then phase flips are applied
-via multi-controlled-Z gates on the branch register qubits.
+.. todo::
 
-Detection uses iterative power-method: for increasing powers
-1, 2, 4, 8, ..., compare root overlap of the marked walk to the
-unmarked baseline.  If the marked walk's overlap diverges from the
-baseline beyond a detection threshold, a marked node is detected.
+    Detection via quantum phase estimation is a future milestone.
+    The current ``walk()`` returns ``(config, registers)`` for use
+    with ``walk_step``; a future version will wrap this in a phase
+    estimation routine to detect whether any marked node exists
+    (Montanaro 2015, Theorem 1).
 
 References
 ----------
@@ -26,12 +24,8 @@ References
 
 import math
 
-import numpy as np
-
-from ._gates import emit_mcz, emit_z
-from .diffusion import _flip_all
 from .walk_core import WalkConfig
-from .walk_operators import build_R_A, build_R_B, walk_step
+from .walk_operators import walk_step
 from .walk_registers import WalkRegisters
 
 
@@ -56,171 +50,6 @@ def _max_walk_iterations(num_moves, max_depth):
     """O(sqrt(T/n)) iterations, minimum 4."""
     T = _tree_size(num_moves, max_depth)
     return max(4, int(math.ceil(math.sqrt(T / max_depth))))
-
-
-# ------------------------------------------------------------------
-# Marking oracle at leaf level
-# ------------------------------------------------------------------
-
-
-def _collect_branch_qubits(registers, config):
-    """Flat list of branch register qubit indices, leaf to root."""
-    qubits = []
-    for d in range(config.max_depth):
-        br = registers.branch_at(d)
-        bw = br.width
-        for bit in range(bw):
-            qubits.append(int(br.qubits[64 - bw + bit]))
-    return qubits
-
-
-def _evaluate_is_marked_classically(is_marked, total_branch_bits):
-    """Return list of integer patterns where is_marked returns True."""
-    marked_values = []
-    for val in range(1 << total_branch_bits):
-        result = is_marked(val)
-        if result is True or result == 1:
-            marked_values.append(val)
-    return marked_values
-
-
-def _apply_phase_on_pattern(pattern, branch_qubits, h_leaf_qubit):
-    """Phase flip on a specific branch pattern via X-MCZ-X."""
-    total_bits = len(branch_qubits)
-
-    # X on branch qubits that should be |0> in the pattern
-    _flip_complement_qubits(pattern, branch_qubits, total_bits)
-
-    # MCZ on h[0] + all branch qubits: phase flip when all are |1>
-    all_qubits = [h_leaf_qubit] + branch_qubits
-    if len(all_qubits) == 1:
-        emit_z(all_qubits[0])
-    else:
-        emit_mcz(all_qubits[-1], all_qubits[:-1])
-
-    # Undo X
-    _flip_complement_qubits(pattern, branch_qubits, total_bits)
-
-
-def _flip_complement_qubits(pattern, branch_qubits, total_bits):
-    """Flip qubits corresponding to 0-bits in *pattern*.
-
-    Uses ``_flip_all`` on qbool wrappers for each qubit that needs
-    flipping (DSL-level, no direct ``emit_x``).
-    """
-    from .walk_branching import _make_qbool_wrapper
-
-    for bit_idx in range(total_bits):
-        if not ((pattern >> bit_idx) & 1):
-            wrapper = _make_qbool_wrapper(branch_qubits[bit_idx])
-            _flip_all(wrapper)
-
-
-def _apply_marking_phase(config, registers):
-    """Phase flip marked leaf patterns, controlled on h[0]=|1>."""
-    h_leaf_qubit = registers.height_qubit(0)
-    branch_qubits = _collect_branch_qubits(registers, config)
-    total_bits = len(branch_qubits)
-
-    marked_values = _evaluate_is_marked_classically(
-        config.is_marked, total_bits,
-    )
-
-    for val in marked_values:
-        _apply_phase_on_pattern(val, branch_qubits, h_leaf_qubit)
-
-
-# ------------------------------------------------------------------
-# Marked walk step
-# ------------------------------------------------------------------
-
-
-def _marked_walk_step(config, registers):
-    """Walk step U' = R_B * R_A' with marking phase at depth 0."""
-    fixed_config = WalkConfig(
-        max_depth=config.max_depth,
-        num_moves=config.num_moves,
-    )
-
-    # R_A' = marking phase + standard R_A
-    _apply_marking_phase(config, registers)
-    build_R_A(fixed_config, registers)
-
-    # R_B as usual
-    build_R_B(fixed_config, registers)
-
-
-# ------------------------------------------------------------------
-# Statevector simulation
-# ------------------------------------------------------------------
-
-
-def _simulate_statevector(qasm_str):
-    """Run QASM through Qiskit Aer and return statevector."""
-    import qiskit.qasm3
-    from qiskit import transpile
-    from qiskit_aer import AerSimulator
-
-    circuit = qiskit.qasm3.loads(qasm_str)
-    circuit.save_statevector()
-    sim = AerSimulator(method="statevector", max_parallel_threads=4)
-    result = sim.run(transpile(circuit, sim)).result()
-    return np.asarray(result.get_statevector())
-
-
-# ------------------------------------------------------------------
-# Root overlap measurement
-# ------------------------------------------------------------------
-
-
-def _measure_root_overlap(config, num_steps):
-    """Root state probability after num_steps marked walk steps."""
-    import quantum_language as ql
-
-    ql.circuit()
-
-    walk_config = WalkConfig(
-        max_depth=config.max_depth,
-        num_moves=config.num_moves,
-        is_marked=config.is_marked,
-    )
-
-    regs = WalkRegisters(walk_config)
-    regs.init_root()
-
-    for _ in range(num_steps):
-        _marked_walk_step(walk_config, regs)
-
-    qasm_str = ql.to_openqasm()
-    sv = _simulate_statevector(qasm_str)
-
-    h_root_qubit = regs.height_qubit(config.max_depth)
-    root_idx = 1 << h_root_qubit
-    return float(abs(sv[root_idx]) ** 2)
-
-
-def _measure_root_overlap_unmarked(num_moves, max_depth, num_steps):
-    """Root state probability after num_steps unmarked walk steps."""
-    import quantum_language as ql
-
-    ql.circuit()
-
-    fixed_config = WalkConfig(
-        max_depth=max_depth,
-        num_moves=num_moves,
-    )
-    regs = WalkRegisters(fixed_config)
-    regs.init_root()
-
-    for _ in range(num_steps):
-        walk_step(fixed_config, regs)
-
-    qasm_str = ql.to_openqasm()
-    sv = _simulate_statevector(qasm_str)
-
-    h_root_qubit = regs.height_qubit(max_depth)
-    root_idx = 1 << h_root_qubit
-    return float(abs(sv[root_idx]) ** 2)
 
 
 # ------------------------------------------------------------------
@@ -264,55 +93,58 @@ def _validate_walk_args(is_marked, max_depth, num_moves,
 
 def walk(is_marked, max_depth, num_moves, *, state=None,
          make_move=None, is_valid=None, max_iterations=None):
-    """Quantum walk search: detect whether a marked node exists.
+    """Build a marked quantum walk configuration with allocated registers.
 
-    Implements a quantum walk-based detection algorithm for marked
-    nodes in a backtracking tree.  The marking oracle is evaluated
-    classically on branch register patterns, and a phase flip is
-    applied at the leaf level of the walk step.
+    Creates a :class:`WalkConfig` with ``is_marked`` set and allocates
+    :class:`WalkRegisters` initialized at the root state.  The returned
+    pair ``(config, registers)`` is ready for use with :func:`walk_step`.
 
-    The algorithm compares root overlap of the marked walk to the
-    unmarked baseline across multiple power levels.  If the marking
-    causes the root overlap to diverge from the baseline, a marked
-    node is detected.
+    The ``is_marked`` predicate is evaluated **quantumly** during
+    ``walk_step``: for each node, ``is_marked(state)`` returns a
+    ``qbool``, and marked nodes receive identity (D_x = I) while
+    unmarked nodes receive the standard diffusion operator (per
+    Montanaro 2015).
 
-    .. note::
+    .. todo::
 
-        This module currently uses fixed-branching walk operators.
-        The ``state``, ``make_move``, and ``is_valid`` parameters
-        are accepted for API compatibility with future variable-
-        branching support but are not used in the current
-        implementation.
+        Detection via quantum phase estimation is a future milestone.
+        Currently this function returns ``(config, registers)`` for
+        manual walk step iteration.  A future version will wrap the
+        walk in a phase estimation routine to detect whether any
+        marked node exists (Montanaro 2015, Theorem 1).
 
     Parameters
     ----------
     is_marked : callable
-        Predicate ``is_marked(value)`` returning bool.  Called with
-        integer values representing branch register patterns at the
-        leaf level.
+        Quantum predicate ``is_marked(state)`` returning ``qbool``.
+        Evaluated quantumly during walk steps to distinguish marked
+        nodes (identity) from unmarked nodes (diffusion).
     max_depth : int
         Maximum depth of the backtracking tree (>= 1).
     num_moves : int
         Maximum branching factor at any node (>= 1).
     state : qint or qarray, optional
-        Quantum register representing the problem state.  Reserved
-        for future variable-branching support; not used currently.
+        Quantum register representing the problem state.  When provided
+        together with ``is_marked``, enables quantum marking in the
+        walk operators (D_x = I for marked nodes).
     make_move : callable, optional
         Function ``make_move(state, move_index)`` that transforms
-        state by applying a move.  Reserved for future variable-
-        branching support; not used currently.
+        state by applying a move.  Used with ``is_valid`` for
+        variable-branching walks.
     is_valid : callable, optional
         Quantum predicate ``is_valid(state)`` returning ``qbool``.
-        Reserved for future variable-branching support; not used
-        currently.
+        Used with ``make_move`` for variable-branching walks.
     max_iterations : int, optional
         Maximum walk step iterations (>= 1).  Auto-computed from
-        tree size as ``ceil(sqrt(T / n))`` if not provided.
+        tree size as ``ceil(sqrt(T / n))`` if not provided.  Stored
+        on the returned config for caller convenience.
 
     Returns
     -------
-    bool
-        True if a marked node is detected, False otherwise.
+    tuple[WalkConfig, WalkRegisters]
+        A ``(config, registers)`` pair.  The config has ``is_marked``
+        set and registers are initialized at the root.  Use with
+        :func:`walk_step` to apply walk iterations.
 
     Raises
     ------
@@ -323,32 +155,26 @@ def walk(is_marked, max_depth, num_moves, *, state=None,
         If ``max_depth``, ``num_moves``, or ``max_iterations`` are
         not int.
     """
+    import quantum_language as ql
+
     _validate_walk_args(is_marked, max_depth, num_moves,
                         max_iterations=max_iterations)
+
+    if max_iterations is None:
+        max_iterations = _max_walk_iterations(num_moves, max_depth)
+
+    ql.circuit()
 
     config = WalkConfig(
         max_depth=max_depth,
         num_moves=num_moves,
         is_marked=is_marked,
+        state=state,
+        make_move=make_move,
+        is_valid=is_valid,
     )
 
-    if max_iterations is None:
-        max_iterations = _max_walk_iterations(num_moves, max_depth)
+    registers = WalkRegisters(config)
+    registers.init_root()
 
-    # Detection threshold: if overlap difference exceeds this,
-    # the marking has a detectable effect on the walk dynamics.
-    detection_threshold = 1e-4
-
-    # Iterative power-method detection
-    power = 1
-    while power <= max_iterations:
-        marked_overlap = _measure_root_overlap(config, power)
-        baseline_overlap = _measure_root_overlap_unmarked(
-            num_moves, max_depth, power,
-        )
-        diff = abs(marked_overlap - baseline_overlap)
-        if diff > detection_threshold:
-            return True  # Marking changed walk dynamics
-        power *= 2
-
-    return False  # No detectable effect from marking
+    return config, registers

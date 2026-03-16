@@ -1,11 +1,12 @@
-"""Tests for walk_search.py: full quantum walk search with detection.
+"""Tests for walk_search.py: quantum walk search configuration.
 
 Verifies the walk() public API:
-- Detects known marked leaf (returns True)
-- No marked nodes (returns False)
-- 2-variable binary ILP detects feasible assignment
-- 3-variable ILP within 15 qubits
-- Returns bool type
+- Returns (config, registers) tuple
+- Config has is_marked set
+- Registers are initialized at root
+- walk_step with is_marked produces correct operator
+- Walk step preserves norm
+- Marked states get identity (unchanged by walk step)
 
 All test circuits use <= 17 qubits.
 """
@@ -20,14 +21,10 @@ from qiskit_aer import AerSimulator
 
 import quantum_language as ql
 from quantum_language.walk_core import WalkConfig
+from quantum_language.walk_operators import walk_step
 from quantum_language.walk_registers import WalkRegisters
 from quantum_language.walk_search import (
-    _apply_phase_on_pattern,
-    _collect_branch_qubits,
-    _evaluate_is_marked_classically,
     _max_walk_iterations,
-    _measure_root_overlap,
-    _measure_root_overlap_unmarked,
     _tree_size,
     _validate_walk_args,
     walk,
@@ -52,26 +49,6 @@ def _simulate_statevector(qasm_str):
     sim = AerSimulator(method="statevector", max_parallel_threads=4)
     result = sim.run(transpile(circuit, sim)).result()
     return np.asarray(result.get_statevector())
-
-
-# ---------------------------------------------------------------------------
-# Simple marking callbacks for testing
-# ---------------------------------------------------------------------------
-
-
-def _is_marked_value3(state):
-    """Marked when state == 3 (classical evaluation)."""
-    return state == 3
-
-
-def _is_marked_never(state):
-    """Nothing is marked."""
-    return False
-
-
-def _is_marked_ge1(state):
-    """Marked when state >= 1 (multiple solutions)."""
-    return state >= 1
 
 
 # ---------------------------------------------------------------------------
@@ -169,113 +146,92 @@ class TestValidation:
 
 
 # ---------------------------------------------------------------------------
-# Group 4: Root Overlap Tests
+# Group 4: walk() Return Type Tests
 # ---------------------------------------------------------------------------
 
 
-class TestRootOverlap:
-    """Test root overlap measurement produces valid probabilities."""
+class TestWalkReturnType:
+    """walk() returns (WalkConfig, WalkRegisters) tuple."""
 
-    def test_unmarked_overlap_is_probability(self):
-        """Root overlap is in [0, 1].
+    def test_returns_tuple(self):
+        """walk() returns a 2-tuple.
 
-        Config: max_depth=2, num_moves=2
         Qubits: 3 height + 2 branch + 2 count = 7 <= 17
         """
-        overlap = _measure_root_overlap_unmarked(2, 2, 1)
-        assert 0 <= overlap <= 1.0 + 1e-10
+        result = walk(lambda s: s == 0, max_depth=2, num_moves=2)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
 
-    def test_unmarked_overlap_less_than_one(self):
-        """Root overlap decreases after walk steps.
+    def test_first_element_is_walkconfig(self):
+        """First element is a WalkConfig."""
+        config, _ = walk(lambda s: s == 0, max_depth=2, num_moves=2)
+        assert isinstance(config, WalkConfig)
 
-        Qubits: 7 <= 17
+    def test_second_element_is_walkregisters(self):
+        """Second element is WalkRegisters."""
+        _, registers = walk(lambda s: s == 0, max_depth=2, num_moves=2)
+        assert isinstance(registers, WalkRegisters)
+
+    def test_config_has_is_marked(self):
+        """Config has is_marked set to the provided predicate."""
+        pred = lambda s: s == 3
+        config, _ = walk(pred, max_depth=2, num_moves=2)
+        assert config.is_marked is pred
+
+    def test_config_has_correct_depth(self):
+        """Config has correct max_depth."""
+        config, _ = walk(lambda s: s == 0, max_depth=3, num_moves=2)
+        assert config.max_depth == 3
+
+    def test_config_has_correct_num_moves(self):
+        """Config has correct num_moves."""
+        config, _ = walk(lambda s: s == 0, max_depth=2, num_moves=3)
+        assert config.num_moves == 3
+
+    def test_registers_initialized_at_root(self):
+        """Registers are initialized (init_root called).
+
+        Calling init_root() again should raise RuntimeError.
         """
-        overlap = _measure_root_overlap_unmarked(2, 2, 1)
-        assert overlap < 1.0
+        _, registers = walk(lambda s: s == 0, max_depth=2, num_moves=2)
+        with pytest.raises(RuntimeError, match="init_root.*already"):
+            registers.init_root()
 
-    def test_unmarked_depth1_periodic(self):
-        """On depth=1 tree, overlap returns to ~1.0 at power=2.
-
-        Qubits: 2 height + 1 branch + 1 count = 4 <= 17
-        """
-        p2 = _measure_root_overlap_unmarked(2, 1, 2)
-        assert abs(p2 - 1.0) < 1e-6
-
-    def test_marked_same_as_unmarked_no_marks(self):
-        """With no marks, marked walk equals unmarked walk.
-
-        Qubits: 7 <= 17
-        """
-        config = WalkConfig(
-            max_depth=2, num_moves=2,
-            is_marked=_is_marked_never,
+    def test_registers_match_config(self):
+        """Registers config matches the returned config."""
+        config, registers = walk(
+            lambda s: s == 0, max_depth=2, num_moves=2,
         )
-        marked = _measure_root_overlap(config, 2)
-        unmarked = _measure_root_overlap_unmarked(2, 2, 2)
-        assert abs(marked - unmarked) < 1e-10
+        assert registers.config is config
+
+    def test_state_passed_through(self):
+        """state parameter is passed to config."""
+        _init_circuit()
+        state = ql.qint(0, width=4)
+        config, _ = walk(
+            lambda s: s == 0, max_depth=2, num_moves=2, state=state,
+        )
+        assert config.state is state
+
+    def test_make_move_passed_through(self):
+        """make_move parameter is passed to config."""
+        fn = lambda s, m: None
+        config, _ = walk(
+            lambda s: s == 0, max_depth=2, num_moves=2, make_move=fn,
+        )
+        assert config.make_move is fn
+
+    def test_is_valid_passed_through(self):
+        """is_valid parameter is passed to config."""
+        fn = lambda s: s != 0
+        config, _ = walk(
+            lambda s: s == 0, max_depth=2, num_moves=2, is_valid=fn,
+        )
+        assert config.is_valid is fn
 
 
 # ---------------------------------------------------------------------------
-# Group 5: Detection Tests
-# ---------------------------------------------------------------------------
-
-
-class TestDetection:
-    """Walk detection: marked leaf True, no marks False."""
-
-    def test_detect_known_marked_leaf(self):
-        """Detect a known marked leaf (value 3) -> True.
-
-        Tree: max_depth=2, num_moves=2 (4 leaves)
-        Marking: value 3 is marked (1 of 4 leaves)
-        Qubits: 7 walk <= 17
-        """
-        result = walk(
-            _is_marked_value3,
-            max_depth=2, num_moves=2, max_iterations=16,
-        )
-        assert result is True
-
-    def test_detect_no_marked_nodes(self):
-        """No marked nodes -> False.
-
-        Tree: max_depth=2, num_moves=2
-        Marking: nothing marked
-        Qubits: 7 walk <= 17
-        """
-        result = walk(
-            _is_marked_never,
-            max_depth=2, num_moves=2, max_iterations=16,
-        )
-        assert result is False
-
-    def test_detect_multiple_marked_leaves(self):
-        """Detect when multiple leaves are marked -> True.
-
-        Tree: max_depth=2, num_moves=2
-        Marking: values >= 1 (3 of 4 leaves)
-        Qubits: 7 <= 17
-        """
-        result = walk(
-            _is_marked_ge1,
-            max_depth=2, num_moves=2, max_iterations=16,
-        )
-        assert result is True
-
-    def test_detect_returns_bool(self):
-        """walk() returns exactly True or False (type check).
-
-        Qubits: 7 <= 17
-        """
-        result = walk(
-            _is_marked_never,
-            max_depth=2, num_moves=2, max_iterations=4,
-        )
-        assert isinstance(result, bool)
-
-
-# ---------------------------------------------------------------------------
-# Group 6: max_iterations edge cases
+# Group 5: max_iterations edge cases
 # ---------------------------------------------------------------------------
 
 
@@ -284,349 +240,195 @@ class TestMaxIterationsEdgeCases:
 
     def test_max_iterations_zero_raises(self):
         with pytest.raises(ValueError, match="max_iterations must be >= 1"):
-            walk(_is_marked_never, max_depth=2, num_moves=2,
+            walk(lambda s: False, max_depth=2, num_moves=2,
                  max_iterations=0)
 
     def test_max_iterations_negative_raises(self):
         with pytest.raises(ValueError, match="max_iterations must be >= 1"):
-            walk(_is_marked_never, max_depth=2, num_moves=2,
+            walk(lambda s: False, max_depth=2, num_moves=2,
                  max_iterations=-1)
 
     def test_max_iterations_float_raises(self):
         with pytest.raises(TypeError, match="max_iterations must be an int"):
-            walk(_is_marked_never, max_depth=2, num_moves=2,
+            walk(lambda s: False, max_depth=2, num_moves=2,
                  max_iterations=4.0)
 
-    def test_max_iterations_one(self):
-        """max_iterations=1 tests only power=1.
-
-        With only power=1, the marking effect is too small for
-        detection.  Should return False.
-
-        Qubits: 7 <= 17
-        """
-        result = walk(
-            _is_marked_value3,
-            max_depth=2, num_moves=2, max_iterations=1,
-        )
-        assert isinstance(result, bool)
-
 
 # ---------------------------------------------------------------------------
-# Group 7: ILP Tests
+# Group 6: Quantum Marking Integration Tests
 # ---------------------------------------------------------------------------
 
 
-def _ilp2_is_marked(state):
-    """2-var ILP: state == 3 (both bits set)."""
-    return state == 3
+class TestQuantumMarkingIntegration:
+    """walk_step with is_marked produces correct operator behavior.
 
+    When is_marked is set together with state on the config, the walk
+    operators apply identity to marked nodes and standard diffusion to
+    unmarked nodes (Montanaro 2015).
+    """
 
-def _ilp3_is_marked(state):
-    """3-var ILP: state == 7 (all three bits set)."""
-    return state == 7
+    def test_walk_step_with_marking_preserves_norm(self):
+        """Walk step with is_marked preserves statevector norm.
 
-
-class TestILP:
-    """Binary ILP detection tests."""
-
-    def test_2var_ilp_detects_feasible(self):
-        """2-variable binary ILP: detect assignment x0=1, x1=1.
-
-        Tree: max_depth=2, num_moves=2
-        Walk qubits: 3 height + 2 branch + 2 count = 7 <= 17
+        Qubits: 4 height + 3 branch + 2 count + 4 state = 13 <= 17
         """
-        result = walk(
-            _ilp2_is_marked,
-            max_depth=2, num_moves=2, max_iterations=16,
+        _init_circuit()
+        state = ql.qint(0, width=4)
+        pred = lambda s: s == 5
+
+        config = WalkConfig(
+            max_depth=3, num_moves=2,
+            is_marked=pred, state=state,
         )
-        assert result is True
+        regs = WalkRegisters(config)
+        regs.init_root()
 
-    def test_3var_ilp_detects_feasible(self):
-        """3-variable binary ILP within 15 qubits.
+        walk_step(config, regs)
 
-        Tree: max_depth=3, num_moves=2
-        Walk qubits: 4 height + 3 branch + 2 count = 9 <= 15
+        _keepalive = [state]
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"Walk step with marking should preserve norm, got {norm}"
+        )
+
+    def test_walk_step_without_marking_preserves_norm(self):
+        """Walk step without is_marked also preserves norm (baseline).
+
+        Qubits: 3 height + 2 branch + 2 count = 7 <= 17
         """
-        result = walk(
-            _ilp3_is_marked,
-            max_depth=3, num_moves=2, max_iterations=16,
+        _init_circuit()
+        config = WalkConfig(max_depth=2, num_moves=2)
+        regs = WalkRegisters(config)
+        regs.init_root()
+
+        walk_step(config, regs)
+
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"Walk step without marking should preserve norm, got {norm}"
         )
-        assert result is True
 
-    def test_3var_ilp_qubit_budget(self):
-        """3-variable ILP walk qubits fit within 15.
+    def test_marking_changes_walk_dynamics(self):
+        """Walk step with marking differs from walk step without marking.
 
-        Walk registers: height=4, branch=3, count=2 -> 9
+        When is_marked and state are both set, the walk step applies
+        identity to marked nodes (D_x = I) and standard diffusion to
+        unmarked nodes.  This produces a different operator than the
+        fully unmarked walk.
+
+        Qubits: 3 height + 2 branch + 2 count + 2 state = 9 + ancillas <= 17
+        """
+        # Unmarked walk
+        _init_circuit()
+        config_std = WalkConfig(max_depth=2, num_moves=2)
+        regs_std = WalkRegisters(config_std)
+        regs_std.init_root()
+        walk_step(config_std, regs_std)
+        sv_std = _simulate_statevector(ql.to_openqasm())
+
+        # Marked walk (with state, some nodes marked)
+        _init_circuit()
+        state = ql.qint(0, width=2)
+        config_marked = WalkConfig(
+            max_depth=2, num_moves=2,
+            is_marked=lambda s: s == 0, state=state,
+        )
+        regs_marked = WalkRegisters(config_marked)
+        regs_marked.init_root()
+        walk_step(config_marked, regs_marked)
+        _keepalive = [state]
+        sv_marked = _simulate_statevector(ql.to_openqasm())
+
+        # Both should be valid unit vectors
+        assert abs(np.linalg.norm(sv_std) - 1.0) < 1e-6
+        assert abs(np.linalg.norm(sv_marked) - 1.0) < 1e-6
+
+        # They should differ because marking changes the operator
+        min_len = min(len(sv_std), len(sv_marked))
+        assert not np.allclose(
+            sv_std[:min_len], sv_marked[:min_len], atol=1e-3,
+        ), "Marked walk should differ from unmarked walk"
+
+    def test_no_marking_gives_standard_walk(self):
+        """Without is_marked, walk step is the standard walk.
+
+        Config without is_marked should produce same result as a
+        config that has never heard of marking.
+
+        Qubits: 3 height + 2 branch + 2 count = 7 <= 17
+        """
+        # Standard walk (no marking)
+        _init_circuit()
+        config_std = WalkConfig(max_depth=2, num_moves=2)
+        regs_std = WalkRegisters(config_std)
+        regs_std.init_root()
+        walk_step(config_std, regs_std)
+        sv_std = _simulate_statevector(ql.to_openqasm())
+
+        # Walk with is_marked=None (default)
+        _init_circuit()
+        config_none = WalkConfig(max_depth=2, num_moves=2, is_marked=None)
+        regs_none = WalkRegisters(config_none)
+        regs_none.init_root()
+        walk_step(config_none, regs_none)
+        sv_none = _simulate_statevector(ql.to_openqasm())
+
+        assert np.allclose(sv_std, sv_none, atol=1e-10), (
+            "Walk without marking should match standard walk"
+        )
+
+    def test_walk_returns_usable_config_and_registers(self):
+        """walk() returns config/registers that can be used with walk_step.
+
+        Qubits: 3 height + 2 branch + 2 count = 7 <= 17
+        """
+        config, regs = walk(lambda s: s == 3, max_depth=2, num_moves=2)
+
+        # Should be able to call walk_step without error
+        walk_step(config, regs)
+
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6
+
+    def test_walk_qubit_budget(self):
+        """Walk registers fit within qubit budget.
+
+        max_depth=3, num_moves=2: 4 height + 3 branch + 2 count = 9 <= 15
         """
         config = WalkConfig(max_depth=3, num_moves=2)
         total = config.total_walk_qubits()
-        assert total <= 15, f"3-var ILP walk uses {total} qubits"
+        assert total <= 15, f"Walk uses {total} qubits"
 
 
 # ---------------------------------------------------------------------------
-# Group 8: Consistency Tests
+# Group 7: Consistency Tests
 # ---------------------------------------------------------------------------
 
 
 class TestConsistency:
-    """Consistency and determinism of walk()."""
+    """Consistency of walk() output."""
 
-    def test_deterministic_results(self):
-        """walk() produces consistent results across runs.
+    def test_deterministic_config(self):
+        """walk() produces consistent config across runs.
 
         Qubits: 7 <= 17
         """
-        results = []
+        pred = lambda s: s == 0
+        configs = []
         for _ in range(3):
-            r = walk(
-                _is_marked_never,
-                max_depth=2, num_moves=2, max_iterations=8,
-            )
-            results.append(r)
-        assert all(r == results[0] for r in results)
+            c, _ = walk(pred, max_depth=2, num_moves=2)
+            configs.append(c)
+        assert all(c.max_depth == 2 for c in configs)
+        assert all(c.num_moves == 2 for c in configs)
+        assert all(c.is_marked is pred for c in configs)
 
     def test_walk_importable(self):
         """walk is importable from quantum_language."""
         from quantum_language import walk as w
         assert callable(w)
-
-
-# ---------------------------------------------------------------------------
-# Group 9: Internal function tests
-# ---------------------------------------------------------------------------
-
-
-class TestCollectBranchQubits:
-    """Test _collect_branch_qubits returns correct qubit indices."""
-
-    def test_binary_depth2_returns_2_qubits(self):
-        """Binary depth=2: 2 branch registers of 1 qubit each.
-
-        Qubits: 7 <= 17
-        """
-        _init_circuit()
-        config = WalkConfig(max_depth=2, num_moves=2)
-        regs = WalkRegisters(config)
-        qubits = _collect_branch_qubits(regs, config)
-        assert len(qubits) == 2
-
-    def test_binary_depth3_returns_3_qubits(self):
-        """Binary depth=3: 3 branch registers of 1 qubit each.
-
-        Qubits: 9 <= 17
-        """
-        _init_circuit()
-        config = WalkConfig(max_depth=3, num_moves=2)
-        regs = WalkRegisters(config)
-        qubits = _collect_branch_qubits(regs, config)
-        assert len(qubits) == 3
-
-    def test_qubit_indices_are_distinct(self):
-        """All returned qubit indices should be unique.
-
-        Qubits: 7 <= 17
-        """
-        _init_circuit()
-        config = WalkConfig(max_depth=2, num_moves=2)
-        regs = WalkRegisters(config)
-        qubits = _collect_branch_qubits(regs, config)
-        assert len(set(qubits)) == len(qubits)
-
-    def test_qubit_indices_match_branch_registers(self):
-        """Returned qubits match branch_at() values.
-
-        Qubits: 7 <= 17
-        """
-        _init_circuit()
-        config = WalkConfig(max_depth=2, num_moves=2)
-        regs = WalkRegisters(config)
-        qubits = _collect_branch_qubits(regs, config)
-
-        expected = []
-        for d in range(config.max_depth):
-            br = regs.branch_at(d)
-            bw = br.width
-            for bit in range(bw):
-                expected.append(int(br.qubits[64 - bw + bit]))
-        assert qubits == expected
-
-    def test_ternary_depth2_returns_4_qubits(self):
-        """Ternary depth=2: 2 branch registers of 2 qubits each.
-
-        Qubits: 9 <= 17
-        """
-        _init_circuit()
-        config = WalkConfig(max_depth=2, num_moves=3)
-        regs = WalkRegisters(config)
-        qubits = _collect_branch_qubits(regs, config)
-        assert len(qubits) == 4
-
-
-class TestApplyPhaseOnPattern:
-    """Test _apply_phase_on_pattern X-MCZ-X gate sequences."""
-
-    def test_pattern_all_ones_no_x_gates(self):
-        """Pattern with all 1s should emit no X gates, only MCZ.
-
-        For pattern=3 (binary 11) on 2 branch qubits, no X gates
-        are needed because all bits are already 1.
-
-        Qubits: 7 <= 17
-        """
-        _init_circuit()
-        config = WalkConfig(max_depth=2, num_moves=2)
-        regs = WalkRegisters(config)
-        regs.init_root()
-
-        h_leaf_qubit = regs.height_qubit(0)
-        branch_qubits = _collect_branch_qubits(regs, config)
-
-        _apply_phase_on_pattern(3, branch_qubits, h_leaf_qubit)
-
-        qasm = ql.to_openqasm()
-        # Should NOT contain standalone 'x' gates (only init x for root)
-        gate_lines = [
-            l.strip() for l in qasm.split("\n")
-            if l.strip().startswith("x ") and "q[" in l
-        ]
-        # The only X gate is the root initialization x q[2]
-        root_x_count = sum(
-            1 for l in gate_lines
-            if l == f"x q[{regs.height_qubit(config.max_depth)}];"
-        )
-        assert len(gate_lines) == root_x_count
-
-    def test_pattern_zero_emits_x_on_all_branches(self):
-        """Pattern 0 (all zeros): X on every branch qubit before/after MCZ.
-
-        For pattern=0, all branch bits should be 0, so we X them to
-        convert to all-1s for MCZ, then X again to undo.
-
-        Qubits: 7 <= 17
-        """
-        _init_circuit()
-        config = WalkConfig(max_depth=2, num_moves=2)
-        regs = WalkRegisters(config)
-        regs.init_root()
-
-        h_leaf_qubit = regs.height_qubit(0)
-        branch_qubits = _collect_branch_qubits(regs, config)
-
-        _apply_phase_on_pattern(0, branch_qubits, h_leaf_qubit)
-
-        qasm = ql.to_openqasm()
-        # Count X gates on branch qubits (each appears twice: before + after)
-        x_count = 0
-        for bq in branch_qubits:
-            x_count += qasm.count(f"x q[{bq}];")
-        assert x_count == 2 * len(branch_qubits)
-
-    def test_phase_flip_on_target_state(self):
-        """Pattern phase flip changes sign of correct basis state.
-
-        Prepare h[0]=1 and branch pattern=3 (both branch qubits=1),
-        apply phase on pattern 3.  The amplitude of that state
-        should get a -1 phase.
-
-        Qubits: 7 <= 17
-        """
-        from quantum_language._gates import emit_x
-
-        _init_circuit()
-        config = WalkConfig(max_depth=2, num_moves=2)
-        regs = WalkRegisters(config)
-
-        # Set h[0]=1 (leaf), and both branches to 1 (pattern=3)
-        emit_x(regs.height_qubit(0))
-        for bq in _collect_branch_qubits(regs, config):
-            emit_x(bq)
-
-        # Record amplitude before marking
-        qasm_before = ql.to_openqasm()
-        sv_before = _simulate_statevector(qasm_before)
-
-        # Now apply the marking phase
-        _init_circuit()
-        emit_x(regs.height_qubit(0))
-        for bq in _collect_branch_qubits(regs, config):
-            emit_x(bq)
-        _apply_phase_on_pattern(
-            3, _collect_branch_qubits(regs, config),
-            regs.height_qubit(0),
-        )
-        qasm_after = ql.to_openqasm()
-        sv_after = _simulate_statevector(qasm_after)
-
-        # Find the nonzero amplitude index
-        nonzero = np.where(np.abs(sv_before) > 0.5)[0]
-        assert len(nonzero) == 1
-        idx = nonzero[0]
-
-        # Phase should have flipped: before +1, after -1
-        assert abs(sv_before[idx] - 1.0) < 1e-6
-        assert abs(sv_after[idx] + 1.0) < 1e-6
-
-    def test_phase_flip_does_not_affect_other_pattern(self):
-        """Phase flip on pattern 3 should NOT affect pattern 1.
-
-        Prepare h[0]=1 with branch=1 (only LSB set), then apply
-        phase on pattern 3.  The amplitude should be unchanged.
-
-        Qubits: 7 <= 17
-        """
-        from quantum_language._gates import emit_x
-
-        _init_circuit()
-        config = WalkConfig(max_depth=2, num_moves=2)
-        regs = WalkRegisters(config)
-
-        # Set h[0]=1 (leaf), branch[0]=1 only (pattern=1)
-        emit_x(regs.height_qubit(0))
-        branch_qubits = _collect_branch_qubits(regs, config)
-        emit_x(branch_qubits[0])  # LSB only
-
-        _apply_phase_on_pattern(3, branch_qubits, regs.height_qubit(0))
-
-        qasm = ql.to_openqasm()
-        sv = _simulate_statevector(qasm)
-
-        # The nonzero amplitude should still be +1 (no phase flip)
-        nonzero = np.where(np.abs(sv) > 0.5)[0]
-        assert len(nonzero) == 1
-        assert abs(sv[nonzero[0]] - 1.0) < 1e-6
-
-
-class TestEvaluateIsMarkedClassically:
-    """Test classical evaluation of is_marked predicate."""
-
-    def test_marks_value3_only(self):
-        result = _evaluate_is_marked_classically(
-            lambda v: v == 3, total_branch_bits=2,
-        )
-        assert result == [3]
-
-    def test_marks_nothing(self):
-        result = _evaluate_is_marked_classically(
-            lambda v: False, total_branch_bits=2,
-        )
-        assert result == []
-
-    def test_marks_all(self):
-        result = _evaluate_is_marked_classically(
-            lambda v: True, total_branch_bits=2,
-        )
-        assert result == [0, 1, 2, 3]
-
-    def test_marks_ge1(self):
-        result = _evaluate_is_marked_classically(
-            lambda v: v >= 1, total_branch_bits=2,
-        )
-        assert result == [1, 2, 3]
-
-    def test_broken_callback_raises(self):
-        """If callback raises, the exception propagates."""
-        def bad_pred(v):
-            raise RuntimeError("broken")
-        with pytest.raises(RuntimeError, match="broken"):
-            _evaluate_is_marked_classically(bad_pred, total_branch_bits=2)
