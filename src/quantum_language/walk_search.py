@@ -1,6 +1,6 @@
 """Full quantum walk search with detection (Montanaro 2015).
 
-Public API: ``walk(state, make_move, is_valid, is_marked, max_depth, num_moves)``
+Public API: ``walk(is_marked, max_depth, num_moves, *, state=None, make_move=None, is_valid=None, max_iterations=None)``
 
 Algorithm
 ---------
