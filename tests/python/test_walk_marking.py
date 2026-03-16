@@ -4,38 +4,42 @@ Per Montanaro 2015: D_x = I (identity) for marked nodes, standard diffusion
 for unmarked.  The _apply_local_diffusion function evaluates is_marked(state)
 quantumly to get a qbool and applies diffusion only for unmarked nodes.
 
-Note on classical optimization
-------------------------------
+Testing strategy
+----------------
 The framework aggressively tracks classical values and resolves comparisons
-at compile time.  For a state register with a known constant value, the
-comparison result qbool has no effect on gate emission (the qubit stays
-at |0> physically).  The marking becomes quantum-effective only when the
-state register is in genuine superposition (after multiple walk steps or
-external preparation).
+at compile time.  Comparisons on constant-value qints produce no gates and
+the result qubit stays at physical |0> regardless of the comparison outcome.
 
-Tests verify structural correctness:
-- Marking code path is exercised (is_marked evaluated, qbool produced)
-- Norm preservation with any marking predicate
-- Qubit budget respected
-- No regression for unmarked walk steps
-- Different marking predicates (always/never/partial) don't break the walk
+To test marking correctness we use two complementary approaches:
+
+1. **Gate-level marking tests** -- Bypass DSL comparison by providing an
+   ``is_marked`` predicate that returns a pre-allocated qbool whose
+   physical qubit has been set via ``emit_x`` (gate-level, invisible to
+   classical tracking).  This gives full control over the marking qubit
+   and lets us verify that marked states get identity while unmarked
+   states get diffusion.
+
+2. **Superposition marking tests** -- Put the state register into a
+   genuine superposition using ``emit_h`` (Hadamard at the gate level),
+   then use a DSL comparison as the marking predicate.  The comparison
+   must still emit gates because the state is in physical superposition,
+   even though the DSL tracker sees value=0.  This verifies that the
+   marking qbool is properly entangled with the state.
 """
 
 import gc
+import warnings
 
 import numpy as np
-import pytest
 import qiskit.qasm3
 from qiskit import transpile
 from qiskit_aer import AerSimulator
 
 import quantum_language as ql
-from quantum_language._gates import emit_x
+from quantum_language._gates import emit_h, emit_x
 from quantum_language.walk_core import WalkConfig
 from quantum_language.walk_operators import (
     _apply_local_diffusion,
-    build_R_A,
-    build_R_B,
     walk_step,
 )
 from quantum_language.walk_registers import WalkRegisters
@@ -70,32 +74,45 @@ def _get_num_qubits(qasm_str):
     raise ValueError("Could not find qubit count in QASM")
 
 
-def _prepare_at_depth(registers, target_depth):
-    """Move walk state from root to a given depth."""
-    max_depth = registers.config.max_depth
-    emit_x(registers.height_qubit(max_depth))    # root off
-    emit_x(registers.height_qubit(target_depth))  # target on
-
-
 # ---------------------------------------------------------------------------
-# Marking predicates
+# Marking predicates (gate-level)
 # ---------------------------------------------------------------------------
 
 
-def _always_marked(state):
-    """Marking predicate: always marked (state >= 0)."""
-    return state >= 0
+def _make_always_marked_predicate():
+    """Return an is_marked predicate that always returns physical |1>.
+
+    Allocates a qbool and flips it to |1> via emit_x.  The returned
+    closure captures this qbool and returns it on every call.  Because
+    the qubit is set at the gate level (not DSL level), the framework
+    cannot optimise it away.
+    """
+    flag = ql.qbool()
+    emit_x(int(flag.qubits[63]))  # physical |1>
+    return lambda state: flag, flag
 
 
-def _never_marked(state):
-    """Marking predicate: never marked (state < 0, always false
-    for unsigned qint)."""
-    return state < 0
+def _make_never_marked_predicate():
+    """Return an is_marked predicate that always returns physical |0>.
+
+    Allocates a qbool and leaves it at |0>.
+    """
+    flag = ql.qbool()
+    # physical |0> -- no emit_x
+    return lambda state: flag, flag
 
 
-def _marked_when_nonzero(state):
-    """Marking predicate: marked when state != 0."""
-    return state != 0
+def _make_superposition_marked_predicate(state):
+    """Return an is_marked predicate based on a real comparison.
+
+    The caller must have put ``state`` into physical superposition
+    (e.g. via emit_h) before calling this.  The predicate returns
+    ``state == 0``, whose result qubit is entangled with the state
+    when the state is in superposition.
+    """
+    def predicate(s):
+        return s == 0
+    return predicate
 
 
 # ---------------------------------------------------------------------------
@@ -127,107 +144,159 @@ def _make_unmarked_config_and_regs(max_depth, num_moves):
 
 
 # ---------------------------------------------------------------------------
-# Group 1: Marked node gets identity (structural tests)
+# Variable-branching helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_move_xor(state, move_idx):
+    """Apply move by XORing state with (move_idx + 1)."""
+    state ^= (move_idx + 1)
+
+
+def _undo_move_xor(state, move_idx):
+    """Undo XOR move (XOR is self-inverse)."""
+    state ^= (move_idx + 1)
+
+
+def _is_valid_nonzero(state):
+    """Validity predicate: valid when state != 0."""
+    return state != 0
+
+
+# ---------------------------------------------------------------------------
+# Group 1: Marked node gets identity (gate-level verification)
 # ---------------------------------------------------------------------------
 
 
 class TestMarkedNodeGetsIdentity:
-    """Verify that the marking code path is exercised and doesn't
-    break the walk.  With the framework's classical optimization,
-    classically-resolved marking predicates produce comparison
-    ancillae but don't change the gate behavior for constant states.
+    """When all nodes are marked the diffusion must be identity.
+
+    Uses gate-level qbool (via emit_x) so that the marking qubit is
+    physically |1> independent of classical optimisation.  After
+    _flip_all (X gate), the qubit becomes |0>, so ``with marked:``
+    does not fire and diffusion is skipped.
     """
 
-    def test_all_marked_preserves_norm(self):
-        """Walk step with always-marked predicate preserves norm.
+    def test_all_marked_walk_step_is_identity(self):
+        """Walk step is identity when is_marked returns physical |1>.
+
+        After the walk step the root probability should still be 1.0
+        because diffusion is suppressed at every depth.
 
         Walk registers: 2 height + 1 branch + 1 count = 4
-        State register: 2 qubits
+        State register: 2 qubits + 1 marking flag = 7 qubits.
         """
         _init_circuit()
-        config, regs, state = _make_marked_config_and_regs(
-            max_depth=1, num_moves=2, state_width=2,
-            is_marked_fn=_always_marked,
+        state = ql.qint(0, width=2)
+        pred, flag = _make_always_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred,
+            state=state,
         )
+        regs = WalkRegisters(config)
+        regs.init_root()
 
         walk_step(config, regs)
 
-        _keepalive = [regs, state]
+        _keepalive = [regs, state, flag]
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+
+        # Root qubit h[max_depth] and marking flag qubit should be |1>,
+        # all other walk register qubits |0>.  The initial state
+        # amplitudes should be unchanged.
+        h_root = regs.height_qubit(config.max_depth)
+        flag_qubit = int(flag.qubits[63])
+        initial_idx = (1 << h_root) | (1 << flag_qubit)
+        root_prob = float(abs(sv[initial_idx]) ** 2)
+        assert abs(root_prob - 1.0) < 1e-6, (
+            f"Walk step with all nodes marked should be identity, "
+            f"root_prob={root_prob}"
+        )
+
+    def test_all_marked_R_B_is_identity(self):
+        """R_B (root diffusion) is identity when marking returns |1>.
+
+        Only R_B is called; it includes the root diffusion at depth 1
+        for a depth-1 tree.  Root probability should remain 1.0.
+        """
+        _init_circuit()
+        state = ql.qint(0, width=2)
+        pred, flag = _make_always_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred,
+            state=state,
+        )
+        regs = WalkRegisters(config)
+        regs.init_root()
+
+        from quantum_language.walk_operators import build_R_B
+        build_R_B(config, regs)
+
+        _keepalive = [regs, state, flag]
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+
+        h_root = regs.height_qubit(config.max_depth)
+        flag_qubit = int(flag.qubits[63])
+        initial_idx = (1 << h_root) | (1 << flag_qubit)
+        root_prob = float(abs(sv[initial_idx]) ** 2)
+        assert abs(root_prob - 1.0) < 1e-6, (
+            f"R_B with all nodes marked should be identity, "
+            f"root_prob={root_prob}"
+        )
+
+    def test_all_marked_double_step_is_identity(self):
+        """Two walk steps are identity when all nodes are marked."""
+        _init_circuit()
+        state = ql.qint(0, width=2)
+        pred, flag = _make_always_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred,
+            state=state,
+        )
+        regs = WalkRegisters(config)
+        regs.init_root()
+
+        walk_step(config, regs)
+        walk_step(config, regs)
+
+        _keepalive = [regs, state, flag]
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+
+        h_root = regs.height_qubit(config.max_depth)
+        flag_qubit = int(flag.qubits[63])
+        initial_idx = (1 << h_root) | (1 << flag_qubit)
+        root_prob = float(abs(sv[initial_idx]) ** 2)
+        assert abs(root_prob - 1.0) < 1e-6, (
+            f"Two walk steps with all nodes marked should be identity, "
+            f"root_prob={root_prob}"
+        )
+
+    def test_all_marked_preserves_norm(self):
+        """All-marked walk step preserves norm."""
+        _init_circuit()
+        state = ql.qint(0, width=2)
+        pred, flag = _make_always_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred,
+            state=state,
+        )
+        regs = WalkRegisters(config)
+        regs.init_root()
+
+        walk_step(config, regs)
+
+        _keepalive = [regs, state, flag]
         sv = _simulate_statevector(ql.to_openqasm())
         norm = np.linalg.norm(sv)
         assert abs(norm - 1.0) < 1e-6, (
             f"All-marked walk step should preserve norm, got {norm}"
-        )
-
-    def test_all_marked_double_step_preserves_norm(self):
-        """Two walk steps with always-marked predicate preserve norm."""
-        _init_circuit()
-        config, regs, state = _make_marked_config_and_regs(
-            max_depth=1, num_moves=2, state_width=2,
-            is_marked_fn=_always_marked,
-        )
-
-        walk_step(config, regs)
-        walk_step(config, regs)
-
-        _keepalive = [regs, state]
-        sv = _simulate_statevector(ql.to_openqasm())
-        norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"Two all-marked walk steps should preserve norm, got {norm}"
-        )
-
-    def test_all_marked_code_path_taken(self):
-        """Verify the marking branch is taken when is_marked and state
-        are set.
-
-        The marked walk step should allocate extra qubits (for the
-        comparison result) compared to the unmarked walk step.
-        """
-        # Unmarked walk step
-        _init_circuit()
-        config_u, regs_u = _make_unmarked_config_and_regs(
-            max_depth=1, num_moves=2,
-        )
-        walk_step(config_u, regs_u)
-        _keep_u = [regs_u]
-        nq_unmarked = _get_num_qubits(ql.to_openqasm())
-
-        # Marked walk step
-        _init_circuit()
-        config_m, regs_m, state_m = _make_marked_config_and_regs(
-            max_depth=1, num_moves=2, state_width=2,
-            is_marked_fn=_always_marked,
-        )
-        walk_step(config_m, regs_m)
-        _keep_m = [regs_m, state_m]
-        nq_marked = _get_num_qubits(ql.to_openqasm())
-
-        # Marked path allocates state register + comparison ancillae
-        assert nq_marked > nq_unmarked, (
-            f"Marked walk should use more qubits than unmarked: "
-            f"marked={nq_marked}, unmarked={nq_unmarked}"
-        )
-
-    def test_all_marked_depth2_preserves_norm(self):
-        """All-marked walk step on depth-2 tree preserves norm.
-
-        Walk registers: 3 height + 2 branch + 1 count = 6
-        State register: 2 qubits
-        """
-        _init_circuit()
-        config, regs, state = _make_marked_config_and_regs(
-            max_depth=2, num_moves=2, state_width=2,
-            is_marked_fn=_always_marked,
-        )
-
-        walk_step(config, regs)
-
-        _keepalive = [regs, state]
-        sv = _simulate_statevector(ql.to_openqasm())
-        norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"All-marked depth-2 walk step should preserve norm, got {norm}"
         )
 
 
@@ -237,8 +306,12 @@ class TestMarkedNodeGetsIdentity:
 
 
 class TestUnmarkedNodeGetsDiffusion:
-    """Without marking (or with is_marked not set), standard diffusion
-    applies and modifies the root state.
+    """When no node is marked the walk step must apply normal diffusion.
+
+    Uses gate-level qbool left at physical |0> (never marked).  After
+    _flip_all (X), the qubit becomes |1> so ``with marked:`` fires
+    and diffusion is applied normally.  Also tests the no-marking
+    baseline (is_marked not set at all).
     """
 
     def test_no_marking_walk_step_modifies_root(self):
@@ -253,9 +326,44 @@ class TestUnmarkedNodeGetsDiffusion:
 
         _keepalive = [regs]
         sv_after = _simulate_statevector(ql.to_openqasm())
-
         assert not np.allclose(sv_before, sv_after, atol=1e-6), (
             "Unmarked walk step should modify root state"
+        )
+
+    def test_never_marked_walk_step_modifies_root(self):
+        """Walk step with is_marked returning physical |0> modifies root.
+
+        Since the marking qubit is physical |0>, after _flip_all it
+        becomes |1>, with fires, diffusion runs.  Root probability
+        should drop below 1.0.
+        """
+        _init_circuit()
+        state = ql.qint(0, width=2)
+        pred, flag = _make_never_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred,
+            state=state,
+        )
+        regs = WalkRegisters(config)
+        regs.init_root()
+
+        walk_step(config, regs)
+
+        _keepalive = [regs, state, flag]
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+
+        # Root probability should have decreased from 1.0 because
+        # diffusion was applied (never marked -> diffusion runs).
+        h_root = regs.height_qubit(config.max_depth)
+        flag_qubit = int(flag.qubits[63])
+        # flag is |0>, h_root is initially |1>
+        initial_idx = 1 << h_root
+        root_prob = float(abs(sv[initial_idx]) ** 2)
+        assert root_prob < 0.99, (
+            f"Never-marked walk step should move amplitude away from "
+            f"root, root_prob={root_prob}"
         )
 
     def test_no_marking_preserves_norm(self):
@@ -275,67 +383,66 @@ class TestUnmarkedNodeGetsDiffusion:
         )
 
     def test_never_marked_preserves_norm(self):
-        """Walk step with never-marked predicate preserves norm."""
+        """Walk step with is_marked returning physical |0> preserves norm."""
         _init_circuit()
-        config, regs, state = _make_marked_config_and_regs(
-            max_depth=1, num_moves=2, state_width=2,
-            is_marked_fn=_never_marked,
+        state = ql.qint(0, width=2)
+        pred, flag = _make_never_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred,
+            state=state,
         )
+        regs = WalkRegisters(config)
+        regs.init_root()
 
         walk_step(config, regs)
 
-        _keepalive = [regs, state]
+        _keepalive = [regs, state, flag]
         sv = _simulate_statevector(ql.to_openqasm())
         norm = np.linalg.norm(sv)
         assert abs(norm - 1.0) < 1e-6, (
             f"Never-marked walk step should preserve norm, got {norm}"
         )
 
-    def test_never_marked_allocates_extra_qubits(self):
-        """Never-marked path allocates extra qubits (state + comparison)."""
-        _init_circuit()
-        config_u, regs_u = _make_unmarked_config_and_regs(
-            max_depth=1, num_moves=2,
-        )
-        walk_step(config_u, regs_u)
-        _keep_u = [regs_u]
-        nq_unmarked = _get_num_qubits(ql.to_openqasm())
-
-        _init_circuit()
-        config_n, regs_n, state_n = _make_marked_config_and_regs(
-            max_depth=1, num_moves=2, state_width=2,
-            is_marked_fn=_never_marked,
-        )
-        walk_step(config_n, regs_n)
-        _keep_n = [regs_n, state_n]
-        nq_never = _get_num_qubits(ql.to_openqasm())
-
-        assert nq_never > nq_unmarked, (
-            f"Never-marked should allocate extra qubits: "
-            f"never={nq_never}, unmarked={nq_unmarked}"
-        )
-
 
 # ---------------------------------------------------------------------------
-# Group 3: Partial marking
+# Group 3: Partial marking (superposition state)
 # ---------------------------------------------------------------------------
 
 
 class TestPartialMarking:
-    """Selective marking with state != 0: state=0 unmarked, nonzero marked.
+    """Selective marking with the state register in superposition.
 
-    For a classical state=0, the partial predicate evaluates to False
-    (not marked), so the marking path allocates comparison ancillae.
+    Puts the state register into physical superposition via emit_h,
+    then uses a DSL comparison (state == 0) as the marking predicate.
+    Verifies that the walk step produces different results from the
+    all-marked and never-marked cases.
     """
 
     def test_partial_marking_preserves_norm(self):
-        """Walk step with partial marking preserves norm."""
+        """Walk step with superposition marking preserves norm.
+
+        State register (2 qubits) put into |+> via Hadamard.
+        is_marked = (state == 0): marked for the |00> component,
+        unmarked for |01>, |10>, |11>.
+
+        Walk registers: 2 height + 1 branch + 1 count = 4
+        State register: 2 qubits + comparison ancillae.
+        """
         _init_circuit()
-        config, regs, state = _make_marked_config_and_regs(
-            max_depth=1, num_moves=2, state_width=2,
-            is_marked_fn=_marked_when_nonzero,
-            state_value=0,
+        state = ql.qint(0, width=2)
+        # Put state into genuine superposition at the gate level
+        emit_h(int(state.qubits[62]))
+        emit_h(int(state.qubits[63]))
+
+        pred = _make_superposition_marked_predicate(state)
+        config = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred,
+            state=state,
         )
+        regs = WalkRegisters(config)
+        regs.init_root()
 
         walk_step(config, regs)
 
@@ -346,36 +453,83 @@ class TestPartialMarking:
             f"Partial marking walk step should preserve norm, got {norm}"
         )
 
-    def test_partial_marking_depth2_preserves_norm(self):
-        """Partial marking on depth-2 tree preserves norm.
+    def test_partial_differs_from_all_marked(self):
+        """Partial marking produces a different statevector than all-marked.
 
-        Walk registers: 3 height + 2 branch + 1 count = 6
-        State register: 2 qubits
+        All-marked is identity; partial marking should apply diffusion
+        to the unmarked components, yielding a different final state.
         """
+        # All-marked (identity)
         _init_circuit()
-        config, regs, state = _make_marked_config_and_regs(
-            max_depth=2, num_moves=2, state_width=2,
-            is_marked_fn=_marked_when_nonzero,
-            state_value=0,
+        state_a = ql.qint(0, width=2)
+        emit_h(int(state_a.qubits[62]))
+        emit_h(int(state_a.qubits[63]))
+        pred_a, flag_a = _make_always_marked_predicate()
+        config_a = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred_a,
+            state=state_a,
         )
+        regs_a = WalkRegisters(config_a)
+        regs_a.init_root()
+        walk_step(config_a, regs_a)
+        _keep_a = [regs_a, state_a, flag_a]
+        sv_all_marked = _simulate_statevector(ql.to_openqasm())
 
-        walk_step(config, regs)
+        # Partial marking via superposition comparison
+        _init_circuit()
+        state_p = ql.qint(0, width=2)
+        emit_h(int(state_p.qubits[62]))
+        emit_h(int(state_p.qubits[63]))
+        pred_p = _make_superposition_marked_predicate(state_p)
+        config_p = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred_p,
+            state=state_p,
+        )
+        regs_p = WalkRegisters(config_p)
+        regs_p.init_root()
+        walk_step(config_p, regs_p)
+        _keep_p = [regs_p, state_p]
+        sv_partial = _simulate_statevector(ql.to_openqasm())
 
-        _keepalive = [regs, state]
-        sv = _simulate_statevector(ql.to_openqasm())
-        norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"Partial marking depth-2 should preserve norm, got {norm}"
+        # They have different qubit counts so cannot directly compare.
+        # Instead verify that partial marking has norm 1 and that the
+        # all-marked case is identity (root probability unchanged).
+        norm_all = np.linalg.norm(sv_all_marked)
+        norm_partial = np.linalg.norm(sv_partial)
+        assert abs(norm_all - 1.0) < 1e-6
+        assert abs(norm_partial - 1.0) < 1e-6
+
+        # All-marked should be identity: root qubit still |1>,
+        # all other walk register qubits |0>.  The state+flag qubits
+        # are in superposition from the Hadamard + emit_x.
+        # Partial should differ because diffusion applies to some
+        # components.  Verify that partial has more non-zero amplitudes
+        # than all-marked (diffusion spreads amplitude).
+        nonzero_all = np.sum(np.abs(sv_all_marked) > 1e-10)
+        nonzero_partial = np.sum(np.abs(sv_partial) > 1e-10)
+        assert nonzero_partial > nonzero_all, (
+            f"Partial marking should spread amplitude to more basis "
+            f"states than all-marked: partial={nonzero_partial}, "
+            f"all_marked={nonzero_all}"
         )
 
     def test_partial_marking_double_step_preserves_norm(self):
-        """Two walk steps with partial marking preserve norm."""
+        """Two walk steps with superposition marking preserve norm."""
         _init_circuit()
-        config, regs, state = _make_marked_config_and_regs(
-            max_depth=1, num_moves=2, state_width=2,
-            is_marked_fn=_marked_when_nonzero,
-            state_value=0,
+        state = ql.qint(0, width=2)
+        emit_h(int(state.qubits[62]))
+        emit_h(int(state.qubits[63]))
+
+        pred = _make_superposition_marked_predicate(state)
+        config = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred,
+            state=state,
         )
+        regs = WalkRegisters(config)
+        regs.init_root()
 
         walk_step(config, regs)
         walk_step(config, regs)
@@ -384,31 +538,8 @@ class TestPartialMarking:
         sv = _simulate_statevector(ql.to_openqasm())
         norm = np.linalg.norm(sv)
         assert abs(norm - 1.0) < 1e-6, (
-            f"Two partial-marking walk steps should preserve norm, got {norm}"
-        )
-
-    def test_partial_marking_allocates_extra_qubits(self):
-        """Partial marking allocates state register + comparison qubits."""
-        _init_circuit()
-        config_u, regs_u = _make_unmarked_config_and_regs(
-            max_depth=1, num_moves=2,
-        )
-        walk_step(config_u, regs_u)
-        _keep_u = [regs_u]
-        nq_unmarked = _get_num_qubits(ql.to_openqasm())
-
-        _init_circuit()
-        config_p, regs_p, state_p = _make_marked_config_and_regs(
-            max_depth=1, num_moves=2, state_width=2,
-            is_marked_fn=_marked_when_nonzero,
-        )
-        walk_step(config_p, regs_p)
-        _keep_p = [regs_p, state_p]
-        nq_partial = _get_num_qubits(ql.to_openqasm())
-
-        assert nq_partial > nq_unmarked, (
-            f"Partial marking should allocate extra qubits: "
-            f"partial={nq_partial}, unmarked={nq_unmarked}"
+            f"Two partial-marking walk steps should preserve norm, "
+            f"got {norm}"
         )
 
 
@@ -423,41 +554,65 @@ class TestMarkingQubitBudget:
     def test_marking_depth1_within_budget(self):
         """Depth-1 marked walk within 17 qubits."""
         _init_circuit()
-        config, regs, state = _make_marked_config_and_regs(
-            max_depth=1, num_moves=2, state_width=2,
-            is_marked_fn=_always_marked,
+        state = ql.qint(0, width=2)
+        pred, flag = _make_always_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred,
+            state=state,
         )
+        regs = WalkRegisters(config)
+        regs.init_root()
         walk_step(config, regs)
-        _keepalive = [regs, state]
+        _keepalive = [regs, state, flag]
         nq = _get_num_qubits(ql.to_openqasm())
         assert nq <= 17, f"Marked walk uses {nq} qubits (limit: 17)"
 
     def test_marking_depth2_within_budget(self):
         """Depth-2 marked walk within 17 qubits."""
         _init_circuit()
-        config, regs, state = _make_marked_config_and_regs(
-            max_depth=2, num_moves=2, state_width=2,
-            is_marked_fn=_marked_when_nonzero,
+        state = ql.qint(0, width=2)
+        pred, flag = _make_never_marked_predicate()
+        config = WalkConfig(
+            max_depth=2, num_moves=2,
+            is_marked=pred,
+            state=state,
         )
+        regs = WalkRegisters(config)
+        regs.init_root()
         walk_step(config, regs)
-        _keepalive = [regs, state]
+        _keepalive = [regs, state, flag]
         nq = _get_num_qubits(ql.to_openqasm())
         assert nq <= 17, f"Marked walk uses {nq} qubits (limit: 17)"
 
-    def test_marking_ternary_within_budget(self):
-        """Ternary tree depth-1 with marking within 17 qubits.
-
-        Use 1-bit state register to minimize qubit usage.
-        """
+    def test_marking_code_path_allocates_extra_qubits(self):
+        """Marked path allocates more qubits than unmarked."""
         _init_circuit()
-        config, regs, state = _make_marked_config_and_regs(
-            max_depth=1, num_moves=3, state_width=1,
-            is_marked_fn=_always_marked,
+        config_u, regs_u = _make_unmarked_config_and_regs(
+            max_depth=1, num_moves=2,
         )
-        walk_step(config, regs)
-        _keepalive = [regs, state]
-        nq = _get_num_qubits(ql.to_openqasm())
-        assert nq <= 17, f"Ternary marked walk uses {nq} qubits (limit: 17)"
+        walk_step(config_u, regs_u)
+        _keep_u = [regs_u]
+        nq_unmarked = _get_num_qubits(ql.to_openqasm())
+
+        _init_circuit()
+        state = ql.qint(0, width=2)
+        pred, flag = _make_always_marked_predicate()
+        config_m = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred,
+            state=state,
+        )
+        regs_m = WalkRegisters(config_m)
+        regs_m.init_root()
+        walk_step(config_m, regs_m)
+        _keep_m = [regs_m, state, flag]
+        nq_marked = _get_num_qubits(ql.to_openqasm())
+
+        assert nq_marked > nq_unmarked, (
+            f"Marked walk should use more qubits than unmarked: "
+            f"marked={nq_marked}, unmarked={nq_unmarked}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -471,15 +626,20 @@ class TestApplyLocalDiffusionDispatch:
     def test_leaf_depth_noop(self):
         """Depth 0 is a no-op regardless of marking."""
         _init_circuit()
-        config, regs, state = _make_marked_config_and_regs(
-            max_depth=1, num_moves=2, state_width=2,
-            is_marked_fn=_always_marked,
+        state = ql.qint(0, width=2)
+        pred, flag = _make_always_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred,
+            state=state,
         )
+        regs = WalkRegisters(config)
+        regs.init_root()
         sv_before = _simulate_statevector(ql.to_openqasm())
 
         _apply_local_diffusion(config, regs, depth=0)
 
-        _keepalive = [regs, state]
+        _keepalive = [regs, state, flag]
         sv_after = _simulate_statevector(ql.to_openqasm())
         assert np.allclose(sv_before, sv_after, atol=1e-10), (
             "Depth 0 should be a no-op even with marking"
@@ -503,9 +663,13 @@ class TestApplyLocalDiffusionDispatch:
         """Without state, the marking branch is not taken even if
         is_marked is set."""
         _init_circuit()
+
+        def _dummy_marked(s):
+            return s >= 0
+
         config = WalkConfig(
             max_depth=1, num_moves=2,
-            is_marked=_always_marked,
+            is_marked=_dummy_marked,
         )
         regs = WalkRegisters(config)
         regs.init_root()
@@ -517,52 +681,139 @@ class TestApplyLocalDiffusionDispatch:
         norm = np.linalg.norm(sv)
         assert abs(norm - 1.0) < 1e-6
 
-    def test_marking_branch_taken_with_both(self):
-        """With both is_marked and state, the marking branch is taken.
+    def test_marked_diffusion_is_identity_at_depth(self):
+        """_apply_local_diffusion at root depth with all-marked is identity.
 
-        Verify by checking that more qubits are allocated (comparison
-        ancilla from the is_marked evaluation).
+        Root probability should remain 1.0 because the marked
+        predicate returns physical |1> and diffusion is suppressed.
         """
-        # Without marking
-        _init_circuit()
-        config_u = WalkConfig(max_depth=1, num_moves=2)
-        regs_u = WalkRegisters(config_u)
-        regs_u.init_root()
-        _apply_local_diffusion(config_u, regs_u, depth=1)
-        _keep_u = [regs_u]
-        nq_u = _get_num_qubits(ql.to_openqasm())
-
-        # With marking
         _init_circuit()
         state = ql.qint(0, width=2)
-        config_m = WalkConfig(
+        pred, flag = _make_always_marked_predicate()
+        config = WalkConfig(
             max_depth=1, num_moves=2,
-            is_marked=_always_marked,
+            is_marked=pred,
             state=state,
         )
-        regs_m = WalkRegisters(config_m)
-        regs_m.init_root()
-        _apply_local_diffusion(config_m, regs_m, depth=1)
-        _keep_m = [regs_m, state]
-        nq_m = _get_num_qubits(ql.to_openqasm())
+        regs = WalkRegisters(config)
+        regs.init_root()
 
-        assert nq_m > nq_u, (
-            f"Marking path should allocate more qubits: "
-            f"marked={nq_m}, unmarked={nq_u}"
+        _apply_local_diffusion(config, regs, depth=1)
+
+        _keepalive = [regs, state, flag]
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+
+        h_root = regs.height_qubit(config.max_depth)
+        flag_qubit = int(flag.qubits[63])
+        initial_idx = (1 << h_root) | (1 << flag_qubit)
+        root_prob = float(abs(sv[initial_idx]) ** 2)
+        assert abs(root_prob - 1.0) < 1e-6, (
+            f"All-marked _apply_local_diffusion should be identity, "
+            f"root_prob={root_prob}"
         )
 
-    def test_marking_with_different_predicates_all_preserve_norm(self):
-        """All three marking predicates preserve norm at depth 1."""
-        for fn in [_always_marked, _never_marked, _marked_when_nonzero]:
-            _init_circuit()
-            config, regs, state = _make_marked_config_and_regs(
-                max_depth=1, num_moves=2, state_width=2,
-                is_marked_fn=fn,
-            )
-            _apply_local_diffusion(config, regs, depth=1)
-            _keepalive = [regs, state]
-            sv = _simulate_statevector(ql.to_openqasm())
-            norm = np.linalg.norm(sv)
-            assert abs(norm - 1.0) < 1e-6, (
-                f"Predicate {fn.__name__} should preserve norm, got {norm}"
-            )
+    def test_unmarked_diffusion_modifies_state_at_depth(self):
+        """_apply_local_diffusion at root depth with never-marked modifies state.
+
+        Root probability should drop because diffusion spreads
+        amplitude to the branch subspace.
+        """
+        _init_circuit()
+        state = ql.qint(0, width=2)
+        pred, flag = _make_never_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=2,
+            is_marked=pred,
+            state=state,
+        )
+        regs = WalkRegisters(config)
+        regs.init_root()
+
+        _apply_local_diffusion(config, regs, depth=1)
+
+        _keepalive = [regs, state, flag]
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+
+        h_root = regs.height_qubit(config.max_depth)
+        initial_idx = 1 << h_root  # flag is |0>, not set
+        root_prob = float(abs(sv[initial_idx]) ** 2)
+        assert root_prob < 0.99, (
+            f"Never-marked _apply_local_diffusion should modify state, "
+            f"root_prob={root_prob}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Group 6: Variable-branching + marking warning
+# ---------------------------------------------------------------------------
+
+
+class TestVariableBranchingMarkingWarning:
+    """When is_marked is set but variable-branching path is taken,
+    a warning must be raised because marking is silently ignored.
+    """
+
+    def test_variable_branching_with_marking_warns(self):
+        """Warning raised when is_marked is set with make_move/is_valid."""
+        _init_circuit()
+        state = ql.qint(0, width=3)
+
+        def _dummy_marked(s):
+            return s >= 0
+
+        config = WalkConfig(
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            is_marked=_dummy_marked,
+            state=state,
+        )
+        regs = WalkRegisters(config)
+        regs.init_root()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            walk_step(config, regs)
+
+        _keepalive = [regs, state]
+
+        # At least one warning about is_marked being ignored
+        marking_warnings = [
+            x for x in w
+            if "is_marked is ignored" in str(x.message)
+        ]
+        assert len(marking_warnings) > 0, (
+            "Should warn when is_marked is set but variable-branching "
+            "path is taken"
+        )
+
+    def test_variable_branching_without_marking_no_warning(self):
+        """No warning when is_marked is not set on variable-branching path."""
+        _init_circuit()
+        state = ql.qint(0, width=3)
+        config = WalkConfig(
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            state=state,
+        )
+        regs = WalkRegisters(config)
+        regs.init_root()
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            walk_step(config, regs)
+
+        _keepalive = [regs, state]
+
+        marking_warnings = [
+            x for x in w
+            if "is_marked is ignored" in str(x.message)
+        ]
+        assert len(marking_warnings) == 0, (
+            "Should not warn about marking when is_marked is not set"
+        )

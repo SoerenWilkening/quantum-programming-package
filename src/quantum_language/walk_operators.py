@@ -18,6 +18,8 @@ References
     Theory of Computing, 2018 (arXiv:1509.02374).
 """
 
+import warnings
+
 from ._gates import emit_mcz, emit_ry, emit_z
 from .diffusion import _flip_all
 from .walk_branching import (
@@ -317,7 +319,15 @@ def _apply_local_diffusion(config, registers, depth):
         # variable-branching path because make_move uses DSL operations
         # (XOR) that do not support controlled execution.  The variable
         # diffusion runs unconditionally here; marking integration for
-        # variable branching is deferred to walk_search rewrite.
+        # variable branching is deferred to walk_search rewrite
+        # (Quantum_Assembly-8sp).
+        if config.is_marked is not None:
+            warnings.warn(
+                "is_marked is ignored in the variable-branching path; "
+                "marking integration for variable branching is deferred "
+                "to the walk_search rewrite (Quantum_Assembly-8sp)",
+                stacklevel=2,
+            )
         _height_controlled_variable_diffusion(
             config, registers, depth, is_root=is_root,
         )
@@ -326,6 +336,11 @@ def _apply_local_diffusion(config, registers, depth):
         # D_x = I for marked, standard diffusion for unmarked.
         # Evaluate is_marked(state) quantumly to get a qbool,
         # negate it so that ``with marked:`` runs on UNMARKED nodes.
+        #
+        # Note: this code path is infrastructure for the walk_search
+        # rewrite (Quantum_Assembly-8sp).  The current walk() public
+        # API in walk_search.py does not set config.state, so it does
+        # not reach this branch yet.
         marked = config.is_marked(config.state)
         _flip_all(marked)
         with marked:
