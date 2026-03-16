@@ -9,11 +9,11 @@ Root node uses phi_root = 2 * arctan(sqrt(n * d)).
 Reference: Montanaro, "Quantum speedup of backtracking algorithms", 2018.
 """
 
-from ._gates import emit_mcz, emit_z
-from .diffusion import _collect_qubits, _flip_all
+from .diffusion import _collect_qubits, _extract_qbools, _flip_all, _nested_phase_flip
 from .walk_branching import (
     _emit_cascade_multi_controlled,
     _emit_multi_controlled_ry,
+    _make_qbool_wrapper,
     _plan_cascade_ops,
 )
 from .walk_core import (
@@ -32,7 +32,11 @@ from .walk_core import (
 
 def _s0_reflection(parent_flag, branch_reg, control_qbool=None,
                    marking_qubit=None):
-    """Phase flip on |0...0> of parent_flag + branch_reg (X-MCZ-X).
+    """Phase flip on |0...0> of parent_flag + branch_reg using DSL ops.
+
+    Uses the same pattern as ``diffusion.py``: flip all qubits (XOR),
+    build a boolean condition via ``&`` chain producing a single qbool,
+    phase flip on that qbool, then undo the flip.
 
     Parameters
     ----------
@@ -52,50 +56,32 @@ def _s0_reflection(parent_flag, branch_reg, control_qbool=None,
     if not s0_qubits:
         return
 
-    # Collect all external control qubits as (qbool_or_None, int_index)
+    # Collect external control qbools
     ext_ctrls = []
-    ext_ctrl_indices = []
     if control_qbool is not None:
         ext_ctrls.append(control_qbool)
-        ext_ctrl_indices.append(int(control_qbool.qubits[63]))
     if marking_qubit is not None:
-        from .walk_branching import _make_qbool_wrapper
         ext_ctrls.append(_make_qbool_wrapper(marking_qubit))
-        ext_ctrl_indices.append(marking_qubit)
+
+    # Extract individual qubits from parent_flag + branch_reg as qbools
+    bits = _extract_qbools(parent_flag, branch_reg)
 
     if ext_ctrls:
-        # Build nested ``with`` context for all external controls.
-        # The X gates on the s0 qubits must be controlled on all
-        # external control qubits so that the reflection is only
-        # applied when all controls are active.
-
-        # X on all qubits, controlled on external controls
-        # Use nested ``with`` blocks for multi-control
-        def _controlled_flip():
+        # Controlled path: nest external controls around the whole
+        # X-phase-X sequence so the reflection only fires when all
+        # external controls are active.  The ``with`` context makes
+        # _flip_all and _nested_phase_flip implicitly controlled on
+        # the external qubits.
+        def _controlled_body():
+            _flip_all(parent_flag, branch_reg)
+            _nested_phase_flip(bits, parent_flag)
             _flip_all(parent_flag, branch_reg)
 
-        _apply_nested_with(ext_ctrls, _controlled_flip)
-
-        # MCZ: add all external control qubits to the control list
-        all_with_ext = ext_ctrl_indices + s0_qubits
-        if len(all_with_ext) == 1:
-            emit_z(all_with_ext[0])
-        else:
-            emit_mcz(all_with_ext[-1], all_with_ext[:-1])
-
-        # X on all qubits, controlled on external controls
-        _apply_nested_with(ext_ctrls, _controlled_flip)
+        _apply_nested_with(ext_ctrls, _controlled_body)
     else:
-        # X on all qubits (map |0...0> -> |1...1>)
+        # Uncontrolled path: standard X-phase-X
         _flip_all(parent_flag, branch_reg)
-
-        # MCZ: phase flip on |1...1>
-        if len(s0_qubits) == 1:
-            emit_z(s0_qubits[0])
-        else:
-            emit_mcz(s0_qubits[-1], s0_qubits[:-1])
-
-        # X on all qubits (undo the mapping)
+        _nested_phase_flip(bits, parent_flag)
         _flip_all(parent_flag, branch_reg)
 
 

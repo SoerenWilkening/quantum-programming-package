@@ -412,10 +412,19 @@ class TestS0Reflection:
         _keepalive = [pf, br]
         sv_after = _get_statevector(ql.to_openqasm())
 
-        # |1,0> should be unchanged (only |0,0> gets phase flip)
-        assert np.allclose(sv_before, sv_after, atol=1e-6), (
+        # The DSL pattern may allocate AND ancillas, so sv_after can be
+        # larger than sv_before.  Ancillas are uncomputed to |0>, so
+        # compare the first len(sv_before) entries (data-qubit subspace
+        # with all ancillas in |0>).
+        n = len(sv_before)
+        assert np.allclose(sv_before, sv_after[:n], atol=1e-6), (
             "S_0 should preserve non-zero states"
         )
+        # All ancilla entries should be zero
+        if len(sv_after) > n:
+            assert np.allclose(sv_after[n:], 0, atol=1e-6), (
+                "Ancilla qubits should be uncomputed to |0>"
+            )
 
     def test_s0_involution(self):
         """S_0^2 = I (applying S_0 twice is identity)."""
@@ -430,6 +439,14 @@ class TestS0Reflection:
         _keepalive = [pf, br]
         sv_after = _get_statevector(ql.to_openqasm())
 
-        assert np.allclose(sv_init, sv_after, atol=1e-10), (
+        # The DSL pattern may allocate AND ancillas, so sv_after can be
+        # larger than sv_init.  Compare the data-qubit subspace only
+        # (ancillas are uncomputed to |0>).
+        n = len(sv_init)
+        assert np.allclose(sv_init, sv_after[:n], atol=1e-10), (
             "S_0^2 should equal identity"
         )
+        if len(sv_after) > n:
+            assert np.allclose(sv_after[n:], 0, atol=1e-10), (
+                "Ancilla qubits should be uncomputed to |0>"
+            )
