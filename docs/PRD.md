@@ -4,7 +4,7 @@
 
 Quantum Assembly is a Python framework that enables developers to write quantum algorithms using familiar programming constructs — arithmetic operators, comparisons, conditionals — without ever touching quantum gates. The framework compiles this high-level code into optimized quantum circuits automatically.
 
-**Current milestone**: Call graph redesign and compilation pipeline improvements — execution-order edges, gate count storage on sequences, graph immutability after capture. *(Completed)*
+**Current milestone**: Per-variable history graph and automatic uncomputation — replacing legacy layer-based uncomputation with per-variable history graphs, triggered by `__exit__`, `__del__`, and measurement. *(Completed)*
 
 ---
 
@@ -51,6 +51,54 @@ Call graph-based compilation pipeline with accurate resource tracking.
 | R7.9 | Hardcoded counts: all precompiled/hardcoded sequences include correct gate counts. | **Done** |
 | R7.10 | Gate counts flow from C sequences through `_record_operation` into `DAGNode`. | **Done** |
 
+#### R11: Automatic Uncomputation
+
+Per-variable history graph system replacing legacy layer-based uncomputation.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R11.1 | `HistoryGraph` data structure with append, reverse iteration, weakref children, discard. | **Done** |
+| R11.2 | Arithmetic/comparison/bitwise operations record `(sequence_ptr, qubit_mapping, num_ancilla)` into result's history graph. | **Done** |
+| R11.3 | `__exit__` uncomputes condition qbool's history in reverse, cascading to orphaned children via weakrefs. | **Done** |
+| R11.4 | `__del__` triggers uncomputation when circuit is active; circuit-active guard prevents shutdown firing. | **Done** |
+| R11.5 | Measurement discards history graph (collapsed qubits cannot be uncomputed). | **Done** |
+| R11.6 | `atexit` hook sets `_circuit_active=False` to prevent `__del__` during interpreter shutdown. | **Done** |
+| R11.7 | Legacy layer-based uncomputation (`_start_layer`, `_end_layer`, `_auto_uncompute`) removed. | **Done** |
+| R11.8 | End-to-end integration tests covering all uncomputation triggers and edge cases. | **Done** |
+
+#### R12: Quantum Walk Rework
+
+Function-based quantum walk API replacing the monolithic QWalkTree class.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R12.1 | `walk(state, make_move, is_valid, is_marked, max_depth, num_moves)` — full walk with detection returning bool. | |
+| R12.2 | `walk_diffusion(state, make_move, is_valid, num_moves)` — local diffusion building block at current depth. | |
+| R12.3 | User provides `make_move(state, move_index)` as `@ql.compile(inverse=True)` function. `move_index` is a classical int; the function uses DSL operations (arithmetic, XOR, `with`) — never raw gates. | |
+| R12.4 | User provides `is_valid(state)` and `is_marked(state)` as quantum predicates returning `qbool`. | |
+| R12.5 | Framework manages height register (one-hot), branch registers (one per depth), and count register internally. User never sees these. | |
+| R12.6 | Counting loop: for each move index, apply move → check validity → increment count → undo move. Operates correctly across all computational basis states. | |
+| R12.7 | Conditional branching: Montanaro rotation angles based on count value, creating uniform superposition over valid moves. Includes parent/self component for probability backflow. | |
+| R12.8 | R_A / R_B walk operators: local diffusions at even/odd depths controlled on height register. walk_step = R_B * R_A. | |
+| R12.9 | Detection via power-method iteration with root overlap measurement. | |
+| R12.10 | XOR-based state manipulation replaces raw qubit index manipulation (e.g., `x ^= value` instead of `emit_x(qubit_idx)`). | |
+| R12.11 | Old `QWalkTree` deprecated and removed. | |
+| R12.12 | Each implementation file ≤ 400 LOC. | |
+| R12.13 | Correctness verified on tiny problems (≤ 17 qubits) via Qiskit simulation. | |
+
+#### R13: Quantum Walk Skill
+
+Claude Code skill (`/quantum-walk`) for guided development of walk functions.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R13.1 | Structured discussion phase: state, moves, validity, marking, parameters. | |
+| R13.2 | Quantum function generation following DSL rules (`with` vs `if`, `@ql.compile(inverse=True)`, XOR idioms). | |
+| R13.3 | Automatic classical equivalent generation (with→if, qint→int, qbool→bool). | |
+| R13.4 | CC-as-oracle verification loop: generate scenarios, run classical equivalents, CC judges correctness. Monte Carlo coverage with k≥20 random inputs. | |
+| R13.5 | Independent verifier agent; flags user only for exotic/custom problems. | |
+| R13.6 | Idiom library: ternary assignment, XOR-based modification, counting, compound validity, all-assigned check. Extensible over time. | |
+
 ### P1 — Should Have
 
 #### R8: Future Compilation Improvements
@@ -95,6 +143,18 @@ General improvements to the existing codebase.
 - All sequences (including hardcoded) report non-zero gate counts that match actual gate content.
 - DAGNode.gate_count is populated from sequence data, not hardcoded to 0.
 
+### 5.1 Quantum Walk Rework
+
+- `ql.walk()` with a known-marked tiny tree returns `True`; with no marked nodes returns `False`.
+- `ql.walk_diffusion()` satisfies reflection property: D² = I (statevector amplitude tolerance ~1e-6).
+- Counting loop produces correct valid-child count across superposition of basis states.
+- R_A and R_B operate on disjoint height register qubits (even vs odd depths).
+- walk_step = R_B * R_A compiles and replays correctly (gate sequence cached).
+- End-to-end: 2-variable binary ILP instance detects known feasible assignment.
+- All test circuits use ≤ 17 qubits.
+- No implementation file exceeds 400 LOC.
+- `/quantum-walk` skill produces correct quantum functions with passing verification loop.
+
 ---
 
 ## 6. Scope & Non-Goals
@@ -104,6 +164,8 @@ General improvements to the existing codebase.
 - Call graph-based compilation pipeline with execution-order edges and gate count tracking.
 - Tracking-only mode for resource estimation without simulation.
 - Graph immutability after capture for safe replay.
+- Function-based quantum walk API (`walk`, `walk_diffusion`) with user-provided move/validity/marking functions.
+- Claude Code skill for guided quantum walk development with CC-as-oracle verification.
 - Future: optimization flags and streaming gate application.
 
 ### Non-Goals
@@ -138,6 +200,29 @@ General improvements to the existing codebase.
 - Gate counts stored on `sequence_t`, including hardcoded sequences
 - Gate counts wired through `_record_operation` → `DAGNode`
 
+### Milestone 1: Per-Variable History Graph & Automatic Uncomputation *(completed)*
+
+- `HistoryGraph` class with `(sequence_ptr, qubit_mapping, num_ancilla)` entries and weakref children
+- Operations record history on result qint/qbool (arithmetic, comparison, bitwise)
+- `__exit__` uncomputes condition qbool history in reverse, cascading to orphaned children
+- `__del__` triggers uncomputation mid-circuit with circuit-active guard
+- Measurement discards history (collapsed qubits)
+- `atexit` shutdown guard prevents `__del__` during interpreter shutdown
+- Legacy layer-based uncomputation removed (`_start_layer`, `_end_layer`, `_auto_uncompute`)
+- End-to-end integration tests across all uncomputation triggers
+
+### Milestone 2: Quantum Walk Rework *(current)*
+
+- Function-based walk API: `ql.walk()` and `ql.walk_diffusion()` replace monolithic `QWalkTree`
+- User provides `make_move`, `is_valid`, `is_marked` as quantum functions using DSL
+- Framework manages height register, branch registers, counting, Montanaro diffusion angles
+- Counting loop: apply-check-undo per move, in superposition across all basis states
+- Conditional branching with parent/self component for probability backflow
+- R_A/R_B walk operators, walk_step = R_B * R_A, power-method detection
+- XOR-based state manipulation replaces raw qubit index handling
+- Claude Code skill (`/quantum-walk`) for guided quantum walk function development
+- Correctness verified on tiny (≤ 17 qubit) problems via simulation
+
 ---
 
 ## 9. Risks
@@ -151,3 +236,5 @@ General improvements to the existing codebase.
 ## 10. References
 
 - Grinko, D., Gacon, J., Zoufal, C., Woerner, S. (2021). "Iterative Quantum Amplitude Estimation." npj Quantum Information, 7(52)
+- Montanaro, A. (2018). "Quantum speedup of backtracking algorithms." Theory of Computing. (arXiv:1509.02374)
+- Gavinsky, D., et al. "Quantum Walks for Min-Max Evaluation." (for adversarial/two-player game tree search)

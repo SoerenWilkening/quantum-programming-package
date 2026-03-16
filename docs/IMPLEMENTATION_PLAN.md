@@ -216,3 +216,464 @@ comparisons on different registers), verify:
 
 **Parallelizable**: Steps 0.1–0.4 (Python/Cython) and Steps 0.5–0.6 (C) are
 independent and can proceed in parallel.
+
+---
+
+## Phase 1 — Per-Variable History Graph & Automatic Uncomputation ✅
+
+### Step 1.1: History Graph Data Structure ✅
+
+**Goal**: Lightweight `HistoryGraph` class holding `(sequence_ptr, qubit_mapping, num_ancilla)` entries with weakref children. Attached to every qint/qbool on creation.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/history_graph.py` | [NEW] `HistoryGraph` with `append`, `add_child`, `reversed_entries`, `live_children`, `discard`, `uncompute` | +90 |
+| `src/quantum_language/qint.pxd` | [MOD] Add `cdef public object history` | +1 |
+| `src/quantum_language/qint.pyx` | [MOD] `self.history = HistoryGraph()` in both init paths | +3 |
+
+**Tests** (`tests/python/test_history_graph.py` [NEW]):
+- Append/reverse ordering, len/bool, weakref alive/dead, discard clears entries and children
+
+**DEP**: None
+
+---
+
+### Step 1.2: Record Operations into Per-Variable History ✅
+
+**Goal**: When out-of-place operations produce a new qint/qbool, record `(sequence_ptr, qubit_mapping, num_ancilla)` into the result's history graph. Widened temporaries registered as weakref children.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/qint_arithmetic.pxi` | [MOD] History recording in `__add__`, `__sub__`, `__neg__`, `__lshift__`, `__rshift__`, `__mul__` | +87 |
+| `src/quantum_language/qint_comparison.pxi` | [MOD] History recording in `__eq__`, `__lt__`, `__gt__` (CQ and QQ paths) | +42 |
+| `src/quantum_language/qint_bitwise.pxi` | [MOD] History recording in `__and__`, `__or__`, `__xor__` | +29 |
+
+**Tests** (`tests/python/test_history_recording.py` [NEW]):
+- Addition/comparison records history, chained expressions record children, input variables have empty history
+
+**DEP**: Step 1.1
+
+---
+
+### Step 1.3: __exit__ Uncomputation for with Blocks ✅
+
+**Goal**: When `with qbool:` exits, uncompute the qbool's history in reverse via `run_instruction(invert=True)`, then cascade to orphaned children.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/history_graph.py` | [MOD] `uncompute(run_fn)` method with reverse iteration and cascade | +25 |
+| `src/quantum_language/qint.pyx` | [MOD] `_run_inverted_on_circuit()` helper; `__exit__` calls `history.uncompute()` | +30 |
+
+**Tests** (`tests/python/test_with_uncompute.py` [NEW]):
+- With block uncomputes qbool, uncomputes temporaries, preserves live variables, nested with blocks, qubit mapping correctness, exception-in-body handling
+
+**DEP**: Step 1.2
+
+---
+
+### Step 1.4: __del__ Uncomputation with Circuit Guard ✅
+
+**Goal**: When refcount hits zero mid-circuit, `__del__` triggers history uncomputation. Circuit-active flag prevents firing during shutdown.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/_core.pyx` | [MOD] `_circuit_active` flag, `_get_circuit_active()`/`_set_circuit_active()` accessors | +15 |
+| `src/quantum_language/qint.pyx` | [MOD] `__del__` checks circuit-active guard, calls `history.uncompute()`, clears layer range | +10 |
+
+**Tests** (`tests/python/test_del_uncompute.py` [NEW]):
+- Del uncomputes when circuit active, skips when inactive, cascades to children, EAGER mode, simulation correctness, double-uncompute prevention
+
+**DEP**: Step 1.3
+
+---
+
+### Step 1.5: Measurement Trigger (Discard History) ✅
+
+**Goal**: When measured, discard history graph. Collapsed qubits cannot be uncomputed.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/qint.pyx` | [MOD] `self.history.discard()` in `measure()` | +1 |
+
+**Tests** (`tests/python/test_measurement_history.py` [NEW]):
+- Measurement clears history, measured variable no del uncompute, measurement orphans children
+
+**DEP**: Step 1.1
+
+---
+
+### Step 1.6: atexit Shutdown Guard ✅
+
+**Goal**: `atexit` hook sets `_circuit_active=False` to prevent `__del__` during interpreter shutdown.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/_core.pyx` | [MOD] `atexit.register(_atexit_disable_circuit)` | +5 |
+
+**Tests** (`tests/python/test_del_uncompute.py` [MOD]):
+- atexit disables circuit flag, del after shutdown is noop, idempotent, EAGER mode interaction
+
+**DEP**: Step 1.4
+
+---
+
+### Step 1.7: Remove Legacy Layer-Based Uncomputation ✅
+
+**Goal**: Remove `_start_layer`, `_end_layer`, `_uncompute_mode`, `_auto_uncompute()`, `layer_floor` save/restore, and dead helper functions.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/qint.pxd` | [MOD] Remove `_start_layer`, `_end_layer`, `_uncompute_mode` | -3 |
+| `src/quantum_language/qint.pyx` | [MOD] Remove layer tracking, `reverse_circuit_range` usage | -80 |
+| `src/quantum_language/qint_comparison.pxi` | [MOD] Remove `layer_floor` save/restore | -40 |
+| `src/quantum_language/qint_arithmetic.pxi` | [MOD] Remove `layer_floor` save/restore | -30 |
+| `src/quantum_language/qint_bitwise.pxi` | [MOD] Remove `layer_floor` save/restore | -20 |
+| `src/quantum_language/qint_division.pxi` | [MOD] Remove `layer_floor` save/restore | -10 |
+| `src/quantum_language/compile.py` | [MOD] Remove `_auto_uncompute()`, `_function_modifies_inputs()`, `_partition_ancillas()`, dead parameters | -120 |
+
+**Tests**: Existing tests pass with no behavioral regression.
+
+**DEP**: Steps 1.3–1.6
+
+---
+
+### Phase 1 Integration Test ✅
+
+**File**: `tests/python/test_phase1_integration.py` [NEW], ~770 LOC
+
+End-to-end: 33 tests covering with blocks (simple/compound/nested), variable survival, measurement discard, eager uncomputation, gate count symmetry, exception handling.
+
+**DEP**: Steps 1.1–1.7
+
+---
+
+### Phase 1 Summary
+
+| Step | What | ~LOC | DEP |
+|------|------|------|-----|
+| 1.1 | History graph data structure | +90 | — |
+| 1.2 | Record operations into history | +158 | 1.1 |
+| 1.3 | `__exit__` uncomputation | +55 | 1.2 |
+| 1.4 | `__del__` uncomputation with circuit guard | +25 | 1.3 |
+| 1.5 | Measurement trigger (discard) | +1 | 1.1 |
+| 1.6 | atexit shutdown guard | +5 | 1.4 |
+| 1.7 | Remove legacy uncomputation | -303 | 1.3–1.6 |
+
+**Net**: ~+31 LOC implementation, ~+1600 LOC tests
+
+---
+
+## Phase 2 — Quantum Walk Rework
+
+Replaces the monolithic `walk.py` (1618 LOC) with a modular, function-based API.
+The user provides `make_move`, `is_valid`, `is_marked` as quantum functions; the
+framework handles all internal walk machinery (height register, branch registers,
+counting, Montanaro diffusion angles, R_A/R_B, detection).
+
+### Design Overview
+
+**User-facing API**:
+```python
+# Full walk — detect existence of a marked node
+found = ql.walk(state, make_move, is_valid, is_marked,
+                max_depth=n, num_moves=m)
+
+# Local diffusion building block — for custom walk operators
+ql.walk_diffusion(state, make_move, is_valid, num_moves=m)
+```
+
+**User-provided functions**:
+- `make_move(state, move_index)` — `@ql.compile(inverse=True)`, transforms state
+  by applying classical move index. Uses DSL operations (arithmetic, XOR, `with`).
+- `is_valid(state)` — quantum predicate, returns `qbool`.
+- `is_marked(state)` — quantum predicate, returns `qbool`.
+
+**Framework-managed registers**:
+- Height register: one-hot, `max_depth + 1` qubits
+- Branch registers: one per depth, `ceil(log2(num_moves))` qubits each
+- Count register: temporary, `ceil(log2(num_moves + 1))` qubits
+
+**Key algorithm** (local diffusion at a node):
+1. Count valid children: for each move i, apply → check validity → count → undo
+2. Conditional rotation: Montanaro angles based on count, include parent/self for backflow
+3. Apply chosen move: controlled on branch register value
+
+**Qubit budget for tests** (must fit ≤ 17 qubits):
+- 2 binary variables, ternary encoding: 2×2=4 state + 2 branch + 3 height + 2 count = 11 qubits
+- 3 binary variables: 3×2=6 state + 3 branch + 4 height + 2 count = 15 qubits
+
+---
+
+### Step 2.1: Walk Core Types & Angle Computation
+
+**Goal**: Configuration dataclass, Montanaro rotation angle formulas, and register
+width computation. Foundation for all subsequent walk modules.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/walk_core.py` | [NEW] `WalkConfig` dataclass, `montanaro_angles(d)`, `root_angle(d, n)`, `branch_width(num_moves)`, `count_width(num_moves)`, `total_walk_qubits()` | ~150 |
+
+**WalkConfig fields**:
+- `state` — quantum register (qarray/qint)
+- `make_move` — compiled function with inverse
+- `is_valid` — quantum predicate
+- `is_marked` — quantum predicate (optional, only needed for full walk)
+- `max_depth` — int
+- `num_moves` — int
+- Derived: `branch_width`, `count_width`, `height_width`
+
+**Angle formulas** (Montanaro 2015):
+- Parent-children split: `phi = 2 * arctan(sqrt(d))` where d = number of valid children
+- Cascade angles: `theta_k = 2 * arctan(sqrt(1 / (d - 1 - k)))` for k = 0..d-2
+- Root special case: `phi_root = 2 * arctan(sqrt(n * d_root))` where n = tree size
+
+**Tests** (`tests/python/test_walk_core.py` [NEW], ~150 LOC):
+- `test_montanaro_angles_binary` — d=2 gives correct phi and theta values
+- `test_montanaro_angles_ternary` — d=3 angles
+- `test_root_angle` — root angle formula
+- `test_branch_width` — `branch_width(2) == 1`, `branch_width(8) == 3`
+- `test_count_width` — `count_width(2) == 2` (stores 0, 1, 2)
+- `test_walk_config_validation` — rejects invalid inputs (depth < 1, moves < 1)
+- `test_total_walk_qubits` — matches manual calculation
+
+**DEP**: None
+
+---
+
+### Step 2.2: Walk Register Management
+
+**Goal**: Allocate and manage the framework-internal registers (height, branch,
+count). Provide helpers to initialize root state and read height.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/walk_registers.py` | [NEW] `WalkRegisters` class: allocate height/branch/count registers, `init_root()`, `current_depth()`, `branch_at(depth)`, `cleanup()` | ~180 |
+
+**WalkRegisters**:
+- `height` — qarray of qbools, one-hot encoding (index k = 1 means at depth k)
+- `branches` — list of qints, one per depth level, width = `branch_width`
+- `count` — qint, width = `count_width`, temporary for counting
+- `init_root()` — set height to root state (h[max_depth] = 1, all branches = 0)
+- `branch_at(depth)` — return the branch register for given depth
+
+**Tests** (`tests/python/test_walk_registers.py` [NEW], ~150 LOC):
+- `test_register_allocation` — correct qubit counts
+- `test_init_root_state` — height register has exactly one bit set at max_depth
+- `test_branch_registers_zeroed` — all branches start at 0
+- `test_total_qubits_matches_config` — sum of all register widths matches `WalkConfig.total_walk_qubits()`
+- `test_cleanup_releases_qubits` — registers deallocated
+
+**DEP**: Step 2.1
+
+---
+
+### Step 2.3: Move Counting
+
+**Goal**: Count valid children at the current node via the apply-check-undo loop.
+Operates in superposition — each basis state of `state` gets its own count.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/walk_counting.py` | [NEW] `count_valid_children(config, count_reg)` — loop over `num_moves`, apply/check/undo, return count in `count_reg` | ~150 |
+
+**Algorithm**:
+```
+count = 0
+for i in range(num_moves):
+    make_move(state, i)
+    valid = is_valid(state)
+    with valid:
+        count += 1
+    # valid is uncomputed automatically (history graph)
+    make_move.inverse(state, i)
+```
+
+**Tests** (`tests/python/test_walk_counting.py` [NEW], ~200 LOC):
+- `test_count_all_valid` — all moves valid → count == num_moves (statevector check)
+- `test_count_none_valid` — no moves valid → count == 0
+- `test_count_partial` — some moves valid → correct count
+- `test_count_superposition` — state in superposition, different basis states yield different counts
+- `test_state_restored` — state is unchanged after counting (apply/undo is clean)
+- `test_inverse_consistency` — make_move followed by make_move.inverse is identity
+
+All tests use ≤ 11 qubits (2-variable ternary encoding).
+
+**DEP**: Step 2.1
+
+---
+
+### Step 2.4: Conditional Branching
+
+**Goal**: Given a count of valid children, create a uniform superposition over
+valid move indices in the branch register, including the parent/self component.
+Then apply the chosen move.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/walk_branching.py` | [NEW] `branch_to_children(config, count_reg, branch_reg)` — conditional rotation based on count, superposition over valid moves, apply chosen move. `unbranch(config, count_reg, branch_reg)` — inverse. | ~250 |
+
+**Algorithm**:
+1. Conditioned on `count == c` for each possible c:
+   - Apply Ry rotation with angle `phi(c)` to split parent/children amplitude
+   - Apply cascade rotations `theta_k(c)` to distribute amplitude among c children
+2. For each move i: controlled on `branch == i`, check validity, apply move if valid
+3. The result: state is in superposition over all valid children + parent component
+
+**Tests** (`tests/python/test_walk_branching.py` [NEW], ~200 LOC):
+- `test_branch_uniform_superposition` — with all moves valid, branch register is uniform
+- `test_branch_includes_parent` — parent component has correct amplitude (1/sqrt(d+1))
+- `test_branch_respects_validity` — invalid moves get zero amplitude
+- `test_unbranch_inverse` — branch followed by unbranch restores original state
+- `test_branch_angles_correct` — amplitudes match Montanaro formulas
+
+**DEP**: Steps 2.1, 2.3
+
+---
+
+### Step 2.5: Local Diffusion Operator
+
+**Goal**: User-facing `walk_diffusion()` that combines counting + branching into a
+single reflection operator at the current depth. Satisfies D² = I.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/walk_diffusion.py` | [NEW] `walk_diffusion(state, make_move, is_valid, num_moves)` — public API. Internally: count → branch → phase flip → unbranch → uncount. | ~200 |
+
+**Structure**: The local diffusion is a reflection about the subspace spanned by
+{parent, valid_children}. Implemented as:
+1. `count_valid_children()` — fill count register
+2. `branch_to_children()` — create superposition in branch register
+3. Phase flip on branch register (MCZ or Z)
+4. `unbranch()` — inverse of step 2
+5. Inverse of counting — undo step 1
+
+**Tests** (`tests/python/test_walk_local_diffusion.py` [NEW], ~200 LOC):
+- `test_reflection_property` — D applied twice returns to original state (|ψ⟩ → D²|ψ⟩ = |ψ⟩, tolerance 1e-6)
+- `test_diffusion_amplitudes` — after one D, amplitudes match expected reflection
+- `test_diffusion_at_root` — root diffusion uses root angle formula
+- `test_diffusion_no_valid_children` — identity when no children are valid
+- `test_walk_diffusion_api` — public API callable with correct signature
+
+All tests use ≤ 15 qubits.
+
+**DEP**: Steps 2.3, 2.4
+
+---
+
+### Step 2.6: Walk Operators (R_A, R_B, walk_step)
+
+**Goal**: Height-controlled walk operators that apply local diffusion at
+even/odd depths. walk_step = R_B * R_A, compiled for replay.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/walk_operators.py` | [NEW] `build_R_A(config, registers)`, `build_R_B(config, registers)`, `walk_step(config, registers)` — compiled walk step. | ~300 |
+
+**R_A**: For each even depth d (excluding root): controlled on `height[d]`,
+apply local diffusion at depth d.
+
+**R_B**: For each odd depth d: controlled on `height[d]`, apply local diffusion.
+Plus root (always included in R_B).
+
+**walk_step**: R_B * R_A, decorated with `@ql.compile` for gate caching.
+
+**Tests** (`tests/python/test_walk_ops.py` [NEW], ~250 LOC):
+- `test_R_A_even_depths_only` — R_A acts only on even-depth height qubits
+- `test_R_B_odd_depths_plus_root` — R_B acts on odd depths and root
+- `test_disjointness` — R_A and R_B height controls do not overlap
+- `test_walk_step_compiled` — second call replays cached gates
+- `test_walk_step_preserves_norm` — unitary (|ψ| = 1 after walk step)
+
+Tests use 2-variable ternary encoding (11 qubits).
+
+**DEP**: Steps 2.2, 2.5
+
+---
+
+### Step 2.7: Full Walk & Detection
+
+**Goal**: `ql.walk()` — the complete algorithm. Initialize root, iterate
+walk steps, detect marked nodes via root overlap measurement.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/walk_search.py` | [NEW] `walk(state, make_move, is_valid, is_marked, max_depth, num_moves)` — public API. Initializes registers, marks leaves, iterates walk_step, measures root overlap. Returns bool. | ~250 |
+
+**Algorithm** (Montanaro detection):
+1. Allocate WalkRegisters, initialize root state
+2. Apply marking oracle: for each leaf state, check `is_marked`, phase-flip if true
+3. Iterate walk_step for O(sqrt(tree_size)) steps
+4. Measure root overlap — if above threshold, marked node exists
+5. Cleanup registers
+
+**Tests** (`tests/python/test_walk_search.py` [NEW], ~250 LOC):
+- `test_detect_known_marked` — tiny tree with known marked leaf → returns True
+- `test_detect_no_marked` — tree with no solutions → returns False
+- `test_ilp_2var` — 2-variable binary ILP: find x0, x1 ∈ {0,1} satisfying x0 + x1 ≥ 1
+  (3 of 4 leaves are solutions, detection should succeed)
+- `test_ilp_3var` — 3-variable ILP with tighter constraint (15 qubits)
+- `test_walk_returns_bool` — return type is bool
+- `test_walk_classical_verification` — run classical equivalents of make_move/is_valid/is_marked
+  to confirm the problem setup is correct before quantum execution
+
+**DEP**: Steps 2.6, 2.5
+
+---
+
+### Step 2.8: Migration & Exports
+
+**Goal**: Update public API, deprecate old QWalkTree, update skill file.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/__init__.py` | [MOD] Add `walk`, `walk_diffusion` exports. Deprecation warning on `QWalkTree` import. | +10 |
+| `src/quantum_language/walk.py` | [MOD] Add deprecation warning at top; keep for backward compatibility during transition. | +5 |
+| `.claude/commands/quantum-walk.md` | [NEW] Skill file (created in this phase). | ~200 |
+
+**Tests** (`tests/python/test_walk_migration.py` [NEW], ~80 LOC):
+- `test_walk_import` — `from quantum_language import walk, walk_diffusion` works
+- `test_qwalktree_deprecation` — importing `QWalkTree` raises DeprecationWarning
+- `test_walk_api_signature` — `walk()` accepts correct parameters
+
+**DEP**: Steps 2.7, all previous steps
+
+---
+
+### Phase 2 Integration Test
+
+**File**: `tests/python/test_walk_integration.py` [NEW], ~300 LOC
+
+End-to-end tests combining all walk components on complete tiny problems:
+
+- `test_binary_sat_2var` — 2-variable SAT: (x0 OR x1). Ternary encoding, 11 qubits.
+  Define make_move (assign first unassigned), is_valid (constraint not violated),
+  is_marked (all assigned + clause satisfied). Walk detects solution.
+- `test_binary_sat_unsatisfiable` — 2-variable unsatisfiable formula. Walk returns False.
+- `test_walk_diffusion_standalone` — Use walk_diffusion() building block independently
+  to verify reflection property on a real problem state.
+- `test_classical_quantum_agreement` — Run classical equivalents of all functions on
+  exhaustive inputs, verify quantum walk result matches classical brute force.
+- `test_custom_walk_via_diffusion` — User builds R_A/R_B manually from walk_diffusion()
+  (the "power user" path).
+
+**DEP**: Steps 2.1–2.8
+
+---
+
+### Phase 2 Summary
+
+| Step | What | ~LOC | File | DEP |
+|------|------|------|------|-----|
+| 2.1 | Walk core types & angles | ~150 | `walk_core.py` | — |
+| 2.2 | Walk register management | ~180 | `walk_registers.py` | 2.1 |
+| 2.3 | Move counting | ~150 | `walk_counting.py` | 2.1 |
+| 2.4 | Conditional branching | ~250 | `walk_branching.py` | 2.1, 2.3 |
+| 2.5 | Local diffusion operator | ~200 | `walk_diffusion.py` | 2.3, 2.4 |
+| 2.6 | Walk operators (R_A, R_B) | ~300 | `walk_operators.py` | 2.2, 2.5 |
+| 2.7 | Full walk & detection | ~250 | `walk_search.py` | 2.5, 2.6 |
+| 2.8 | Migration & exports | ~15 | `__init__.py`, `walk.py` | 2.7 |
+
+**Parallelizable**: Steps 2.2 and 2.3 are independent (both depend only on 2.1).
+
+**Total**: ~1495 LOC implementation across 7 new files (all ≤ 300 LOC),
+~1780 LOC tests across 9 test files. Replaces 1618 LOC monolithic `walk.py`.
