@@ -54,6 +54,32 @@ class TestQWalkTreeRemoved:
             from quantum_language.walk import QWalkTree  # noqa: F401
 
 
+class TestNoEmitXInWalkModules:
+    """Verify that walk modules do not use emit_x directly [Quantum_Assembly-rm9]."""
+
+    def test_no_emit_x_in_walk_modules(self):
+        """No walk_*.py source file should contain 'emit_x(' calls."""
+        import os
+        import re
+
+        src_dir = Path(__file__).resolve().parent.parent.parent / "src" / "quantum_language"
+        pattern = re.compile(r"emit_x\(")
+        violations = []
+
+        for fname in sorted(os.listdir(src_dir)):
+            if fname.startswith("walk_") and fname.endswith(".py"):
+                fpath = src_dir / fname
+                content = fpath.read_text()
+                for lineno, line in enumerate(content.splitlines(), 1):
+                    if pattern.search(line):
+                        violations.append(f"{fname}:{lineno}: {line.strip()}")
+
+        assert not violations, (
+            "walk_*.py files must not contain emit_x( calls:\n"
+            + "\n".join(violations)
+        )
+
+
 class TestSkillFile:
     """Skill file .claude/commands/quantum-walk.md exists and covers all phases."""
 

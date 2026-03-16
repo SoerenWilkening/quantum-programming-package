@@ -28,7 +28,8 @@ import math
 
 import numpy as np
 
-from ._gates import emit_mcz, emit_x, emit_z
+from ._gates import emit_mcz, emit_z
+from .diffusion import _flip_all
 from .walk_core import WalkConfig
 from .walk_operators import build_R_A, build_R_B, walk_step
 from .walk_registers import WalkRegisters
@@ -88,9 +89,7 @@ def _apply_phase_on_pattern(pattern, branch_qubits, h_leaf_qubit):
     total_bits = len(branch_qubits)
 
     # X on branch qubits that should be |0> in the pattern
-    for bit_idx in range(total_bits):
-        if not ((pattern >> bit_idx) & 1):
-            emit_x(branch_qubits[bit_idx])
+    _flip_complement_qubits(pattern, branch_qubits, total_bits)
 
     # MCZ on h[0] + all branch qubits: phase flip when all are |1>
     all_qubits = [h_leaf_qubit] + branch_qubits
@@ -100,9 +99,21 @@ def _apply_phase_on_pattern(pattern, branch_qubits, h_leaf_qubit):
         emit_mcz(all_qubits[-1], all_qubits[:-1])
 
     # Undo X
+    _flip_complement_qubits(pattern, branch_qubits, total_bits)
+
+
+def _flip_complement_qubits(pattern, branch_qubits, total_bits):
+    """Flip qubits corresponding to 0-bits in *pattern*.
+
+    Uses ``_flip_all`` on qbool wrappers for each qubit that needs
+    flipping (DSL-level, no direct ``emit_x``).
+    """
+    from .walk_branching import _make_qbool_wrapper
+
     for bit_idx in range(total_bits):
         if not ((pattern >> bit_idx) & 1):
-            emit_x(branch_qubits[bit_idx])
+            wrapper = _make_qbool_wrapper(branch_qubits[bit_idx])
+            _flip_all(wrapper)
 
 
 def _apply_marking_phase(config, registers):

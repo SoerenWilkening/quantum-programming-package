@@ -19,7 +19,7 @@ References
     Theory of Computing, 2018 (arXiv:1509.02374).
 """
 
-from ._gates import emit_x
+from .diffusion import _flip_all
 from .walk_core import WalkConfig
 
 
@@ -112,8 +112,7 @@ class WalkRegisters:
             raise RuntimeError("init_root() has already been called")
 
         root_idx = self.config.max_depth
-        root_qubit = int(self.height[root_idx].qubits[63])
-        emit_x(root_qubit)
+        _flip_all(self.height[root_idx])
         self._initialized = True
 
     def branch_at(self, depth):

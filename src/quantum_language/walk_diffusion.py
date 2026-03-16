@@ -10,8 +10,8 @@ Root node uses phi_root = 2 * arctan(sqrt(n * d)).
 Reference: Montanaro, "Quantum speedup of backtracking algorithms", 2018.
 """
 
-from ._gates import emit_mcz, emit_ry, emit_x, emit_z
-from .diffusion import _collect_qubits
+from ._gates import emit_mcz, emit_ry, emit_z
+from .diffusion import _collect_qubits, _flip_all
 from .walk_branching import (
     _emit_cascade_multi_controlled,
     _emit_multi_controlled_ry,
@@ -39,8 +39,7 @@ def _s0_reflection(parent_flag, branch_reg):
         return
 
     # X on all qubits (map |0...0> -> |1...1>)
-    for q in s0_qubits:
-        emit_x(q)
+    _flip_all(parent_flag, branch_reg)
 
     # MCZ: phase flip on |1...1>
     if len(s0_qubits) == 1:
@@ -49,8 +48,7 @@ def _s0_reflection(parent_flag, branch_reg):
         emit_mcz(s0_qubits[-1], s0_qubits[:-1])
 
     # X on all qubits (undo the mapping)
-    for q in s0_qubits:
-        emit_x(q)
+    _flip_all(parent_flag, branch_reg)
 
 
 # ------------------------------------------------------------------

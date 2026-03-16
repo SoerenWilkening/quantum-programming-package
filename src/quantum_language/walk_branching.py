@@ -34,7 +34,8 @@ References
 
 import math
 
-from ._gates import emit_ry, emit_x
+from ._gates import emit_ry
+from .diffusion import _flip_all
 from .walk_core import WalkConfig, montanaro_phi
 from .qbool import qbool as new_qbool
 
@@ -184,11 +185,11 @@ def _emit_multi_controlled_ry(target_qubit, angle, ctrl_qubits):
         with c1_ctrl:
             emit_ry(target_qubit, angle / 2)
         with c0_ctrl:
-            emit_x(c1)
+            _flip_all(c1_ctrl)
         with c1_ctrl:
             emit_ry(target_qubit, -angle / 2)
         with c0_ctrl:
-            emit_x(c1)
+            _flip_all(c1_ctrl)
         with c0_ctrl:
             emit_ry(target_qubit, angle / 2)
         return
@@ -208,13 +209,14 @@ def _emit_multi_controlled_ry(target_qubit, angle, ctrl_qubits):
 
 def _emit_multi_controlled_x(target_qubit, ctrl_qubits):
     """Emit X on target controlled by multiple qubits."""
+    target_wrapper = _make_qbool_wrapper(target_qubit)
     if not ctrl_qubits:
-        emit_x(target_qubit)
+        _flip_all(target_wrapper)
         return
     if len(ctrl_qubits) == 1:
         ctrl = _make_qbool_wrapper(ctrl_qubits[0])
         with ctrl:
-            emit_x(target_qubit)
+            _flip_all(target_wrapper)
         return
     from ._gates import emit_h, emit_mcz
     emit_h(target_qubit)

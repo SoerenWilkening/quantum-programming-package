@@ -18,7 +18,8 @@ References
     Theory of Computing, 2018 (arXiv:1509.02374).
 """
 
-from ._gates import emit_mcz, emit_ry, emit_x, emit_z
+from ._gates import emit_mcz, emit_ry, emit_z
+from .diffusion import _flip_all
 from .walk_branching import (
     _emit_cascade_multi_controlled,
     _emit_multi_controlled_ry,
@@ -119,8 +120,7 @@ def _height_controlled_diffusion(h_qubit_idx, h_child_idx, branch_reg,
 
     # X on all s0_qubits, controlled on h[depth]
     with h_control:
-        for q in s0_qubits:
-            emit_x(q)
+        _flip_all(h_child_qbool, branch_reg)
 
     # MCZ: add h_qubit_idx to the control list
     all_s0_with_h = [h_qubit_idx] + s0_qubits
@@ -131,8 +131,7 @@ def _height_controlled_diffusion(h_qubit_idx, h_child_idx, branch_reg,
 
     # X on all s0_qubits, controlled on h[depth]
     with h_control:
-        for q in s0_qubits:
-            emit_x(q)
+        _flip_all(h_child_qbool, branch_reg)
 
     # Step C: U (forward state preparation)
     # Parent-child split rotation, then cascade.
@@ -228,16 +227,14 @@ def _height_controlled_variable_diffusion(config, registers, depth,
     s0_qubits = _collect_qubits(h_child_qbool, branch_reg)
 
     with h_control:
-        for q in s0_qubits:
-            emit_x(q)
+        _flip_all(h_child_qbool, branch_reg)
     all_s0_with_h = [h_qubit_idx] + s0_qubits
     if len(all_s0_with_h) == 1:
         emit_z(all_s0_with_h[0])
     else:
         emit_mcz(all_s0_with_h[-1], all_s0_with_h[:-1])
     with h_control:
-        for q in s0_qubits:
-            emit_x(q)
+        _flip_all(h_child_qbool, branch_reg)
 
     # Step 6: U forward (state preparation)
     for c in range(1, num_moves + 1):

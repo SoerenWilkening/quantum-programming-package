@@ -73,6 +73,23 @@ def _total_width(*args):
     return total
 
 
+def _flip_all(*registers):
+    """Apply X gate to every qubit in the given registers.
+
+    DSL-level helper that accepts qint, qbool, or qarray objects and
+    applies ``emit_x`` to each physical qubit.  Handles controlled
+    context automatically (emits CX inside ``with qbool:`` blocks).
+
+    Parameters
+    ----------
+    *registers : qint, qbool, or qarray
+        Quantum registers whose qubits should be flipped.
+    """
+    qubits = _collect_qubits(*registers)
+    for q in qubits:
+        emit_x(q)
+
+
 @ql_compile(key=_total_width)
 def diffusion(*registers):
     """Apply Grover diffusion operator (X-MCZ-X pattern).
