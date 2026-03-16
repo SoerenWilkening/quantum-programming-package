@@ -409,13 +409,62 @@ class TestCleanup:
         regs.cleanup()
         assert regs.count is None
 
-    def test_cleanup_resets_initialized(self):
+    def test_cleanup_sets_cleaned_up_flag(self):
         _init_circuit()
         cfg = WalkConfig(max_depth=2, num_moves=2)
         regs = WalkRegisters(cfg)
         regs.init_root()
         regs.cleanup()
-        assert regs._initialized is False
+        assert regs._cleaned_up is True
+
+
+# ---------------------------------------------------------------------------
+# Group 8b: Post-Cleanup Error Behavior
+# ---------------------------------------------------------------------------
+
+
+class TestPostCleanupErrors:
+    """Verify all methods raise RuntimeError after cleanup()."""
+
+    def test_total_qubits_after_cleanup_raises(self):
+        _init_circuit()
+        cfg = WalkConfig(max_depth=2, num_moves=2)
+        regs = WalkRegisters(cfg)
+        regs.cleanup()
+        with pytest.raises(RuntimeError, match="registers have been cleaned up"):
+            regs.total_qubits()
+
+    def test_branch_at_after_cleanup_raises(self):
+        _init_circuit()
+        cfg = WalkConfig(max_depth=2, num_moves=2)
+        regs = WalkRegisters(cfg)
+        regs.cleanup()
+        with pytest.raises(RuntimeError, match="registers have been cleaned up"):
+            regs.branch_at(0)
+
+    def test_height_qubit_after_cleanup_raises(self):
+        _init_circuit()
+        cfg = WalkConfig(max_depth=2, num_moves=2)
+        regs = WalkRegisters(cfg)
+        regs.cleanup()
+        with pytest.raises(RuntimeError, match="registers have been cleaned up"):
+            regs.height_qubit(0)
+
+    def test_current_depth_after_cleanup_raises(self):
+        _init_circuit()
+        cfg = WalkConfig(max_depth=2, num_moves=2)
+        regs = WalkRegisters(cfg)
+        regs.cleanup()
+        with pytest.raises(RuntimeError, match="registers have been cleaned up"):
+            regs.current_depth()
+
+    def test_init_root_after_cleanup_raises(self):
+        _init_circuit()
+        cfg = WalkConfig(max_depth=2, num_moves=2)
+        regs = WalkRegisters(cfg)
+        regs.cleanup()
+        with pytest.raises(RuntimeError, match="registers have been cleaned up"):
+            regs.init_root()
 
 
 # ---------------------------------------------------------------------------

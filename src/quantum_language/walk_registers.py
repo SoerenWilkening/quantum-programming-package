@@ -56,7 +56,8 @@ class WalkRegisters:
         If *config* is not a ``WalkConfig``.
     """
 
-    __slots__ = ("config", "height", "branches", "count", "_initialized")
+    __slots__ = ("config", "height", "branches", "count", "_initialized",
+                 "_cleaned_up")
 
     def __init__(self, config):
         if not isinstance(config, WalkConfig):
@@ -68,6 +69,7 @@ class WalkRegisters:
 
         self.config = config
         self._initialized = False
+        self._cleaned_up = False
 
         # Height register: one-hot qbool array (max_depth + 1 elements).
         # Each qbool is independently allocated and starts as |0>.
@@ -84,6 +86,11 @@ class WalkRegisters:
         # Count register: temporary qint for counting valid children.
         self.count = ql.qint(0, width=config.cw)
 
+    def _check_cleaned_up(self):
+        """Raise RuntimeError if cleanup() has been called."""
+        if self._cleaned_up:
+            raise RuntimeError("registers have been cleaned up")
+
     def init_root(self):
         """Set the height register to the root state.
 
@@ -97,8 +104,10 @@ class WalkRegisters:
         Raises
         ------
         RuntimeError
-            If ``init_root`` has already been called.
+            If ``init_root`` has already been called, or if
+            :meth:`cleanup` has been called.
         """
+        self._check_cleaned_up()
         if self._initialized:
             raise RuntimeError("init_root() has already been called")
 
@@ -130,7 +139,10 @@ class WalkRegisters:
             If *depth* is out of range ``[0, max_depth)``.
         TypeError
             If *depth* is not an int.
+        RuntimeError
+            If :meth:`cleanup` has been called.
         """
+        self._check_cleaned_up()
         if not isinstance(depth, int):
             raise TypeError(
                 f"depth must be an int, got {type(depth).__name__}"
@@ -160,7 +172,10 @@ class WalkRegisters:
             If *depth* is out of range ``[0, max_depth]``.
         TypeError
             If *depth* is not an int.
+        RuntimeError
+            If :meth:`cleanup` has been called.
         """
+        self._check_cleaned_up()
         if not isinstance(depth, int):
             raise TypeError(
                 f"depth must be an int, got {type(depth).__name__}"
@@ -182,7 +197,13 @@ class WalkRegisters:
         -------
         list[qbool]
             The height register (one-hot qbool array).
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`cleanup` has been called.
         """
+        self._check_cleaned_up()
         return self.height
 
     def total_qubits(self):
@@ -192,7 +213,13 @@ class WalkRegisters:
         -------
         int
             Sum of height, branch, and count register widths.
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`cleanup` has been called.
         """
+        self._check_cleaned_up()
         h_qubits = len(self.height)
         b_qubits = sum(br.width for br in self.branches)
         c_qubits = self.count.width
@@ -206,9 +233,10 @@ class WalkRegisters:
         qubits when the registers go out of scope.
 
         The method clears the internal lists and sets the count register
-        to None.  Calling any other method after cleanup raises an error.
+        to None.  Calling any other method after cleanup raises
+        ``RuntimeError``.
         """
         self.height = []
         self.branches = []
         self.count = None
-        self._initialized = False
+        self._cleaned_up = True
