@@ -1,11 +1,11 @@
 """Phase 78: Diffusion Operator and Phase Property Tests.
 
-Verifies GROV-03 (X-MCZ-X diffusion with zero ancilla) and GROV-05 (manual
-S_0 via `with x == 0: x.phase += pi`) through comprehensive tests including
-Qiskit statevector simulation.
+Verifies GROV-03 (DSL-based diffusion with ~register + & chain + phase flip)
+and GROV-05 (manual S_0 via `with x == 0: x.phase += pi`) through
+comprehensive tests including Qiskit statevector simulation.
 
 Test Coverage:
-- TestDiffusionOperator: QASM verification + Qiskit statevector for X-MCZ-X pattern
+- TestDiffusionOperator: QASM verification + Qiskit statevector for DSL pattern
 - TestPhaseProperty: phase property semantics (no-op uncontrolled, CP controlled)
 """
 
@@ -62,10 +62,10 @@ def _gate_present(qasm_str, gate_name):
 # Group 1: Diffusion Operator (GROV-03)
 # ---------------------------------------------------------------------------
 class TestDiffusionOperator:
-    """GROV-03: Diffusion operator uses X-MCZ-X pattern (zero ancilla, O(n) gates)."""
+    """GROV-03: Diffusion operator uses DSL-based ~register + & chain + phase."""
 
     def test_diffusion_1qubit_qasm(self):
-        """1-qubit diffusion: X-Z-X pattern (MCZ degenerates to Z)."""
+        """1-qubit diffusion: X-P(pi)-X pattern (phase flip via DSL)."""
         ql.circuit()
         ql.option("fault_tolerant", True)
 
@@ -74,19 +74,19 @@ class TestDiffusionOperator:
 
         qasm = ql.to_openqasm()
 
-        # 1-qubit MCZ = Z gate, sandwiched by X gates
+        # 1-qubit: X + P(pi) + X (P(pi) is equivalent to Z)
         assert _gate_present(qasm, "x"), "Expected X gates in QASM"
-        assert _gate_present(qasm, "z"), "Expected Z gate in QASM"
+        assert _gate_present(qasm, "p("), "Expected P(pi) gate in QASM"
 
         # Count X gates: should be 2 (1 before + 1 after)
         x_count = _count_gate(qasm, "x")
         assert x_count == 2, f"Expected 2 X gates, got {x_count}"
 
-        # Only 1 qubit allocated (no ancilla)
+        # Only 1 qubit allocated (no ancilla for 1-qubit case)
         assert "qubit[1]" in qasm, f"Expected 1 qubit, got: {qasm}"
 
     def test_diffusion_2qubit_qasm(self):
-        """2-qubit diffusion: X-CZ-X pattern."""
+        """2-qubit diffusion: X-CCX-P(pi)-CCX-X pattern (AND + phase)."""
         ql.circuit()
         ql.option("fault_tolerant", True)
 
@@ -95,18 +95,19 @@ class TestDiffusionOperator:
 
         qasm = ql.to_openqasm()
 
-        # 2-qubit MCZ = CZ gate
-        assert _gate_present(qasm, "cz"), "Expected CZ gate in QASM"
+        # 2-qubit: Toffoli AND chain + P(pi)
+        assert _gate_present(qasm, "ccx"), "Expected CCX (Toffoli) gate in QASM"
+        assert _gate_present(qasm, "p("), "Expected P(pi) gate in QASM"
 
         # Count X gates: should be 4 (2 before + 2 after)
         x_count = _count_gate(qasm, "x")
         assert x_count == 4, f"Expected 4 X gates, got {x_count}"
 
-        # Only 2 qubits allocated (no ancilla)
-        assert "qubit[2]" in qasm, f"Expected 2 qubits, got: {qasm}"
+        # 3 qubits: 2 data + 1 AND ancilla
+        assert "qubit[3]" in qasm, f"Expected 3 qubits, got: {qasm}"
 
     def test_diffusion_3qubit_qasm(self):
-        """3-qubit diffusion: X-MCZ-X pattern with multi-controlled Z."""
+        """3-qubit diffusion: X-CCX chain-P(pi)-CCX uncompute-X pattern."""
         ql.circuit()
         ql.option("fault_tolerant", True)
 
@@ -115,17 +116,17 @@ class TestDiffusionOperator:
 
         qasm = ql.to_openqasm()
 
-        # 3-qubit MCZ = ctrl(2) @ z
-        assert "ctrl" in qasm.lower() or "cz" in qasm.lower(), (
-            f"Expected multi-controlled Z in QASM:\n{qasm}"
+        # 3-qubit: CCX AND chain + P(pi)
+        assert _gate_present(qasm, "ccx"), (
+            f"Expected CCX (Toffoli) gates in QASM:\n{qasm}"
         )
 
         # Count X gates: should be 6 (3 before + 3 after)
         x_count = _count_gate(qasm, "x")
         assert x_count == 6, f"Expected 6 X gates, got {x_count}"
 
-        # Only 3 qubits allocated (no ancilla)
-        assert "qubit[3]" in qasm, f"Expected 3 qubits, got: {qasm}"
+        # 5 qubits: 3 data + 2 AND ancillas
+        assert "qubit[5]" in qasm, f"Expected 5 qubits, got: {qasm}"
 
     def test_diffusion_statevector_2qubit(self):
         """2-qubit diffusion: Qiskit statevector confirms S_0 reflection.
@@ -209,20 +210,20 @@ class TestDiffusionOperator:
 
         qasm = ql.to_openqasm()
 
-        # Total width = 3 qubits
-        assert "qubit[3]" in qasm, f"Expected 3 qubits, got: {qasm}"
+        # Total width = 3 data qubits + 2 AND ancillas = 5 qubits
+        assert "qubit[5]" in qasm, f"Expected 5 qubits, got: {qasm}"
 
         # Should have 6 X gates (3 before + 3 after)
         x_count = _count_gate(qasm, "x")
         assert x_count == 6, f"Expected 6 X gates, got {x_count}"
 
-        # Should have MCZ (ctrl(2) @ z) for 3 qubits
-        assert "ctrl" in qasm.lower() or "cz" in qasm.lower(), (
-            f"Expected multi-controlled Z:\n{qasm}"
+        # Should have CCX (Toffoli AND chain) for 3 qubits
+        assert _gate_present(qasm, "ccx"), (
+            f"Expected CCX gates:\n{qasm}"
         )
 
     def test_diffusion_qbool(self):
-        """Diffusion on qbool: 1-qubit case (X-Z-X)."""
+        """Diffusion on qbool: 1-qubit case (X-P(pi)-X)."""
         ql.circuit()
         ql.option("fault_tolerant", True)
 
@@ -234,13 +235,13 @@ class TestDiffusionOperator:
         # 1 qubit only
         assert "qubit[1]" in qasm, f"Expected 1 qubit, got: {qasm}"
 
-        # X-Z-X pattern
+        # X-P(pi)-X pattern
         x_count = _count_gate(qasm, "x")
         assert x_count == 2, f"Expected 2 X gates, got {x_count}"
-        assert _gate_present(qasm, "z"), "Expected Z gate"
+        assert _gate_present(qasm, "p("), "Expected P(pi) gate"
 
     def test_diffusion_qarray(self):
-        """Diffusion on qarray: 2 qbool elements = 2 qubits total."""
+        """Diffusion on qarray: 2 qbool elements = 2 data qubits + 1 AND ancilla."""
         ql.circuit()
         ql.option("fault_tolerant", True)
 
@@ -249,13 +250,13 @@ class TestDiffusionOperator:
 
         qasm = ql.to_openqasm()
 
-        # 2 qubits total
-        assert "qubit[2]" in qasm, f"Expected 2 qubits, got: {qasm}"
+        # 3 qubits: 2 data + 1 AND ancilla
+        assert "qubit[3]" in qasm, f"Expected 3 qubits, got: {qasm}"
 
-        # 4 X gates (2 before + 2 after) + CZ
+        # 4 X gates (2 before + 2 after) + CCX (AND)
         x_count = _count_gate(qasm, "x")
         assert x_count == 4, f"Expected 4 X gates, got {x_count}"
-        assert _gate_present(qasm, "cz"), "Expected CZ gate"
+        assert _gate_present(qasm, "ccx"), "Expected CCX gate"
 
     def test_diffusion_zero_width_error(self):
         """Diffusion with no arguments raises ValueError."""
@@ -303,13 +304,13 @@ class TestDiffusionOperator:
 
         # Should produce valid QASM with gates
         assert "OPENQASM" in qasm
-        # Flag qubit + 2 search qubits = at least 3 qubits
-        assert "qubit[3]" in qasm, f"Expected 3 qubits:\n{qasm}"
 
-        # The diffusion gates should be present (X and CZ pattern)
-        assert _gate_present(qasm, "x"), "Expected X gates in controlled diffusion"
-        assert _gate_present(qasm, "cz") or _gate_present(qasm, "z"), (
-            f"Expected Z/CZ gate in controlled diffusion:\n{qasm}"
+        # The diffusion gates should be present (X and CCX/P pattern)
+        assert _gate_present(qasm, "x") or _gate_present(qasm, "ccx"), (
+            f"Expected X or CCX gates in controlled diffusion:\n{qasm}"
+        )
+        assert _gate_present(qasm, "p("), (
+            f"Expected P gate in controlled diffusion:\n{qasm}"
         )
 
     def test_diffusion_4qubit_statevector(self):

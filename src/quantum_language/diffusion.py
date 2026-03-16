@@ -1,7 +1,9 @@
-"""Grover diffusion operator using X-MCZ-X pattern.
+"""Grover diffusion operator using DSL operations.
 
 Provides ql.diffusion() convenience wrapper that applies the S_0 reflection
-(phase flip on |0...0> state) using zero ancilla and O(n) gates.
+(phase flip on |0...0> state).  Uses ``~register`` for bit-flipping and
+``qbool & chain`` + ``phase += pi`` for the multi-controlled phase flip,
+avoiding raw ``emit_*`` calls.
 
 Usage
 -----
@@ -12,7 +14,9 @@ Usage
 >>> ql.diffusion(x)  # S_0 reflection
 """
 
-from ._gates import emit_mcz, emit_x, emit_z
+import math
+
+from ._core import _set_layer_floor, get_current_layer, option
 from .compile import compile as ql_compile
 from .qarray import qarray
 from .qint import qint
@@ -77,25 +81,119 @@ def _flip_all(*registers):
     """Apply X gate to every qubit in the given registers.
 
     DSL-level helper that accepts qint, qbool, or qarray objects and
-    applies ``emit_x`` to each physical qubit.  Handles controlled
-    context automatically (emits CX inside ``with qbool:`` blocks).
+    applies ``~register`` (bitwise NOT) to each.  Handles controlled
+    context automatically via the DSL ``__invert__`` implementation.
+
+    Temporarily enables ``simulate`` mode so that the underlying
+    ``run_instruction`` path stores gates in the circuit.
 
     Parameters
     ----------
     *registers : qint, qbool, or qarray
         Quantum registers whose qubits should be flipped.
     """
-    qubits = _collect_qubits(*registers)
-    for q in qubits:
-        emit_x(q)
+    was_simulating = option('simulate')
+    if not was_simulating:
+        option('simulate', True)
+    try:
+        for reg in registers:
+            if isinstance(reg, qarray):
+                for elem in reg:
+                    ~elem
+            elif isinstance(reg, qint):
+                ~reg
+    finally:
+        if not was_simulating:
+            option('simulate', False)
+
+
+def _extract_qbools(*registers):
+    """Extract individual qubits as qbool objects from registers.
+
+    Parameters
+    ----------
+    *registers : qint, qbool, or qarray
+        Quantum registers to extract qubits from.
+
+    Returns
+    -------
+    list[qbool]
+        Flat list of single-qubit qbool wrappers.
+    """
+    bits = []
+    for reg in registers:
+        if isinstance(reg, qarray):
+            for elem in reg:
+                for i in range(elem.width):
+                    bits.append(elem[i])
+        elif isinstance(reg, qint):
+            for i in range(reg.width):
+                bits.append(reg[i])
+    return bits
+
+
+def _nested_phase_flip(bits, target_register):
+    """Apply phase flip controlled on all qubits in *bits* being |1>.
+
+    Recursively nests ``with`` blocks so that the innermost level
+    applies ``target_register.phase += pi``.  The ``with`` block
+    ``__exit__`` automatically uncomputes AND-ancillas in the correct
+    order, avoiding gate-reordering issues.
+
+    Parameters
+    ----------
+    bits : list[qbool]
+        Qubits that must all be |1> for the phase flip to apply.
+    target_register : qint
+        Register used for the ``phase += pi`` call.
+    """
+    def _recurse(idx):
+        if idx == len(bits):
+            target_register.phase += math.pi
+        else:
+            with bits[idx]:
+                _recurse(idx + 1)
+
+    _recurse(0)
 
 
 @ql_compile(key=_total_width)
-def diffusion(*registers):
-    """Apply Grover diffusion operator (X-MCZ-X pattern).
+def _diffusion_impl(*registers):
+    """Inner implementation of diffusion (compiled for gate caching)."""
+    bits = _extract_qbools(*registers)
 
-    Reflects amplitude about |0...0> state. Zero ancilla, O(n) gates.
+    if not bits:
+        raise ValueError("diffusion() requires at least one qubit")
+
+    # X on all qubits (map |0...0> to |1...1>)
+    _flip_all(*registers)
+
+    # Phase flip on |1...1> (which corresponds to |0...0> after X mapping)
+    # Uses nested ``with`` blocks: each level adds a control qubit,
+    # and the innermost block applies the phase flip.  The ``with``
+    # block __exit__ handles AND-ancilla uncomputation in the correct
+    # order automatically.
+    _nested_phase_flip(bits, registers[0])
+
+    # Prevent the optimizer from merging the second X gates with the
+    # first (they are separated by the phase-flip block).
+    _set_layer_floor(get_current_layer())
+
+    # X on all qubits (undo the mapping)
+    _flip_all(*registers)
+
+
+def diffusion(*registers):
+    """Apply Grover diffusion operator.
+
+    Reflects amplitude about |0...0> state using DSL operations:
+    ``~register`` for bit-flip and ``qbool & chain`` + ``phase += pi``
+    for the multi-controlled phase flip.
     Works on qint, qbool, and qarray. Multiple registers are flattened.
+
+    Enables ``simulate`` mode so that DSL operations produce gates in
+    the circuit.  The inner implementation is ``@ql.compile``-cached so
+    that repeated calls replay the captured gate sequence.
 
     Parameters
     ----------
@@ -115,21 +213,11 @@ def diffusion(*registers):
     >>> x.branch()
     >>> ql.diffusion(x)
     """
-    qubits = _collect_qubits(*registers)
-
-    if not qubits:
-        raise ValueError("diffusion() requires at least one qubit")
-
-    # X on all qubits
-    for q in qubits:
-        emit_x(q)
-
-    # MCZ: phase flip on |1...1> (which corresponds to |0...0> after X mapping)
-    if len(qubits) == 1:
-        emit_z(qubits[0])
-    else:
-        emit_mcz(qubits[-1], qubits[:-1])
-
-    # X on all qubits (undo the mapping)
-    for q in qubits:
-        emit_x(q)
+    was_simulating = option('simulate')
+    if not was_simulating:
+        option('simulate', True)
+    try:
+        _diffusion_impl(*registers)
+    finally:
+        if not was_simulating:
+            option('simulate', False)
