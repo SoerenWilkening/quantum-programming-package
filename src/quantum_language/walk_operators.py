@@ -261,12 +261,37 @@ def _height_controlled_variable_diffusion(config, registers, depth,
 # ------------------------------------------------------------------
 
 
+def _apply_fixed_diffusion(config, registers, depth, is_root):
+    """Apply fixed-branching diffusion at *depth*."""
+    num_moves = config.num_moves
+    bw = config.bw
+    h_qubit_idx = registers.height_qubit(depth)
+    h_child_idx = registers.height_qubit(depth - 1)
+
+    branch_reg = registers.branch_at(depth - 1)
+
+    angle_data = _precompute_angles(
+        num_moves, bw, is_root=is_root,
+        max_depth=config.max_depth,
+    )
+
+    _height_controlled_diffusion(
+        h_qubit_idx, h_child_idx, branch_reg,
+        num_moves, angle_data,
+    )
+
+
 def _apply_local_diffusion(config, registers, depth):
     """Apply local diffusion at the given depth, controlled on height.
 
     Dispatches between fixed-branching (no predicates) and variable-
     branching (with is_valid predicate) depending on whether config
     has callbacks set.
+
+    Per Montanaro 2015, if ``config.is_marked`` is set along with
+    ``config.state``, the marking predicate is evaluated quantumly.
+    Marked nodes receive identity (D_x = I) while unmarked nodes
+    receive the standard diffusion operator.
 
     Parameters
     ----------
@@ -288,37 +313,26 @@ def _apply_local_diffusion(config, registers, depth):
                     and config.state is not None)
 
     if use_variable:
+        # Variable branching: marking is not yet integrated into the
+        # variable-branching path because make_move uses DSL operations
+        # (XOR) that do not support controlled execution.  The variable
+        # diffusion runs unconditionally here; marking integration for
+        # variable branching is deferred to walk_search rewrite.
         _height_controlled_variable_diffusion(
             config, registers, depth, is_root=is_root,
         )
+    elif config.is_marked is not None and config.state is not None:
+        # Quantum marking (fixed branching):
+        # D_x = I for marked, standard diffusion for unmarked.
+        # Evaluate is_marked(state) quantumly to get a qbool,
+        # negate it so that ``with marked:`` runs on UNMARKED nodes.
+        marked = config.is_marked(config.state)
+        _flip_all(marked)
+        with marked:
+            _apply_fixed_diffusion(config, registers, depth, is_root)
+        _flip_all(marked)
     else:
-        # Fixed branching: direct Montanaro rotations
-        num_moves = config.num_moves
-        bw = config.bw
-        h_qubit_idx = registers.height_qubit(depth)
-        h_child_idx = registers.height_qubit(depth - 1)
-
-        # The branch register at depth d is used for branches going
-        # from depth d down to depth d-1.  In WalkRegisters, branches
-        # are indexed 0..max_depth-1 where index 0 is the deepest
-        # (leaf level).  The branch at "depth d" (tree depth) maps to
-        # branches[max_depth - depth] in the register layout.  But
-        # WalkRegisters.branch_at(depth) handles this mapping using
-        # the direct index, where branch_at(d) returns branches[d].
-        # For the walk operators, the branch register at tree depth d
-        # is branch_at(depth - 1), matching how the tree descends from
-        # depth d to depth d-1.
-        branch_reg = registers.branch_at(depth - 1)
-
-        angle_data = _precompute_angles(
-            num_moves, bw, is_root=is_root,
-            max_depth=config.max_depth,
-        )
-
-        _height_controlled_diffusion(
-            h_qubit_idx, h_child_idx, branch_reg,
-            num_moves, angle_data,
-        )
+        _apply_fixed_diffusion(config, registers, depth, is_root)
 
 
 # ------------------------------------------------------------------
