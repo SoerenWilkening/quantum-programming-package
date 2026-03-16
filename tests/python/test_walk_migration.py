@@ -2,12 +2,11 @@
 
 Verifies:
 - walk and walk_diffusion are importable from quantum_language
-- QWalkTree raises DeprecationWarning on instantiation
+- QWalkTree is no longer importable
 - walk_diffusion is callable
 - Skill file .claude/commands/quantum-walk.md exists
 """
 
-import warnings
 from pathlib import Path
 
 import pytest
@@ -41,34 +40,18 @@ class TestWalkExports:
         assert callable(ql.walk_diffusion)
 
 
-class TestQWalkTreeDeprecation:
-    """QWalkTree raises DeprecationWarning on instantiation."""
+class TestQWalkTreeRemoved:
+    """QWalkTree is no longer importable after removal."""
 
-    def test_deprecation_warning_raised(self):
-        ql.circuit()
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            ql.QWalkTree(max_depth=2, branching=2)
-            assert len(w) == 1
-            assert issubclass(w[0].category, DeprecationWarning)
-            assert "deprecated" in str(w[0].message).lower()
+    def test_qwalktree_not_in_namespace(self):
+        assert not hasattr(ql, "QWalkTree")
 
-    def test_deprecation_message_content(self):
-        ql.circuit()
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            ql.QWalkTree(max_depth=1, branching=2)
-            assert "walk()" in str(w[0].message)
-            assert "walk_diffusion()" in str(w[0].message)
+    def test_qwalktree_not_in_all(self):
+        assert "QWalkTree" not in ql.__all__
 
-    def test_qwalktree_still_works(self):
-        """QWalkTree still functions despite deprecation."""
-        ql.circuit()
-        with warnings.catch_warnings(record=True):
-            warnings.simplefilter("always")
-            tree = ql.QWalkTree(max_depth=2, branching=2)
-            assert tree.max_depth == 2
-            assert tree.total_qubits == 5
+    def test_walk_module_not_importable(self):
+        with pytest.raises(ImportError):
+            from quantum_language.walk import QWalkTree  # noqa: F401
 
 
 class TestSkillFile:

@@ -62,7 +62,6 @@ from .qbool import qbool
 from .qint import qint
 from .qint_mod import qint_mod
 from .quantum_counting import count_solutions
-from .walk import QWalkTree
 from .walk_diffusion import walk_diffusion
 from .walk_search import walk
 
@@ -194,7 +193,6 @@ __all__ = [
     "diffusion",
     "amplitude_estimate",
     "count_solutions",
-    "QWalkTree",
     "walk",
     "walk_diffusion",
     "grover",
