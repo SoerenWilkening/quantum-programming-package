@@ -72,7 +72,7 @@ Function-based quantum walk API replacing the monolithic QWalkTree class.
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| R12.1 | `walk(state, make_move, is_valid, is_marked, max_depth, num_moves)` — full walk with detection returning bool. | |
+| R12.1 | `walk(is_marked, max_depth, num_moves)` — full walk with detection returning bool. | |
 | R12.2 | `walk_diffusion(state, make_move, is_valid, num_moves)` — local diffusion building block at current depth. | |
 | R12.3 | User provides `make_move(state, move_index)` as `@ql.compile(inverse=True)` function. `move_index` is a classical int; the function uses DSL operations (arithmetic, XOR, `with`) — never raw gates. | |
 | R12.4 | User provides `is_valid(state)` and `is_marked(state)` as quantum predicates returning `qbool`. | |
@@ -82,9 +82,11 @@ Function-based quantum walk API replacing the monolithic QWalkTree class.
 | R12.8 | R_A / R_B walk operators: local diffusions at even/odd depths controlled on height register. walk_step = R_B * R_A. | |
 | R12.9 | Detection via power-method iteration with root overlap measurement. | |
 | R12.10 | XOR-based state manipulation replaces raw qubit index manipulation (e.g., `x ^= value` instead of `emit_x(qubit_idx)`). | |
-| R12.11 | Old `QWalkTree` deprecated and removed. | |
+| R12.11 | Old `QWalkTree` class and `walk.py` removed entirely, along with all associated test files. | |
 | R12.12 | Each implementation file ≤ 400 LOC. | |
 | R12.13 | Correctness verified on tiny problems (≤ 17 qubits) via Qiskit simulation. | |
+| R12.14 | (TODO — Milestone 2b) No classical evaluation of quantum predicates. `is_marked` evaluated quantumly, returning `qbool`. Diffusion only on unmarked nodes via `with ~marked:`. | |
+| R12.15 | (TODO — Milestone 2b) `walk_operators.py` composes `walk_diffusion.py` — no reimplementation of diffusion logic in the operator layer. | |
 
 #### R13: Quantum Walk Skill
 
@@ -151,9 +153,14 @@ General improvements to the existing codebase.
 - R_A and R_B operate on disjoint height register qubits (even vs odd depths).
 - walk_step = R_B * R_A compiles and replays correctly (gate sequence cached).
 - End-to-end: 2-variable binary ILP instance detects known feasible assignment.
+- Old `walk.py` and all associated test files removed.
 - All test circuits use ≤ 17 qubits.
 - No implementation file exceeds 400 LOC.
 - `/quantum-walk` skill produces correct quantum functions with passing verification loop.
+- (TODO) Marking is quantum: `is_marked(state)` returns `qbool`, diffusion applied only to unmarked nodes (`with ~marked:`). No classical enumeration.
+- (TODO) No `emit_x` in walk modules — all state manipulation via DSL operators.
+- (TODO) No physical qubit indices (`.qubits[...]`) in walk module logic.
+- (TODO) `walk_operators.py` calls into `walk_diffusion.py` — no duplicated diffusion logic.
 
 ---
 
@@ -211,17 +218,27 @@ General improvements to the existing codebase.
 - Legacy layer-based uncomputation removed (`_start_layer`, `_end_layer`, `_auto_uncompute`)
 - End-to-end integration tests across all uncomputation triggers
 
-### Milestone 2: Quantum Walk Rework *(current)*
+### Milestone 2: Quantum Walk Rework — Initial Implementation *(completed, needs bug fixes)*
 
 - Function-based walk API: `ql.walk()` and `ql.walk_diffusion()` replace monolithic `QWalkTree`
 - User provides `make_move`, `is_valid`, `is_marked` as quantum functions using DSL
 - Framework manages height register, branch registers, counting, Montanaro diffusion angles
 - Counting loop: apply-check-undo per move, in superposition across all basis states
 - Conditional branching with parent/self component for probability backflow
-- R_A/R_B walk operators, walk_step = R_B * R_A, power-method detection
-- XOR-based state manipulation replaces raw qubit index handling
+- R_A/R_B walk operators, walk_step = R_B * R_A
 - Claude Code skill (`/quantum-walk`) for guided quantum walk function development
 - Correctness verified on tiny (≤ 17 qubit) problems via simulation
+
+### Milestone 2b: Quantum Walk Bug Fixes *(current)*
+
+Fixes correctness bugs discovered during review of the initial walk implementation:
+
+- **Quantum marking**: Replace classical `is_marked` evaluation (brute-force enumeration of basis states) with quantum evaluation: `is_marked(state)` returns `qbool`, marking = identity (D_x = I for marked nodes per Montanaro 2015), diffusion only on unmarked nodes via `with ~marked:`
+- **Remove `emit_x`**: Replace all `emit_x(qubit_idx)` with DSL equivalents (`x ^= value`) across walk_branching, walk_diffusion, walk_operators, walk_search
+- **Remove classical detection**: Remove simulation-based overlap detection from `walk_search.py`; add TODO for phase estimation-based detection (future milestone)
+- **Deduplicate operators**: `walk_operators.py` should compose `walk_diffusion.py`, not reimplement diffusion logic
+- **Remove `walk.py`**: Delete the deprecated `QWalkTree` class and all 13 associated test files
+- **Agent instructions**: Updated worker and reviewer agents to enforce quantum DSL rules (no physical qubit indices, no classical evaluation of quantum predicates, marking = identity)
 
 ---
 

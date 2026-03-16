@@ -17,8 +17,7 @@ The framework handles all internal machinery: height registers, branch registers
 
 ```python
 # Full walk — detects existence of a marked node
-found = ql.walk(state, make_move, is_valid, is_marked,
-                max_depth=depth, num_moves=num)
+found = ql.walk(is_marked, max_depth=depth, num_moves=num)
 
 # Local diffusion building block — for custom walk operators
 ql.walk_diffusion(state, make_move, is_valid, num_moves=num)
@@ -240,8 +239,7 @@ ql.circuit()
 x = ...  # as designed
 
 # Full walk
-found = ql.walk(x, make_move, is_valid, is_marked,
-                max_depth=..., num_moves=...)
+found = ql.walk(is_marked, max_depth=..., num_moves=...)
 
 print(f"Marked node exists: {found}")
 ```
