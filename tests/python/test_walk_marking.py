@@ -731,48 +731,222 @@ class TestApplyLocalDiffusionDispatch:
 
 
 # ---------------------------------------------------------------------------
-# Group 6: Variable-branching + marking warning
+# Group 6: Variable-branching + marking
 # ---------------------------------------------------------------------------
 
 
-class TestVariableBranchingMarkingWarning:
-    """When is_marked is set but variable-branching path is taken,
-    a warning must be raised because marking is silently ignored.
+class TestMarkingWithVariableBranching:
+    """Marking works correctly with variable-branching diffusion.
+
+    When is_marked is set along with make_move/is_valid/state, the
+    variable-branching path evaluates is_marked(state) quantumly and
+    wraps the diffusion call with ``with ~marked:``.  Controlled XOR
+    operations inside make_move become Toffoli gates under the marking
+    control, handled natively by the framework.
     """
 
-    def test_variable_branching_with_marking_warns(self):
-        """Warning raised when is_marked is set with make_move/is_valid."""
+    def test_marking_with_variable_branching_all_marked_identity(self):
+        """All-marked walk step with variable branching is identity.
+
+        When is_marked returns physical |1> for all states, diffusion
+        is suppressed and the walk step acts as identity.
+        """
         _init_circuit()
-        state = ql.qint(0, width=3)
-
-        def _dummy_marked(s):
-            return s >= 0
-
+        state = ql.qint(0, width=2)
+        pred, flag = _make_always_marked_predicate()
         config = WalkConfig(
             max_depth=1, num_moves=1,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_nonzero,
-            is_marked=_dummy_marked,
+            is_marked=pred,
             state=state,
         )
         regs = WalkRegisters(config)
         regs.init_root()
 
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+        walk_step(config, regs)
+
+        _keepalive = [regs, state, flag]
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+
+        h_root = regs.height_qubit(config.max_depth)
+        flag_qubit = int(flag.qubits[63])
+        initial_idx = (1 << h_root) | (1 << flag_qubit)
+        root_prob = float(abs(sv[initial_idx]) ** 2)
+        assert abs(root_prob - 1.0) < 1e-6, (
+            f"All-marked variable-branching walk step should be identity, "
+            f"root_prob={root_prob}"
+        )
+
+    def test_marking_with_variable_branching_never_marked_preserves_norm(self):
+        """Never-marked walk step with variable branching preserves norm.
+
+        When is_marked returns physical |0>, diffusion should run
+        on all nodes.  The variable-branching diffusion with constant
+        initial state may not spread amplitude visibly (the counting
+        evaluates at compile time), but the norm must be preserved.
+        """
+        _init_circuit()
+        state = ql.qint(0, width=2)
+        pred, flag = _make_never_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=2,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            is_marked=pred,
+            state=state,
+        )
+        regs = WalkRegisters(config)
+        regs.init_root()
+
+        walk_step(config, regs)
+
+        _keepalive = [regs, state, flag]
+        sv = _simulate_statevector(ql.to_openqasm())
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"Never-marked variable-branching walk step should "
+            f"preserve norm, got {norm}"
+        )
+
+    def test_marking_with_variable_branching_differs_from_unmarked(self):
+        """Marked vs unmarked variable-branching produce different circuits.
+
+        All-marked walk step produces identity (no diffusion gates fire),
+        while the unmarked walk step applies diffusion.  The two should
+        produce different QASM output.
+        """
+        # All-marked
+        _init_circuit()
+        state_m = ql.qint(0, width=2)
+        pred_m, flag_m = _make_always_marked_predicate()
+        config_m = WalkConfig(
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            is_marked=pred_m,
+            state=state_m,
+        )
+        regs_m = WalkRegisters(config_m)
+        regs_m.init_root()
+        walk_step(config_m, regs_m)
+        _km = [regs_m, state_m, flag_m]
+        qasm_marked = ql.to_openqasm()
+
+        # Never-marked
+        _init_circuit()
+        state_u = ql.qint(0, width=2)
+        pred_u, flag_u = _make_never_marked_predicate()
+        config_u = WalkConfig(
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            is_marked=pred_u,
+            state=state_u,
+        )
+        regs_u = WalkRegisters(config_u)
+        regs_u.init_root()
+        walk_step(config_u, regs_u)
+        _ku = [regs_u, state_u, flag_u]
+        qasm_unmarked = ql.to_openqasm()
+
+        # The two circuits should differ in gate count because
+        # all-marked suppresses the diffusion rotations
+        assert qasm_marked != qasm_unmarked, (
+            "All-marked and never-marked variable-branching walks "
+            "should produce different QASM"
+        )
+
+    def test_marking_with_variable_branching_preserves_norm(self):
+        """Walk step with marking + variable branching preserves norm."""
+        _init_circuit()
+        state = ql.qint(0, width=2)
+        pred, flag = _make_always_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            is_marked=pred,
+            state=state,
+        )
+        regs = WalkRegisters(config)
+        regs.init_root()
+
+        walk_step(config, regs)
+
+        _keepalive = [regs, state, flag]
+        sv = _simulate_statevector(ql.to_openqasm())
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"Variable-branching marked walk step should preserve "
+            f"norm, got {norm}"
+        )
+
+    def test_controlled_xor_under_marking(self):
+        """XOR operations inside make_move work under marking control.
+
+        Verifies that when marking wraps the variable-branching
+        diffusion, the XOR in make_move (which runs unconditionally
+        during validity evaluation, outside marking control) produces
+        a valid unitary (norm preservation) and does not raise errors.
+        Tests with both num_moves=1 and num_moves=2.
+        """
+        for num_moves in (1, 2):
+            _init_circuit()
+            state = ql.qint(0, width=2)
+            pred, flag = _make_never_marked_predicate()
+            config = WalkConfig(
+                max_depth=1, num_moves=num_moves,
+                make_move=_make_move_xor,
+                undo_move=_undo_move_xor,
+                is_valid=_is_valid_nonzero,
+                is_marked=pred,
+                state=state,
+            )
+            regs = WalkRegisters(config)
+            regs.init_root()
+
             walk_step(config, regs)
 
-        _keepalive = [regs, state]
+            _keepalive = [regs, state, flag]
+            sv = _simulate_statevector(ql.to_openqasm())
+            norm = np.linalg.norm(sv)
+            assert abs(norm - 1.0) < 1e-6, (
+                f"Controlled XOR under marking with num_moves={num_moves} "
+                f"should preserve norm, got {norm}"
+            )
 
-        # At least one warning about is_marked being ignored
-        marking_warnings = [
-            x for x in w
-            if "is_marked is ignored" in str(x.message)
-        ]
-        assert len(marking_warnings) > 0, (
-            "Should warn when is_marked is set but variable-branching "
-            "path is taken"
+    def test_variable_branching_marking_double_step_preserves_norm(self):
+        """Two walk steps with marking + variable branching preserve norm."""
+        _init_circuit()
+        state = ql.qint(0, width=2)
+        pred, flag = _make_never_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            is_marked=pred,
+            state=state,
+        )
+        regs = WalkRegisters(config)
+        regs.init_root()
+
+        walk_step(config, regs)
+        walk_step(config, regs)
+
+        _keepalive = [regs, state, flag]
+        sv = _simulate_statevector(ql.to_openqasm())
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"Two variable-branching marked walk steps should preserve "
+            f"norm, got {norm}"
         )
 
     def test_variable_branching_without_marking_no_warning(self):
@@ -797,8 +971,31 @@ class TestVariableBranchingMarkingWarning:
 
         marking_warnings = [
             x for x in w
-            if "is_marked is ignored" in str(x.message)
+            if "is_marked" in str(x.message)
         ]
         assert len(marking_warnings) == 0, (
             "Should not warn about marking when is_marked is not set"
+        )
+
+    def test_variable_branching_marking_within_qubit_budget(self):
+        """Variable-branching with marking stays within 17-qubit limit."""
+        _init_circuit()
+        state = ql.qint(0, width=2)
+        pred, flag = _make_always_marked_predicate()
+        config = WalkConfig(
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            is_marked=pred,
+            state=state,
+        )
+        regs = WalkRegisters(config)
+        regs.init_root()
+        walk_step(config, regs)
+        _keepalive = [regs, state, flag]
+        nq = _get_num_qubits(ql.to_openqasm())
+        assert nq <= 17, (
+            f"Variable-branching marked walk uses {nq} qubits "
+            f"(limit: 17)"
         )

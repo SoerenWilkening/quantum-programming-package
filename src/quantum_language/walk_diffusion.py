@@ -31,7 +31,8 @@ from .walk_core import (
 # ------------------------------------------------------------------
 
 
-def _s0_reflection(parent_flag, branch_reg, control_qubit=None):
+def _s0_reflection(parent_flag, branch_reg, control_qubit=None,
+                   marking_qubit=None):
     """Phase flip on |0...0> of parent_flag + branch_reg (X-MCZ-X).
 
     Parameters
@@ -43,30 +44,47 @@ def _s0_reflection(parent_flag, branch_reg, control_qubit=None):
     control_qubit : int or None
         If set, all operations are controlled on this physical qubit
         index (height control for walk operators).
+    marking_qubit : int or None
+        If set, all operations are additionally controlled on this
+        physical qubit index (marking control for Montanaro marking).
     """
     s0_qubits = _collect_qubits(parent_flag, branch_reg)
 
     if not s0_qubits:
         return
 
+    # Collect all external control qubits (height + marking)
+    ext_ctrls = []
     if control_qubit is not None:
+        ext_ctrls.append(control_qubit)
+    if marking_qubit is not None:
+        ext_ctrls.append(marking_qubit)
+
+    if ext_ctrls:
         from .walk_branching import _make_qbool_wrapper
-        h_control = _make_qbool_wrapper(control_qubit)
 
-        # X on all qubits, controlled on height qubit
-        with h_control:
+        # Build nested ``with`` context for all external controls.
+        # The X gates on the s0 qubits must be controlled on all
+        # external control qubits so that the reflection is only
+        # applied when all controls are active.
+        ctrl_wrappers = [_make_qbool_wrapper(q) for q in ext_ctrls]
+
+        # X on all qubits, controlled on external controls
+        # Use nested ``with`` blocks for multi-control
+        def _controlled_flip():
             _flip_all(parent_flag, branch_reg)
 
-        # MCZ: add control_qubit to the control list
-        all_with_h = [control_qubit] + s0_qubits
-        if len(all_with_h) == 1:
-            emit_z(all_with_h[0])
+        _apply_nested_with(ctrl_wrappers, _controlled_flip)
+
+        # MCZ: add all external control qubits to the control list
+        all_with_ext = ext_ctrls + s0_qubits
+        if len(all_with_ext) == 1:
+            emit_z(all_with_ext[0])
         else:
-            emit_mcz(all_with_h[-1], all_with_h[:-1])
+            emit_mcz(all_with_ext[-1], all_with_ext[:-1])
 
-        # X on all qubits, controlled on height qubit
-        with h_control:
-            _flip_all(parent_flag, branch_reg)
+        # X on all qubits, controlled on external controls
+        _apply_nested_with(ctrl_wrappers, _controlled_flip)
     else:
         # X on all qubits (map |0...0> -> |1...1>)
         _flip_all(parent_flag, branch_reg)
@@ -79,6 +97,30 @@ def _s0_reflection(parent_flag, branch_reg, control_qubit=None):
 
         # X on all qubits (undo the mapping)
         _flip_all(parent_flag, branch_reg)
+
+
+def _apply_nested_with(ctrl_wrappers, body_fn):
+    """Apply body_fn inside nested ``with`` blocks for all controls.
+
+    Parameters
+    ----------
+    ctrl_wrappers : list[qbool]
+        Control qbool wrappers to nest.
+    body_fn : callable
+        Function to call inside the innermost ``with`` block.
+    """
+    if not ctrl_wrappers:
+        body_fn()
+        return
+
+    def _recurse(idx):
+        if idx == len(ctrl_wrappers):
+            body_fn()
+        else:
+            with ctrl_wrappers[idx]:
+                _recurse(idx + 1)
+
+    _recurse(0)
 
 
 # ------------------------------------------------------------------
@@ -190,7 +232,8 @@ def _evaluate_validity(config):
 
 
 def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
-                        is_root=False, control_qubit=None):
+                        is_root=False, control_qubit=None,
+                        marking_qubit=None):
     """Variable-branching diffusion: count -> conditional rotations -> S_0.
 
     Parameters
@@ -208,12 +251,18 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
     control_qubit : int or None
         If set, all operations are controlled on this physical qubit
         index (height control for walk operators).
+    marking_qubit : int or None
+        If set, the rotation and S_0 steps (steps 4-6) are additionally
+        controlled on this physical qubit index (marking control for
+        Montanaro marking).  The validity evaluation and counting
+        (steps 1-3, 7) run unconditionally.
     """
     import quantum_language as ql
 
     num_moves = config.num_moves
 
     # Step 1: Evaluate validity for all children
+    # (unconditional -- not controlled on marking_qubit)
     validity = _evaluate_validity(config)
 
     # Step 2: Sum validity bits into count register.
@@ -221,6 +270,7 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
     # ``count += v`` to avoid a framework bug where ``__iadd__`` /
     # ``__isub__`` with comparison-derived qbools produces garbage
     # qubit indices.
+    # (unconditional -- not controlled on marking_qubit)
     cw = count_width(num_moves)
     count = ql.qint(0, width=cw)
     for v in validity:
@@ -230,6 +280,7 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
     # Step 3: Compute count comparisons and extract raw qubit indices.
     # Store only the physical qubit index (int), not the live qbool,
     # matching the pattern in the old counting_diffusion_core.
+    # (unconditional -- not controlled on marking_qubit)
     cond_qubits_map = {}
     for c in range(1, num_moves + 1):
         if c in angle_data:
@@ -238,8 +289,11 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
 
     parent_qubit = int(parent_flag.qubits[63])
     extra_ctrls = [control_qubit] if control_qubit is not None else []
+    if marking_qubit is not None:
+        extra_ctrls = extra_ctrls + [marking_qubit]
 
     # Step 4: U_dagger (inverse state preparation)
+    # (controlled on marking_qubit if set)
     for c in range(1, num_moves + 1):
         if c not in angle_data:
             continue
@@ -254,9 +308,12 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
         _emit_multi_controlled_ry(parent_qubit, -phi, ctrl_qubits)
 
     # Step 5: S_0 reflection
-    _s0_reflection(parent_flag, branch_reg, control_qubit=control_qubit)
+    # (controlled on marking_qubit if set)
+    _s0_reflection(parent_flag, branch_reg, control_qubit=control_qubit,
+                   marking_qubit=marking_qubit)
 
     # Step 6: U forward (state preparation)
+    # (controlled on marking_qubit if set)
     for c in range(1, num_moves + 1):
         if c not in angle_data:
             continue
@@ -271,6 +328,7 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
             )
 
     # Step 7: Uncompute count register (reverse controlled decrement)
+    # (unconditional -- not controlled on marking_qubit)
     for v in reversed(validity):
         with v:
             count -= 1
@@ -405,7 +463,7 @@ def walk_diffusion_fixed(parent_flag, branch_reg, num_moves,
 
 
 def walk_diffusion_with_regs(config, parent_flag, branch_reg, is_root=False,
-                             control_qubit=None):
+                             control_qubit=None, marking_qubit=None):
     """Local diffusion using pre-allocated registers.
 
     Like :func:`walk_diffusion` but takes a ``WalkConfig`` and
@@ -425,6 +483,11 @@ def walk_diffusion_with_regs(config, parent_flag, branch_reg, is_root=False,
     control_qubit : int or None, optional
         If set, all operations are controlled on this physical qubit
         index (height control for walk operators).  Default is None.
+    marking_qubit : int or None, optional
+        If set, the rotation and S_0 steps are additionally controlled
+        on this physical qubit index (marking control for Montanaro
+        marking).  The validity evaluation runs unconditionally.
+        Default is None.
     """
     _validate_config(config)
 
@@ -438,7 +501,8 @@ def walk_diffusion_with_regs(config, parent_flag, branch_reg, is_root=False,
     )
 
     _variable_diffusion(config, parent_flag, branch_reg, angles,
-                        is_root=is_root, control_qubit=control_qubit)
+                        is_root=is_root, control_qubit=control_qubit,
+                        marking_qubit=marking_qubit)
 
 
 # ------------------------------------------------------------------
