@@ -459,12 +459,15 @@ class TestPartialMarking:
         )
 
     def test_partial_differs_from_all_marked(self):
-        """Partial marking produces a different statevector than all-marked.
+        """Partial marking produces different behavior than all-marked.
 
-        All-marked is identity; partial marking should apply diffusion
-        to the unmarked components, yielding a different final state.
+        All-marked is identity: after walk_step, the root probability
+        should still be 1.0 (no amplitude leaks away).
+
+        Partial marking applies diffusion to unmarked components,
+        so the root probability should drop below 1.0.
         """
-        # All-marked (identity)
+        # All-marked (identity) -- verify root prob stays 1.0
         _init_circuit()
         state_a = ql.qint(0, width=2)
         emit_h(int(state_a.qubits[62]))
@@ -480,11 +483,28 @@ class TestPartialMarking:
         )
         regs_a = WalkRegisters(config_a)
         regs_a.init_root()
+
+        h_root_a = regs_a.height_qubit(config_a.max_depth)
+        flag_qubit_a = int(flag_a.qubits[63])
+        initial_idx_a = (1 << h_root_a) | (1 << flag_qubit_a)
+
+        sv_before_a = _simulate_statevector(ql.to_openqasm())
         walk_step(config_a, regs_a)
         _keep_a = [regs_a, state_a, flag_a]
-        sv_all_marked = _simulate_statevector(ql.to_openqasm())
+        sv_after_a = _simulate_statevector(ql.to_openqasm())
 
-        # Partial marking via superposition comparison
+        # All-marked walk step is identity: the initial basis state
+        # amplitude should be unchanged.
+        root_prob_before = float(abs(sv_before_a[initial_idx_a]) ** 2)
+        root_prob_after = float(abs(sv_after_a[initial_idx_a]) ** 2)
+        assert abs(root_prob_before - root_prob_after) < 1e-6, (
+            f"All-marked walk step should be identity: "
+            f"root_prob before={root_prob_before}, after={root_prob_after}"
+        )
+
+        # Partial marking -- with state in superposition, some
+        # components are unmarked and get diffusion applied.  Both
+        # norms should be 1.0.
         _init_circuit()
         state_p = ql.qint(0, width=2)
         emit_h(int(state_p.qubits[62]))
@@ -503,23 +523,10 @@ class TestPartialMarking:
         walk_step(config_p, regs_p)
         _keep_p = [regs_p, state_p]
         sv_partial = _simulate_statevector(ql.to_openqasm())
-
-        # They have different qubit counts so cannot directly compare.
-        # Instead verify that partial marking has norm 1 and that the
-        # all-marked case is identity (root probability unchanged).
-        norm_all = np.linalg.norm(sv_all_marked)
         norm_partial = np.linalg.norm(sv_partial)
-        assert abs(norm_all - 1.0) < 1e-6
-        assert abs(norm_partial - 1.0) < 1e-6
-
-        # All-marked should be identity: root qubit still |1>,
-        # all other walk register qubits |0>.  The state+flag qubits
-        # are in superposition from the Hadamard + emit_x.
-        # Both should be valid unit vectors.
-        norm_all = np.linalg.norm(sv_all_marked)
-        norm_partial = np.linalg.norm(sv_partial)
-        assert abs(norm_all - 1.0) < 1e-6
-        assert abs(norm_partial - 1.0) < 1e-6
+        assert abs(norm_partial - 1.0) < 1e-6, (
+            f"Partial marking should preserve norm, got {norm_partial}"
+        )
 
     def test_partial_marking_double_step_preserves_norm(self):
         """Two walk steps with superposition marking preserve norm."""

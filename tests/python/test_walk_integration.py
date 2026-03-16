@@ -187,10 +187,14 @@ class TestWalkReturnsConfigAndRegisters:
     def test_returns_tuple(self):
         """walk() returns a 2-tuple."""
         _init_circuit()
-        config, regs, _ = _walk_with_state(
-            _sat_2var_satisfiable, max_depth=1, num_moves=1,
+        state = ql.qint(0, width=2)
+        result = walk(
+            lambda s: s == 0, 1, 1, state,
+            _make_move_xor, _is_valid_nonzero_walk,
+            undo_move=_undo_move_xor,
         )
-        assert isinstance((config, regs), tuple)
+        assert isinstance(result, tuple)
+        assert len(result) == 2
 
     def test_config_type(self):
         """First element is WalkConfig."""

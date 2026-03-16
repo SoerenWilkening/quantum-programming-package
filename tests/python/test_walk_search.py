@@ -20,6 +20,7 @@ from qiskit import transpile
 from qiskit_aer import AerSimulator
 
 import quantum_language as ql
+from quantum_language._gates import emit_h
 from quantum_language.walk_core import WalkConfig
 from quantum_language.walk_operators import walk_step
 from quantum_language.walk_registers import WalkRegisters
@@ -233,10 +234,12 @@ class TestWalkReturnType:
     def test_returns_tuple(self):
         """walk() returns a 2-tuple."""
         _init_circuit()
-        config, regs, state = _walk_with_state(
-            lambda s: s == 0, max_depth=1, num_moves=1,
+        state = ql.qint(0, width=2)
+        result = walk(
+            lambda s: s == 0, 1, 1, state,
+            _make_move_xor, _is_valid_nonzero,
+            undo_move=_undo_move_xor,
         )
-        result = (config, regs)
         assert isinstance(result, tuple)
         assert len(result) == 2
 
@@ -328,6 +331,17 @@ class TestWalkReturnType:
             lambda s: s == 0, 1, 1, state, _make_move_xor, fn,
         )
         assert config.is_valid is fn
+
+    def test_undo_move_passed_through(self):
+        """undo_move parameter is passed to config."""
+        fn = lambda s, m: None
+        _init_circuit()
+        state = ql.qint(0, width=1)
+        config, _ = walk(
+            lambda s: s == 0, 1, 1, state, _make_move_xor,
+            _is_valid_nonzero, undo_move=fn,
+        )
+        assert config.undo_move is fn
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +435,84 @@ class TestQuantumMarkingIntegration:
         norm = np.linalg.norm(sv)
         assert abs(norm - 1.0) < 1e-6, (
             f"Walk step without marking should preserve norm, got {norm}"
+        )
+
+    def test_marking_changes_walk_dynamics(self):
+        """Marking changes the walk operator vs the unmarked walk.
+
+        The all-marked walk step (is_marked returns physical |1> via
+        gate-level emit_x) acts as identity: root probability stays
+        at 1.0 because diffusion is suppressed.  Without marking,
+        the walk step applies diffusion normally.
+
+        To prove the operator differs, we verify that (a) the
+        all-marked step truly produces identity (root prob = 1.0)
+        and (b) the marked and unmarked paths produce different QASM
+        (different gate sequences).  Together these confirm that the
+        marking predicate is wired into the walk operator correctly.
+
+        Qubits: 2 height + 1 branch + 1 count + 2 state + ancillae <= 17
+        """
+        from quantum_language._gates import emit_x
+
+        # All-marked walk step (identity): root prob should stay 1.0.
+        _init_circuit()
+        state_m = ql.qint(0, width=2)
+        # Gate-level marking: always |1>, invisible to DSL tracker
+        mark_flag = ql.qbool()
+        emit_x(int(mark_flag.qubits[63]))
+
+        config_m = WalkConfig(
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            is_marked=lambda s: mark_flag,
+            state=state_m,
+        )
+        regs_m = WalkRegisters(config_m)
+        regs_m.init_root()
+        walk_step(config_m, regs_m)
+
+        _keep_m = [regs_m, state_m, mark_flag]
+        qasm_marked = ql.to_openqasm()
+        sv_marked = _simulate_statevector(qasm_marked)
+
+        h_root_m = regs_m.height_qubit(config_m.max_depth)
+        flag_qubit_m = int(mark_flag.qubits[63])
+        # Initial state: h_root=|1>, mark_flag=|1>, state=|00>
+        initial_idx = (1 << h_root_m) | (1 << flag_qubit_m)
+        marked_root_prob = float(abs(sv_marked[initial_idx]) ** 2)
+
+        assert abs(marked_root_prob - 1.0) < 1e-6, (
+            f"All-marked walk should be identity, "
+            f"root_prob={marked_root_prob}"
+        )
+
+        # Unmarked walk step: no is_marked, diffusion runs normally.
+        _init_circuit()
+        state_u = ql.qint(0, width=2)
+        config_u = WalkConfig(
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            state=state_u,
+        )
+        regs_u = WalkRegisters(config_u)
+        regs_u.init_root()
+        walk_step(config_u, regs_u)
+
+        _keep_u = [regs_u, state_u]
+        qasm_unmarked = ql.to_openqasm()
+        sv_unmarked = _simulate_statevector(qasm_unmarked)
+        assert abs(np.linalg.norm(sv_unmarked) - 1.0) < 1e-6
+
+        # The two circuits must differ because the marked path wraps
+        # the diffusion rotations with marking controls.
+        assert qasm_marked != qasm_unmarked, (
+            "Marked and unmarked walks should produce different QASM "
+            "(marking adds control gates)"
         )
 
     def test_walk_returns_usable_config_and_registers(self):

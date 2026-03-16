@@ -135,6 +135,9 @@ def walk(is_marked, max_depth, num_moves, state, make_move, is_valid,
         state by applying a move.
     is_valid : callable
         Quantum predicate ``is_valid(state)`` returning ``qbool``.
+    undo_move : callable, optional
+        Explicit inverse of ``make_move``.  If not provided, the
+        diffusion falls back to ``make_move.adjoint``.
     max_iterations : int, optional
         Maximum walk step iterations (>= 1).  Auto-computed from
         tree size as ``ceil(sqrt(T / n))`` if not provided.
