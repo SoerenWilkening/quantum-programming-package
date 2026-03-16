@@ -20,7 +20,6 @@ from qiskit import transpile
 from qiskit_aer import AerSimulator
 
 import quantum_language as ql
-from quantum_language._gates import emit_h
 from quantum_language.walk_core import WalkConfig
 from quantum_language.walk_operators import walk_step
 from quantum_language.walk_registers import WalkRegisters

@@ -459,13 +459,14 @@ class TestPartialMarking:
         )
 
     def test_partial_differs_from_all_marked(self):
-        """Partial marking produces different behavior than all-marked.
+        """Partial marking produces different circuit than all-marked.
 
         All-marked is identity: after walk_step, the root probability
-        should still be 1.0 (no amplitude leaks away).
+        stays at 1.0 (diffusion suppressed).
 
-        Partial marking applies diffusion to unmarked components,
-        so the root probability should drop below 1.0.
+        Partial marking (state in superposition, is_marked = state == 0)
+        produces an entangled marking qbool, so the diffusion fires on
+        unmarked components and the circuit differs from all-marked.
         """
         # All-marked (identity) -- verify root prob stays 1.0
         _init_circuit()
@@ -491,7 +492,8 @@ class TestPartialMarking:
         sv_before_a = _simulate_statevector(ql.to_openqasm())
         walk_step(config_a, regs_a)
         _keep_a = [regs_a, state_a, flag_a]
-        sv_after_a = _simulate_statevector(ql.to_openqasm())
+        qasm_all_marked = ql.to_openqasm()
+        sv_after_a = _simulate_statevector(qasm_all_marked)
 
         # All-marked walk step is identity: the initial basis state
         # amplitude should be unchanged.
@@ -503,8 +505,7 @@ class TestPartialMarking:
         )
 
         # Partial marking -- with state in superposition, some
-        # components are unmarked and get diffusion applied.  Both
-        # norms should be 1.0.
+        # components are unmarked and get diffusion applied.
         _init_circuit()
         state_p = ql.qint(0, width=2)
         emit_h(int(state_p.qubits[62]))
@@ -522,10 +523,19 @@ class TestPartialMarking:
         regs_p.init_root()
         walk_step(config_p, regs_p)
         _keep_p = [regs_p, state_p]
-        sv_partial = _simulate_statevector(ql.to_openqasm())
+        qasm_partial = ql.to_openqasm()
+        sv_partial = _simulate_statevector(qasm_partial)
         norm_partial = np.linalg.norm(sv_partial)
         assert abs(norm_partial - 1.0) < 1e-6, (
             f"Partial marking should preserve norm, got {norm_partial}"
+        )
+
+        # The two circuits must differ: all-marked uses a constant
+        # marking qubit (emit_x) while partial uses an entangled
+        # comparison result, producing different gate sequences.
+        assert qasm_all_marked != qasm_partial, (
+            "Partial marking should produce a different circuit than "
+            "all-marked (different marking qbool wiring)"
         )
 
     def test_partial_marking_double_step_preserves_norm(self):
