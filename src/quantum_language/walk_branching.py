@@ -218,10 +218,12 @@ def _emit_multi_controlled_x(target_qubit, ctrl_qubits):
         with ctrl:
             _flip_all(target_wrapper)
         return
-    from ._gates import emit_h, emit_mcz
-    emit_h(target_qubit)
-    emit_mcz(target_qubit, ctrl_qubits)
-    emit_h(target_qubit)
+    # Build combined qbool via & chain of all control qubits
+    combined = _make_qbool_wrapper(ctrl_qubits[0])
+    for cq in ctrl_qubits[1:]:
+        combined = combined & _make_qbool_wrapper(cq)
+    with combined:
+        target_wrapper ^= 1
 
 
 # ------------------------------------------------------------------
