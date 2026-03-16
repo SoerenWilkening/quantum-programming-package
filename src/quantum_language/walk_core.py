@@ -49,6 +49,8 @@ def branch_width(num_moves):
     ValueError
         If *num_moves* < 1.
     """
+    if not isinstance(num_moves, int):
+        raise TypeError(f"num_moves must be an int, got {type(num_moves).__name__}")
     if num_moves < 1:
         raise ValueError(f"num_moves must be >= 1, got {num_moves}")
     if num_moves == 1:
@@ -74,9 +76,13 @@ def count_width(num_moves):
 
     Raises
     ------
+    TypeError
+        If *num_moves* is not an int.
     ValueError
         If *num_moves* < 1.
     """
+    if not isinstance(num_moves, int):
+        raise TypeError(f"num_moves must be an int, got {type(num_moves).__name__}")
     if num_moves < 1:
         raise ValueError(f"num_moves must be >= 1, got {num_moves}")
     return math.ceil(math.log2(num_moves + 1))
@@ -122,7 +128,10 @@ def montanaro_cascade_angles(d):
     theta_k(d) = 2 * arctan(sqrt(1 / (d - 1 - k)))  for k = 0 .. d - 2
 
     These rotations, applied sequentially to the branch register qubits,
-    produce a uniform superposition over *d* states.
+    produce the amplitude split required by the Montanaro diffusion
+    operator.  The resulting distribution is generally non-uniform; each
+    state receives amplitude according to the walk's stationary
+    distribution.
 
     Parameters
     ----------
@@ -143,9 +152,8 @@ def montanaro_cascade_angles(d):
         raise ValueError(f"d must be >= 1, got {d}")
     angles = []
     for k in range(d - 1):
-        remaining = d - 1 - k
-        if remaining > 0:
-            angles.append(2.0 * math.atan(math.sqrt(1.0 / remaining)))
+        remaining = d - 1 - k  # ranges from d-1 down to 1, always > 0
+        angles.append(2.0 * math.atan(math.sqrt(1.0 / remaining)))
     return angles
 
 
@@ -254,6 +262,14 @@ class WalkConfig:
     hw: int = field(init=False)
 
     def __post_init__(self):
+        if not isinstance(self.max_depth, int):
+            raise TypeError(
+                f"max_depth must be an int, got {type(self.max_depth).__name__}"
+            )
+        if not isinstance(self.num_moves, int):
+            raise TypeError(
+                f"num_moves must be an int, got {type(self.num_moves).__name__}"
+            )
         if self.max_depth < 1:
             raise ValueError(
                 f"max_depth must be >= 1, got {self.max_depth}"

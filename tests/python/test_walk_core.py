@@ -50,6 +50,18 @@ class TestBranchWidth:
         with pytest.raises(ValueError, match="num_moves must be >= 1"):
             branch_width(-1)
 
+    def test_rejects_float(self):
+        with pytest.raises(TypeError, match="num_moves must be an int"):
+            branch_width(2.5)
+
+    def test_rejects_string(self):
+        with pytest.raises(TypeError, match="num_moves must be an int"):
+            branch_width("2")
+
+    def test_rejects_none(self):
+        with pytest.raises(TypeError, match="num_moves must be an int"):
+            branch_width(None)
+
 
 # ------------------------------------------------------------------
 # count_width
@@ -84,6 +96,14 @@ class TestCountWidth:
     def test_invalid_zero(self):
         with pytest.raises(ValueError, match="num_moves must be >= 1"):
             count_width(0)
+
+    def test_rejects_float(self):
+        with pytest.raises(TypeError, match="num_moves must be an int"):
+            count_width(2.5)
+
+    def test_rejects_string(self):
+        with pytest.raises(TypeError, match="num_moves must be an int"):
+            count_width("3")
 
 
 # ------------------------------------------------------------------
@@ -233,6 +253,22 @@ class TestWalkConfig:
     def test_invalid_moves_negative(self):
         with pytest.raises(ValueError, match="num_moves must be >= 1"):
             WalkConfig(max_depth=3, num_moves=-5)
+
+    def test_rejects_float_depth(self):
+        with pytest.raises(TypeError, match="max_depth must be an int"):
+            WalkConfig(max_depth=2.5, num_moves=2)
+
+    def test_rejects_float_moves(self):
+        with pytest.raises(TypeError, match="num_moves must be an int"):
+            WalkConfig(max_depth=2, num_moves=3.0)
+
+    def test_rejects_string_depth(self):
+        with pytest.raises(TypeError, match="max_depth must be an int"):
+            WalkConfig(max_depth="2", num_moves=2)
+
+    def test_rejects_none_moves(self):
+        with pytest.raises(TypeError, match="num_moves must be an int"):
+            WalkConfig(max_depth=2, num_moves=None)
 
     def test_optional_callbacks_none(self):
         cfg = WalkConfig(max_depth=2, num_moves=2)
