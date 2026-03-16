@@ -477,7 +477,7 @@ class TestQuantumMarkingIntegration:
         qasm_marked = ql.to_openqasm()
         sv_marked = _simulate_statevector(qasm_marked)
 
-        h_root_m = regs_m.height_qubit(config_m.max_depth)
+        h_root_m = int(regs_m.height_qubit(config_m.max_depth).qubits[63])
         flag_qubit_m = int(mark_flag.qubits[63])
         # Initial state: h_root=|1>, mark_flag=|1>, state=|00>
         initial_idx = (1 << h_root_m) | (1 << flag_qubit_m)

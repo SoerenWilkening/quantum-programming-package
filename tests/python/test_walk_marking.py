@@ -203,7 +203,7 @@ class TestMarkedNodeGetsIdentity:
         # Root qubit h[max_depth] and marking flag qubit should be |1>,
         # all other walk register qubits |0>.  The initial state
         # amplitudes should be unchanged.
-        h_root = regs.height_qubit(config.max_depth)
+        h_root = int(regs.height_qubit(config.max_depth).qubits[63])
         flag_qubit = int(flag.qubits[63])
         initial_idx = (1 << h_root) | (1 << flag_qubit)
         root_prob = float(abs(sv[initial_idx]) ** 2)
@@ -239,7 +239,7 @@ class TestMarkedNodeGetsIdentity:
         qasm = ql.to_openqasm()
         sv = _simulate_statevector(qasm)
 
-        h_root = regs.height_qubit(config.max_depth)
+        h_root = int(regs.height_qubit(config.max_depth).qubits[63])
         flag_qubit = int(flag.qubits[63])
         initial_idx = (1 << h_root) | (1 << flag_qubit)
         root_prob = float(abs(sv[initial_idx]) ** 2)
@@ -271,7 +271,7 @@ class TestMarkedNodeGetsIdentity:
         qasm = ql.to_openqasm()
         sv = _simulate_statevector(qasm)
 
-        h_root = regs.height_qubit(config.max_depth)
+        h_root = int(regs.height_qubit(config.max_depth).qubits[63])
         flag_qubit = int(flag.qubits[63])
         initial_idx = (1 << h_root) | (1 << flag_qubit)
         root_prob = float(abs(sv[initial_idx]) ** 2)
@@ -485,7 +485,7 @@ class TestPartialMarking:
         regs_a = WalkRegisters(config_a)
         regs_a.init_root()
 
-        h_root_a = regs_a.height_qubit(config_a.max_depth)
+        h_root_a = int(regs_a.height_qubit(config_a.max_depth).qubits[63])
         flag_qubit_a = int(flag_a.qubits[63])
         initial_idx_a = (1 << h_root_a) | (1 << flag_qubit_a)
 
@@ -730,7 +730,7 @@ class TestApplyLocalDiffusionDispatch:
         qasm = ql.to_openqasm()
         sv = _simulate_statevector(qasm)
 
-        h_root = regs.height_qubit(config.max_depth)
+        h_root = int(regs.height_qubit(config.max_depth).qubits[63])
         flag_qubit = int(flag.qubits[63])
         initial_idx = (1 << h_root) | (1 << flag_qubit)
         root_prob = float(abs(sv[initial_idx]) ** 2)
@@ -811,7 +811,7 @@ class TestMarkingWithVariableBranching:
         qasm = ql.to_openqasm()
         sv = _simulate_statevector(qasm)
 
-        h_root = regs.height_qubit(config.max_depth)
+        h_root = int(regs.height_qubit(config.max_depth).qubits[63])
         flag_qubit = int(flag.qubits[63])
         initial_idx = (1 << h_root) | (1 << flag_qubit)
         root_prob = float(abs(sv[initial_idx]) ** 2)

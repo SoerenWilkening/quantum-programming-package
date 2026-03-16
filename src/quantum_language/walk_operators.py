@@ -68,6 +68,9 @@ def _apply_local_diffusion(config, registers, depth):
     quantumly: marked nodes receive identity (D_x = I) while unmarked
     nodes receive the standard diffusion operator.
 
+    Height control uses the qbool from ``registers.height_qubit(depth)``.
+    The child height qbool is passed directly as the parent flag.
+
     Parameters
     ----------
     config : WalkConfig
@@ -82,12 +85,9 @@ def _apply_local_diffusion(config, registers, depth):
 
     is_root = (depth == config.max_depth)
 
-    from .walk_branching import _make_qbool_wrapper
-
-    h_qubit_idx = registers.height_qubit(depth)
-    h_child_idx = registers.height_qubit(depth - 1)
+    h_qbool = registers.height_qubit(depth)
+    h_child_qbool = registers.height_qubit(depth - 1)
     branch_reg = registers.branch_at(depth - 1)
-    parent_flag = _make_qbool_wrapper(h_child_idx)
 
     if config.is_marked is not None and config.state is not None:
         # Quantum marking with variable branching:
@@ -102,15 +102,15 @@ def _apply_local_diffusion(config, registers, depth):
         _flip_all(marked)
         marking_qubit = int(marked.qubits[63])
         walk_diffusion_with_regs(
-            config, parent_flag, branch_reg,
-            is_root=is_root, control_qubit=h_qubit_idx,
+            config, h_child_qbool, branch_reg,
+            is_root=is_root, control_qbool=h_qbool,
             marking_qubit=marking_qubit,
         )
         _flip_all(marked)
     else:
         walk_diffusion_with_regs(
-            config, parent_flag, branch_reg,
-            is_root=is_root, control_qubit=h_qubit_idx,
+            config, h_child_qbool, branch_reg,
+            is_root=is_root, control_qbool=h_qbool,
         )
 
 
@@ -240,9 +240,11 @@ def verify_disjointness(config, registers):
     if config.max_depth % 2 == 0:
         r_b_depths.add(config.max_depth)
 
-    # Map to physical qubit indices
-    r_a_qubits = {registers.height_qubit(d) for d in r_a_depths}
-    r_b_qubits = {registers.height_qubit(d) for d in r_b_depths}
+    # Map to physical qubit indices (extract int from qbool)
+    r_a_qubits = {int(registers.height_qubit(d).qubits[63])
+                   for d in r_a_depths}
+    r_b_qubits = {int(registers.height_qubit(d).qubits[63])
+                   for d in r_b_depths}
 
     overlap = r_a_qubits & r_b_qubits
     return {

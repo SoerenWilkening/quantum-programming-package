@@ -190,7 +190,8 @@ class TestInitRoot:
 
         # The root qubit should be |1>. Find the statevector index
         # where only the root height qubit is set.
-        root_qubit = regs.height_qubit(cfg.max_depth)
+        root_qbool = regs.height_qubit(cfg.max_depth)
+        root_qubit = int(root_qbool.qubits[63])
         expected_idx = 1 << root_qubit
         prob = abs(sv[expected_idx]) ** 2
         assert prob > 0.999, (
@@ -220,7 +221,8 @@ class TestInitRoot:
         assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
 
         sv = _simulate_statevector(qasm)
-        root_qubit = regs.height_qubit(cfg.max_depth)
+        root_qbool = regs.height_qubit(cfg.max_depth)
+        root_qubit = int(root_qbool.qubits[63])
         expected_idx = 1 << root_qubit
         prob = abs(sv[expected_idx]) ** 2
         assert prob > 0.999
@@ -319,22 +321,33 @@ class TestBranchAt:
 
 
 class TestHeightQubit:
-    """Verify height_qubit() returns valid physical qubit indices."""
+    """Verify height_qubit() returns qbool objects."""
 
-    def test_height_qubit_returns_int(self):
+    def test_height_qubit_returns_qbool(self):
+        """height_qubit() returns qbool, not int."""
+        from quantum_language.qbool import qbool
         _init_circuit()
         cfg = WalkConfig(max_depth=2, num_moves=2)
         regs = WalkRegisters(cfg)
         for d in range(cfg.hw):
             q = regs.height_qubit(d)
-            assert isinstance(q, int)
+            assert isinstance(q, qbool)
+
+    def test_height_qubit_is_same_object(self):
+        """height_qubit(d) returns the same qbool as height[d]."""
+        _init_circuit()
+        cfg = WalkConfig(max_depth=2, num_moves=2)
+        regs = WalkRegisters(cfg)
+        for d in range(cfg.hw):
+            assert regs.height_qubit(d) is regs.height[d]
 
     def test_height_qubits_unique(self):
         """All height qubits have distinct physical indices."""
         _init_circuit()
         cfg = WalkConfig(max_depth=3, num_moves=2)
         regs = WalkRegisters(cfg)
-        qubits = [regs.height_qubit(d) for d in range(cfg.hw)]
+        qubits = [int(regs.height_qubit(d).qubits[63])
+                   for d in range(cfg.hw)]
         assert len(set(qubits)) == cfg.hw
 
     def test_height_qubit_negative_raises(self):

@@ -153,7 +153,7 @@ class WalkRegisters:
         return self.branches[depth]
 
     def height_qubit(self, depth):
-        """Return the physical qubit index for the height bit at a given depth.
+        """Return the qbool for the height bit at a given depth.
 
         Parameters
         ----------
@@ -162,8 +162,9 @@ class WalkRegisters:
 
         Returns
         -------
-        int
-            Physical qubit index for ``height[depth]``.
+        qbool
+            The height qbool at ``depth``.  Can be used directly in
+            ``with`` blocks for height-controlled operations.
 
         Raises
         ------
@@ -183,7 +184,7 @@ class WalkRegisters:
             raise IndexError(
                 f"depth must be in [0, {self.config.max_depth}], got {depth}"
             )
-        return int(self.height[depth].qubits[63])
+        return self.height[depth]
 
     def current_depth(self):
         """Return the list of height qbools for use in controlled operations.
