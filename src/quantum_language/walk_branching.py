@@ -10,18 +10,19 @@ Algorithm
 For each possible count value ``c`` in ``1 .. num_moves``, conditioned on
 ``count_reg == c``:
 
-1. Apply Ry(phi(c)) to a parent-flag qubit, splitting amplitude between
-   the parent component (cos(phi/2) = 1/sqrt(c+1)) and the children
-   component (sin(phi/2) = sqrt(c)/sqrt(c+1)).
+1. Apply Ry(phi(c)) to a dedicated parent-flag qubit, splitting amplitude
+   between the parent component (cos(phi/2) = 1/sqrt(c+1)) and the
+   children component (sin(phi/2) = sqrt(c)/sqrt(c+1)).
 
 2. Apply cascade rotations to distribute the children amplitude uniformly
    among ``c`` branch register values.  The cascade uses balanced binary
    splitting with angles theta_k(c) = 2*arcsin(sqrt(right_count/total))
    at each split.
 
-After the call, the branch register holds a uniform superposition over
-move indices 0..c-1 (with parent component on branch=0 when the parent
-flag is |0>).  Invalid moves (indices >= c) receive zero amplitude.
+After the call, the parent-flag qubit and branch register together encode
+the superposition: parent flag |0> gives the parent/self component, and
+parent flag |1> combined with branch register values 0..c-1 gives the
+children components.  Invalid moves (indices >= c) receive zero amplitude.
 
 ``unbranch`` reverses the entire operation.
 
@@ -35,6 +36,7 @@ import math
 
 from ._gates import emit_ry, emit_x
 from .walk_core import WalkConfig, montanaro_phi
+from .qbool import qbool as new_qbool
 
 
 # ------------------------------------------------------------------
@@ -269,11 +271,40 @@ def _emit_cascade_multi_controlled(branch_reg, ops, ctrl_qubits, sign=1):
 
 
 # ------------------------------------------------------------------
+# BranchState: holds branching ancillae for correct inversion
+# ------------------------------------------------------------------
+
+
+class BranchState:
+    """Holds the quantum ancillae created during branching.
+
+    The multi-controlled rotations in the branching step create
+    entanglement via V-gate decomposition involving the comparison
+    qubits.  For the inverse (unbranch) to undo this exactly, it
+    must reuse the *same* physical comparison qubits.  This object
+    carries them from ``branch_to_children`` to ``unbranch``.
+
+    Attributes
+    ----------
+    parent_flag : qbool
+        Dedicated parent-flag qubit.
+    cond_map : dict
+        Maps count value c -> qbool comparison result (count_reg == c).
+    """
+
+    __slots__ = ("parent_flag", "cond_map")
+
+    def __init__(self, parent_flag, cond_map):
+        self.parent_flag = parent_flag
+        self.cond_map = cond_map
+
+
+# ------------------------------------------------------------------
 # Public API: branch_to_children / unbranch
 # ------------------------------------------------------------------
 
 
-def branch_to_children(config, count_reg, branch_reg):
+def branch_to_children(config, count_reg, branch_reg, parent_flag=None):
     """Create uniform superposition over valid move indices in branch register.
 
     Given ``count_reg`` holding the number of valid children (computed by
@@ -283,15 +314,16 @@ def branch_to_children(config, count_reg, branch_reg):
     - For each count value ``c`` (1 .. num_moves), conditioned on
       ``count_reg == c``:
 
-      1. Ry(phi(c)) on the parent-flag qubit (branch MSB area), splitting
+      1. Ry(phi(c)) on a dedicated parent-flag qubit, splitting
          amplitude 1/sqrt(c+1) to parent and sqrt(c)/sqrt(c+1) to children.
 
       2. Cascade rotations on the branch register to distribute the children
          amplitude uniformly among values 0 .. c-1.
 
-    After the call, the branch register holds a superposition where each
-    valid move index has equal amplitude, and the parent/self component
-    has amplitude 1/sqrt(d+1) for d valid children.
+    After the call, the parent-flag qubit encodes whether we stay at the
+    parent (|0>) or descend to a child (|1>), and the branch register
+    holds the child index.  For d valid children, the parent component
+    has amplitude 1/sqrt(d+1).
 
     Parameters
     ----------
@@ -301,6 +333,15 @@ def branch_to_children(config, count_reg, branch_reg):
         Count register holding the number of valid children.
     branch_reg : qint
         Branch register (initially |0>) to receive the superposition.
+    parent_flag : qbool, optional
+        Dedicated parent-flag qubit.  If None, one is allocated
+        automatically.
+
+    Returns
+    -------
+    BranchState
+        Object holding the parent-flag qubit and comparison ancillae.
+        Must be passed to :func:`unbranch` for correct inversion.
 
     Raises
     ------
@@ -314,44 +355,64 @@ def branch_to_children(config, count_reg, branch_reg):
     num_moves = config.num_moves
     bw = branch_reg.width
 
+    # Allocate parent-flag qubit if not provided
+    if parent_flag is None:
+        parent_flag = new_qbool()
+
     # Pre-compute angles and cascade ops for each possible count value
     angle_data = _precompute_angle_data(num_moves, bw)
 
-    # For each possible count value c = 1..num_moves, conditioned on
-    # count_reg == c, apply the phi rotation and cascade.
+    # Compute all count comparisons up front AND keep the qbool objects
+    # alive.  The framework's automatic uncomputation reverses comparison
+    # gates when a qbool goes out of scope, so we must retain references
+    # to all comparison results until after the controlled rotations.
+    # The comparison qbools are also returned in the BranchState so that
+    # unbranch can reuse the same physical qubits.
     cond_map = {}
     for c in range(1, num_moves + 1):
-        cond = (count_reg == c)
-        cond_map[c] = int(cond.qubits[63])
+        cond_map[c] = (count_reg == c)
+
+    parent_qubit = int(parent_flag.qubits[63])
 
     for c in range(1, num_moves + 1):
-        cond_qubit = cond_map[c]
+        cond_qubit = int(cond_map[c].qubits[63])
         ctrl_qubits = [cond_qubit]
         phi = angle_data[c]["phi"]
         cascade_ops = angle_data[c]["cascade_ops"]
 
-        # Step 1: Parent-children split via Ry(phi) on branch MSB
-        # The branch register MSB serves as the parent flag:
-        # |0> = parent component, |1> = children component
+        # Step 1: Parent-children split via Ry(phi) on parent-flag qubit.
+        # The parent flag is a SEPARATE qubit from the branch register.
         # After Ry(phi), amplitude splits as:
         #   cos(phi/2) on |0> = 1/sqrt(c+1)  (parent)
         #   sin(phi/2) on |1> = sqrt(c)/sqrt(c+1)  (children)
-        parent_qubit = int(branch_reg.qubits[64 - bw])
         _emit_multi_controlled_ry(parent_qubit, phi, ctrl_qubits)
 
-        # Step 2: Cascade to distribute children amplitude uniformly
+        # Step 2: Cascade to distribute amplitude uniformly among branch
+        # register values 0..c-1.  The cascade is controlled only on the
+        # count comparison (not on parent_flag).  Both the parent and
+        # children components share the same branch register encoding;
+        # the parent/child distinction lives on the parent_flag qubit.
+        # This matches Montanaro's formulation where the cascade and
+        # its inverse bracket the S_0 reflection.
         if c > 1 and cascade_ops:
             _emit_cascade_multi_controlled(
-                branch_reg, cascade_ops, ctrl_qubits, sign=1
+                branch_reg, cascade_ops, ctrl_qubits, sign=1,
             )
 
+    return BranchState(parent_flag, cond_map)
 
-def unbranch(config, count_reg, branch_reg):
+
+def unbranch(config, count_reg, branch_reg, branch_state=None):
     """Inverse of :func:`branch_to_children`.
 
     Reverses the branching rotations, restoring the branch register to
-    |0> and uncomputing the parent-flag split.  Applied in reverse order
-    of count values, with inverted rotation angles.
+    |0> and the parent-flag qubit to |0>.  Applied in reverse order of
+    count values, with inverted rotation angles.
+
+    The ``branch_state`` carries the comparison qbools and parent-flag
+    from the forward pass.  The inverse **must** use the same physical
+    comparison qubits because the multi-controlled V-gate decomposition
+    creates entanglement involving those qubits.
 
     Parameters
     ----------
@@ -361,35 +422,44 @@ def unbranch(config, count_reg, branch_reg):
         Count register holding the number of valid children.
     branch_reg : qint
         Branch register to restore to |0>.
+    branch_state : BranchState
+        State returned by :func:`branch_to_children`, carrying the
+        parent-flag qubit and comparison ancillae.
+
+    Raises
+    ------
+    ValueError
+        If ``branch_state`` is None.
     """
     _validate_branching_args(config, count_reg, branch_reg)
+    if branch_state is None:
+        raise ValueError("branch_state must not be None for unbranch")
+
+    parent_flag = branch_state.parent_flag
+    cond_map = branch_state.cond_map
 
     num_moves = config.num_moves
     bw = branch_reg.width
 
     angle_data = _precompute_angle_data(num_moves, bw)
 
-    # Recompute conditions (same comparisons as forward pass)
-    cond_map = {}
-    for c in range(1, num_moves + 1):
-        cond = (count_reg == c)
-        cond_map[c] = int(cond.qubits[63])
+    parent_qubit = int(parent_flag.qubits[63])
 
     # Reverse order of count values for inverse
     for c in reversed(range(1, num_moves + 1)):
-        cond_qubit = cond_map[c]
+        cond_qubit = int(cond_map[c].qubits[63])
         ctrl_qubits = [cond_qubit]
         phi = angle_data[c]["phi"]
         cascade_ops = angle_data[c]["cascade_ops"]
 
-        # Inverse cascade first (reverse of forward order)
+        # Inverse cascade first (reverse of forward order),
+        # controlled only on count comparison (matching forward pass).
         if c > 1 and cascade_ops:
             _emit_cascade_multi_controlled(
-                branch_reg, cascade_ops, ctrl_qubits, sign=-1
+                branch_reg, cascade_ops, ctrl_qubits, sign=-1,
             )
 
-        # Inverse phi rotation
-        parent_qubit = int(branch_reg.qubits[64 - bw])
+        # Inverse phi rotation on parent-flag qubit
         _emit_multi_controlled_ry(parent_qubit, -phi, ctrl_qubits)
 
 
