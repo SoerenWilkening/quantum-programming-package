@@ -10,14 +10,11 @@ Root node uses phi_root = 2 * arctan(sqrt(n * d)).
 Reference: Montanaro, "Quantum speedup of backtracking algorithms", 2018.
 """
 
-import math
-
 from ._gates import emit_mcz, emit_ry, emit_x, emit_z
 from .diffusion import _collect_qubits
 from .walk_branching import (
     _emit_cascade_multi_controlled,
     _emit_multi_controlled_ry,
-    _make_qbool_wrapper,
     _plan_cascade_ops,
 )
 from .walk_core import (
@@ -144,17 +141,25 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
     # Step 1: Evaluate validity for all children
     validity = _evaluate_validity(config)
 
-    # Step 2: Sum validity bits into count register
-    cw = max(1, math.ceil(math.log2(num_moves + 1)))
+    # Step 2: Sum validity bits into count register.
+    # Use controlled increment (``with v: count += 1``) instead of
+    # ``count += v`` to avoid a framework bug where ``__iadd__`` /
+    # ``__isub__`` with comparison-derived qbools produces garbage
+    # qubit indices.
+    cw = count_width(num_moves)
     count = ql.qint(0, width=cw)
     for v in validity:
-        count += v
+        with v:
+            count += 1
 
-    # Step 3: Compute count comparisons (keep alive for both passes)
-    cond_map = {}
+    # Step 3: Compute count comparisons and extract raw qubit indices.
+    # Store only the physical qubit index (int), not the live qbool,
+    # matching the pattern in the old counting_diffusion_core.
+    cond_qubits_map = {}
     for c in range(1, num_moves + 1):
         if c in angle_data:
-            cond_map[c] = (count == c)
+            cond = (count == c)
+            cond_qubits_map[c] = int(cond.qubits[63])
 
     parent_qubit = int(parent_flag.qubits[63])
 
@@ -164,8 +169,7 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
             continue
         phi = angle_data[c]["phi"]
         cascade_ops = angle_data[c]["cascade_ops"]
-        cond_qubit = int(cond_map[c].qubits[63])
-        ctrl_qubits = [cond_qubit]
+        ctrl_qubits = [cond_qubits_map[c]]
 
         if c > 1 and cascade_ops:
             _emit_cascade_multi_controlled(
@@ -182,8 +186,7 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
             continue
         phi = angle_data[c]["phi"]
         cascade_ops = angle_data[c]["cascade_ops"]
-        cond_qubit = int(cond_map[c].qubits[63])
-        ctrl_qubits = [cond_qubit]
+        ctrl_qubits = [cond_qubits_map[c]]
 
         _emit_multi_controlled_ry(parent_qubit, phi, ctrl_qubits)
         if c > 1 and cascade_ops:
@@ -191,11 +194,10 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
                 branch_reg, cascade_ops, ctrl_qubits, sign=1,
             )
 
-    # Step 7: Uncompute count register
+    # Step 7: Uncompute count register (reverse controlled decrement)
     for v in reversed(validity):
-        count -= v
-
-    # Comparisons and validity will be freed by gc
+        with v:
+            count -= 1
 
 
 # ------------------------------------------------------------------

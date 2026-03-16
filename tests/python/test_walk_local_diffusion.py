@@ -541,13 +541,10 @@ class TestVariableBranching:
         """After variable diffusion with valid children, parent_flag
         should be in superposition (non-trivial amplitude distribution).
 
-        state=1, num_moves=1, move_0: 1^1=0 (invalid via nonzero check).
-        So count=0, no rotations applied, parent_flag stays |0>.
-
         state=2, move_0: 2^1=3 (valid). count=1, rotation applied.
         """
         _init_circuit()
-        state = ql.qint(2, width=2)
+        state = ql.qint(2, width=3)
         num_moves = 1
         bw = branch_width(num_moves)
         pf = ql.qbool()
@@ -574,9 +571,84 @@ class TestVariableBranching:
 
         # With state=2 and nonzero check, move 0 gives 2^1=3 (nonzero=valid)
         # So count=1. The diffusion should create amplitude on parent_flag.
-        # We just verify the diffusion ran (state is not all-|0> on parent_flag).
         total_prob = pf_probs.get(0, 0.0) + pf_probs.get(1, 0.0)
         assert abs(total_prob - 1.0) < 1e-6
+
+    def test_variable_diffusion_num_moves_2(self):
+        """Variable diffusion works with num_moves=2.
+
+        state=0, is_valid=nonzero:
+        move 0: 0^1=1 (valid)
+        move 1: 0^2=2 (valid)
+        count=2, both children valid.
+        """
+        _init_circuit()
+        state = ql.qint(0, width=2)
+
+        walk_diffusion(
+            state, _make_move_xor, _is_valid_nonzero, 2,
+            undo_move=_undo_move_xor,
+        )
+
+        state_start = state.allocated_start
+        _keepalive = [state]
+        qasm = ql.to_openqasm()
+        nq = _get_num_qubits(qasm)
+        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+
+        # State should be preserved (counting apply-check-undo is clean)
+        extracted = _simulate_and_extract(qasm, nq, state_start, state.width)
+        assert extracted == 0, (
+            f"State should be preserved at 0, got {extracted}"
+        )
+
+    def test_variable_diffusion_num_moves_2_partial_validity(self):
+        """Variable diffusion with num_moves=2, partial validity.
+
+        state=1, is_valid=nonzero:
+        move 0: 1^1=0 (invalid, zero)
+        move 1: 1^2=3 (valid, nonzero)
+        count=1.
+        """
+        _init_circuit()
+        state = ql.qint(1, width=2)
+
+        walk_diffusion(
+            state, _make_move_xor, _is_valid_nonzero, 2,
+            undo_move=_undo_move_xor,
+        )
+
+        state_start = state.allocated_start
+        _keepalive = [state]
+        qasm = ql.to_openqasm()
+        nq = _get_num_qubits(qasm)
+        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+
+        extracted = _simulate_and_extract(qasm, nq, state_start, state.width)
+        assert extracted == 1, (
+            f"State should be preserved at 1, got {extracted}"
+        )
+
+    def test_variable_diffusion_num_moves_2_qubit_indices_sane(self):
+        """Variable diffusion with num_moves=2 produces sane qubit indices.
+
+        Regression test: previously count -= v with comparison-derived
+        qbools produced garbage qubit indices (32000+ qubits).
+        """
+        _init_circuit()
+        state = ql.qint(0, width=2)
+
+        walk_diffusion(
+            state, _make_move_xor, _is_valid_nonzero, 2,
+            undo_move=_undo_move_xor,
+        )
+
+        _keepalive = [state]
+        qasm = ql.to_openqasm()
+        nq = _get_num_qubits(qasm)
+        assert nq < 100, (
+            f"Circuit uses {nq} qubits -- garbage qubit indices detected"
+        )
 
 
 # ---------------------------------------------------------------------------
