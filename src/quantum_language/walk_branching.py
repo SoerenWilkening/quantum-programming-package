@@ -34,7 +34,7 @@ References
 
 import math
 
-from .diffusion import _flip_all
+from .diffusion import _flip_all, _qubit_index
 from .walk_core import WalkConfig, montanaro_phi
 from .qbool import qbool as new_qbool
 
@@ -56,6 +56,26 @@ def _make_qbool_wrapper(qubit_idx):
     arr = np.zeros(64, dtype=np.uint32)
     arr[63] = qubit_idx
     return qbool(create_new=False, bit_list=arr)
+
+
+def _wrap_qbool(q):
+    """Create a non-owning qbool wrapper for an existing qbool.
+
+    Extracts the physical qubit index and creates a lightweight wrapper
+    so that operations on the wrapper do not trigger uncomputation of
+    the original qbool.
+
+    Parameters
+    ----------
+    q : qbool
+        Source qbool to wrap.
+
+    Returns
+    -------
+    qbool
+        Non-owning wrapper backed by the same physical qubit.
+    """
+    return _make_qbool_wrapper(_qubit_index(q))
 
 
 # ------------------------------------------------------------------
@@ -155,24 +175,24 @@ def _plan_cascade_recursive(d, w, bit_offset, ops, control_stack):
 
 
 # ------------------------------------------------------------------
-# Multi-controlled gate emission
+# Multi-controlled gate helpers
 # ------------------------------------------------------------------
 
 
-def _emit_multi_controlled_ry(target, angle, ctrls):
-    """Emit Ry(angle) on target controlled by multiple qubits.
+def _multi_controlled_ry(target, angle, ctrls):
+    """Apply Ry(angle) on target controlled by multiple qubits.
 
     Uses branch() for the rotation and & chains for multi-control.
     Negative angles (for inverse) are handled via X-Ry-X decomposition.
 
     Parameters
     ----------
-    target : qbool or int
-        Target qubit (qbool object or physical qubit index).
+    target : qbool
+        Target qubit (qbool object).
     angle : float
         Ry rotation angle in radians.
-    ctrls : list[qbool | int]
-        Control qubits (qbool objects or physical qubit indices).
+    ctrls : list[qbool]
+        Control qubits (qbool objects).
     """
     if abs(angle) < 1e-15:
         return
@@ -180,10 +200,9 @@ def _emit_multi_controlled_ry(target, angle, ctrls):
     prob = math.sin(angle / 2) ** 2
     inverse = angle < 0
 
-    # Normalise target to a physical qubit index, then create a
-    # lightweight wrapper so branch() operates on a non-owning view.
-    target_idx = int(target.qubits[63]) if hasattr(target, 'qubits') else int(target)
-    target_w = _make_qbool_wrapper(target_idx)
+    # Create a lightweight non-owning wrapper so branch() does not
+    # trigger uncomputation of the caller's qbool.
+    target_w = _wrap_qbool(target)
 
     if not ctrls:
         if inverse:
@@ -196,10 +215,7 @@ def _emit_multi_controlled_ry(target, angle, ctrls):
 
     # Wrap controls as lightweight qbool views to avoid cascade
     # uncomputation of the caller's qbool objects.
-    ctrl_wrappers = []
-    for c in ctrls:
-        idx = int(c.qubits[63]) if hasattr(c, 'qubits') else int(c)
-        ctrl_wrappers.append(_make_qbool_wrapper(idx))
+    ctrl_wrappers = [_wrap_qbool(c) for c in ctrls]
 
     # Build combined control via & chain
     combined = ctrl_wrappers[0]
@@ -215,35 +231,42 @@ def _emit_multi_controlled_ry(target, angle, ctrls):
             target_w.branch(prob)
 
 
-def _emit_multi_controlled_x(target_qubit, ctrl_qubits):
-    """Emit X on target controlled by multiple qubits."""
-    target_wrapper = _make_qbool_wrapper(target_qubit)
-    if not ctrl_qubits:
+def _multi_controlled_x(target, ctrls):
+    """Apply X on target controlled by multiple qubits.
+
+    Parameters
+    ----------
+    target : qbool
+        Target qubit (qbool object).
+    ctrls : list[qbool]
+        Control qubits (qbool objects).
+    """
+    target_wrapper = _wrap_qbool(target)
+    if not ctrls:
         _flip_all(target_wrapper)
         return
-    if len(ctrl_qubits) == 1:
-        ctrl = _make_qbool_wrapper(ctrl_qubits[0])
-        with ctrl:
+    ctrl_wrappers = [_wrap_qbool(c) for c in ctrls]
+    if len(ctrl_wrappers) == 1:
+        with ctrl_wrappers[0]:
             _flip_all(target_wrapper)
         return
     # Build combined qbool via & chain of all control qubits
-    combined = _make_qbool_wrapper(ctrl_qubits[0])
-    for cq in ctrl_qubits[1:]:
-        combined = combined & _make_qbool_wrapper(cq)
+    combined = ctrl_wrappers[0]
+    for cw in ctrl_wrappers[1:]:
+        combined = combined & cw
     with combined:
         _flip_all(target_wrapper)
 
 
 # ------------------------------------------------------------------
-# Cascade emission with multi-control
+# Cascade with multi-control
 # ------------------------------------------------------------------
 
 
-def _emit_cascade_multi_controlled(branch_reg, ops, ctrls, sign=1):
+def _cascade_multi_controlled(branch_reg, ops, ctrls, sign=1):
     """Execute pre-planned cascade ops with additional control qubits.
 
-    Uses qint bitwise indexing (branch_reg[i]) for cascade bit access
-    instead of raw qubit array extraction.
+    Uses qint bitwise indexing (branch_reg[i]) for cascade bit access.
 
     Parameters
     ----------
@@ -251,8 +274,8 @@ def _emit_cascade_multi_controlled(branch_reg, ops, ctrls, sign=1):
         Branch register to operate on.
     ops : list[tuple]
         Gate operations from ``_plan_cascade_ops``.
-    ctrls : list[qbool | int]
-        Control qubits (qbool objects or physical qubit indices).
+    ctrls : list[qbool]
+        Control qubits (qbool objects).
     sign : int
         +1 for forward cascade, -1 for inverse (negates angles).
     """
@@ -265,39 +288,27 @@ def _emit_cascade_multi_controlled(branch_reg, ops, ctrls, sign=1):
     def _bit_qbool(bit_off):
         return branch_reg[w - 1 - bit_off]
 
-    # Pre-compute control indices for X operations.
-    ctrl_indices = []
-    for c in ctrls:
-        ctrl_indices.append(
-            int(c.qubits[63]) if hasattr(c, 'qubits') else int(c)
-        )
-
     for op in ops:
         if op[0] == "ry":
             _, bit_off, angle = op
             target = _bit_qbool(bit_off)
-            _emit_multi_controlled_ry(target, sign * angle, ctrls)
+            _multi_controlled_ry(target, sign * angle, ctrls)
         elif op[0] == "cry":
             _, bit_off, angle, ctrl_bit_off = op
             target = _bit_qbool(bit_off)
             cascade_ctrl = _bit_qbool(ctrl_bit_off)
-            _emit_multi_controlled_ry(
+            _multi_controlled_ry(
                 target, sign * angle, ctrls + [cascade_ctrl]
             )
         elif op[0] == "x":
             _, bit_off = op
             target = _bit_qbool(bit_off)
-            _emit_multi_controlled_x(
-                int(target.qubits[63]), ctrl_indices,
-            )
+            _multi_controlled_x(target, ctrls)
         elif op[0] == "cx":
             _, target_bit_off, ctrl_bit_off = op
             target = _bit_qbool(target_bit_off)
             cascade_ctrl = _bit_qbool(ctrl_bit_off)
-            _emit_multi_controlled_x(
-                int(target.qubits[63]),
-                ctrl_indices + [int(cascade_ctrl.qubits[63])],
-            )
+            _multi_controlled_x(target, ctrls + [cascade_ctrl])
 
 
 # ------------------------------------------------------------------
@@ -412,7 +423,7 @@ def branch_to_children(config, count_reg, branch_reg, parent_flag=None):
         # After Ry(phi), amplitude splits as:
         #   cos(phi/2) on |0> = 1/sqrt(c+1)  (parent)
         #   sin(phi/2) on |1> = sqrt(c)/sqrt(c+1)  (children)
-        _emit_multi_controlled_ry(parent_flag, phi, ctrl_qbools)
+        _multi_controlled_ry(parent_flag, phi, ctrl_qbools)
 
         # Step 2: Cascade to distribute amplitude uniformly among branch
         # register values 0..c-1.  The cascade is controlled only on the
@@ -422,7 +433,7 @@ def branch_to_children(config, count_reg, branch_reg, parent_flag=None):
         # This matches Montanaro's formulation where the cascade and
         # its inverse bracket the S_0 reflection.
         if c > 1 and cascade_ops:
-            _emit_cascade_multi_controlled(
+            _cascade_multi_controlled(
                 branch_reg, cascade_ops, ctrl_qbools, sign=1,
             )
 
@@ -479,12 +490,12 @@ def unbranch(config, count_reg, branch_reg, branch_state=None):
         # Inverse cascade first (reverse of forward order),
         # controlled only on count comparison (matching forward pass).
         if c > 1 and cascade_ops:
-            _emit_cascade_multi_controlled(
+            _cascade_multi_controlled(
                 branch_reg, cascade_ops, ctrl_qbools, sign=-1,
             )
 
         # Inverse phi rotation on parent-flag qubit
-        _emit_multi_controlled_ry(parent_flag, -phi, ctrl_qbools)
+        _multi_controlled_ry(parent_flag, -phi, ctrl_qbools)
 
 
 # ------------------------------------------------------------------

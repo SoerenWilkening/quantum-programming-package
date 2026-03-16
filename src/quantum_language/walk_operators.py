@@ -18,7 +18,7 @@ References
     Theory of Computing, 2018 (arXiv:1509.02374).
 """
 
-from .diffusion import _flip_all
+from .diffusion import _flip_all, _qubit_index, _register_indices
 from .walk_core import WalkConfig
 from .walk_diffusion import _evaluate_validity, walk_diffusion_with_regs
 from .walk_registers import WalkRegisters
@@ -254,10 +254,10 @@ def verify_disjointness(config, registers):
     if config.max_depth % 2 == 0:
         r_b_depths.add(config.max_depth)
 
-    # Map to physical qubit indices (extract int from qbool)
-    r_a_qubits = {int(registers.height_qubit(d).qubits[63])
+    # Map to physical qubit indices via _qubit_index helper
+    r_a_qubits = {_qubit_index(registers.height_qubit(d))
                    for d in r_a_depths}
-    r_b_qubits = {int(registers.height_qubit(d).qubits[63])
+    r_b_qubits = {_qubit_index(registers.height_qubit(d))
                    for d in r_b_depths}
 
     overlap = r_a_qubits & r_b_qubits
@@ -349,20 +349,14 @@ class WalkOperatorState:
 
         # Height register qubits
         for h in self.registers.height:
-            all_indices.append(int(h.qubits[63]))
+            all_indices.append(_qubit_index(h))
 
         # Branch register qubits
         for br in self.registers.branches:
-            bw = br.width
-            for i in range(bw):
-                all_indices.append(int(br.qubits[64 - bw + i]))
+            all_indices.extend(_register_indices(br))
 
         # Count register qubits
-        cw = self.registers.count.width
-        for i in range(cw):
-            all_indices.append(
-                int(self.registers.count.qubits[64 - cw + i])
-            )
+        all_indices.extend(_register_indices(self.registers.count))
 
         arr = np.zeros(64, dtype=np.uint32)
         total = len(all_indices)

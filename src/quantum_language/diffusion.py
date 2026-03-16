@@ -22,6 +22,39 @@ from .qarray import qarray
 from .qint import qint
 
 
+def _qubit_index(q):
+    """Return the physical qubit index for a single-qubit (qbool) register.
+
+    Parameters
+    ----------
+    q : qbool
+        A 1-bit quantum register.
+
+    Returns
+    -------
+    int
+        Physical qubit index.
+    """
+    return int(q.qubits[63])
+
+
+def _register_indices(reg):
+    """Return the physical qubit indices for a quantum register.
+
+    Parameters
+    ----------
+    reg : qint
+        Quantum register.
+
+    Returns
+    -------
+    list[int]
+        Physical qubit indices, MSB-first order.
+    """
+    w = reg.width if hasattr(reg, "width") else reg.bits
+    return [int(reg.qubits[64 - w + i]) for i in range(w)]
+
+
 def _collect_qubits(*registers):
     """Collect qubit indices from quantum registers.
 

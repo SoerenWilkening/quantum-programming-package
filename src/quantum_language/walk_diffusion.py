@@ -9,10 +9,10 @@ Root node uses phi_root = 2 * arctan(sqrt(n * d)).
 Reference: Montanaro, "Quantum speedup of backtracking algorithms", 2018.
 """
 
-from .diffusion import _collect_qubits, _extract_qbools, _flip_all, _nested_phase_flip
+from .diffusion import _extract_qbools, _flip_all, _nested_phase_flip
 from .walk_branching import (
-    _emit_cascade_multi_controlled,
-    _emit_multi_controlled_ry,
+    _cascade_multi_controlled,
+    _multi_controlled_ry,
     _plan_cascade_ops,
 )
 from .walk_core import (
@@ -50,9 +50,10 @@ def _s0_reflection(parent_flag, branch_reg, control_qbool=None,
         If set, all operations are additionally controlled on this
         qbool (marking control for Montanaro marking).
     """
-    s0_qubits = _collect_qubits(parent_flag, branch_reg)
+    # Check if there are any qubits to reflect on.
+    bits = _extract_qbools(parent_flag, branch_reg)
 
-    if not s0_qubits:
+    if not bits:
         return
 
     # Collect external control qbools
@@ -61,9 +62,6 @@ def _s0_reflection(parent_flag, branch_reg, control_qbool=None,
         ext_ctrls.append(control_qbool)
     if marking_qbool is not None:
         ext_ctrls.append(marking_qbool)
-
-    # Extract individual qubits from parent_flag + branch_reg as qbools
-    bits = _extract_qbools(parent_flag, branch_reg)
 
     if ext_ctrls:
         # Controlled path: nest external controls around the whole
@@ -202,22 +200,20 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
         with v:
             count += 1
 
-    # Step 3: Compute count comparisons and extract raw qubit indices.
-    # Store only the physical qubit index (int), not the live qbool,
-    # matching the pattern in the old counting_diffusion_core.
+    # Step 3: Compute count comparisons as qbool objects.
+    # Keep the qbool references alive so they are not uncomputed before
+    # use in the controlled rotations.
     # (unconditional -- not controlled on marking_qbool)
-    cond_qubits_map = {}
+    cond_map = {}
     for c in range(1, num_moves + 1):
         if c in angle_data:
-            cond = (count == c)
-            cond_qubits_map[c] = int(cond.qubits[63])
+            cond_map[c] = (count == c)
 
-    parent_qubit = int(parent_flag.qubits[63])
     extra_ctrls = []
     if control_qbool is not None:
-        extra_ctrls.append(int(control_qbool.qubits[63]))
+        extra_ctrls.append(control_qbool)
     if marking_qbool is not None:
-        extra_ctrls.append(int(marking_qbool.qubits[63]))
+        extra_ctrls.append(marking_qbool)
 
     # Step 4: U_dagger (inverse state preparation)
     # (controlled on marking_qbool if set)
@@ -226,13 +222,13 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
             continue
         phi = angle_data[c]["phi"]
         cascade_ops = angle_data[c]["cascade_ops"]
-        ctrl_qubits = extra_ctrls + [cond_qubits_map[c]]
+        ctrl_qbools = extra_ctrls + [cond_map[c]]
 
         if c > 1 and cascade_ops:
-            _emit_cascade_multi_controlled(
-                branch_reg, cascade_ops, ctrl_qubits, sign=-1,
+            _cascade_multi_controlled(
+                branch_reg, cascade_ops, ctrl_qbools, sign=-1,
             )
-        _emit_multi_controlled_ry(parent_qubit, -phi, ctrl_qubits)
+        _multi_controlled_ry(parent_flag, -phi, ctrl_qbools)
 
     # Step 5: S_0 reflection
     # (controlled on marking_qbool if set)
@@ -246,12 +242,12 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
             continue
         phi = angle_data[c]["phi"]
         cascade_ops = angle_data[c]["cascade_ops"]
-        ctrl_qubits = extra_ctrls + [cond_qubits_map[c]]
+        ctrl_qbools = extra_ctrls + [cond_map[c]]
 
-        _emit_multi_controlled_ry(parent_qubit, phi, ctrl_qubits)
+        _multi_controlled_ry(parent_flag, phi, ctrl_qbools)
         if c > 1 and cascade_ops:
-            _emit_cascade_multi_controlled(
-                branch_reg, cascade_ops, ctrl_qubits, sign=1,
+            _cascade_multi_controlled(
+                branch_reg, cascade_ops, ctrl_qbools, sign=1,
             )
 
     # Step 7: Uncompute count register (reverse controlled decrement)
