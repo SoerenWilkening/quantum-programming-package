@@ -11,8 +11,6 @@ import os
 import re
 from pathlib import Path
 
-import pytest
-
 
 def _walk_module_sources():
     """Return list of (filename, content) for all walk_*.py modules."""
