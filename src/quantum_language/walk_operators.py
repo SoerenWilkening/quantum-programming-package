@@ -20,15 +20,9 @@ References
 
 import warnings
 
-from ._gates import emit_mcz, emit_ry, emit_z
 from .diffusion import _flip_all
-from .walk_branching import (
-    _emit_cascade_multi_controlled,
-    _emit_multi_controlled_ry,
-    _make_qbool_wrapper,
-)
 from .walk_core import WalkConfig
-from .walk_diffusion import _precompute_angles
+from .walk_diffusion import walk_diffusion_fixed, walk_diffusion_with_regs
 from .walk_registers import WalkRegisters
 
 
@@ -64,222 +58,23 @@ def _validate_operator_args(config, registers):
 
 
 # ------------------------------------------------------------------
-# Height-controlled local diffusion (fixed branching)
-# ------------------------------------------------------------------
-
-
-def _height_controlled_diffusion(h_qubit_idx, h_child_idx, branch_reg,
-                                  num_moves, angle_data):
-    """Apply local diffusion D_x controlled on height qubit.
-
-    All gates are controlled on h[depth] (the height qubit at the
-    current depth).  The diffusion acts on the h[depth-1] qubit
-    (child height bit) and the branch register at this level.
-
-    Implements D_x = U * S_0 * U_dagger where:
-    - U = Ry(phi) on h_child + cascade on branch_reg
-    - S_0 = phase flip on |0...0> of h_child + branch_reg
-
-    Parameters
-    ----------
-    h_qubit_idx : int
-        Physical qubit index for h[depth] (control).
-    h_child_idx : int
-        Physical qubit index for h[depth-1] (target of Ry).
-    branch_reg : qint
-        Branch register at this depth level.
-    num_moves : int
-        Branching factor (number of valid children).
-    angle_data : dict
-        Pre-computed angles from ``_precompute_angles``.
-    """
-    if num_moves < 1:
-        return  # No children -> identity
-
-    phi = angle_data[num_moves]["phi"]
-    cascade_ops = angle_data[num_moves]["cascade_ops"]
-    h_control = _make_qbool_wrapper(h_qubit_idx)
-
-    # Step A: U_dagger (inverse state preparation)
-    # Undo cascade, then undo parent-child split rotation.
-    if num_moves > 1 and cascade_ops:
-        _emit_cascade_multi_controlled(
-            branch_reg, cascade_ops, [h_qubit_idx], sign=-1,
-        )
-    with h_control:
-        emit_ry(h_child_idx, -phi)
-
-    # Step B: S_0 reflection on h_child + branch_reg subspace,
-    # controlled on h[depth].
-    #
-    # The S_0 reflection flips phase on |0...0> of (h_child, branch_reg).
-    # We need: X on all qubits, MCZ on all, X on all -- all controlled
-    # on h[depth].
-    from .diffusion import _collect_qubits
-
-    h_child_qbool = _make_qbool_wrapper(h_child_idx)
-    s0_qubits = _collect_qubits(h_child_qbool, branch_reg)
-
-    # X on all s0_qubits, controlled on h[depth]
-    with h_control:
-        _flip_all(h_child_qbool, branch_reg)
-
-    # MCZ: add h_qubit_idx to the control list
-    all_s0_with_h = [h_qubit_idx] + s0_qubits
-    if len(all_s0_with_h) == 1:
-        emit_z(all_s0_with_h[0])
-    else:
-        emit_mcz(all_s0_with_h[-1], all_s0_with_h[:-1])
-
-    # X on all s0_qubits, controlled on h[depth]
-    with h_control:
-        _flip_all(h_child_qbool, branch_reg)
-
-    # Step C: U (forward state preparation)
-    # Parent-child split rotation, then cascade.
-    with h_control:
-        emit_ry(h_child_idx, phi)
-    if num_moves > 1 and cascade_ops:
-        _emit_cascade_multi_controlled(
-            branch_reg, cascade_ops, [h_qubit_idx], sign=1,
-        )
-
-
-def _height_controlled_variable_diffusion(config, registers, depth,
-                                           is_root=False):
-    """Apply variable-branching local diffusion controlled on height qubit.
-
-    Uses the counting-based approach: evaluate validity for each child,
-    count valid children, apply conditional Montanaro rotations, S_0
-    reflection, and uncompute.
-
-    Parameters
-    ----------
-    config : WalkConfig
-        Walk configuration with state, make_move, is_valid, num_moves.
-    registers : WalkRegisters
-        Walk registers.
-    depth : int
-        Depth level (1..max_depth).
-    is_root : bool
-        If True, use root angle formula.
-    """
-    import quantum_language as ql
-
-    num_moves = config.num_moves
-    bw = config.bw
-    h_qubit_idx = registers.height_qubit(depth)
-    h_child_idx = registers.height_qubit(depth - 1)
-    branch_reg = registers.branch_at(depth - 1)
-    h_control = _make_qbool_wrapper(h_qubit_idx)
-
-    # Pre-compute angles for all possible count values
-    angle_data = _precompute_angles(
-        num_moves, bw, is_root=is_root, max_depth=config.max_depth,
-    )
-
-    # Step 1: Evaluate validity for all children
-    state = config.state
-    make_move = config.make_move
-    is_valid = config.is_valid
-    undo = config.undo_move
-    if undo is None:
-        undo = config.make_move.adjoint
-
-    validity = []
-    for i in range(num_moves):
-        make_move(state, i)
-        v = is_valid(state)
-        validity.append(v)
-        undo(state, i)
-
-    # Step 2: Sum validity bits into count register
-    from .walk_core import count_width
-    cw = count_width(num_moves)
-    count = ql.qint(0, width=cw)
-    for v in validity:
-        with v:
-            count += 1
-
-    # Step 3: Compute count comparisons
-    cond_qubits_map = {}
-    for c in range(1, num_moves + 1):
-        if c in angle_data:
-            cond = (count == c)
-            cond_qubits_map[c] = int(cond.qubits[63])
-
-    # Step 4: U_dagger (inverse state preparation)
-    for c in range(1, num_moves + 1):
-        if c not in angle_data:
-            continue
-        phi = angle_data[c]["phi"]
-        cascade_ops = angle_data[c]["cascade_ops"]
-        ctrl_qubits = [h_qubit_idx, cond_qubits_map[c]]
-
-        if c > 1 and cascade_ops:
-            _emit_cascade_multi_controlled(
-                branch_reg, cascade_ops, ctrl_qubits, sign=-1,
-            )
-        _emit_multi_controlled_ry(h_child_idx, -phi, ctrl_qubits)
-
-    # Step 5: S_0 reflection controlled on h[depth]
-    from .diffusion import _collect_qubits
-
-    h_child_qbool = _make_qbool_wrapper(h_child_idx)
-    s0_qubits = _collect_qubits(h_child_qbool, branch_reg)
-
-    with h_control:
-        _flip_all(h_child_qbool, branch_reg)
-    all_s0_with_h = [h_qubit_idx] + s0_qubits
-    if len(all_s0_with_h) == 1:
-        emit_z(all_s0_with_h[0])
-    else:
-        emit_mcz(all_s0_with_h[-1], all_s0_with_h[:-1])
-    with h_control:
-        _flip_all(h_child_qbool, branch_reg)
-
-    # Step 6: U forward (state preparation)
-    for c in range(1, num_moves + 1):
-        if c not in angle_data:
-            continue
-        phi = angle_data[c]["phi"]
-        cascade_ops = angle_data[c]["cascade_ops"]
-        ctrl_qubits = [h_qubit_idx, cond_qubits_map[c]]
-
-        _emit_multi_controlled_ry(h_child_idx, phi, ctrl_qubits)
-        if c > 1 and cascade_ops:
-            _emit_cascade_multi_controlled(
-                branch_reg, cascade_ops, ctrl_qubits, sign=1,
-            )
-
-    # Step 7: Uncompute count register
-    for v in reversed(validity):
-        with v:
-            count -= 1
-
-
-# ------------------------------------------------------------------
 # Local diffusion dispatch
 # ------------------------------------------------------------------
 
 
 def _apply_fixed_diffusion(config, registers, depth, is_root):
-    """Apply fixed-branching diffusion at *depth*."""
-    num_moves = config.num_moves
-    bw = config.bw
+    """Apply fixed-branching diffusion at *depth*, controlled on height."""
+    from .walk_branching import _make_qbool_wrapper
+
     h_qubit_idx = registers.height_qubit(depth)
     h_child_idx = registers.height_qubit(depth - 1)
-
     branch_reg = registers.branch_at(depth - 1)
+    parent_flag = _make_qbool_wrapper(h_child_idx)
 
-    angle_data = _precompute_angles(
-        num_moves, bw, is_root=is_root,
-        max_depth=config.max_depth,
-    )
-
-    _height_controlled_diffusion(
-        h_qubit_idx, h_child_idx, branch_reg,
-        num_moves, angle_data,
+    walk_diffusion_fixed(
+        parent_flag, branch_reg, config.num_moves,
+        max_depth=config.max_depth, is_root=is_root,
+        control_qubit=h_qubit_idx,
     )
 
 
@@ -328,8 +123,16 @@ def _apply_local_diffusion(config, registers, depth):
                 "to the walk_search rewrite (Quantum_Assembly-8sp)",
                 stacklevel=2,
             )
-        _height_controlled_variable_diffusion(
-            config, registers, depth, is_root=is_root,
+        from .walk_branching import _make_qbool_wrapper
+
+        h_qubit_idx = registers.height_qubit(depth)
+        h_child_idx = registers.height_qubit(depth - 1)
+        branch_reg = registers.branch_at(depth - 1)
+        parent_flag = _make_qbool_wrapper(h_child_idx)
+
+        walk_diffusion_with_regs(
+            config, parent_flag, branch_reg,
+            is_root=is_root, control_qubit=h_qubit_idx,
         )
     elif config.is_marked is not None and config.state is not None:
         # Quantum marking (fixed branching):
