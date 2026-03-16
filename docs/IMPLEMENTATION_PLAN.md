@@ -724,7 +724,7 @@ Clean up `__init__.py` exports.
 
 | File | Action | ~LOC |
 |------|--------|------|
-| `src/quantum_language/walk.py` | [DEL] Remove entirely | -1480 |
+| `src/quantum_language/walk.py` | [DEL] Remove entirely | -1620 |
 | `src/quantum_language/__init__.py` | [MOD] Remove `QWalkTree` import and `__all__` entry | -5 |
 | `tests/python/test_walk_operators.py` | [DEL] Old QWalkTree-based operator tests | - |
 | `tests/python/test_walk_detection.py` | [DEL] Old QWalkTree-based detection tests | - |
@@ -879,7 +879,7 @@ def walk(state, make_move, is_valid, is_marked, *,
 
 | Step | What | ~LOC delta | File(s) | DEP |
 |------|------|------------|---------|-----|
-| 2b.1 | Remove walk.py & old tests | ~-1480 impl, ~-2000 tests | `walk.py`, 10+ test files | — |
+| 2b.1 | Remove walk.py & old tests | ~-1620 impl, ~-2000 tests | `walk.py`, 10+ test files | — |
 | 2b.2 | Replace emit_x with DSL | ~-60 | walk_branching/diffusion/operators/search/registers | 2b.1 |
 | 2b.3 | Quantum marking in operators | ~+15 | `walk_operators.py` | 2b.2 |
 | 2b.4 | Deduplicate operators | ~-130 | `walk_operators.py`, `walk_diffusion.py` | 2b.3 |
