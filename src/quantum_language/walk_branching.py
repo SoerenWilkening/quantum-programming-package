@@ -34,7 +34,6 @@ References
 
 import math
 
-from ._gates import emit_ry
 from .diffusion import _flip_all
 from .walk_core import WalkConfig, montanaro_phi
 from .qbool import qbool as new_qbool
@@ -160,51 +159,60 @@ def _plan_cascade_recursive(d, w, bit_offset, ops, control_stack):
 # ------------------------------------------------------------------
 
 
-def _emit_multi_controlled_ry(target_qubit, angle, ctrl_qubits):
+def _emit_multi_controlled_ry(target, angle, ctrls):
     """Emit Ry(angle) on target controlled by multiple qubits.
 
-    Handles 0, 1, 2+ controls via V-gate decomposition.
+    Uses branch() for the rotation and & chains for multi-control.
+    Negative angles (for inverse) are handled via X-Ry-X decomposition.
+
+    Parameters
+    ----------
+    target : qbool or int
+        Target qubit (qbool object or physical qubit index).
+    angle : float
+        Ry rotation angle in radians.
+    ctrls : list[qbool | int]
+        Control qubits (qbool objects or physical qubit indices).
     """
     if abs(angle) < 1e-15:
         return
 
-    if not ctrl_qubits:
-        emit_ry(target_qubit, angle)
+    prob = math.sin(angle / 2) ** 2
+    inverse = angle < 0
+
+    # Normalise target to a physical qubit index, then create a
+    # lightweight wrapper so branch() operates on a non-owning view.
+    target_idx = int(target.qubits[63]) if hasattr(target, 'qubits') else int(target)
+    target_w = _make_qbool_wrapper(target_idx)
+
+    if not ctrls:
+        if inverse:
+            _flip_all(target_w)
+            target_w.branch(prob)
+            _flip_all(target_w)
+        else:
+            target_w.branch(prob)
         return
 
-    if len(ctrl_qubits) == 1:
-        ctrl = _make_qbool_wrapper(ctrl_qubits[0])
-        with ctrl:
-            emit_ry(target_qubit, angle)
-        return
+    # Wrap controls as lightweight qbool views to avoid cascade
+    # uncomputation of the caller's qbool objects.
+    ctrl_wrappers = []
+    for c in ctrls:
+        idx = int(c.qubits[63]) if hasattr(c, 'qubits') else int(c)
+        ctrl_wrappers.append(_make_qbool_wrapper(idx))
 
-    if len(ctrl_qubits) == 2:
-        c0, c1 = ctrl_qubits
-        c0_ctrl = _make_qbool_wrapper(c0)
-        c1_ctrl = _make_qbool_wrapper(c1)
-        with c1_ctrl:
-            emit_ry(target_qubit, angle / 2)
-        with c0_ctrl:
-            _flip_all(c1_ctrl)
-        with c1_ctrl:
-            emit_ry(target_qubit, -angle / 2)
-        with c0_ctrl:
-            _flip_all(c1_ctrl)
-        with c0_ctrl:
-            emit_ry(target_qubit, angle / 2)
-        return
+    # Build combined control via & chain
+    combined = ctrl_wrappers[0]
+    for cw in ctrl_wrappers[1:]:
+        combined = combined & cw
 
-    # 3+ controls: recursive V-gate decomposition
-    primary = ctrl_qubits[-1]
-    remaining = ctrl_qubits[:-1]
-    p_ctrl = _make_qbool_wrapper(primary)
-    with p_ctrl:
-        emit_ry(target_qubit, angle / 2)
-    _emit_multi_controlled_x(primary, remaining)
-    with p_ctrl:
-        emit_ry(target_qubit, -angle / 2)
-    _emit_multi_controlled_x(primary, remaining)
-    _emit_multi_controlled_ry(target_qubit, angle / 2, remaining)
+    with combined:
+        if inverse:
+            _flip_all(target_w)
+            target_w.branch(prob)
+            _flip_all(target_w)
+        else:
+            target_w.branch(prob)
 
 
 def _emit_multi_controlled_x(target_qubit, ctrl_qubits):
@@ -231,8 +239,11 @@ def _emit_multi_controlled_x(target_qubit, ctrl_qubits):
 # ------------------------------------------------------------------
 
 
-def _emit_cascade_multi_controlled(branch_reg, ops, ctrl_qubits, sign=1):
+def _emit_cascade_multi_controlled(branch_reg, ops, ctrls, sign=1):
     """Execute pre-planned cascade ops with additional control qubits.
+
+    Uses qint bitwise indexing (branch_reg[i]) for cascade bit access
+    instead of raw qubit array extraction.
 
     Parameters
     ----------
@@ -240,8 +251,8 @@ def _emit_cascade_multi_controlled(branch_reg, ops, ctrl_qubits, sign=1):
         Branch register to operate on.
     ops : list[tuple]
         Gate operations from ``_plan_cascade_ops``.
-    ctrl_qubits : list[int]
-        Physical qubit indices for additional controls.
+    ctrls : list[qbool | int]
+        Control qubits (qbool objects or physical qubit indices).
     sign : int
         +1 for forward cascade, -1 for inverse (negates angles).
     """
@@ -249,28 +260,43 @@ def _emit_cascade_multi_controlled(branch_reg, ops, ctrl_qubits, sign=1):
     if sign == -1:
         ops = list(reversed(ops))
 
+    # Convert MSB-first bit_offset to LSB-first qint index.
+    # Cascade uses 0=MSB, qint[i] uses 0=LSB.
+    def _bit_qbool(bit_off):
+        return branch_reg[w - 1 - bit_off]
+
+    # Pre-compute control indices for X operations.
+    ctrl_indices = []
+    for c in ctrls:
+        ctrl_indices.append(
+            int(c.qubits[63]) if hasattr(c, 'qubits') else int(c)
+        )
+
     for op in ops:
         if op[0] == "ry":
             _, bit_off, angle = op
-            qubit = int(branch_reg.qubits[64 - w + bit_off])
-            _emit_multi_controlled_ry(qubit, sign * angle, ctrl_qubits)
+            target = _bit_qbool(bit_off)
+            _emit_multi_controlled_ry(target, sign * angle, ctrls)
         elif op[0] == "cry":
             _, bit_off, angle, ctrl_bit_off = op
-            qubit = int(branch_reg.qubits[64 - w + bit_off])
-            cascade_ctrl = int(branch_reg.qubits[64 - w + ctrl_bit_off])
+            target = _bit_qbool(bit_off)
+            cascade_ctrl = _bit_qbool(ctrl_bit_off)
             _emit_multi_controlled_ry(
-                qubit, sign * angle, ctrl_qubits + [cascade_ctrl]
+                target, sign * angle, ctrls + [cascade_ctrl]
             )
         elif op[0] == "x":
             _, bit_off = op
-            qubit = int(branch_reg.qubits[64 - w + bit_off])
-            _emit_multi_controlled_x(qubit, ctrl_qubits)
+            target = _bit_qbool(bit_off)
+            _emit_multi_controlled_x(
+                int(target.qubits[63]), ctrl_indices,
+            )
         elif op[0] == "cx":
             _, target_bit_off, ctrl_bit_off = op
-            target_q = int(branch_reg.qubits[64 - w + target_bit_off])
-            cascade_ctrl = int(branch_reg.qubits[64 - w + ctrl_bit_off])
+            target = _bit_qbool(target_bit_off)
+            cascade_ctrl = _bit_qbool(ctrl_bit_off)
             _emit_multi_controlled_x(
-                target_q, ctrl_qubits + [cascade_ctrl]
+                int(target.qubits[63]),
+                ctrl_indices + [int(cascade_ctrl.qubits[63])],
             )
 
 
@@ -283,10 +309,10 @@ class BranchState:
     """Holds the quantum ancillae created during branching.
 
     The multi-controlled rotations in the branching step create
-    entanglement via V-gate decomposition involving the comparison
-    qubits.  For the inverse (unbranch) to undo this exactly, it
-    must reuse the *same* physical comparison qubits.  This object
-    carries them from ``branch_to_children`` to ``unbranch``.
+    entanglement involving the comparison qubits.  For the inverse
+    (unbranch) to undo this exactly, it must reuse the *same*
+    physical comparison qubits.  This object carries them from
+    ``branch_to_children`` to ``unbranch``.
 
     Attributes
     ----------
@@ -376,11 +402,8 @@ def branch_to_children(config, count_reg, branch_reg, parent_flag=None):
     for c in range(1, num_moves + 1):
         cond_map[c] = (count_reg == c)
 
-    parent_qubit = int(parent_flag.qubits[63])
-
     for c in range(1, num_moves + 1):
-        cond_qubit = int(cond_map[c].qubits[63])
-        ctrl_qubits = [cond_qubit]
+        ctrl_qbools = [cond_map[c]]
         phi = angle_data[c]["phi"]
         cascade_ops = angle_data[c]["cascade_ops"]
 
@@ -389,7 +412,7 @@ def branch_to_children(config, count_reg, branch_reg, parent_flag=None):
         # After Ry(phi), amplitude splits as:
         #   cos(phi/2) on |0> = 1/sqrt(c+1)  (parent)
         #   sin(phi/2) on |1> = sqrt(c)/sqrt(c+1)  (children)
-        _emit_multi_controlled_ry(parent_qubit, phi, ctrl_qubits)
+        _emit_multi_controlled_ry(parent_flag, phi, ctrl_qbools)
 
         # Step 2: Cascade to distribute amplitude uniformly among branch
         # register values 0..c-1.  The cascade is controlled only on the
@@ -400,7 +423,7 @@ def branch_to_children(config, count_reg, branch_reg, parent_flag=None):
         # its inverse bracket the S_0 reflection.
         if c > 1 and cascade_ops:
             _emit_cascade_multi_controlled(
-                branch_reg, cascade_ops, ctrl_qubits, sign=1,
+                branch_reg, cascade_ops, ctrl_qbools, sign=1,
             )
 
     return BranchState(parent_flag, cond_map)
@@ -415,8 +438,8 @@ def unbranch(config, count_reg, branch_reg, branch_state=None):
 
     The ``branch_state`` carries the comparison qbools and parent-flag
     from the forward pass.  The inverse **must** use the same physical
-    comparison qubits because the multi-controlled V-gate decomposition
-    creates entanglement involving those qubits.
+    comparison qubits because the multi-controlled rotations create
+    entanglement involving those qubits.
 
     Parameters
     ----------
@@ -447,12 +470,9 @@ def unbranch(config, count_reg, branch_reg, branch_state=None):
 
     angle_data = _precompute_angle_data(num_moves, bw)
 
-    parent_qubit = int(parent_flag.qubits[63])
-
     # Reverse order of count values for inverse
     for c in reversed(range(1, num_moves + 1)):
-        cond_qubit = int(cond_map[c].qubits[63])
-        ctrl_qubits = [cond_qubit]
+        ctrl_qbools = [cond_map[c]]
         phi = angle_data[c]["phi"]
         cascade_ops = angle_data[c]["cascade_ops"]
 
@@ -460,11 +480,11 @@ def unbranch(config, count_reg, branch_reg, branch_state=None):
         # controlled only on count comparison (matching forward pass).
         if c > 1 and cascade_ops:
             _emit_cascade_multi_controlled(
-                branch_reg, cascade_ops, ctrl_qubits, sign=-1,
+                branch_reg, cascade_ops, ctrl_qbools, sign=-1,
             )
 
         # Inverse phi rotation on parent-flag qubit
-        _emit_multi_controlled_ry(parent_qubit, -phi, ctrl_qubits)
+        _emit_multi_controlled_ry(parent_flag, -phi, ctrl_qbools)
 
 
 # ------------------------------------------------------------------
