@@ -462,10 +462,10 @@ class TestVariableBranching:
         """Config with callbacks takes the variable-branching path.
 
         Verify the variable path is exercised by checking that more
-        qubits are allocated (comparison/count ancillae) than the
-        fixed-branching path would use.
+        qubits are allocated (state + comparison/count ancillae) than
+        the bare walk registers alone.
 
-        Fixed: height + branch + count = 2 + 1 + 1 = 4 qubits.
+        Bare walk regs: height + branch + count = 2 + 1 + 1 = 4 qubits.
         Variable: additional state + comparison ancillae.
         """
         _init_circuit()
@@ -480,10 +480,10 @@ class TestVariableBranching:
         nq = _get_num_qubits(qasm)
 
         # Variable path allocates state (3) + walk regs + ancillae
-        # Fixed path would only use walk regs (4 qubits)
+        # Bare walk regs would only use 4 qubits
         assert nq > 4, (
-            f"Variable path should allocate more qubits than fixed, "
-            f"got {nq}"
+            f"Variable path should allocate more qubits than bare "
+            f"walk registers, got {nq}"
         )
         assert nq <= 17, f"Variable walk uses {nq} qubits (limit: 17)"
 

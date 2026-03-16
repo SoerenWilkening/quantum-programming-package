@@ -54,6 +54,28 @@ class TestQWalkTreeRemoved:
             from quantum_language.walk import QWalkTree  # noqa: F401
 
 
+class TestFixedDiffusionRemoved:
+    """walk_diffusion_fixed is no longer importable after removal."""
+
+    def test_walk_diffusion_fixed_not_in_namespace(self):
+        assert not hasattr(ql, "walk_diffusion_fixed")
+
+    def test_walk_diffusion_fixed_not_in_all(self):
+        assert "walk_diffusion_fixed" not in ql.__all__
+
+    def test_walk_diffusion_fixed_not_importable_from_module(self):
+        with pytest.raises(ImportError):
+            from quantum_language.walk_diffusion import walk_diffusion_fixed  # noqa: F401
+
+    def test_fixed_diffusion_not_importable_from_module(self):
+        with pytest.raises(ImportError):
+            from quantum_language.walk_diffusion import _fixed_diffusion  # noqa: F401
+
+    def test_apply_fixed_diffusion_not_importable(self):
+        with pytest.raises(ImportError):
+            from quantum_language.walk_operators import _apply_fixed_diffusion  # noqa: F401
+
+
 class TestNoEmitXInWalkModules:
     """Verify that walk modules do not use emit_x directly [Quantum_Assembly-rm9]."""
 
