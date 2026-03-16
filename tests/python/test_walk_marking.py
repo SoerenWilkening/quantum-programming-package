@@ -120,21 +120,6 @@ def _make_superposition_marked_predicate(state):
 # ---------------------------------------------------------------------------
 
 
-def _make_marked_config_and_regs(max_depth, num_moves, state_width,
-                                  is_marked_fn, state_value=0):
-    """Create WalkConfig with is_marked and state, init root."""
-    state = ql.qint(state_value, width=state_width)
-    config = WalkConfig(
-        max_depth=max_depth,
-        num_moves=num_moves,
-        is_marked=is_marked_fn,
-        state=state,
-    )
-    regs = WalkRegisters(config)
-    regs.init_root()
-    return config, regs, state
-
-
 def _make_unmarked_config_and_regs(max_depth, num_moves):
     """Create WalkConfig without marking, init root."""
     config = WalkConfig(max_depth=max_depth, num_moves=num_moves)
