@@ -9,15 +9,21 @@ A quantum walk searches a tree by superposing over children at each node. The us
 - **`state`**: A quantum register (qarray/qint) representing a node (e.g., variable assignments for ILP, board position for chess)
 - **`make_move(state, move_index)`**: A compiled quantum function that transforms the state by applying move `move_index`. Must be decorated with `@ql.compile(inverse=True)` for reversibility.
 - **`is_valid(state)`**: A quantum predicate returning `qbool` — is this state feasible?
-- **`is_marked(state)`**: A quantum predicate returning `qbool` — is this a solution?
+- **`is_marked(state)`**: A quantum predicate returning `qbool` — is this a solution? Evaluated **quantumly** on superpositions of basis states (no classical enumeration). Marked nodes receive identity (D_x = I) while unmarked nodes receive the standard diffusion operator (per Montanaro 2015).
 
-The framework handles all internal machinery: height registers, branch registers, counting valid children, Montanaro rotation angles, R_A/R_B walk operators, and detection.
+The framework handles all internal machinery: height registers, branch registers, counting valid children, Montanaro rotation angles, R_A/R_B walk operators, and marking.
+
+> **Note**: Detection via quantum phase estimation (Montanaro 2015, Theorem 1) is a future milestone. Currently `walk()` returns a `(config, registers)` pair for manual walk step iteration.
 
 ### API
 
 ```python
-# Full walk — detects existence of a marked node
-found = ql.walk(is_marked, max_depth=depth, num_moves=num)
+# Build a marked walk configuration with allocated registers.
+# Returns (WalkConfig, WalkRegisters) — ready for use with walk_step.
+config, registers = ql.walk(
+    is_marked, max_depth=depth, num_moves=num,
+    state=state, make_move=make_move, is_valid=is_valid,
+)
 
 # Local diffusion building block — for custom walk operators
 ql.walk_diffusion(state, make_move, is_valid, num_moves=num)
@@ -25,7 +31,7 @@ ql.walk_diffusion(state, make_move, is_valid, num_moves=num)
 
 ### Key Principle
 
-The user's functions (`make_move`, `is_valid`, `is_marked`) use normal Python arithmetic on quantum types (`qint`, `qbool`, `qarray`). They work on all computational basis states simultaneously — that's quantum parallelism. The user never touches gates.
+The user's functions (`make_move`, `is_valid`, `is_marked`) use normal Python arithmetic on quantum types (`qint`, `qbool`, `qarray`). They work on all computational basis states simultaneously — that's quantum parallelism. The user never touches gates. The `is_marked` predicate is evaluated quantumly: it returns a `qbool` that controls whether each node receives identity or diffusion. There is no classical enumeration of basis states.
 
 ---
 
@@ -238,10 +244,19 @@ ql.circuit()
 # State initialization (from Phase 1)
 x = ...  # as designed
 
-# Full walk
-found = ql.walk(is_marked, max_depth=..., num_moves=...)
+# Build marked walk configuration and registers.
+# walk() returns (WalkConfig, WalkRegisters), not a bool.
+# Detection via phase estimation is a future milestone.
+config, registers = ql.walk(
+    is_marked, max_depth=..., num_moves=...,
+    state=x, make_move=make_move, is_valid=is_valid,
+)
 
-print(f"Marked node exists: {found}")
+# Apply walk steps manually (phase-estimation wrapper is TODO)
+from quantum_language.walk_operators import walk_step
+num_steps = 4  # or compute from tree size
+for _ in range(num_steps):
+    walk_step(config, registers)
 ```
 
 Or for custom walk construction using the diffusion building block:
