@@ -16,6 +16,7 @@ References
 """
 
 import math
+import warnings
 
 import numpy as np
 
@@ -687,6 +688,11 @@ class QWalkTree:
     """
 
     def __init__(self, max_depth, branching, predicate=None, *, max_qubits=17):
+        warnings.warn(
+            "QWalkTree is deprecated; use ql.walk() or ql.walk_diffusion() instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.max_depth = max_depth
         self.max_qubits = max_qubits
         self._predicate = predicate
