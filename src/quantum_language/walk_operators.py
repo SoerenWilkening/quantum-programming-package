@@ -20,7 +20,7 @@ References
 
 from .diffusion import _flip_all
 from .walk_core import WalkConfig
-from .walk_diffusion import walk_diffusion_fixed, walk_diffusion_with_regs
+from .walk_diffusion import walk_diffusion_with_regs
 from .walk_registers import WalkRegisters
 
 
@@ -60,38 +60,18 @@ def _validate_operator_args(config, registers):
 # ------------------------------------------------------------------
 
 
-def _apply_fixed_diffusion(config, registers, depth, is_root):
-    """Apply fixed-branching diffusion at *depth*, controlled on height."""
-    from .walk_branching import _make_qbool_wrapper
-
-    h_qubit_idx = registers.height_qubit(depth)
-    h_child_idx = registers.height_qubit(depth - 1)
-    branch_reg = registers.branch_at(depth - 1)
-    parent_flag = _make_qbool_wrapper(h_child_idx)
-
-    walk_diffusion_fixed(
-        parent_flag, branch_reg, config.num_moves,
-        max_depth=config.max_depth, is_root=is_root,
-        control_qubit=h_qubit_idx,
-    )
-
-
 def _apply_local_diffusion(config, registers, depth):
     """Apply local diffusion at the given depth, controlled on height.
 
-    Dispatches between fixed-branching (no predicates) and variable-
-    branching (with is_valid predicate) depending on whether config
-    has callbacks set.
-
-    Per Montanaro 2015, if ``config.is_marked`` is set along with
-    ``config.state``, the marking predicate is evaluated quantumly.
-    Marked nodes receive identity (D_x = I) while unmarked nodes
-    receive the standard diffusion operator.
+    Always uses variable-branching diffusion (with is_valid predicate).
+    If ``config.is_marked`` is set, the marking predicate is evaluated
+    quantumly: marked nodes receive identity (D_x = I) while unmarked
+    nodes receive the standard diffusion operator.
 
     Parameters
     ----------
     config : WalkConfig
-        Walk configuration.
+        Walk configuration with state, make_move, is_valid.
     registers : WalkRegisters
         Walk registers.
     depth : int
@@ -102,54 +82,36 @@ def _apply_local_diffusion(config, registers, depth):
 
     is_root = (depth == config.max_depth)
 
-    # Determine whether to use variable or fixed branching
-    use_variable = (config.make_move is not None
-                    and config.is_valid is not None
-                    and config.state is not None)
+    from .walk_branching import _make_qbool_wrapper
 
-    if use_variable:
-        from .walk_branching import _make_qbool_wrapper
+    h_qubit_idx = registers.height_qubit(depth)
+    h_child_idx = registers.height_qubit(depth - 1)
+    branch_reg = registers.branch_at(depth - 1)
+    parent_flag = _make_qbool_wrapper(h_child_idx)
 
-        h_qubit_idx = registers.height_qubit(depth)
-        h_child_idx = registers.height_qubit(depth - 1)
-        branch_reg = registers.branch_at(depth - 1)
-        parent_flag = _make_qbool_wrapper(h_child_idx)
-
-        if config.is_marked is not None and config.state is not None:
-            # Quantum marking with variable branching:
-            # D_x = I for marked, standard diffusion for unmarked.
-            # Evaluate is_marked(state) quantumly, negate so that
-            # the marking qubit is |1> for UNMARKED nodes.  The
-            # marking qubit is passed into the diffusion as an extra
-            # control so that only the rotation / S_0 steps are
-            # conditioned -- the validity evaluation (which uses XOR
-            # in make_move) runs unconditionally outside any control.
-            marked = config.is_marked(config.state)
-            _flip_all(marked)
-            marking_qubit = int(marked.qubits[63])
-            walk_diffusion_with_regs(
-                config, parent_flag, branch_reg,
-                is_root=is_root, control_qubit=h_qubit_idx,
-                marking_qubit=marking_qubit,
-            )
-            _flip_all(marked)
-        else:
-            walk_diffusion_with_regs(
-                config, parent_flag, branch_reg,
-                is_root=is_root, control_qubit=h_qubit_idx,
-            )
-    elif config.is_marked is not None and config.state is not None:
-        # Quantum marking (fixed branching):
+    if config.is_marked is not None and config.state is not None:
+        # Quantum marking with variable branching:
         # D_x = I for marked, standard diffusion for unmarked.
-        # Evaluate is_marked(state) quantumly to get a qbool,
-        # negate it so that ``with marked:`` runs on UNMARKED nodes.
+        # Evaluate is_marked(state) quantumly, negate so that
+        # the marking qubit is |1> for UNMARKED nodes.  The
+        # marking qubit is passed into the diffusion as an extra
+        # control so that only the rotation / S_0 steps are
+        # conditioned -- the validity evaluation (which uses XOR
+        # in make_move) runs unconditionally outside any control.
         marked = config.is_marked(config.state)
         _flip_all(marked)
-        with marked:
-            _apply_fixed_diffusion(config, registers, depth, is_root)
+        marking_qubit = int(marked.qubits[63])
+        walk_diffusion_with_regs(
+            config, parent_flag, branch_reg,
+            is_root=is_root, control_qubit=h_qubit_idx,
+            marking_qubit=marking_qubit,
+        )
         _flip_all(marked)
     else:
-        _apply_fixed_diffusion(config, registers, depth, is_root)
+        walk_diffusion_with_regs(
+            config, parent_flag, branch_reg,
+            is_root=is_root, control_qubit=h_qubit_idx,
+        )
 
 
 # ------------------------------------------------------------------

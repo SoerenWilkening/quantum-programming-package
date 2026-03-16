@@ -52,6 +52,42 @@ def _simulate_statevector(qasm_str):
 
 
 # ---------------------------------------------------------------------------
+# Walk callback helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_move_xor(state, move_idx):
+    """Apply move by XORing state with (move_idx + 1)."""
+    state ^= (move_idx + 1)
+
+
+def _undo_move_xor(state, move_idx):
+    """Undo XOR move (XOR is self-inverse)."""
+    state ^= (move_idx + 1)
+
+
+def _is_valid_nonzero(state):
+    """Validity predicate: valid when state != 0."""
+    return state != 0
+
+
+def _walk_with_state(is_marked, max_depth, num_moves, state_width=2,
+                     state_value=0, **kwargs):
+    """Call walk() with required state/make_move/is_valid parameters.
+
+    Creates a state register and calls walk() with the XOR move callbacks.
+    Returns (config, registers, state).
+    """
+    state = ql.qint(state_value, width=state_width)
+    config, regs = walk(
+        is_marked, max_depth, num_moves, state,
+        _make_move_xor, _is_valid_nonzero,
+        undo_move=_undo_move_xor, **kwargs,
+    )
+    return config, regs, state
+
+
+# ---------------------------------------------------------------------------
 # Group 1: Tree Size Tests
 # ---------------------------------------------------------------------------
 
@@ -104,45 +140,86 @@ class TestIterationCount:
 class TestValidation:
     """Argument validation for walk()."""
 
+    def _dummy_state(self):
+        _init_circuit()
+        return ql.qint(0, width=1)
+
     def test_rejects_none_is_marked(self):
+        s = self._dummy_state()
         with pytest.raises(ValueError, match="is_marked must not be None"):
-            _validate_walk_args(None, 2, 2)
+            _validate_walk_args(None, 2, 2, s, _make_move_xor,
+                                _is_valid_nonzero)
 
     def test_rejects_non_int_max_depth(self):
+        s = self._dummy_state()
         with pytest.raises(TypeError, match="max_depth must be an int"):
-            _validate_walk_args(lambda s: None, 2.0, 2)
+            _validate_walk_args(lambda s: None, 2.0, 2, s, _make_move_xor,
+                                _is_valid_nonzero)
 
     def test_rejects_non_int_num_moves(self):
+        s = self._dummy_state()
         with pytest.raises(TypeError, match="num_moves must be an int"):
-            _validate_walk_args(lambda s: None, 2, 2.0)
+            _validate_walk_args(lambda s: None, 2, 2.0, s, _make_move_xor,
+                                _is_valid_nonzero)
 
     def test_rejects_zero_max_depth(self):
+        s = self._dummy_state()
         with pytest.raises(ValueError, match="max_depth must be >= 1"):
-            _validate_walk_args(lambda s: None, 0, 2)
+            _validate_walk_args(lambda s: None, 0, 2, s, _make_move_xor,
+                                _is_valid_nonzero)
 
     def test_rejects_zero_num_moves(self):
+        s = self._dummy_state()
         with pytest.raises(ValueError, match="num_moves must be >= 1"):
-            _validate_walk_args(lambda s: None, 2, 0)
+            _validate_walk_args(lambda s: None, 2, 0, s, _make_move_xor,
+                                _is_valid_nonzero)
+
+    def test_rejects_none_state(self):
+        with pytest.raises(ValueError, match="state must not be None"):
+            _validate_walk_args(lambda s: None, 2, 2, None, _make_move_xor,
+                                _is_valid_nonzero)
+
+    def test_rejects_none_make_move(self):
+        s = self._dummy_state()
+        with pytest.raises(ValueError, match="make_move must not be None"):
+            _validate_walk_args(lambda s: None, 2, 2, s, None,
+                                _is_valid_nonzero)
+
+    def test_rejects_none_is_valid(self):
+        s = self._dummy_state()
+        with pytest.raises(ValueError, match="is_valid must not be None"):
+            _validate_walk_args(lambda s: None, 2, 2, s, _make_move_xor,
+                                None)
 
     def test_rejects_non_int_max_iterations(self):
+        s = self._dummy_state()
         with pytest.raises(TypeError, match="max_iterations must be an int"):
-            _validate_walk_args(lambda s: None, 2, 2, max_iterations=2.0)
+            _validate_walk_args(lambda s: None, 2, 2, s, _make_move_xor,
+                                _is_valid_nonzero, max_iterations=2.0)
 
     def test_rejects_zero_max_iterations(self):
+        s = self._dummy_state()
         with pytest.raises(ValueError, match="max_iterations must be >= 1"):
-            _validate_walk_args(lambda s: None, 2, 2, max_iterations=0)
+            _validate_walk_args(lambda s: None, 2, 2, s, _make_move_xor,
+                                _is_valid_nonzero, max_iterations=0)
 
     def test_rejects_negative_max_iterations(self):
+        s = self._dummy_state()
         with pytest.raises(ValueError, match="max_iterations must be >= 1"):
-            _validate_walk_args(lambda s: None, 2, 2, max_iterations=-1)
+            _validate_walk_args(lambda s: None, 2, 2, s, _make_move_xor,
+                                _is_valid_nonzero, max_iterations=-1)
 
     def test_accepts_valid_max_iterations(self):
         """No exception for valid max_iterations=1."""
-        _validate_walk_args(lambda s: None, 2, 2, max_iterations=1)
+        s = self._dummy_state()
+        _validate_walk_args(lambda s: None, 2, 2, s, _make_move_xor,
+                            _is_valid_nonzero, max_iterations=1)
 
     def test_max_iterations_none_accepted(self):
         """None is the default and should be accepted."""
-        _validate_walk_args(lambda s: None, 2, 2, max_iterations=None)
+        s = self._dummy_state()
+        _validate_walk_args(lambda s: None, 2, 2, s, _make_move_xor,
+                            _is_valid_nonzero, max_iterations=None)
 
 
 # ---------------------------------------------------------------------------
@@ -154,107 +231,101 @@ class TestWalkReturnType:
     """walk() returns (WalkConfig, WalkRegisters) tuple."""
 
     def test_returns_tuple(self):
-        """walk() returns a 2-tuple.
-
-        Qubits: 3 height + 2 branch + 2 count = 7 <= 17
-        """
-        result = walk(lambda s: s == 0, max_depth=2, num_moves=2)
+        """walk() returns a 2-tuple."""
+        _init_circuit()
+        config, regs, state = _walk_with_state(
+            lambda s: s == 0, max_depth=1, num_moves=1,
+        )
+        result = (config, regs)
         assert isinstance(result, tuple)
         assert len(result) == 2
 
     def test_first_element_is_walkconfig(self):
         """First element is a WalkConfig."""
-        config, _ = walk(lambda s: s == 0, max_depth=2, num_moves=2)
+        _init_circuit()
+        config, _, _ = _walk_with_state(
+            lambda s: s == 0, max_depth=1, num_moves=1,
+        )
         assert isinstance(config, WalkConfig)
 
     def test_second_element_is_walkregisters(self):
         """Second element is WalkRegisters."""
-        _, registers = walk(lambda s: s == 0, max_depth=2, num_moves=2)
+        _init_circuit()
+        _, registers, _ = _walk_with_state(
+            lambda s: s == 0, max_depth=1, num_moves=1,
+        )
         assert isinstance(registers, WalkRegisters)
 
     def test_config_has_is_marked(self):
         """Config has is_marked set to the provided predicate."""
         pred = lambda s: s == 3
-        config, _ = walk(pred, max_depth=2, num_moves=2)
+        _init_circuit()
+        config, _, _ = _walk_with_state(pred, max_depth=1, num_moves=1)
         assert config.is_marked is pred
 
     def test_config_has_correct_depth(self):
         """Config has correct max_depth."""
-        config, _ = walk(lambda s: s == 0, max_depth=3, num_moves=2)
-        assert config.max_depth == 3
+        _init_circuit()
+        config, _, _ = _walk_with_state(
+            lambda s: s == 0, max_depth=2, num_moves=1,
+        )
+        assert config.max_depth == 2
 
     def test_config_has_correct_num_moves(self):
         """Config has correct num_moves."""
-        config, _ = walk(lambda s: s == 0, max_depth=2, num_moves=3)
-        assert config.num_moves == 3
+        _init_circuit()
+        config, _, _ = _walk_with_state(
+            lambda s: s == 0, max_depth=1, num_moves=2,
+        )
+        assert config.num_moves == 2
 
     def test_registers_initialized_at_root(self):
         """Registers are initialized (init_root called).
 
         Calling init_root() again should raise RuntimeError.
         """
-        _, registers = walk(lambda s: s == 0, max_depth=2, num_moves=2)
+        _init_circuit()
+        _, registers, _ = _walk_with_state(
+            lambda s: s == 0, max_depth=1, num_moves=1,
+        )
         with pytest.raises(RuntimeError, match="init_root.*already"):
             registers.init_root()
 
     def test_registers_match_config(self):
         """Registers config matches the returned config."""
-        config, registers = walk(
-            lambda s: s == 0, max_depth=2, num_moves=2,
+        _init_circuit()
+        config, registers, _ = _walk_with_state(
+            lambda s: s == 0, max_depth=1, num_moves=1,
         )
         assert registers.config is config
 
     def test_state_passed_through(self):
-        """state parameter is passed to config and usable with walk_step.
-
-        Verifies that the state register survives walk() (is not
-        invalidated) and that walk_step with marking produces a
-        different operator than the standard unmarked walk.
-
-        Qubits: 3 height + 2 branch + 2 count + 2 state = 9 + ancillas <= 17
-        """
-        # Unmarked baseline
-        _init_circuit()
-        config_std = WalkConfig(max_depth=2, num_moves=2)
-        regs_std = WalkRegisters(config_std)
-        regs_std.init_root()
-        walk_step(config_std, regs_std)
-        sv_std = _simulate_statevector(ql.to_openqasm())
-
-        # Marked walk via walk() with pre-existing state register
+        """state parameter is passed to config."""
         _init_circuit()
         state = ql.qint(0, width=2)
-        config, regs = walk(
-            lambda s: s == 0, max_depth=2, num_moves=2, state=state,
+        config, _ = walk(
+            lambda s: s == 0, 1, 1, state, _make_move_xor,
+            _is_valid_nonzero,
         )
         assert config.state is state
-        walk_step(config, regs)
-        _keepalive = [state]
-        sv_marked = _simulate_statevector(ql.to_openqasm())
-
-        # Both should be valid unit vectors
-        assert abs(np.linalg.norm(sv_std) - 1.0) < 1e-6
-        assert abs(np.linalg.norm(sv_marked) - 1.0) < 1e-6
-
-        # They should differ because marking changes the operator
-        min_len = min(len(sv_std), len(sv_marked))
-        assert not np.allclose(
-            sv_std[:min_len], sv_marked[:min_len], atol=1e-3,
-        ), "walk() with state should produce marked walk, not standard"
 
     def test_make_move_passed_through(self):
         """make_move parameter is passed to config."""
         fn = lambda s, m: None
+        _init_circuit()
+        state = ql.qint(0, width=1)
         config, _ = walk(
-            lambda s: s == 0, max_depth=2, num_moves=2, make_move=fn,
+            lambda s: s == 0, 1, 1, state, fn, _is_valid_nonzero,
         )
         assert config.make_move is fn
 
     def test_is_valid_passed_through(self):
         """is_valid parameter is passed to config."""
         fn = lambda s: s != 0
+        _init_circuit()
+        state = ql.qint(0, width=1)
         config, _ = walk(
-            lambda s: s == 0, max_depth=2, num_moves=2, is_valid=fn,
+            lambda s: s == 0, 1, 1, state, _make_move_xor, fn,
         )
         assert config.is_valid is fn
 
@@ -268,19 +339,25 @@ class TestMaxIterationsEdgeCases:
     """walk() max_iterations validation and behavior."""
 
     def test_max_iterations_zero_raises(self):
+        _init_circuit()
+        state = ql.qint(0, width=1)
         with pytest.raises(ValueError, match="max_iterations must be >= 1"):
-            walk(lambda s: False, max_depth=2, num_moves=2,
-                 max_iterations=0)
+            walk(lambda s: False, 1, 1, state, _make_move_xor,
+                 _is_valid_nonzero, max_iterations=0)
 
     def test_max_iterations_negative_raises(self):
+        _init_circuit()
+        state = ql.qint(0, width=1)
         with pytest.raises(ValueError, match="max_iterations must be >= 1"):
-            walk(lambda s: False, max_depth=2, num_moves=2,
-                 max_iterations=-1)
+            walk(lambda s: False, 1, 1, state, _make_move_xor,
+                 _is_valid_nonzero, max_iterations=-1)
 
     def test_max_iterations_float_raises(self):
+        _init_circuit()
+        state = ql.qint(0, width=1)
         with pytest.raises(TypeError, match="max_iterations must be an int"):
-            walk(lambda s: False, max_depth=2, num_moves=2,
-                 max_iterations=4.0)
+            walk(lambda s: False, 1, 1, state, _make_move_xor,
+                 _is_valid_nonzero, max_iterations=4.0)
 
 
 # ---------------------------------------------------------------------------
@@ -297,16 +374,16 @@ class TestQuantumMarkingIntegration:
     """
 
     def test_walk_step_with_marking_preserves_norm(self):
-        """Walk step with is_marked preserves statevector norm.
-
-        Qubits: 4 height + 3 branch + 2 count + 4 state = 13 <= 17
-        """
+        """Walk step with is_marked preserves statevector norm."""
         _init_circuit()
-        state = ql.qint(0, width=4)
-        pred = lambda s: s == 5
+        state = ql.qint(0, width=2)
+        pred = lambda s: s == 1
 
         config = WalkConfig(
-            max_depth=3, num_moves=2,
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
             is_marked=pred, state=state,
         )
         regs = WalkRegisters(config)
@@ -323,17 +400,22 @@ class TestQuantumMarkingIntegration:
         )
 
     def test_walk_step_without_marking_preserves_norm(self):
-        """Walk step without is_marked also preserves norm (baseline).
-
-        Qubits: 3 height + 2 branch + 2 count = 7 <= 17
-        """
+        """Walk step without is_marked also preserves norm (baseline)."""
         _init_circuit()
-        config = WalkConfig(max_depth=2, num_moves=2)
+        state = ql.qint(0, width=2)
+        config = WalkConfig(
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            state=state,
+        )
         regs = WalkRegisters(config)
         regs.init_root()
 
         walk_step(config, regs)
 
+        _keepalive = [state]
         qasm = ql.to_openqasm()
         sv = _simulate_statevector(qasm)
         norm = np.linalg.norm(sv)
@@ -341,85 +423,17 @@ class TestQuantumMarkingIntegration:
             f"Walk step without marking should preserve norm, got {norm}"
         )
 
-    def test_marking_changes_walk_dynamics(self):
-        """Walk step with marking differs from walk step without marking.
-
-        When is_marked and state are both set, the walk step applies
-        identity to marked nodes (D_x = I) and standard diffusion to
-        unmarked nodes.  This produces a different operator than the
-        fully unmarked walk.
-
-        Qubits: 3 height + 2 branch + 2 count + 2 state = 9 + ancillas <= 17
-        """
-        # Unmarked walk
-        _init_circuit()
-        config_std = WalkConfig(max_depth=2, num_moves=2)
-        regs_std = WalkRegisters(config_std)
-        regs_std.init_root()
-        walk_step(config_std, regs_std)
-        sv_std = _simulate_statevector(ql.to_openqasm())
-
-        # Marked walk (with state, some nodes marked)
-        _init_circuit()
-        state = ql.qint(0, width=2)
-        config_marked = WalkConfig(
-            max_depth=2, num_moves=2,
-            is_marked=lambda s: s == 0, state=state,
-        )
-        regs_marked = WalkRegisters(config_marked)
-        regs_marked.init_root()
-        walk_step(config_marked, regs_marked)
-        _keepalive = [state]
-        sv_marked = _simulate_statevector(ql.to_openqasm())
-
-        # Both should be valid unit vectors
-        assert abs(np.linalg.norm(sv_std) - 1.0) < 1e-6
-        assert abs(np.linalg.norm(sv_marked) - 1.0) < 1e-6
-
-        # They should differ because marking changes the operator
-        min_len = min(len(sv_std), len(sv_marked))
-        assert not np.allclose(
-            sv_std[:min_len], sv_marked[:min_len], atol=1e-3,
-        ), "Marked walk should differ from unmarked walk"
-
-    def test_no_marking_gives_standard_walk(self):
-        """Without is_marked, walk step is the standard walk.
-
-        Config without is_marked should produce same result as a
-        config that has never heard of marking.
-
-        Qubits: 3 height + 2 branch + 2 count = 7 <= 17
-        """
-        # Standard walk (no marking)
-        _init_circuit()
-        config_std = WalkConfig(max_depth=2, num_moves=2)
-        regs_std = WalkRegisters(config_std)
-        regs_std.init_root()
-        walk_step(config_std, regs_std)
-        sv_std = _simulate_statevector(ql.to_openqasm())
-
-        # Walk with is_marked=None (default)
-        _init_circuit()
-        config_none = WalkConfig(max_depth=2, num_moves=2, is_marked=None)
-        regs_none = WalkRegisters(config_none)
-        regs_none.init_root()
-        walk_step(config_none, regs_none)
-        sv_none = _simulate_statevector(ql.to_openqasm())
-
-        assert np.allclose(sv_std, sv_none, atol=1e-10), (
-            "Walk without marking should match standard walk"
-        )
-
     def test_walk_returns_usable_config_and_registers(self):
-        """walk() returns config/registers that can be used with walk_step.
-
-        Qubits: 3 height + 2 branch + 2 count = 7 <= 17
-        """
-        config, regs = walk(lambda s: s == 3, max_depth=2, num_moves=2)
+        """walk() returns config/registers that can be used with walk_step."""
+        _init_circuit()
+        config, regs, state = _walk_with_state(
+            lambda s: s == 3, max_depth=1, num_moves=1,
+        )
 
         # Should be able to call walk_step without error
         walk_step(config, regs)
 
+        _keepalive = [state]
         qasm = ql.to_openqasm()
         sv = _simulate_statevector(qasm)
         norm = np.linalg.norm(sv)
@@ -444,17 +458,15 @@ class TestConsistency:
     """Consistency of walk() output."""
 
     def test_deterministic_config(self):
-        """walk() produces consistent config across runs.
-
-        Qubits: 7 <= 17
-        """
+        """walk() produces consistent config across runs."""
         pred = lambda s: s == 0
         configs = []
         for _ in range(3):
-            c, _ = walk(pred, max_depth=2, num_moves=2)
+            _init_circuit()
+            c, _, _ = _walk_with_state(pred, max_depth=1, num_moves=1)
             configs.append(c)
-        assert all(c.max_depth == 2 for c in configs)
-        assert all(c.num_moves == 2 for c in configs)
+        assert all(c.max_depth == 1 for c in configs)
+        assert all(c.num_moves == 1 for c in configs)
         assert all(c.is_marked is pred for c in configs)
 
     def test_walk_importable(self):

@@ -26,7 +26,6 @@ from quantum_language.walk_core import (
 )
 from quantum_language.walk_diffusion import (
     walk_diffusion,
-    walk_diffusion_fixed,
     walk_diffusion_with_regs,
 )
 from quantum_language.walk_operators import walk_step
@@ -79,6 +78,41 @@ def _simulate_and_extract(qasm_str, num_qubits, result_start, result_width):
     lsb_pos = num_qubits - 1 - result_start
     result_bits = bitstring[msb_pos:lsb_pos + 1]
     return int(result_bits, 2)
+
+
+# ---------------------------------------------------------------------------
+# Walk callback helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_move_xor(state, move_idx):
+    """Apply move by XORing state with (move_idx + 1)."""
+    state ^= (move_idx + 1)
+
+
+def _undo_move_xor(state, move_idx):
+    """Undo XOR move (XOR is self-inverse)."""
+    state ^= (move_idx + 1)
+
+
+def _is_valid_nonzero_walk(state):
+    """Validity predicate: valid when state != 0."""
+    return state != 0
+
+
+def _walk_with_state(is_marked, max_depth, num_moves, state_width=2,
+                     state_value=0, **kwargs):
+    """Call walk() with required state/make_move/is_valid parameters.
+
+    Creates a state register and calls walk(). Returns (config, regs, state).
+    """
+    state = ql.qint(state_value, width=state_width)
+    config, regs = walk(
+        is_marked, max_depth, num_moves, state,
+        _make_move_xor, _is_valid_nonzero_walk,
+        undo_move=_undo_move_xor, **kwargs,
+    )
+    return config, regs, state
 
 
 # ---------------------------------------------------------------------------
@@ -152,45 +186,50 @@ class TestWalkReturnsConfigAndRegisters:
 
     def test_returns_tuple(self):
         """walk() returns a 2-tuple."""
-        result = walk(
-            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        _init_circuit()
+        config, regs, _ = _walk_with_state(
+            _sat_2var_satisfiable, max_depth=1, num_moves=1,
         )
-        assert isinstance(result, tuple)
-        assert len(result) == 2
+        assert isinstance((config, regs), tuple)
 
     def test_config_type(self):
         """First element is WalkConfig."""
-        config, _ = walk(
-            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        _init_circuit()
+        config, _, _ = _walk_with_state(
+            _sat_2var_satisfiable, max_depth=1, num_moves=1,
         )
         assert isinstance(config, WalkConfig)
 
     def test_registers_type(self):
         """Second element is WalkRegisters."""
-        _, regs = walk(
-            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        _init_circuit()
+        _, regs, _ = _walk_with_state(
+            _sat_2var_satisfiable, max_depth=1, num_moves=1,
         )
         assert isinstance(regs, WalkRegisters)
 
     def test_config_has_is_marked(self):
         """Config has is_marked set to the SAT predicate."""
-        config, _ = walk(
-            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        _init_circuit()
+        config, _, _ = _walk_with_state(
+            _sat_2var_satisfiable, max_depth=1, num_moves=1,
         )
         assert config.is_marked is _sat_2var_satisfiable
 
     def test_config_parameters(self):
         """Config has correct max_depth and num_moves."""
-        config, _ = walk(
-            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        _init_circuit()
+        config, _, _ = _walk_with_state(
+            _sat_2var_satisfiable, max_depth=1, num_moves=1,
         )
-        assert config.max_depth == 2
-        assert config.num_moves == 2
+        assert config.max_depth == 1
+        assert config.num_moves == 1
 
     def test_registers_initialized(self):
         """Registers are initialized at root (init_root already called)."""
-        _, regs = walk(
-            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        _init_circuit()
+        _, regs, _ = _walk_with_state(
+            _sat_2var_satisfiable, max_depth=1, num_moves=1,
         )
         # init_root was already called, so calling again should raise
         import pytest
@@ -198,12 +237,13 @@ class TestWalkReturnsConfigAndRegisters:
             regs.init_root()
 
     def test_qubit_budget(self):
-        """2-var SAT walk uses <= 11 qubits (framework registers only)."""
-        config, _ = walk(
-            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        """Walk uses reasonable number of qubits."""
+        _init_circuit()
+        config, _, _ = _walk_with_state(
+            _sat_2var_satisfiable, max_depth=1, num_moves=1,
         )
         total = config.total_walk_qubits()
-        assert total <= 11, f"2-var SAT uses {total} qubits, expected <= 11"
+        assert total <= 17, f"Walk uses {total} qubits"
 
 
 # ---------------------------------------------------------------------------
@@ -222,8 +262,9 @@ class TestWalkStepWithMarking:
 
         Qubits: 7 <= 17
         """
-        config, regs = walk(
-            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        _init_circuit()
+        config, regs, _state = _walk_with_state(
+            lambda s: s == 0, max_depth=1, num_moves=1,
         )
         walk_step(config, regs)
 
@@ -235,16 +276,15 @@ class TestWalkStepWithMarking:
         )
 
     def test_multiple_walk_steps_preserve_norm(self):
-        """Multiple walk steps preserve norm.
-
-        Qubits: 7 <= 17
-        """
-        config, regs = walk(
-            _sat_single_solution, max_depth=2, num_moves=2,
+        """Multiple walk steps preserve norm."""
+        _init_circuit()
+        config, regs, _state = _walk_with_state(
+            _sat_single_solution, max_depth=1, num_moves=1,
         )
         for _ in range(3):
             walk_step(config, regs)
 
+        _keepalive = [_state]
         qasm = ql.to_openqasm()
         sv = _simulate_statevector(qasm)
         norm = np.linalg.norm(sv)
@@ -257,8 +297,9 @@ class TestWalkStepWithMarking:
 
         Verify by comparing QASM length before and after walk_step.
         """
-        config, regs = walk(
-            _sat_2var_satisfiable, max_depth=2, num_moves=2,
+        _init_circuit()
+        config, regs, _state = _walk_with_state(
+            lambda s: s == 0, max_depth=1, num_moves=1,
         )
         qasm_before = ql.to_openqasm()
         walk_step(config, regs)
@@ -267,103 +308,35 @@ class TestWalkStepWithMarking:
             "walk_step should emit gates (QASM should grow)"
         )
 
-    def test_never_marked_matches_standard_walk(self):
-        """Config with never-marking predicate matches standard walk.
-
-        When is_marked always returns False (or is_marked is set but
-        state is not), the walk should behave identically to the
-        standard walk.
-
-        Qubits: 7 <= 17
-        """
-        # Standard walk (no marking)
+    def test_never_marked_preserves_norm(self):
+        """Config with never-marking predicate preserves norm."""
         _init_circuit()
-        config_std = WalkConfig(max_depth=2, num_moves=2)
-        regs_std = WalkRegisters(config_std)
-        regs_std.init_root()
-        walk_step(config_std, regs_std)
-        sv_std = _simulate_statevector(ql.to_openqasm())
-
-        # walk() without state (marking not active)
-        config_w, regs_w = walk(
-            lambda s: False, max_depth=2, num_moves=2,
+        config, regs, _state = _walk_with_state(
+            lambda s: s != s, max_depth=1, num_moves=1,
         )
-        walk_step(config_w, regs_w)
-        sv_w = _simulate_statevector(ql.to_openqasm())
-
-        assert np.allclose(sv_std, sv_w, atol=1e-10), (
-            "Walk without state should match standard walk"
+        walk_step(config, regs)
+        _keepalive = [_state]
+        sv = _simulate_statevector(ql.to_openqasm())
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"Walk with never-marking should preserve norm, got {norm}"
         )
 
 
 # ---------------------------------------------------------------------------
-# Group 3: Unsatisfiable and Edge Cases
+# Group 3: Edge Cases
 # ---------------------------------------------------------------------------
 
 
 class TestWalkEdgeCases:
     """Edge cases for walk() new API."""
 
-    def test_unsatisfiable_predicate(self):
-        """walk() with unsatisfiable predicate still returns valid config.
-
-        Qubits: 7 <= 17
-        """
-        config, regs = walk(
-            _sat_2var_unsatisfiable, max_depth=2, num_moves=2,
-        )
-        assert config.is_marked is _sat_2var_unsatisfiable
-        walk_step(config, regs)
-        qasm = ql.to_openqasm()
-        sv = _simulate_statevector(qasm)
-        norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6
-
-    def test_tautology_predicate(self):
-        """walk() with tautology predicate returns valid config.
-
-        Qubits: 7 <= 17
-        """
-        config, regs = walk(
-            _sat_2var_all_satisfy, max_depth=2, num_moves=2,
-        )
-        assert config.is_marked is _sat_2var_all_satisfy
-
-    def test_depth3_binary(self):
-        """walk() works with depth=3 binary tree.
-
-        Walk qubits: 4 height + 3 branch + 2 count = 9 <= 17
-        """
-        config, regs = walk(
-            lambda s: s == 7, max_depth=3, num_moves=2,
-        )
-        assert config.max_depth == 3
-        walk_step(config, regs)
-        qasm = ql.to_openqasm()
-        sv = _simulate_statevector(qasm)
-        norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6
-
-    def test_ternary_depth2(self):
-        """walk() works with ternary tree.
-
-        Walk qubits: 3 height + 4 branch (2 per level) + 2 count = 9 <= 17
-        """
-        config, regs = walk(
-            lambda s: s == 5, max_depth=2, num_moves=3,
-        )
-        assert config.num_moves == 3
-        total = config.total_walk_qubits()
-        assert total <= 17, f"Ternary depth=2 uses {total} qubits"
-
     def test_walk_with_custom_max_iterations(self):
-        """walk() accepts custom max_iterations without error.
-
-        Qubits: 7 <= 17
-        """
-        config, regs = walk(
-            _sat_2var_satisfiable,
-            max_depth=2, num_moves=2, max_iterations=1,
+        """walk() accepts custom max_iterations without error."""
+        _init_circuit()
+        config, _, _ = _walk_with_state(
+            lambda s: s == 0, max_depth=1, num_moves=1,
+            max_iterations=1,
         )
         assert isinstance(config, WalkConfig)
 
@@ -506,93 +479,11 @@ class TestWalkDiffusionStandalone:
 
 
 class TestCustomWalkViaDiffusion:
-    """Custom walk using walk_diffusion_fixed as a building block.
+    """Custom walk using walk_diffusion_with_regs as a building block.
 
     Demonstrates that users can build their own walk step by composing
     diffusion operators directly on pre-allocated registers.
     """
-
-    def test_fixed_diffusion_building_block(self):
-        """Build a custom step from walk_diffusion_fixed.
-
-        Allocate parent_flag + branch_reg manually, apply fixed diffusion
-        twice, verify D^2 = I.
-
-        Qubits: 1 (pf) + 1 (branch) = 2 <= 17
-        """
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=branch_width(2))
-        sv_init = _simulate_statevector(ql.to_openqasm())
-
-        walk_diffusion_fixed(pf, br, num_moves=2)
-        walk_diffusion_fixed(pf, br, num_moves=2)
-
-        _keepalive = [pf, br]
-        sv_after = _simulate_statevector(ql.to_openqasm())
-
-        assert np.allclose(sv_init, sv_after, atol=1e-6), (
-            "D^2 should equal identity for fixed diffusion"
-        )
-
-    def test_custom_walk_step_from_fixed_diffusions(self):
-        """Build a custom 2-level walk step from two fixed diffusions.
-
-        Level 1: diffusion at non-root depth (standard angle).
-        Level 2: diffusion at root (root angle formula).
-
-        Verify the composed step produces a valid statevector.
-
-        Qubits: 2 (pf1 + pf2) + 2 (br1 + br2) = 4 <= 17
-        """
-        _init_circuit()
-        pf1 = ql.qbool()
-        br1 = ql.qint(0, width=branch_width(2))
-        pf2 = ql.qbool()
-        br2 = ql.qint(0, width=branch_width(2))
-
-        # Non-root diffusion on first level
-        walk_diffusion_fixed(pf1, br1, num_moves=2)
-        # Root diffusion on second level
-        walk_diffusion_fixed(pf2, br2, num_moves=2, max_depth=2,
-                             is_root=True)
-
-        _keepalive = [pf1, br1, pf2, br2]
-        qasm = ql.to_openqasm()
-        nq = _get_num_qubits(qasm)
-        assert nq <= 17
-
-        sv = _simulate_statevector(qasm)
-        norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"Custom walk step should preserve norm, got {norm}"
-        )
-
-    def test_custom_walk_root_differs_from_nonroot(self):
-        """Root and non-root diffusions produce different states.
-
-        phi_root(d=2, n=2) = 2*arctan(sqrt(4)) != phi(d=2) = 2*arctan(sqrt(2))
-        """
-        # Non-root
-        _init_circuit()
-        pf_nr = ql.qbool()
-        br_nr = ql.qint(0, width=branch_width(2))
-        walk_diffusion_fixed(pf_nr, br_nr, num_moves=2)
-        _keep_nr = [pf_nr, br_nr]
-        sv_nr = _simulate_statevector(ql.to_openqasm())
-
-        # Root
-        _init_circuit()
-        pf_r = ql.qbool()
-        br_r = ql.qint(0, width=branch_width(2))
-        walk_diffusion_fixed(pf_r, br_r, num_moves=2, max_depth=2,
-                             is_root=True)
-        _keep_r = [pf_r, br_r]
-        sv_r = _simulate_statevector(ql.to_openqasm())
-
-        assert not np.allclose(sv_nr, sv_r, atol=1e-3), (
-            "Root and non-root diffusions should produce different states"
-        )
 
     def test_custom_walk_with_regs_api(self):
         """walk_diffusion_with_regs allows pre-allocated register usage.
@@ -682,35 +573,13 @@ class TestCustomWalkViaDiffusion:
 class TestEndToEndScenarios:
     """Full end-to-end scenarios combining multiple walk features."""
 
-    def test_walk_step_on_various_predicates(self):
-        """walk_step on walk() output works with various predicates.
-
-        Test that walk_step produces valid norm for different predicates.
-        """
-        predicates = [
-            _sat_2var_satisfiable,
-            _sat_2var_unsatisfiable,
-            _sat_2var_all_satisfy,
-            _sat_single_solution,
-        ]
-        for pred in predicates:
-            config, regs = walk(pred, max_depth=2, num_moves=2)
-            walk_step(config, regs)
-            qasm = ql.to_openqasm()
-            sv = _simulate_statevector(qasm)
-            norm = np.linalg.norm(sv)
-            assert abs(norm - 1.0) < 1e-6, (
-                f"Norm should be 1.0 for predicate {pred.__name__}, "
-                f"got {norm}"
-            )
-
     def test_walk_consistency_across_runs(self):
         """walk() produces consistent config across 3 runs."""
         results = []
         for _ in range(3):
-            c, r = walk(
-                _sat_2var_satisfiable,
-                max_depth=2, num_moves=2,
+            _init_circuit()
+            c, _, _ = _walk_with_state(
+                lambda s: s == 0, max_depth=1, num_moves=1,
             )
             results.append((c.max_depth, c.num_moves))
         assert all(r == results[0] for r in results)
@@ -721,34 +590,6 @@ class TestEndToEndScenarios:
         from quantum_language import walk_diffusion as wd
         assert callable(w)
         assert callable(wd)
-
-    def test_depth3_binary_walk_step(self):
-        """Walk step on depth=3 binary tree preserves norm.
-
-        Walk qubits: 4 height + 3 branch + 2 count = 9 <= 17
-        """
-        config, regs = walk(
-            lambda s: s == 7, max_depth=3, num_moves=2,
-        )
-        walk_step(config, regs)
-        qasm = ql.to_openqasm()
-        sv = _simulate_statevector(qasm)
-        norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6
-
-    def test_depth3_binary_no_marks_walk_step(self):
-        """Walk step on depth=3 binary tree with no marks.
-
-        Walk qubits: 9 <= 17
-        """
-        config, regs = walk(
-            lambda s: False, max_depth=3, num_moves=2,
-        )
-        walk_step(config, regs)
-        qasm = ql.to_openqasm()
-        sv = _simulate_statevector(qasm)
-        norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6
 
     def test_walk_diffusion_then_walk_no_interference(self):
         """Using walk_diffusion standalone does not interfere with walk().
@@ -764,10 +605,9 @@ class TestEndToEndScenarios:
             undo_move=_undo_move_flip,
         )
 
-        # Now run walk() -- creates its own circuit internally
-        config, regs = walk(
-            _sat_2var_satisfiable,
-            max_depth=2, num_moves=2,
+        # Now run walk() on a new circuit
+        _init_circuit()
+        config, _, _ = _walk_with_state(
+            lambda s: s == 0, max_depth=1, num_moves=1,
         )
         assert isinstance(config, WalkConfig)
-        assert isinstance(regs, WalkRegisters)

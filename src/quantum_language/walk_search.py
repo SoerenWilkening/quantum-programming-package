@@ -1,6 +1,6 @@
 """Quantum walk search: build marked walk configuration (Montanaro 2015).
 
-Public API: ``walk(is_marked, max_depth, num_moves, *, state=None, make_move=None, is_valid=None, max_iterations=None)``
+Public API: ``walk(is_marked, max_depth, num_moves, state, make_move, is_valid, *, max_iterations=None)``
 
 Builds a :class:`WalkConfig` with the ``is_marked`` predicate set and
 allocates walk registers ready for use with :func:`walk_step`.  The
@@ -56,8 +56,8 @@ def _max_walk_iterations(num_moves, max_depth):
 # ------------------------------------------------------------------
 
 
-def _validate_walk_args(is_marked, max_depth, num_moves,
-                        max_iterations=None):
+def _validate_walk_args(is_marked, max_depth, num_moves, state,
+                        make_move, is_valid, max_iterations=None):
     """Validate arguments for the walk() public API."""
     if is_marked is None:
         raise ValueError("is_marked must not be None")
@@ -73,6 +73,12 @@ def _validate_walk_args(is_marked, max_depth, num_moves,
         raise ValueError(f"max_depth must be >= 1, got {max_depth}")
     if num_moves < 1:
         raise ValueError(f"num_moves must be >= 1, got {num_moves}")
+    if state is None:
+        raise ValueError("state must not be None")
+    if make_move is None:
+        raise ValueError("make_move must not be None")
+    if is_valid is None:
+        raise ValueError("is_valid must not be None")
     if max_iterations is not None:
         if not isinstance(max_iterations, int):
             raise TypeError(
@@ -90,8 +96,8 @@ def _validate_walk_args(is_marked, max_depth, num_moves,
 # ------------------------------------------------------------------
 
 
-def walk(is_marked, max_depth, num_moves, *, state=None,
-         make_move=None, is_valid=None, max_iterations=None):
+def walk(is_marked, max_depth, num_moves, state, make_move, is_valid,
+         *, undo_move=None, max_iterations=None):
     """Build a marked quantum walk configuration with allocated registers.
 
     Creates a :class:`WalkConfig` with ``is_marked`` set and allocates
@@ -122,17 +128,13 @@ def walk(is_marked, max_depth, num_moves, *, state=None,
         Maximum depth of the backtracking tree (>= 1).
     num_moves : int
         Maximum branching factor at any node (>= 1).
-    state : qint or qarray, optional
-        Quantum register representing the problem state.  When provided
-        together with ``is_marked``, enables quantum marking in the
-        walk operators (D_x = I for marked nodes).
-    make_move : callable, optional
+    state : qint or qarray
+        Quantum register representing the problem state.
+    make_move : callable
         Function ``make_move(state, move_index)`` that transforms
-        state by applying a move.  Used with ``is_valid`` for
-        variable-branching walks.
-    is_valid : callable, optional
+        state by applying a move.
+    is_valid : callable
         Quantum predicate ``is_valid(state)`` returning ``qbool``.
-        Used with ``make_move`` for variable-branching walks.
     max_iterations : int, optional
         Maximum walk step iterations (>= 1).  Auto-computed from
         tree size as ``ceil(sqrt(T / n))`` if not provided.
@@ -147,26 +149,18 @@ def walk(is_marked, max_depth, num_moves, *, state=None,
     Raises
     ------
     ValueError
-        If ``is_marked`` is None, or depth/moves < 1, or
-        ``max_iterations`` < 1.
+        If ``is_marked``, ``state``, ``make_move``, or ``is_valid``
+        is None, or depth/moves < 1, or ``max_iterations`` < 1.
     TypeError
         If ``max_depth``, ``num_moves``, or ``max_iterations`` are
         not int.
     """
-    import quantum_language as ql
-
-    _validate_walk_args(is_marked, max_depth, num_moves,
+    _validate_walk_args(is_marked, max_depth, num_moves, state,
+                        make_move, is_valid,
                         max_iterations=max_iterations)
 
     if max_iterations is None:
         max_iterations = _max_walk_iterations(num_moves, max_depth)
-
-    # Only create a fresh circuit when no pre-existing state register
-    # is provided.  If state is given, the caller already has an active
-    # circuit that owns that register; calling ql.circuit() would
-    # invalidate it.
-    if state is None:
-        ql.circuit()
 
     config = WalkConfig(
         max_depth=max_depth,
@@ -174,6 +168,7 @@ def walk(is_marked, max_depth, num_moves, *, state=None,
         is_marked=is_marked,
         state=state,
         make_move=make_move,
+        undo_move=undo_move,
         is_valid=is_valid,
     )
 

@@ -12,7 +12,6 @@ Requirements from acceptance criteria:
 """
 
 import gc
-import math
 
 import numpy as np
 import pytest
@@ -23,13 +22,9 @@ import quantum_language as ql
 from quantum_language.walk_core import (
     WalkConfig,
     branch_width,
-    count_width,
-    montanaro_phi,
-    root_angle,
 )
 from quantum_language.walk_diffusion import (
     walk_diffusion,
-    walk_diffusion_fixed,
     walk_diffusion_with_regs,
     _s0_reflection,
 )
@@ -156,307 +151,9 @@ class TestValidation:
         with pytest.raises(TypeError, match="config must be a WalkConfig"):
             walk_diffusion_with_regs("not a config", None, None)
 
-    def test_fixed_rejects_non_int_num_moves(self):
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=1)
-        with pytest.raises(TypeError, match="num_moves must be an int"):
-            walk_diffusion_fixed(pf, br, 2.0)
-
-    def test_fixed_rejects_zero_num_moves(self):
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=1)
-        with pytest.raises(ValueError, match="num_moves must be >= 1"):
-            walk_diffusion_fixed(pf, br, 0)
-
 
 # ---------------------------------------------------------------------------
-# Group 2: Reflection Property D^2 = I (fixed branching)
-# ---------------------------------------------------------------------------
-
-
-class TestReflectionPropertyFixed:
-    """D^2 = I (statevector tolerance 1e-6) for fixed branching."""
-
-    def test_d_squared_identity_d1(self):
-        """D^2 = I with d=1 (single child)."""
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=branch_width(1))
-        sv_init = _get_statevector(ql.to_openqasm())
-
-        walk_diffusion_fixed(pf, br, num_moves=1)
-        walk_diffusion_fixed(pf, br, num_moves=1)
-
-        _keepalive = [pf, br]
-        sv_after = _get_statevector(ql.to_openqasm())
-
-        assert np.allclose(sv_init, sv_after, atol=1e-6), (
-            "D^2 should equal identity for d=1"
-        )
-
-    def test_d_squared_identity_d2(self):
-        """D^2 = I with d=2 (binary branching)."""
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=branch_width(2))
-        sv_init = _get_statevector(ql.to_openqasm())
-
-        walk_diffusion_fixed(pf, br, num_moves=2)
-        walk_diffusion_fixed(pf, br, num_moves=2)
-
-        _keepalive = [pf, br]
-        sv_after = _get_statevector(ql.to_openqasm())
-
-        assert np.allclose(sv_init, sv_after, atol=1e-6), (
-            "D^2 should equal identity for d=2"
-        )
-
-    def test_d_squared_identity_d3(self):
-        """D^2 = I with d=3 (ternary branching)."""
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=branch_width(3))
-        sv_init = _get_statevector(ql.to_openqasm())
-
-        walk_diffusion_fixed(pf, br, num_moves=3)
-        walk_diffusion_fixed(pf, br, num_moves=3)
-
-        _keepalive = [pf, br]
-        sv_after = _get_statevector(ql.to_openqasm())
-
-        assert np.allclose(sv_init, sv_after, atol=1e-6), (
-            "D^2 should equal identity for d=3"
-        )
-
-    def test_d_squared_identity_d4(self):
-        """D^2 = I with d=4."""
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=branch_width(4))
-        sv_init = _get_statevector(ql.to_openqasm())
-
-        walk_diffusion_fixed(pf, br, num_moves=4)
-        walk_diffusion_fixed(pf, br, num_moves=4)
-
-        _keepalive = [pf, br]
-        sv_after = _get_statevector(ql.to_openqasm())
-
-        assert np.allclose(sv_init, sv_after, atol=1e-6), (
-            "D^2 should equal identity for d=4"
-        )
-
-    def test_single_diffusion_changes_state_d2(self):
-        """Single D with d=2 modifies the statevector (non-trivial)."""
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=branch_width(2))
-        sv_init = _get_statevector(ql.to_openqasm())
-
-        walk_diffusion_fixed(pf, br, num_moves=2)
-
-        _keepalive = [pf, br]
-        sv_after = _get_statevector(ql.to_openqasm())
-
-        assert not np.allclose(sv_init, sv_after, atol=1e-3), (
-            "Single diffusion should change the state (d=2)"
-        )
-
-
-# ---------------------------------------------------------------------------
-# Group 3: Root Angle Formula
-# ---------------------------------------------------------------------------
-
-
-class TestRootAngle:
-    """Root diffusion uses root angle formula phi_root(d, n)."""
-
-    def test_root_d_squared_identity_d2_n2(self):
-        """D_root^2 = I with d=2, n=2."""
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=branch_width(2))
-        sv_init = _get_statevector(ql.to_openqasm())
-
-        walk_diffusion_fixed(pf, br, num_moves=2, max_depth=2, is_root=True)
-        walk_diffusion_fixed(pf, br, num_moves=2, max_depth=2, is_root=True)
-
-        _keepalive = [pf, br]
-        sv_after = _get_statevector(ql.to_openqasm())
-
-        assert np.allclose(sv_init, sv_after, atol=1e-6), (
-            "D_root^2 should equal identity for d=2, n=2"
-        )
-
-    def test_root_d_squared_identity_d3_n2(self):
-        """D_root^2 = I with d=3, n=2."""
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=branch_width(3))
-        sv_init = _get_statevector(ql.to_openqasm())
-
-        walk_diffusion_fixed(pf, br, num_moves=3, max_depth=2, is_root=True)
-        walk_diffusion_fixed(pf, br, num_moves=3, max_depth=2, is_root=True)
-
-        _keepalive = [pf, br]
-        sv_after = _get_statevector(ql.to_openqasm())
-
-        assert np.allclose(sv_init, sv_after, atol=1e-6), (
-            "D_root^2 should equal identity for d=3, n=2"
-        )
-
-    def test_root_produces_different_amplitudes_than_nonroot(self):
-        """Root and non-root diffusions produce different states.
-
-        phi_root(d=2, n=2) = 2*arctan(sqrt(4)) != phi(d=2) = 2*arctan(sqrt(2))
-        """
-        # Non-root
-        _init_circuit()
-        pf_nr = ql.qbool()
-        br_nr = ql.qint(0, width=branch_width(2))
-        walk_diffusion_fixed(pf_nr, br_nr, num_moves=2)
-        _keep_nr = [pf_nr, br_nr]
-        sv_nr = _get_statevector(ql.to_openqasm())
-
-        # Root
-        _init_circuit()
-        pf_r = ql.qbool()
-        br_r = ql.qint(0, width=branch_width(2))
-        walk_diffusion_fixed(pf_r, br_r, num_moves=2, max_depth=2,
-                             is_root=True)
-        _keep_r = [pf_r, br_r]
-        sv_r = _get_statevector(ql.to_openqasm())
-
-        assert not np.allclose(sv_nr, sv_r, atol=1e-3), (
-            "Root and non-root diffusions should produce different states"
-        )
-
-
-# ---------------------------------------------------------------------------
-# Group 4: Correct Amplitudes After One Diffusion
-# ---------------------------------------------------------------------------
-
-
-class TestDiffusionAmplitudes:
-    """Amplitudes after a single diffusion match expected reflection."""
-
-    def test_d2_amplitudes(self):
-        """D_x on d=2 from |0,0> produces correct reflection amplitudes.
-
-        |psi_x> = cos(phi/2)|0,0> + cos(phi/2)*sin(pi/4)|0,1>
-                  + sin(phi/2)*cos(pi/4)|1,0> + sin(phi/2)*sin(pi/4)|1,1>
-        where phi = 2*arctan(sqrt(2)).
-
-        D_x|0,0> = 2<psi_x|0,0>|psi_x> - |0,0>
-        """
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=branch_width(2))
-
-        walk_diffusion_fixed(pf, br, num_moves=2)
-
-        pf_start = pf.allocated_start
-        br_start = br.allocated_start
-        _keepalive = [pf, br]
-        sv = _get_statevector(ql.to_openqasm())
-
-        # Compute expected amplitudes analytically
-        d = 2
-        phi = montanaro_phi(d)
-        cphi = math.cos(phi / 2)
-        sphi = math.sin(phi / 2)
-        cc = math.cos(math.pi / 4)
-        sc = math.sin(math.pi / 4)
-
-        # |psi_x> in (pf, br) basis
-        psi = np.array([cphi * cc, cphi * sc, sphi * cc, sphi * sc])
-        start = np.array([1.0, 0.0, 0.0, 0.0])
-        inner = np.dot(psi, start)
-        expected = 2 * inner * psi - start
-
-        # Extract observed amplitudes from statevector
-        # pf=qubit at pf_start, br=qubit at br_start
-        idx_00 = 0  # pf=0, br=0
-        idx_01 = 1 << br_start  # pf=0, br=1
-        idx_10 = 1 << pf_start  # pf=1, br=0
-        idx_11 = (1 << pf_start) | (1 << br_start)  # pf=1, br=1
-
-        observed = np.array([sv[idx_00], sv[idx_01], sv[idx_10], sv[idx_11]])
-
-        # Match up to global phase
-        overlap = abs(np.vdot(observed, expected))
-        assert abs(overlap - 1.0) < 1e-6, (
-            f"Amplitudes don't match expected D_x|0,0>.\n"
-            f"  Expected: {expected}\n"
-            f"  Observed: {observed}\n"
-            f"  Overlap: {overlap}"
-        )
-
-    def test_d1_parent_amplitude(self):
-        """d=1: parent prob = 1/2, single child prob = 1/2.
-
-        phi(1) = pi/2. cos^2(pi/4) = 1/2.
-        """
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=branch_width(1))
-
-        walk_diffusion_fixed(pf, br, num_moves=1)
-
-        pf_start = pf.allocated_start
-        _keepalive = [pf, br]
-        sv = _get_statevector(ql.to_openqasm())
-
-        pf_probs = _extract_register_probs(sv, pf_start, 1)
-
-        # After D|0>: parent and child each get specific amplitude
-        # D|0> = 2<psi|0>|psi> - |0>
-        # <psi|0> = cos(phi/2) = cos(pi/4) = 1/sqrt(2)
-        # D|0> = 2*(1/sqrt(2))*|psi> - |0>
-        # = sqrt(2)*|psi> - |0>
-        # parent component = sqrt(2)*cos(pi/4) - 1 = sqrt(2)/sqrt(2) - 1 = 0
-        # child component = sqrt(2)*sin(pi/4) = sqrt(2)/sqrt(2) = 1
-        # So D|0> maps entirely to child state for d=1
-        child_prob = pf_probs.get(1, 0.0)
-        parent_prob = pf_probs.get(0, 0.0)
-
-        # D|0> should give child prob close to 1.0 and parent prob close to 0
-        # (reflection flips through |psi>)
-        total = parent_prob + child_prob
-        assert abs(total - 1.0) < 1e-6, f"Total prob should be 1, got {total}"
-
-
-# ---------------------------------------------------------------------------
-# Group 5: Identity When No Valid Children (fixed branching d=0)
-# ---------------------------------------------------------------------------
-
-
-class TestNoValidChildren:
-    """Diffusion is identity when d=0 (no valid children)."""
-
-    def test_fixed_d0_is_noop(self):
-        """_fixed_diffusion with d < 1 returns immediately (no gates)."""
-        from quantum_language.walk_diffusion import _fixed_diffusion
-
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=1)
-        sv_before = _get_statevector(ql.to_openqasm())
-
-        # Calling _fixed_diffusion with d=0 is a no-op
-        _fixed_diffusion(0, pf, br, {})
-
-        _keepalive = [pf, br]
-        sv_after = _get_statevector(ql.to_openqasm())
-
-        assert np.allclose(sv_before, sv_after, atol=1e-10), (
-            "Diffusion with d=0 should be identity"
-        )
-
-
-# ---------------------------------------------------------------------------
-# Group 6: Variable Branching (with predicates)
+# Group 2: Variable Branching (with predicates)
 # ---------------------------------------------------------------------------
 
 
@@ -652,34 +349,12 @@ class TestVariableBranching:
 
 
 # ---------------------------------------------------------------------------
-# Group 7: Qubit Budget
+# Group 3: Qubit Budget
 # ---------------------------------------------------------------------------
 
 
 class TestQubitBudget:
     """Verify circuits stay within the 17-qubit simulation limit."""
-
-    def test_fixed_d2_within_budget(self):
-        """Fixed d=2 diffusion uses only 2 qubits."""
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=branch_width(2))
-        walk_diffusion_fixed(pf, br, num_moves=2)
-        _keepalive = [pf, br]
-        qasm = ql.to_openqasm()
-        nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
-
-    def test_fixed_d4_within_budget(self):
-        """Fixed d=4 diffusion fits within 17 qubits."""
-        _init_circuit()
-        pf = ql.qbool()
-        br = ql.qint(0, width=branch_width(4))
-        walk_diffusion_fixed(pf, br, num_moves=4)
-        _keepalive = [pf, br]
-        qasm = ql.to_openqasm()
-        nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
 
     def test_variable_1bit_1move_within_budget(self):
         """Variable diffusion with 1-bit state, 1 move within budget."""
@@ -696,7 +371,7 @@ class TestQubitBudget:
 
 
 # ---------------------------------------------------------------------------
-# Group 8: S_0 Reflection Unit Test
+# Group 4: S_0 Reflection Unit Test
 # ---------------------------------------------------------------------------
 
 

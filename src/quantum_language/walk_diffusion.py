@@ -3,14 +3,13 @@
 D_x = U * S_0 * U_dagger, where U = Montanaro rotations on
 parent_flag + branch register, S_0 = phase flip on |0...0>.
 
-Fixed-branching path: d known classically, direct rotations, D^2 = I exact.
 Variable-branching path: evaluates validity, counts, conditional rotations.
 Root node uses phi_root = 2 * arctan(sqrt(n * d)).
 
 Reference: Montanaro, "Quantum speedup of backtracking algorithms", 2018.
 """
 
-from ._gates import emit_mcz, emit_ry, emit_z
+from ._gates import emit_mcz, emit_z
 from .diffusion import _collect_qubits, _flip_all
 from .walk_branching import (
     _emit_cascade_multi_controlled,
@@ -139,70 +138,6 @@ def _precompute_angles(num_moves, bw, is_root=False, max_depth=1):
         cascade_ops = _plan_cascade_ops(c, bw)
         data[c] = {"phi": phi, "cascade_ops": cascade_ops}
     return data
-
-
-# ------------------------------------------------------------------
-# Fixed-branching diffusion (no predicates, D^2 = I exact)
-# ------------------------------------------------------------------
-
-
-def _fixed_diffusion(d, parent_flag, branch_reg, angle_data,
-                     control_qubit=None):
-    """Fixed-branching D_x = U S_0 U_dagger.  No ancilla, D^2 = I exact.
-
-    Parameters
-    ----------
-    d : int
-        Number of valid children.
-    parent_flag : qbool
-        Parent-flag qubit.
-    branch_reg : qint
-        Branch register.
-    angle_data : dict
-        Pre-computed angles from ``_precompute_angles``.
-    control_qubit : int or None
-        If set, all operations are controlled on this physical qubit
-        index (height control for walk operators).
-    """
-    if d < 1:
-        return  # No valid children -> identity
-
-    phi = angle_data[d]["phi"]
-    cascade_ops = angle_data[d]["cascade_ops"]
-    parent_qubit = int(parent_flag.qubits[63])
-
-    extra_ctrls = [control_qubit] if control_qubit is not None else []
-
-    if control_qubit is not None:
-        from .walk_branching import _make_qbool_wrapper
-        h_control = _make_qbool_wrapper(control_qubit)
-
-    # Step A: U_dagger (inverse state preparation)
-    # First undo cascade, then undo phi rotation
-    if d > 1 and cascade_ops:
-        _emit_cascade_multi_controlled(
-            branch_reg, cascade_ops, extra_ctrls, sign=-1,
-        )
-    if control_qubit is not None:
-        with h_control:
-            emit_ry(parent_qubit, -phi)
-    else:
-        emit_ry(parent_qubit, -phi)
-
-    # Step B: S_0 reflection
-    _s0_reflection(parent_flag, branch_reg, control_qubit=control_qubit)
-
-    # Step C: U forward (state preparation)
-    # First phi rotation, then cascade
-    if control_qubit is not None:
-        with h_control:
-            emit_ry(parent_qubit, phi)
-    else:
-        emit_ry(parent_qubit, phi)
-    if d > 1 and cascade_ops:
-        _emit_cascade_multi_controlled(
-            branch_reg, cascade_ops, extra_ctrls, sign=1,
-        )
 
 
 # ------------------------------------------------------------------
@@ -410,51 +345,6 @@ def walk_diffusion(state, make_move, is_valid, num_moves,
     # Apply the variable-branching diffusion
     _variable_diffusion(config, parent_flag, branch_reg, angles,
                         is_root=is_root)
-
-
-def walk_diffusion_fixed(parent_flag, branch_reg, num_moves,
-                         max_depth=1, is_root=False, control_qubit=None):
-    """Fixed-branching diffusion (no predicates, D^2 = I exact).
-
-    Applies the Montanaro diffusion assuming all ``num_moves`` children
-    are valid.  Uses direct rotations on the parent_flag and branch
-    register with no ancilla allocation.  Satisfies D^2 = I at full
-    statevector level.
-
-    This is the building block used by walk operators (R_A, R_B) at
-    nodes where the branching factor is fixed.
-
-    Parameters
-    ----------
-    parent_flag : qbool
-        Parent-flag qubit.
-    branch_reg : qint
-        Branch register.
-    num_moves : int
-        Number of valid children (branching factor).
-    max_depth : int, optional
-        Tree depth (for root angle formula).  Default is 1.
-    is_root : bool, optional
-        If True, use root angle formula.  Default is False.
-    control_qubit : int or None, optional
-        If set, all operations are controlled on this physical qubit
-        index (height control for walk operators).  Default is None.
-    """
-    if not isinstance(num_moves, int):
-        raise TypeError(
-            f"num_moves must be an int, got {type(num_moves).__name__}"
-        )
-    if num_moves < 1:
-        raise ValueError(f"num_moves must be >= 1, got {num_moves}")
-
-    bw = branch_reg.width
-    angles = _precompute_angles(
-        num_moves, bw,
-        is_root=is_root,
-        max_depth=max_depth,
-    )
-    _fixed_diffusion(num_moves, parent_flag, branch_reg, angles,
-                     control_qubit=control_qubit)
 
 
 # ------------------------------------------------------------------
