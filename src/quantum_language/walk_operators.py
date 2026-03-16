@@ -113,14 +113,12 @@ def _apply_local_diffusion(config, registers, depth):
         # Variable branching: marking is not yet integrated into the
         # variable-branching path because make_move uses DSL operations
         # (XOR) that do not support controlled execution.  The variable
-        # diffusion runs unconditionally here; marking integration for
-        # variable branching is deferred to walk_search rewrite
-        # (Quantum_Assembly-8sp).
+        # diffusion runs unconditionally here.
         if config.is_marked is not None:
             warnings.warn(
                 "is_marked is ignored in the variable-branching path; "
-                "marking integration for variable branching is deferred "
-                "to the walk_search rewrite (Quantum_Assembly-8sp)",
+                "quantum marking is not yet supported with variable "
+                "branching (make_move / is_valid)",
                 stacklevel=2,
             )
         from .walk_branching import _make_qbool_wrapper
@@ -139,11 +137,6 @@ def _apply_local_diffusion(config, registers, depth):
         # D_x = I for marked, standard diffusion for unmarked.
         # Evaluate is_marked(state) quantumly to get a qbool,
         # negate it so that ``with marked:`` runs on UNMARKED nodes.
-        #
-        # Note: this code path is infrastructure for the walk_search
-        # rewrite (Quantum_Assembly-8sp).  The current walk() public
-        # API in walk_search.py does not set config.state, so it does
-        # not reach this branch yet.
         marked = config.is_marked(config.state)
         _flip_all(marked)
         with marked:

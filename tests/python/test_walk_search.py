@@ -205,13 +205,42 @@ class TestWalkReturnType:
         assert registers.config is config
 
     def test_state_passed_through(self):
-        """state parameter is passed to config."""
+        """state parameter is passed to config and usable with walk_step.
+
+        Verifies that the state register survives walk() (is not
+        invalidated) and that walk_step with marking produces a
+        different operator than the standard unmarked walk.
+
+        Qubits: 3 height + 2 branch + 2 count + 2 state = 9 + ancillas <= 17
+        """
+        # Unmarked baseline
         _init_circuit()
-        state = ql.qint(0, width=4)
-        config, _ = walk(
+        config_std = WalkConfig(max_depth=2, num_moves=2)
+        regs_std = WalkRegisters(config_std)
+        regs_std.init_root()
+        walk_step(config_std, regs_std)
+        sv_std = _simulate_statevector(ql.to_openqasm())
+
+        # Marked walk via walk() with pre-existing state register
+        _init_circuit()
+        state = ql.qint(0, width=2)
+        config, regs = walk(
             lambda s: s == 0, max_depth=2, num_moves=2, state=state,
         )
         assert config.state is state
+        walk_step(config, regs)
+        _keepalive = [state]
+        sv_marked = _simulate_statevector(ql.to_openqasm())
+
+        # Both should be valid unit vectors
+        assert abs(np.linalg.norm(sv_std) - 1.0) < 1e-6
+        assert abs(np.linalg.norm(sv_marked) - 1.0) < 1e-6
+
+        # They should differ because marking changes the operator
+        min_len = min(len(sv_std), len(sv_marked))
+        assert not np.allclose(
+            sv_std[:min_len], sv_marked[:min_len], atol=1e-3,
+        ), "walk() with state should produce marked walk, not standard"
 
     def test_make_move_passed_through(self):
         """make_move parameter is passed to config."""

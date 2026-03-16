@@ -25,7 +25,6 @@ References
 import math
 
 from .walk_core import WalkConfig
-from .walk_operators import walk_step
 from .walk_registers import WalkRegisters
 
 
@@ -136,8 +135,7 @@ def walk(is_marked, max_depth, num_moves, *, state=None,
         Used with ``make_move`` for variable-branching walks.
     max_iterations : int, optional
         Maximum walk step iterations (>= 1).  Auto-computed from
-        tree size as ``ceil(sqrt(T / n))`` if not provided.  Stored
-        on the returned config for caller convenience.
+        tree size as ``ceil(sqrt(T / n))`` if not provided.
 
     Returns
     -------
@@ -163,7 +161,12 @@ def walk(is_marked, max_depth, num_moves, *, state=None,
     if max_iterations is None:
         max_iterations = _max_walk_iterations(num_moves, max_depth)
 
-    ql.circuit()
+    # Only create a fresh circuit when no pre-existing state register
+    # is provided.  If state is given, the caller already has an active
+    # circuit that owns that register; calling ql.circuit() would
+    # invalidate it.
+    if state is None:
+        ql.circuit()
 
     config = WalkConfig(
         max_depth=max_depth,
