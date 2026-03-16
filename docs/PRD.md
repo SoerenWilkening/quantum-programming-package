@@ -72,7 +72,7 @@ Function-based quantum walk API replacing the monolithic QWalkTree class.
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| R12.1 | `walk(is_marked, max_depth, num_moves)` — full walk with detection returning bool. | |
+| R12.1 | `walk(is_marked, max_depth, num_moves)` — full walk with detection returning bool. (Signature will change in Step 2b.5 to accept state/make_move/is_valid and return (config, registers); update this row when that step lands.) | |
 | R12.2 | `walk_diffusion(state, make_move, is_valid, num_moves)` — local diffusion building block at current depth. | |
 | R12.3 | User provides `make_move(state, move_index)` as `@ql.compile(inverse=True)` function. `move_index` is a classical int; the function uses DSL operations (arithmetic, XOR, `with`) — never raw gates. | |
 | R12.4 | User provides `is_valid(state)` and `is_marked(state)` as quantum predicates returning `qbool`. | |
