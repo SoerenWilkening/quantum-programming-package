@@ -13,7 +13,6 @@ from .diffusion import _collect_qubits, _extract_qbools, _flip_all, _nested_phas
 from .walk_branching import (
     _emit_cascade_multi_controlled,
     _emit_multi_controlled_ry,
-    _make_qbool_wrapper,
     _plan_cascade_ops,
 )
 from .walk_core import (
@@ -31,7 +30,7 @@ from .walk_core import (
 
 
 def _s0_reflection(parent_flag, branch_reg, control_qbool=None,
-                   marking_qubit=None):
+                   marking_qbool=None):
     """Phase flip on |0...0> of parent_flag + branch_reg using DSL ops.
 
     Uses the same pattern as ``diffusion.py``: flip all qubits (XOR),
@@ -47,9 +46,9 @@ def _s0_reflection(parent_flag, branch_reg, control_qbool=None,
     control_qbool : qbool or None
         If set, all operations are controlled on this height qbool
         (height control for walk operators).
-    marking_qubit : int or None
+    marking_qbool : qbool or None
         If set, all operations are additionally controlled on this
-        physical qubit index (marking control for Montanaro marking).
+        qbool (marking control for Montanaro marking).
     """
     s0_qubits = _collect_qubits(parent_flag, branch_reg)
 
@@ -60,8 +59,8 @@ def _s0_reflection(parent_flag, branch_reg, control_qbool=None,
     ext_ctrls = []
     if control_qbool is not None:
         ext_ctrls.append(control_qbool)
-    if marking_qubit is not None:
-        ext_ctrls.append(_make_qbool_wrapper(marking_qubit))
+    if marking_qbool is not None:
+        ext_ctrls.append(marking_qbool)
 
     # Extract individual qubits from parent_flag + branch_reg as qbools
     bits = _extract_qbools(parent_flag, branch_reg)
@@ -155,7 +154,7 @@ def _evaluate_validity(config):
 
 def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
                         is_root=False, control_qbool=None,
-                        marking_qubit=None):
+                        marking_qbool=None, validity=None):
     """Variable-branching diffusion: count -> conditional rotations -> S_0.
 
     Parameters
@@ -173,26 +172,30 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
     control_qbool : qbool or None
         If set, all operations are controlled on this height qbool
         (height control for walk operators).
-    marking_qubit : int or None
+    marking_qbool : qbool or None
         If set, the rotation and S_0 steps (steps 4-6) are additionally
-        controlled on this physical qubit index (marking control for
-        Montanaro marking).  The validity evaluation and counting
-        (steps 1-3, 7) run unconditionally.
+        controlled on this qbool (marking control for Montanaro
+        marking).  The validity evaluation and counting (steps 1-3, 7)
+        run unconditionally.
+    validity : list or None
+        Pre-evaluated validity qbools (from ``_evaluate_validity``).
+        If None, validity is evaluated internally.
     """
     import quantum_language as ql
 
     num_moves = config.num_moves
 
     # Step 1: Evaluate validity for all children
-    # (unconditional -- not controlled on marking_qubit)
-    validity = _evaluate_validity(config)
+    # (unconditional -- not controlled on marking_qbool)
+    if validity is None:
+        validity = _evaluate_validity(config)
 
     # Step 2: Sum validity bits into count register.
     # Use controlled increment (``with v: count += 1``) instead of
     # ``count += v`` to avoid a framework bug where ``__iadd__`` /
     # ``__isub__`` with comparison-derived qbools produces garbage
     # qubit indices.
-    # (unconditional -- not controlled on marking_qubit)
+    # (unconditional -- not controlled on marking_qbool)
     cw = count_width(num_moves)
     count = ql.qint(0, width=cw)
     for v in validity:
@@ -202,7 +205,7 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
     # Step 3: Compute count comparisons and extract raw qubit indices.
     # Store only the physical qubit index (int), not the live qbool,
     # matching the pattern in the old counting_diffusion_core.
-    # (unconditional -- not controlled on marking_qubit)
+    # (unconditional -- not controlled on marking_qbool)
     cond_qubits_map = {}
     for c in range(1, num_moves + 1):
         if c in angle_data:
@@ -213,11 +216,11 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
     extra_ctrls = []
     if control_qbool is not None:
         extra_ctrls.append(int(control_qbool.qubits[63]))
-    if marking_qubit is not None:
-        extra_ctrls = extra_ctrls + [marking_qubit]
+    if marking_qbool is not None:
+        extra_ctrls.append(int(marking_qbool.qubits[63]))
 
     # Step 4: U_dagger (inverse state preparation)
-    # (controlled on marking_qubit if set)
+    # (controlled on marking_qbool if set)
     for c in range(1, num_moves + 1):
         if c not in angle_data:
             continue
@@ -232,12 +235,12 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
         _emit_multi_controlled_ry(parent_qubit, -phi, ctrl_qubits)
 
     # Step 5: S_0 reflection
-    # (controlled on marking_qubit if set)
+    # (controlled on marking_qbool if set)
     _s0_reflection(parent_flag, branch_reg, control_qbool=control_qbool,
-                   marking_qubit=marking_qubit)
+                   marking_qbool=marking_qbool)
 
     # Step 6: U forward (state preparation)
-    # (controlled on marking_qubit if set)
+    # (controlled on marking_qbool if set)
     for c in range(1, num_moves + 1):
         if c not in angle_data:
             continue
@@ -252,7 +255,7 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
             )
 
     # Step 7: Uncompute count register (reverse controlled decrement)
-    # (unconditional -- not controlled on marking_qubit)
+    # (unconditional -- not controlled on marking_qbool)
     for v in reversed(validity):
         with v:
             count -= 1
@@ -342,7 +345,8 @@ def walk_diffusion(state, make_move, is_valid, num_moves,
 
 
 def walk_diffusion_with_regs(config, parent_flag, branch_reg, is_root=False,
-                             control_qbool=None, marking_qubit=None):
+                             control_qbool=None, marking_qbool=None,
+                             validity=None):
     """Local diffusion using pre-allocated registers.
 
     Like :func:`walk_diffusion` but takes a ``WalkConfig`` and
@@ -362,11 +366,13 @@ def walk_diffusion_with_regs(config, parent_flag, branch_reg, is_root=False,
     control_qbool : qbool or None, optional
         If set, all operations are controlled on this height qbool
         (height control for walk operators).  Default is None.
-    marking_qubit : int or None, optional
+    marking_qbool : qbool or None, optional
         If set, the rotation and S_0 steps are additionally controlled
-        on this physical qubit index (marking control for Montanaro
-        marking).  The validity evaluation runs unconditionally.
-        Default is None.
+        on this qbool (marking control for Montanaro marking).  The
+        validity evaluation runs unconditionally.  Default is None.
+    validity : list or None, optional
+        Pre-evaluated validity qbools (from ``_evaluate_validity``).
+        If None, validity is evaluated internally.  Default is None.
     """
     _validate_config(config)
 
@@ -381,7 +387,7 @@ def walk_diffusion_with_regs(config, parent_flag, branch_reg, is_root=False,
 
     _variable_diffusion(config, parent_flag, branch_reg, angles,
                         is_root=is_root, control_qbool=control_qbool,
-                        marking_qubit=marking_qubit)
+                        marking_qbool=marking_qbool, validity=validity)
 
 
 # ------------------------------------------------------------------

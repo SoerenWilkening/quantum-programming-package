@@ -20,7 +20,7 @@ References
 
 from .diffusion import _flip_all
 from .walk_core import WalkConfig
-from .walk_diffusion import walk_diffusion_with_regs
+from .walk_diffusion import _evaluate_validity, walk_diffusion_with_regs
 from .walk_registers import WalkRegisters
 
 
@@ -71,6 +71,15 @@ def _apply_local_diffusion(config, registers, depth):
     Height control uses the qbool from ``registers.height_qubit(depth)``.
     The child height qbool is passed directly as the parent flag.
 
+    When marking is active, the structure at this level is:
+
+    1. Evaluate validity unconditionally (no marking control).
+    2. Evaluate ``is_marked(state)`` to obtain a ``marked`` qbool.
+    3. Negate ``marked`` so it is |1> for UNMARKED nodes.
+    4. Pass ``marked`` as ``marking_qbool`` into the diffusion so that
+       only the rotation / S_0 steps are conditioned on it.
+    5. Undo the negation.
+
     Parameters
     ----------
     config : WalkConfig
@@ -92,20 +101,25 @@ def _apply_local_diffusion(config, registers, depth):
     if config.is_marked is not None and config.state is not None:
         # Quantum marking with variable branching:
         # D_x = I for marked, standard diffusion for unmarked.
-        # Evaluate is_marked(state) quantumly, negate so that
-        # the marking qubit is |1> for UNMARKED nodes.  The
-        # marking qubit is passed into the diffusion as an extra
-        # control so that only the rotation / S_0 steps are
-        # conditioned -- the validity evaluation (which uses XOR
-        # in make_move) runs unconditionally outside any control.
+
+        # Step 1: Evaluate validity unconditionally (outside marking).
+        validity = _evaluate_validity(config)
+
+        # Step 2-3: Evaluate is_marked(state) quantumly, negate so
+        # that the marking qbool is |1> for UNMARKED nodes.
         marked = config.is_marked(config.state)
         _flip_all(marked)
-        marking_qubit = int(marked.qubits[63])
+
+        # Step 4: Pass marked qbool into diffusion -- only the
+        # rotation / S_0 steps are controlled on it.  Validity
+        # is pre-evaluated and passed in so it runs unconditionally.
         walk_diffusion_with_regs(
             config, h_child_qbool, branch_reg,
             is_root=is_root, control_qbool=h_qbool,
-            marking_qubit=marking_qubit,
+            marking_qbool=marked, validity=validity,
         )
+
+        # Step 5: Undo the negation.
         _flip_all(marked)
     else:
         walk_diffusion_with_regs(

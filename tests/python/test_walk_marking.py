@@ -1039,3 +1039,95 @@ class TestMarkingWithVariableBranching:
             f"Variable-branching marked walk uses {nq} qubits "
             f"(limit: 17)"
         )
+
+
+# ---------------------------------------------------------------------------
+# Group 7: Marking control visible in QASM
+# ---------------------------------------------------------------------------
+
+
+class TestMarkingControlVisibleInQasm:
+    """Verify that marking control is visible in the generated QASM.
+
+    When marking is active, the marking qbool (passed as a qbool object
+    through the call chain) should produce additional controlled gates
+    compared to the unmarked case.  The marking qbool's physical qubit
+    index should appear as a control in the QASM output.
+    """
+
+    def test_marking_control_visible_in_qasm(self):
+        """Marking qbool produces visible control gates in QASM output.
+
+        Compares QASM for a walk step with never-marked (is_marked
+        returns physical |0>) against QASM without marking at all.
+        The marked circuit should:
+        1. Have more gates (marking adds controlled operations).
+        2. Reference the marking qbool's physical qubit in its gates.
+        3. Preserve norm (unitarity).
+        """
+        # Circuit 1: No marking (baseline)
+        _init_circuit()
+        state_u = ql.qint(0, width=2)
+        config_u = WalkConfig(
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            state=state_u,
+        )
+        regs_u = WalkRegisters(config_u)
+        regs_u.init_root()
+        walk_step(config_u, regs_u)
+        _keep_u = [regs_u, state_u]
+        qasm_no_marking = ql.to_openqasm()
+
+        # Circuit 2: With marking (never-marked => diffusion fires)
+        _init_circuit()
+        state_m = ql.qint(0, width=2)
+        pred_m, flag_m = _make_never_marked_predicate()
+        config_m = WalkConfig(
+            max_depth=1, num_moves=1,
+            make_move=_make_move_xor,
+            undo_move=_undo_move_xor,
+            is_valid=_is_valid_nonzero,
+            is_marked=pred_m,
+            state=state_m,
+        )
+        regs_m = WalkRegisters(config_m)
+        regs_m.init_root()
+        walk_step(config_m, regs_m)
+        _keep_m = [regs_m, state_m, flag_m]
+        qasm_with_marking = ql.to_openqasm()
+
+        # The marking qubit's physical index
+        flag_qubit_idx = int(flag_m.qubits[63])
+        flag_qubit_name = f"q[{flag_qubit_idx}]"
+
+        # 1. Circuits should differ (marking adds extra controls)
+        assert qasm_no_marking != qasm_with_marking, (
+            "Marking should produce different QASM than no marking"
+        )
+
+        # 2. The marked circuit should reference the marking qubit
+        assert flag_qubit_name in qasm_with_marking, (
+            f"Marking qbool qubit {flag_qubit_name} should appear "
+            f"in the QASM output as a control"
+        )
+
+        # 3. The marked circuit should use more qubits
+        nq_no_marking = _get_num_qubits(qasm_no_marking)
+        nq_with_marking = _get_num_qubits(qasm_with_marking)
+        assert nq_with_marking > nq_no_marking, (
+            f"Marking should use more qubits: "
+            f"no_marking={nq_no_marking}, with_marking={nq_with_marking}"
+        )
+
+        # 4. Both circuits should produce valid unitaries (norm preserved)
+        sv_u = _simulate_statevector(qasm_no_marking)
+        sv_m = _simulate_statevector(qasm_with_marking)
+        assert abs(np.linalg.norm(sv_u) - 1.0) < 1e-6, (
+            "No-marking walk step should preserve norm"
+        )
+        assert abs(np.linalg.norm(sv_m) - 1.0) < 1e-6, (
+            "Marked walk step should preserve norm"
+        )
