@@ -72,21 +72,23 @@ Function-based quantum walk API replacing the monolithic QWalkTree class.
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| R12.1 | `walk(is_marked, max_depth, num_moves)` — full walk with detection returning bool. (Signature will change in Step 2b.5 to accept state/make_move/is_valid and return (config, registers); update this row when that step lands.) | |
-| R12.2 | `walk_diffusion(state, make_move, is_valid, num_moves)` — local diffusion building block at current depth. | |
-| R12.3 | User provides `make_move(state, move_index)` as `@ql.compile(inverse=True)` function. `move_index` is a classical int; the function uses DSL operations (arithmetic, XOR, `with`) — never raw gates. | |
-| R12.4 | User provides `is_valid(state)` and `is_marked(state)` as quantum predicates returning `qbool`. | |
-| R12.5 | Framework manages height register (one-hot), branch registers (one per depth), and count register internally. User never sees these. | |
-| R12.6 | Counting loop: for each move index, apply move → check validity → increment count → undo move. Operates correctly across all computational basis states. | |
-| R12.7 | Conditional branching: Montanaro rotation angles based on count value, creating uniform superposition over valid moves. Includes parent/self component for probability backflow. | |
-| R12.8 | R_A / R_B walk operators: local diffusions at even/odd depths controlled on height register. walk_step = R_B * R_A. | |
-| R12.9 | Detection via power-method iteration with root overlap measurement. | |
-| R12.10 | XOR-based state manipulation replaces raw qubit index manipulation (e.g., `x ^= value` instead of `emit_x(qubit_idx)`). | |
-| R12.11 | Old `QWalkTree` class and `walk.py` removed entirely, along with all associated test files. | |
-| R12.12 | Each implementation file ≤ 400 LOC. | |
-| R12.13 | Correctness verified on tiny problems (≤ 17 qubits) via Qiskit simulation. | |
-| R12.14 | (TODO — Milestone 2b) No classical evaluation of quantum predicates. `is_marked` evaluated quantumly, returning `qbool`. Diffusion only on unmarked nodes via `with ~marked:`. | |
-| R12.15 | (TODO — Milestone 2b) `walk_operators.py` composes `walk_diffusion.py` — no reimplementation of diffusion logic in the operator layer. | |
+| R12.1 | `walk(is_marked, max_depth, num_moves, *, state, make_move, is_valid)` — builds `WalkConfig` with marking, allocates `WalkRegisters`, returns `(config, registers)`. All parameters required. Detection via phase estimation is a future milestone. | **Done** |
+| R12.2 | `walk_diffusion(state, make_move, is_valid, num_moves)` — local diffusion building block. Single implementation path: always evaluates validity quantumly (no fixed-branching shortcut). | **Done** |
+| R12.3 | User provides `make_move(state, move_index)` as `@ql.compile(inverse=True)` function. `move_index` is a classical int; the function uses DSL operations (arithmetic, XOR, `with`) — never raw gates. | **Done** |
+| R12.4 | User provides `is_valid(state)` and `is_marked(state)` as quantum predicates returning `qbool`. | **Done** |
+| R12.5 | Framework manages height register (one-hot), branch registers (one per depth), and count register internally. User never sees these. | **Done** |
+| R12.6 | Counting loop: for each move index, apply move → check validity → increment count → undo move. Operates correctly across all computational basis states. | **Done** |
+| R12.7 | Conditional branching: Montanaro rotation angles based on count value, creating uniform superposition over valid moves. Includes parent/self component for probability backflow. | **Done** |
+| R12.8 | R_A / R_B walk operators: local diffusions at even/odd depths controlled on height register. walk_step = R_B * R_A. | **Done** |
+| R12.9 | Detection via quantum phase estimation (Montanaro 2015, Theorem 1). Future milestone — `walk()` returns `(config, registers)` for now. | |
+| R12.10 | XOR-based state manipulation replaces raw qubit index manipulation (e.g., `x ^= value` instead of `emit_x(qubit_idx)`). | **Done** |
+| R12.11 | Old `QWalkTree` class and `walk.py` removed entirely, along with all associated test files. | **Done** |
+| R12.12 | Each implementation file ≤ 400 LOC. | **Done** |
+| R12.13 | Correctness verified on tiny problems (≤ 17 qubits) via Qiskit simulation. | **Done** |
+| R12.14 | `is_marked` evaluated quantumly, returning `qbool`. Marking = identity (D_x = I for marked nodes per Montanaro 2015). Works with variable-branching diffusion via controlled XOR (Toffoli). | **Done** |
+| R12.15 | `walk_operators.py` composes `walk_diffusion.py` — no reimplementation of diffusion logic in the operator layer. | **Done** |
+| R12.16 | Single diffusion implementation: variable-branching only. No `_fixed_diffusion` path — fixed branching converges to plain Grover's (use `ql.grover()` for that). | |
+| R12.17 | Marking integrated with variable-branching path: `with ~marked:` wraps the variable diffusion call. No separate marking dispatch. | |
 
 #### R13: Quantum Walk Skill
 
@@ -147,20 +149,20 @@ General improvements to the existing codebase.
 
 ### 5.1 Quantum Walk Rework
 
-- `ql.walk()` with a known-marked tiny tree returns `True`; with no marked nodes returns `False`.
+- `ql.walk()` returns `(config, registers)` for use with `walk_step`. Detection via phase estimation is a future milestone.
 - `ql.walk_diffusion()` satisfies reflection property: D² = I (statevector amplitude tolerance ~1e-6).
 - Counting loop produces correct valid-child count across superposition of basis states.
 - R_A and R_B operate on disjoint height register qubits (even vs odd depths).
 - walk_step = R_B * R_A compiles and replays correctly (gate sequence cached).
-- End-to-end: 2-variable binary ILP instance detects known feasible assignment.
 - Old `walk.py` and all associated test files removed.
 - All test circuits use ≤ 17 qubits.
 - No implementation file exceeds 400 LOC.
 - `/quantum-walk` skill produces correct quantum functions with passing verification loop.
-- (TODO) Marking is quantum: `is_marked(state)` returns `qbool`, diffusion applied only to unmarked nodes (`with ~marked:`). No classical enumeration.
-- (TODO) No `emit_x` in walk modules — all state manipulation via DSL operators.
-- (TODO) No physical qubit indices (`.qubits[...]`) in walk module logic.
-- (TODO) `walk_operators.py` calls into `walk_diffusion.py` — no duplicated diffusion logic.
+- Marking is quantum: `is_marked(state)` returns `qbool`, diffusion applied only to unmarked nodes (`with ~marked:`). No classical enumeration.
+- No `emit_x` in walk modules — all state manipulation via DSL operators.
+- `walk_operators.py` calls into `walk_diffusion.py` — no duplicated diffusion logic.
+- Single diffusion path: variable-branching only. No fixed-branching shortcut.
+- `walk()` requires `state`, `make_move`, `is_valid` — no optional-but-actually-needed parameters.
 
 ---
 
@@ -229,16 +231,25 @@ General improvements to the existing codebase.
 - Claude Code skill (`/quantum-walk`) for guided quantum walk function development
 - Correctness verified on tiny (≤ 17 qubit) problems via simulation
 
-### Milestone 2b: Quantum Walk Bug Fixes *(current)*
+### Milestone 2b: Quantum Walk Bug Fixes *(completed)*
 
-Fixes correctness bugs discovered during review of the initial walk implementation:
+Fixed correctness bugs discovered during review of the initial walk implementation:
 
-- **Quantum marking**: Replace classical `is_marked` evaluation (brute-force enumeration of basis states) with quantum evaluation: `is_marked(state)` returns `qbool`, marking = identity (D_x = I for marked nodes per Montanaro 2015), diffusion only on unmarked nodes via `with ~marked:`
-- **Remove `emit_x`**: Replace all `emit_x(qubit_idx)` with DSL equivalents (`x ^= value`) across walk_branching, walk_diffusion, walk_operators, walk_search
-- **Remove classical detection**: Remove simulation-based overlap detection from `walk_search.py`; add TODO for phase estimation-based detection (future milestone)
-- **Deduplicate operators**: `walk_operators.py` should compose `walk_diffusion.py`, not reimplement diffusion logic
-- **Remove `walk.py`**: Delete the deprecated `QWalkTree` class and all 13 associated test files
-- **Agent instructions**: Updated worker and reviewer agents to enforce quantum DSL rules (no physical qubit indices, no classical evaluation of quantum predicates, marking = identity)
+- **Quantum marking**: Replaced classical `is_marked` evaluation with quantum evaluation: `is_marked(state)` returns `qbool`, marking = identity (D_x = I per Montanaro 2015)
+- **Remove `emit_x`**: Replaced all `emit_x(qubit_idx)` with DSL equivalents via `_flip_all` helper
+- **Remove classical detection**: Removed simulation-based overlap detection; `walk()` returns `(config, registers)` for manual walk step iteration. Phase estimation detection is a future milestone.
+- **Deduplicate operators**: `walk_operators.py` now composes `walk_diffusion.py` via `control_qubit` parameter
+- **Remove `walk.py`**: Deleted the deprecated `QWalkTree` class and all associated test files
+- **Rewrite `walk_search.py`**: `walk()` builds `WalkConfig` with `is_marked` and returns `(config, registers)`
+
+### Milestone 2c: Unify Diffusion Path *(current)*
+
+Simplifies the walk implementation by removing the fixed-branching diffusion path and unifying on variable-branching diffusion as the single implementation:
+
+- **Remove `_fixed_diffusion`**: The fixed-branching path assumes all `num_moves` children are always valid (classical `int d`). This is only correct for perfectly regular trees with no pruning — but the whole point of backtracking is pruning via `is_valid`. The fixed case converges to plain Grover's algorithm, which already has `ql.grover()`. Remove `_fixed_diffusion`, `walk_diffusion_fixed`, and `_apply_fixed_diffusion`.
+- **Marking on variable-branching path**: Remove the warning that marking is ignored in variable branching. Controlled XOR inside `with ~marked:` decomposes to Toffoli gates, which the framework handles natively. Wrap `_variable_diffusion` with `with ~marked:` in `_apply_local_diffusion`.
+- **Require `state`, `make_move`, `is_valid` in `walk()`**: These are no longer optional. Every walk needs a state register and move/validity callbacks. Simplifies the API and removes the three-way dispatch.
+- **Test consolidation**: Remove fixed-branching tests, update marking tests to use variable branching. Net LOC reduction in both implementation and tests.
 
 ---
 

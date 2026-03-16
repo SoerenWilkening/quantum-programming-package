@@ -6,12 +6,12 @@ You are guiding the user through designing quantum walk functions for the Quantu
 
 A quantum walk searches a tree by superposing over children at each node. The user provides:
 
-- **`state`**: A quantum register (qarray/qint) representing a node (e.g., variable assignments for ILP, board position for chess)
-- **`make_move(state, move_index)`**: A compiled quantum function that transforms the state by applying move `move_index`. Must be decorated with `@ql.compile(inverse=True)` for reversibility.
-- **`is_valid(state)`**: A quantum predicate returning `qbool` — is this state feasible?
-- **`is_marked(state)`**: A quantum predicate returning `qbool` — is this a solution? Evaluated **quantumly** on superpositions of basis states (no classical enumeration). Marked nodes receive identity (D_x = I) while unmarked nodes receive the standard diffusion operator (per Montanaro 2015).
+- **`state`**: A quantum register (qarray/qint) representing a node (e.g., variable assignments for ILP, board position for chess). **Required.**
+- **`make_move(state, move_index)`**: A compiled quantum function that transforms the state by applying move `move_index`. Must be decorated with `@ql.compile(inverse=True)` for reversibility. **Required.**
+- **`is_valid(state)`**: A quantum predicate returning `qbool` — is this state feasible? **Required.**
+- **`is_marked(state)`**: A quantum predicate returning `qbool` — is this a solution? Evaluated **quantumly** on superpositions of basis states (no classical enumeration). Marked nodes receive identity (D_x = I) while unmarked nodes receive the standard diffusion operator (per Montanaro 2015). **Required.**
 
-The framework handles all internal machinery: height registers, branch registers, counting valid children, Montanaro rotation angles, R_A/R_B walk operators, and marking.
+The framework handles all internal machinery: height registers, branch registers, counting valid children, Montanaro rotation angles, R_A/R_B walk operators, and marking. There is a single diffusion implementation (variable-branching) that evaluates `is_valid` quantumly per child — no fixed-branching shortcut.
 
 > **Note**: Detection via quantum phase estimation (Montanaro 2015, Theorem 1) is a future milestone. Currently `walk()` returns a `(config, registers)` pair for manual walk step iteration.
 
@@ -19,13 +19,14 @@ The framework handles all internal machinery: height registers, branch registers
 
 ```python
 # Build a marked walk configuration with allocated registers.
-# Returns (WalkConfig, WalkRegisters) — ready for use with walk_step.
+# All parameters are required. Returns (WalkConfig, WalkRegisters).
 config, registers = ql.walk(
     is_marked, max_depth=depth, num_moves=num,
     state=state, make_move=make_move, is_valid=is_valid,
 )
 
-# Local diffusion building block — for custom walk operators
+# Local diffusion building block — for custom walk operators.
+# Single implementation: always evaluates validity quantumly.
 ql.walk_diffusion(state, make_move, is_valid, num_moves=num)
 ```
 
@@ -58,6 +59,8 @@ Wait for confirmation before proceeding.
 ---
 
 ## Phase 2: Write Quantum Functions
+
+Write the quantum functions to a dedicated file (e.g., `walk_functions.py` or a problem-specific name like `sat_walk.py`). This file contains `make_move`, `is_valid`, and `is_marked` — the user's quantum logic, separate from the walk assembly code.
 
 Generate three functions following these rules:
 
@@ -154,6 +157,8 @@ def is_marked(x):
 
 ### Generate Classical Equivalents
 
+Write the classical equivalents to a **separate file** (e.g., `walk_functions_classical.py` or `sat_walk_classical.py`). This keeps verification code cleanly separated from the quantum implementation.
+
 For every quantum function, generate a classical mirror using plain Python types. Translation rules:
 
 | Quantum | Classical |
@@ -234,7 +239,7 @@ Launch an independent verifier agent with the following instructions:
 
 ## Phase 4: Assemble
 
-Wire the verified functions into the walk API:
+Wire the verified functions into the walk API. All four user functions are required:
 
 ```python
 import quantum_language as ql
@@ -245,7 +250,7 @@ ql.circuit()
 x = ...  # as designed
 
 # Build marked walk configuration and registers.
-# walk() returns (WalkConfig, WalkRegisters), not a bool.
+# All parameters required. Returns (WalkConfig, WalkRegisters).
 # Detection via phase estimation is a future milestone.
 config, registers = ql.walk(
     is_marked, max_depth=..., num_moves=...,

@@ -680,213 +680,143 @@ End-to-end tests combining all walk components on complete tiny problems:
 
 ---
 
-## Phase 2b — Quantum Walk Bug Fixes
+## Phase 2b — Quantum Walk Bug Fixes ✅
 
-Fixes correctness bugs discovered during review of Phase 2. The core issues:
+Fixed correctness bugs discovered during review of Phase 2:
 
-1. **Classical evaluation of quantum predicates**: `walk_search.py` evaluates `is_marked` by brute-forcing all 2^n values classically — fundamentally wrong for quantum computing. Must evaluate quantumly.
-2. **Raw gate usage**: `emit_x(qubit_idx)` used throughout walk modules instead of DSL operators (`x ^= value`).
-3. **Wrong marking semantics**: Code applies phase flips on marked nodes (Grover-style). Per Montanaro 2015, D_x = I (identity) for marked nodes — diffusion only on unmarked nodes.
-4. **Wrong detection algorithm**: Simulation-based overlap comparison instead of phase estimation. Phase estimation is postponed; remove wrong code, add TODO.
-5. **Duplicated logic**: `walk_operators.py` reimplements diffusion instead of composing `walk_diffusion.py`.
-
-### Design Corrections
-
-**Marking = identity** (Montanaro 2015, Theorem 1):
-- If node x is marked: D_x = I (do nothing)
-- If node x is unmarked: D_x = I − 2|ψ_x⟩⟨ψ_x| (standard diffusion)
-
-The correct pattern in `_apply_local_diffusion`:
-```python
-if config.is_marked is not None:
-    marked = config.is_marked(config.state)
-    with ~marked:
-        _do_diffusion(config, registers, depth)
-else:
-    _do_diffusion(config, registers, depth)
-```
-
-**Module layering after fixes**:
-- `walk_core.py` — types + angles (unchanged)
-- `walk_counting.py` — count valid children (unchanged, already correct quantum pattern)
-- `walk_branching.py` — conditional branching (fix: replace emit_x with DSL)
-- `walk_diffusion.py` — single-node diffusion (fix: replace emit_x with DSL)
-- `walk_registers.py` — register management (unchanged)
-- `walk_operators.py` — R_A/R_B composing walk_diffusion, with `is_marked` check (rewrite: remove duplicated diffusion, add marking)
-- `walk_search.py` — thin shell building walk operator, TODO for phase estimation detection (rewrite: remove classical evaluation + simulation)
-
----
-
-### Step 2b.1: Remove walk.py & Old Tests
-
-**Goal**: Delete the deprecated `QWalkTree` class and all associated test files.
-Clean up `__init__.py` exports.
-
-| File | Action | ~LOC |
-|------|--------|------|
-| `src/quantum_language/walk.py` | [DEL] Remove entirely | -1620 |
-| `src/quantum_language/__init__.py` | [MOD] Remove `QWalkTree` import and `__all__` entry | -5 |
-| `tests/python/test_walk_operators.py` | [DEL] Old QWalkTree-based operator tests | - |
-| `tests/python/test_walk_detection.py` | [DEL] Old QWalkTree-based detection tests | - |
-| `tests/python/test_walk_diffusion.py` | [DEL] Old QWalkTree-based diffusion tests (not test_walk_local_diffusion.py) | - |
-| `tests/python/test_walk_tree.py` | [DEL] Old QWalkTree encoding tests | - |
-| `tests/python/test_walk_predicate.py` | [DEL] Old predicate evaluation tests | - |
-| `tests/python/test_walk_variable.py` | [DEL] Old variable branching tests | - |
-| `tests/python/test_counting_diffusion.py` | [DEL] Old counting diffusion tests | - |
-| Other QWalkTree test files | [DEL] All remaining test files that import QWalkTree | - |
-| `tests/python/test_walk_migration.py` | [MOD] Remove QWalkTree deprecation tests, keep new API tests | - |
-
-**Tests**: Verify `from quantum_language import walk, walk_diffusion` still works.
-Verify `QWalkTree` is no longer importable. Run full suite — no import errors.
-
-**DEP**: None
-
----
-
-### Step 2b.2: Replace emit_x with DSL Operators
-
-**Goal**: Replace all `emit_x(qubit_idx)` calls in walk modules with qint/qbool
-DSL equivalents. Remove `.qubits[...]` access patterns.
-
-| File | Action | ~LOC |
-|------|--------|------|
-| `src/quantum_language/walk_branching.py` | [MOD] Replace `emit_x` with `branch ^= 1 << bit` or equivalent XOR operations. Remove raw qubit index access. | ~-20 |
-| `src/quantum_language/walk_diffusion.py` | [MOD] Replace `emit_x` with DSL XOR. | ~-10 |
-| `src/quantum_language/walk_operators.py` | [MOD] Replace `emit_x` with DSL XOR. | ~-15 |
-| `src/quantum_language/walk_search.py` | [MOD] Replace `emit_x` with DSL XOR. | ~-10 |
-| `src/quantum_language/walk_registers.py` | [MOD] Replace `emit_x` in `init_root` with DSL. | ~-2 |
-
-**Preserved**: `emit_mcz` (no DSL equivalent). `emit_ry` (Montanaro rotations, acceptable).
-
-**Tests**: All existing walk tests must pass unchanged. Add grep-based test that
-no walk_*.py file contains `emit_x(`.
-
-**DEP**: Step 2b.1 (walk.py removed first to reduce noise)
-
----
-
-### Step 2b.3: Quantum Marking in Walk Operators
-
-**Goal**: Add `is_marked` check to the local diffusion dispatch in `walk_operators.py`.
-Per Montanaro: D_x = I for marked nodes, standard diffusion for unmarked.
-
-| File | Action | ~LOC |
-|------|--------|------|
-| `src/quantum_language/walk_operators.py` | [MOD] In `_apply_local_diffusion`: if `config.is_marked` is set, evaluate `is_marked(state)` quantumly, apply diffusion only `with ~marked:`. | +15 |
-
-**Algorithm in `_apply_local_diffusion`**:
-```
-if config.is_marked is not None and config.state is not None:
-    marked = config.is_marked(config.state)
-    with ~marked:
-        _do_diffusion(...)
-    # marked nodes: identity (nothing happens)
-else:
-    _do_diffusion(...)
-```
-
-**Tests** (`tests/python/test_walk_operators_fn.py` [MOD]):
-- `test_marked_node_gets_identity` — mark all nodes → walk step is identity
-- `test_unmarked_node_gets_diffusion` — no marking → standard diffusion (existing)
-- `test_partial_marking` — some nodes marked, some not → correct selective diffusion
-- Verify via statevector that marked basis states are unchanged
-
-**DEP**: Step 2b.2
-
----
-
-### Step 2b.4: Deduplicate Walk Operators
-
-**Goal**: `walk_operators.py` should compose `walk_diffusion.py` for the actual
-diffusion math, not reimplement it. Remove `_height_controlled_diffusion` and
-`_height_controlled_variable_diffusion` — replace with calls to
-`walk_diffusion_fixed` / `walk_diffusion_with_regs`.
-
-| File | Action | ~LOC |
-|------|--------|------|
-| `src/quantum_language/walk_operators.py` | [MOD] Replace ~200 LOC of duplicated diffusion logic with calls to `walk_diffusion.py` functions. `_apply_local_diffusion` becomes a thin dispatch: height control + marking check + call to walk_diffusion. | ~-150 |
-| `src/quantum_language/walk_diffusion.py` | [MOD] Ensure `walk_diffusion_fixed` accepts height control qubit parameter for controlled operation. | ~+20 |
-
-**Tests**: All existing walk operator tests must pass. Verify no `_precompute_angles`
-import in walk_operators.py (it should come through walk_diffusion).
-
-**DEP**: Step 2b.3
-
----
-
-### Step 2b.5: Rewrite walk_search.py
-
-**Note**: This step changes the `walk()` signature from the current
-`walk(is_marked, max_depth, num_moves)` returning `bool` to
-`walk(state, make_move, is_valid, is_marked, *, max_depth, num_moves)`
-returning `(config, registers)`. When this step lands, update PRD R12.1
-to reflect the new signature.
-
-**Goal**: Remove the wrong classical marking oracle and simulation-based detection.
-Replace with a thin shell that builds the walk operator with marking.
-Add TODO docstring for phase estimation detection.
-
-| File | Action | ~LOC |
-|------|--------|------|
-| `src/quantum_language/walk_search.py` | [MOD] Remove `_evaluate_is_marked_classically`, `_apply_phase_on_pattern`, `_apply_marking_phase`, `_simulate_statevector`, `_measure_root_overlap`, `_measure_root_overlap_unmarked`. Keep `walk()` as public API that builds a WalkConfig with `is_marked` and calls `walk_step`. Add TODO docstring for phase estimation. | ~-200 |
-| `tests/python/test_walk_search.py` | [MOD] Remove tests for classical evaluation. Add tests for quantum marking integration (walk_step with is_marked produces correct operator). | ~-100, +50 |
-| `tests/python/test_walk_integration.py` | [MOD] Update integration tests to match new API (no detection yet, test operator construction). | ~-50, +30 |
-
-**`walk()` after rewrite**:
-```python
-def walk(state, make_move, is_valid, is_marked, *,
-         max_depth, num_moves):
-    """Build quantum walk operator with marking.
-
-    Constructs the walk operator U = R_B * R_A where D_x = I for
-    marked nodes (per Montanaro 2015). The operator can be used
-    with phase estimation for detection.
-
-    TODO: Phase estimation-based detection. Currently returns the
-    WalkConfig and WalkRegisters for manual use.
-    """
-    config = WalkConfig(
-        state=state, make_move=make_move, is_valid=is_valid,
-        is_marked=is_marked, max_depth=max_depth, num_moves=num_moves,
-    )
-    registers = WalkRegisters(config)
-    registers.init_root()
-    return config, registers
-```
-
-**Tests**:
-- `test_walk_returns_config_and_registers` — correct types returned
-- `test_walk_operator_with_marking_preserves_norm` — walk_step on marked config is unitary
-- `test_walk_operator_marking_identity_on_marked` — marked states unchanged after walk_step
-
-**DEP**: Steps 2b.3, 2b.4
-
----
-
-### Step 2b.6: Update Quantum Walk Skill
-
-**Goal**: Update the `/quantum-walk` skill file to reflect corrected semantics.
-
-| File | Action | ~LOC |
-|------|--------|------|
-| `.claude/commands/quantum-walk.md` | [MOD] Clarify: `is_marked` is quantum (returns qbool), marking = identity, no classical evaluation. Update API section for new `walk()` return type. | ~+15 |
-
-**DEP**: Step 2b.5
-
----
+1. Classical evaluation of quantum predicates → quantum evaluation via `is_marked(state)` returning `qbool`
+2. Raw `emit_x(qubit_idx)` → DSL `_flip_all` helper wrapping qint/qbool registers
+3. Wrong marking semantics → D_x = I for marked nodes (Montanaro 2015), diffusion only on unmarked
+4. Simulation-based detection → removed; `walk()` returns `(config, registers)`, phase estimation is future milestone
+5. Duplicated diffusion logic → `walk_operators.py` composes `walk_diffusion.py` via `control_qubit` parameter
+6. Deprecated `QWalkTree` → deleted along with all associated test files
 
 ### Phase 2b Summary
 
+| Step | What | Status |
+|------|------|--------|
+| 2b.1 | Remove walk.py & old tests | ✅ |
+| 2b.2 | Replace emit_x with DSL operators | ✅ |
+| 2b.3 | Quantum marking in walk operators | ✅ |
+| 2b.4 | Deduplicate walk operators | ✅ |
+| 2b.5 | Rewrite walk_search.py | ✅ |
+| 2b.6 | Update quantum walk skill | ✅ |
+
+---
+
+## Phase 2c — Unify Diffusion Path
+
+The walk currently has two diffusion implementations:
+
+- **Variable-branching** (`_variable_diffusion`): evaluates `is_valid` per child quantumly, counts valid children into a quantum register, applies conditional Montanaro rotations per count value. Correct for all trees.
+- **Fixed-branching** (`_fixed_diffusion`): takes a classical `int d`, assumes all `num_moves` children are always valid. Only correct for perfectly regular trees with no pruning.
+
+**Problem**: The fixed path is wrong for any real backtracking problem (the whole point is pruning via `is_valid`). It converges to plain Grover's algorithm, which already has `ql.grover()`. Meanwhile, marking only works on the fixed path — the variable path warns and ignores `is_marked`.
+
+**Solution**: Remove `_fixed_diffusion` entirely. Unify on `_variable_diffusion` as the single diffusion implementation. Make marking work with variable branching — controlled XOR inside `with ~marked:` decomposes to Toffoli gates, which the framework handles natively.
+
+### Design After Phase 2c
+
+**`_apply_local_diffusion` (single path)**:
+```python
+def _apply_local_diffusion(config, registers, depth):
+    if depth == 0:
+        return  # leaf
+
+    if config.is_marked is not None:
+        marked = config.is_marked(config.state)
+        _flip_all(marked)
+        with marked:  # executes on UNMARKED nodes
+            _do_variable_diffusion(config, registers, depth)
+        _flip_all(marked)
+    else:
+        _do_variable_diffusion(config, registers, depth)
+```
+
+Controlled XOR inside `with marked:` → each X gate becomes a CNOT, each CNOT becomes a Toffoli. The framework's `with qbool:` mechanism handles this natively.
+
+**`walk()` API**: `state`, `make_move`, `is_valid` are all required. No optional-but-actually-needed parameters.
+
+**Module layering after Phase 2c**:
+- `walk_core.py` — types + angles (unchanged)
+- `walk_counting.py` — count valid children (unchanged)
+- `walk_branching.py` — conditional branching (unchanged)
+- `walk_diffusion.py` — single-node diffusion: only `_variable_diffusion`, `walk_diffusion_with_regs`, `walk_diffusion` (public). No `_fixed_diffusion`, no `walk_diffusion_fixed`.
+- `walk_registers.py` — register management (unchanged)
+- `walk_operators.py` — R_A/R_B composing walk_diffusion, marking wraps variable diffusion
+- `walk_search.py` — thin shell, `walk()` requires state/make_move/is_valid
+
+---
+
+### Step 2c.1: Marking on Variable-Branching Path
+
+**Goal**: Make marking work with variable-branching diffusion. Remove the warning
+that `is_marked` is ignored. Wrap `_variable_diffusion` with `with ~marked:`.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/walk_operators.py` | [MOD] Remove warning about marking being ignored in variable-branching path. Restructure `_apply_local_diffusion`: evaluate `is_marked(state)` → `with ~marked:` wraps the variable diffusion call. Single code path for both marked and unmarked walks. | ~-20 |
+
+**Key change**: The `with marked:` block wraps the entire variable diffusion call.
+Controlled XOR operations inside `make_move` become Toffoli gates under the
+marking control — this is handled natively by the framework.
+
+**Tests** (`tests/python/test_walk_marking.py` [MOD]):
+- Update marking tests to use variable branching (provide `make_move`, `is_valid`, `state`)
+- `test_marking_with_variable_branching` — marking + validity evaluation in same walk step
+- `test_controlled_xor_under_marking` — verify `make_move` operations are correctly controlled
+- Verify norm preservation and D²=I with marking + variable branching
+
+**DEP**: Phase 2b (all steps completed)
+
+---
+
+### Step 2c.2: Remove Fixed Diffusion
+
+**Goal**: Delete `_fixed_diffusion`, `walk_diffusion_fixed`, and `_apply_fixed_diffusion`.
+Make `state`, `make_move`, `is_valid` required in `walk()`. Single diffusion path.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/walk_diffusion.py` | [MOD] Delete `_fixed_diffusion` (~40 LOC) and `walk_diffusion_fixed` (~25 LOC). Remove `_precompute_angles` usage for fixed path. Keep `_variable_diffusion`, `walk_diffusion_with_regs`, `walk_diffusion`. | ~-65 |
+| `src/quantum_language/walk_operators.py` | [MOD] Delete `_apply_fixed_diffusion` (~15 LOC). `_apply_local_diffusion` becomes a single path: always variable diffusion, optionally wrapped with marking. | ~-15 |
+| `src/quantum_language/walk_search.py` | [MOD] Make `state`, `make_move`, `is_valid` required positional parameters. Remove `if state is None: ql.circuit()` branch. | ~-10 |
+| `src/quantum_language/__init__.py` | [MOD] Remove `walk_diffusion_fixed` from exports if present. | ~-1 |
+
+**Tests**:
+- Remove fixed-branching tests from `test_walk_local_diffusion.py` (5 tests in `TestReflectionPropertyFixed`, `TestNoValidChildren`)
+- Remove fixed-branching tests from `test_walk_operators_fn.py`
+- Update `test_walk_search.py` — `walk()` no longer accepts state=None
+- Update `test_walk_marking.py` — remove tests that use fixed-branching config
+- Verify all remaining tests pass
+
+**DEP**: Step 2c.1
+
+---
+
+### Step 2c.3: Test Consolidation
+
+**Goal**: Clean up test files after the fixed-branching removal. Merge or remove
+tests that are redundant now that there's a single diffusion path.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `tests/python/test_walk_local_diffusion.py` | [MOD] Remove `TestReflectionPropertyFixed`, `TestDiffusionAmplitudes` (fixed-specific). Keep `TestVariableBranching`, `TestS0Reflection`, `TestQubitBudget`. | ~-150 |
+| `tests/python/test_walk_marking.py` | [MOD] Remove tests that construct fixed-branching configs. All marking tests use variable branching. | ~-100 |
+| `tests/python/test_walk_operators_fn.py` | [MOD] Remove fixed-branching operator tests. All operator tests use variable branching. | ~-50 |
+| `tests/python/test_walk_migration.py` | [MOD] Update to verify `walk_diffusion_fixed` is NOT importable. | ~+5 |
+
+**DEP**: Step 2c.2
+
+---
+
+### Phase 2c Summary
+
 | Step | What | ~LOC delta | File(s) | DEP |
 |------|------|------------|---------|-----|
-| 2b.1 | Remove walk.py & old tests | ~-1620 impl, ~-2000 tests | `walk.py`, 10+ test files | — |
-| 2b.2 | Replace emit_x with DSL | ~-60 | walk_branching/diffusion/operators/search/registers | 2b.1 |
-| 2b.3 | Quantum marking in operators | ~+15 | `walk_operators.py` | 2b.2 |
-| 2b.4 | Deduplicate operators | ~-130 | `walk_operators.py`, `walk_diffusion.py` | 2b.3 |
-| 2b.5 | Rewrite walk_search.py | ~-220 | `walk_search.py`, tests | 2b.3, 2b.4 |
-| 2b.6 | Update quantum walk skill | ~+15 | `quantum-walk.md` | 2b.5 |
+| 2c.1 | Marking on variable-branching path | ~-20 | `walk_operators.py`, `test_walk_marking.py` | 2b |
+| 2c.2 | Remove fixed diffusion, require state/make_move/is_valid | ~-90 | `walk_diffusion.py`, `walk_operators.py`, `walk_search.py` | 2c.1 |
+| 2c.3 | Test consolidation | ~-300 tests | 4 test files | 2c.2 |
 
-**Parallelizable**: None — each step depends on the previous (incremental cleanup).
-
-**Net result**: Significant LOC reduction, correct quantum semantics throughout,
-clean module layering with no duplication.
+**Net result**: ~90 LOC implementation reduction, ~300 LOC test reduction, single
+diffusion path, marking works with all walk configurations.
