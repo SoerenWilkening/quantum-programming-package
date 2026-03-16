@@ -77,12 +77,9 @@ def _evaluate_is_marked_classically(is_marked, total_branch_bits):
     """Return list of integer patterns where is_marked returns True."""
     marked_values = []
     for val in range(1 << total_branch_bits):
-        try:
-            result = is_marked(val)
-            if result is True or result == 1:
-                marked_values.append(val)
-        except (TypeError, AttributeError):
-            break
+        result = is_marked(val)
+        if result is True or result == 1:
+            marked_values.append(val)
     return marked_values
 
 
@@ -220,15 +217,9 @@ def _measure_root_overlap_unmarked(num_moves, max_depth, num_steps):
 # ------------------------------------------------------------------
 
 
-def _validate_walk_args(state, make_move, is_valid, is_marked,
-                        max_depth, num_moves):
+def _validate_walk_args(is_marked, max_depth, num_moves,
+                        max_iterations=None):
     """Validate arguments for the walk() public API."""
-    if state is None:
-        raise ValueError("state must not be None")
-    if make_move is None:
-        raise ValueError("make_move must not be None")
-    if is_valid is None:
-        raise ValueError("is_valid must not be None")
     if is_marked is None:
         raise ValueError("is_marked must not be None")
     if not isinstance(max_depth, int):
@@ -243,6 +234,16 @@ def _validate_walk_args(state, make_move, is_valid, is_marked,
         raise ValueError(f"max_depth must be >= 1, got {max_depth}")
     if num_moves < 1:
         raise ValueError(f"num_moves must be >= 1, got {num_moves}")
+    if max_iterations is not None:
+        if not isinstance(max_iterations, int):
+            raise TypeError(
+                f"max_iterations must be an int, got "
+                f"{type(max_iterations).__name__}"
+            )
+        if max_iterations < 1:
+            raise ValueError(
+                f"max_iterations must be >= 1, got {max_iterations}"
+            )
 
 
 # ------------------------------------------------------------------
@@ -250,38 +251,52 @@ def _validate_walk_args(state, make_move, is_valid, is_marked,
 # ------------------------------------------------------------------
 
 
-def walk(state, make_move, is_valid, is_marked, max_depth, num_moves,
-         max_iterations=None):
+def walk(is_marked, max_depth, num_moves, *, state=None,
+         make_move=None, is_valid=None, max_iterations=None):
     """Quantum walk search: detect whether a marked node exists.
 
     Implements a quantum walk-based detection algorithm for marked
-    nodes in a backtracking tree.  The tree is defined by the user's
-    ``make_move``, ``is_valid``, and ``is_marked`` callbacks.
+    nodes in a backtracking tree.  The marking oracle is evaluated
+    classically on branch register patterns, and a phase flip is
+    applied at the leaf level of the walk step.
 
-    The algorithm incorporates a marking oracle phase flip at the
-    leaf level into the walk step.  It then compares root overlap of
-    the marked walk to the unmarked baseline across multiple power
-    levels.  If the marking causes the root overlap to diverge from
-    the baseline, a marked node is detected.
+    The algorithm compares root overlap of the marked walk to the
+    unmarked baseline across multiple power levels.  If the marking
+    causes the root overlap to diverge from the baseline, a marked
+    node is detected.
+
+    .. note::
+
+        This module currently uses fixed-branching walk operators.
+        The ``state``, ``make_move``, and ``is_valid`` parameters
+        are accepted for API compatibility with future variable-
+        branching support but are not used in the current
+        implementation.
 
     Parameters
     ----------
-    state : qint or qarray
-        Quantum register representing the problem state.
-    make_move : callable
-        Function ``make_move(state, move_index)`` that transforms
-        state by applying a move.
-    is_valid : callable
-        Quantum predicate ``is_valid(state)`` returning ``qbool``.
     is_marked : callable
         Predicate ``is_marked(value)`` returning bool.  Called with
-        integer values representing branch register patterns.
+        integer values representing branch register patterns at the
+        leaf level.
     max_depth : int
         Maximum depth of the backtracking tree (>= 1).
     num_moves : int
         Maximum branching factor at any node (>= 1).
+    state : qint or qarray, optional
+        Quantum register representing the problem state.  Reserved
+        for future variable-branching support; not used currently.
+    make_move : callable, optional
+        Function ``make_move(state, move_index)`` that transforms
+        state by applying a move.  Reserved for future variable-
+        branching support; not used currently.
+    is_valid : callable, optional
+        Quantum predicate ``is_valid(state)`` returning ``qbool``.
+        Reserved for future variable-branching support; not used
+        currently.
     max_iterations : int, optional
-        Maximum walk step iterations.  Auto-computed if not provided.
+        Maximum walk step iterations (>= 1).  Auto-computed from
+        tree size as ``ceil(sqrt(T / n))`` if not provided.
 
     Returns
     -------
@@ -291,20 +306,19 @@ def walk(state, make_move, is_valid, is_marked, max_depth, num_moves,
     Raises
     ------
     ValueError
-        If required arguments are None, or depth/moves < 1.
+        If ``is_marked`` is None, or depth/moves < 1, or
+        ``max_iterations`` < 1.
     TypeError
-        If max_depth or num_moves are not int.
+        If ``max_depth``, ``num_moves``, or ``max_iterations`` are
+        not int.
     """
-    _validate_walk_args(state, make_move, is_valid, is_marked,
-                        max_depth, num_moves)
+    _validate_walk_args(is_marked, max_depth, num_moves,
+                        max_iterations=max_iterations)
 
     config = WalkConfig(
         max_depth=max_depth,
         num_moves=num_moves,
-        make_move=make_move,
-        is_valid=is_valid,
         is_marked=is_marked,
-        state=state,
     )
 
     if max_iterations is None:
