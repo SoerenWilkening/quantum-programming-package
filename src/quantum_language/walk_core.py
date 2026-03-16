@@ -46,6 +46,8 @@ def branch_width(num_moves):
 
     Raises
     ------
+    TypeError
+        If *num_moves* is not an int.
     ValueError
         If *num_moves* < 1.
     """
@@ -128,10 +130,7 @@ def montanaro_cascade_angles(d):
     theta_k(d) = 2 * arctan(sqrt(1 / (d - 1 - k)))  for k = 0 .. d - 2
 
     These rotations, applied sequentially to the branch register qubits,
-    produce the amplitude split required by the Montanaro diffusion
-    operator.  The resulting distribution is generally non-uniform; each
-    state receives amplitude according to the walk's stationary
-    distribution.
+    produce a uniform superposition over *d* states.
 
     Parameters
     ----------
