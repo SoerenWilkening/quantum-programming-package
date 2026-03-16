@@ -7,7 +7,6 @@ Verifies:
 - No from ._gates import lines remain in walk modules.
 """
 
-import os
 import re
 from pathlib import Path
 
@@ -16,10 +15,9 @@ def _walk_module_sources():
     """Return list of (filename, content) for all walk_*.py modules."""
     src_dir = Path(__file__).resolve().parent.parent.parent / "src" / "quantum_language"
     results = []
-    for fname in sorted(os.listdir(src_dir)):
-        if fname.startswith("walk_") and fname.endswith(".py"):
-            fpath = src_dir / fname
-            results.append((fname, fpath.read_text()))
+    for fpath in sorted(src_dir.iterdir()):
+        if fpath.name.startswith("walk_") and fpath.suffix == ".py":
+            results.append((fpath.name, fpath.read_text()))
     return results
 
 
