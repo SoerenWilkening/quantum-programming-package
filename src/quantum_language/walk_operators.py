@@ -21,16 +21,11 @@ References
 from ._gates import emit_mcz, emit_ry, emit_x, emit_z
 from .walk_branching import (
     _emit_cascade_multi_controlled,
+    _emit_multi_controlled_ry,
     _make_qbool_wrapper,
-    _plan_cascade_ops,
 )
-from .walk_core import (
-    WalkConfig,
-    branch_width,
-    montanaro_phi,
-    root_angle,
-)
-from .walk_diffusion import _s0_reflection
+from .walk_core import WalkConfig
+from .walk_diffusion import _precompute_angles
 from .walk_registers import WalkRegisters
 
 
@@ -66,42 +61,6 @@ def _validate_operator_args(config, registers):
 
 
 # ------------------------------------------------------------------
-# Angle precomputation
-# ------------------------------------------------------------------
-
-
-def _precompute_diffusion_angles(num_moves, bw, is_root=False,
-                                  max_depth=1):
-    """Pre-compute Montanaro angles and cascade ops for c = 1 .. num_moves.
-
-    Parameters
-    ----------
-    num_moves : int
-        Maximum branching factor.
-    bw : int
-        Branch register width.
-    is_root : bool
-        If True, use root angle formula.
-    max_depth : int
-        Tree depth (for root angle formula).
-
-    Returns
-    -------
-    dict
-        Maps child count c -> {"phi": float, "cascade_ops": list}.
-    """
-    data = {}
-    for c in range(1, num_moves + 1):
-        if is_root:
-            phi = root_angle(c, max_depth)
-        else:
-            phi = montanaro_phi(c)
-        cascade_ops = _plan_cascade_ops(c, bw)
-        data[c] = {"phi": phi, "cascade_ops": cascade_ops}
-    return data
-
-
-# ------------------------------------------------------------------
 # Height-controlled local diffusion (fixed branching)
 # ------------------------------------------------------------------
 
@@ -129,7 +88,7 @@ def _height_controlled_diffusion(h_qubit_idx, h_child_idx, branch_reg,
     num_moves : int
         Branching factor (number of valid children).
     angle_data : dict
-        Pre-computed angles from ``_precompute_diffusion_angles``.
+        Pre-computed angles from ``_precompute_angles``.
     """
     if num_moves < 1:
         return  # No children -> identity
@@ -214,7 +173,7 @@ def _height_controlled_variable_diffusion(config, registers, depth,
     h_control = _make_qbool_wrapper(h_qubit_idx)
 
     # Pre-compute angles for all possible count values
-    angle_data = _precompute_diffusion_angles(
+    angle_data = _precompute_angles(
         num_moves, bw, is_root=is_root, max_depth=config.max_depth,
     )
 
@@ -260,7 +219,6 @@ def _height_controlled_variable_diffusion(config, registers, depth,
             _emit_cascade_multi_controlled(
                 branch_reg, cascade_ops, ctrl_qubits, sign=-1,
             )
-        from .walk_branching import _emit_multi_controlled_ry
         _emit_multi_controlled_ry(h_child_idx, -phi, ctrl_qubits)
 
     # Step 5: S_0 reflection controlled on h[depth]
@@ -355,7 +313,7 @@ def _apply_local_diffusion(config, registers, depth):
         # depth d to depth d-1.
         branch_reg = registers.branch_at(depth - 1)
 
-        angle_data = _precompute_diffusion_angles(
+        angle_data = _precompute_angles(
             num_moves, bw, is_root=is_root,
             max_depth=config.max_depth,
         )

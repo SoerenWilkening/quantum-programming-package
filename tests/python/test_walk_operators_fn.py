@@ -5,11 +5,13 @@ WalkRegisters.  Tests cover:
 
 - Disjointness of R_A/R_B height controls
 - R_A acts on even depths only (excluding root)
+- R_A modifies state at active non-root even depth
 - R_B acts on odd depths plus root
 - walk_step = R_B * R_A
 - WalkOperatorState compilation and replay
 - Norm preservation (unitarity)
 - Validation of arguments
+- Variable-branching path (with make_move/is_valid/state callbacks)
 """
 
 import gc
@@ -21,6 +23,7 @@ from qiskit import transpile
 from qiskit_aer import AerSimulator
 
 import quantum_language as ql
+from quantum_language._gates import emit_x
 from quantum_language.walk_core import WalkConfig
 from quantum_language.walk_operators import (
     WalkOperatorState,
@@ -70,6 +73,57 @@ def _make_config_and_regs(max_depth, num_moves):
     regs = WalkRegisters(config)
     regs.init_root()
     return config, regs
+
+
+def _prepare_at_depth(registers, target_depth):
+    """Move walk state from root to a given depth.
+
+    Flips root height qubit off and target depth qubit on.
+    The state becomes |h[target_depth]=1, all branches=0>.
+    """
+    max_depth = registers.config.max_depth
+    emit_x(registers.height_qubit(max_depth))    # root off
+    emit_x(registers.height_qubit(target_depth))  # target on
+
+
+# ---------------------------------------------------------------------------
+# Variable-branching helpers (move/validity callbacks)
+# ---------------------------------------------------------------------------
+
+
+def _make_move_xor(state, move_idx):
+    """Apply move by XORing state with (move_idx + 1)."""
+    state ^= (move_idx + 1)
+
+
+def _undo_move_xor(state, move_idx):
+    """Undo XOR move (XOR is self-inverse)."""
+    state ^= (move_idx + 1)
+
+
+def _is_valid_nonzero(state):
+    """Validity predicate: valid when state != 0."""
+    return state != 0
+
+
+def _make_variable_config_and_regs(max_depth, num_moves, state_width,
+                                    state_value=0):
+    """Create WalkConfig with callbacks and WalkRegisters, init root.
+
+    Returns (config, registers, state) tuple.
+    """
+    state = ql.qint(state_value, width=state_width)
+    config = WalkConfig(
+        max_depth=max_depth,
+        num_moves=num_moves,
+        make_move=_make_move_xor,
+        undo_move=_undo_move_xor,
+        is_valid=_is_valid_nonzero,
+        state=state,
+    )
+    regs = WalkRegisters(config)
+    regs.init_root()
+    return config, regs, state
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +290,31 @@ class TestBuildRA:
             "R_A should not affect root state (only even non-root depths)"
         )
 
+    def test_R_A_modifies_state_at_even_nonroot_depth(self):
+        """R_A modifies state when walk is at even non-root depth.
+
+        For max_depth=3, R_A includes depth 2 (even, non-root).
+        Manually set h[2]=1 (root h[3] off) so that R_A depth-2
+        diffusion activates and modifies the statevector.
+
+        Qubits: 4 height + 3 branch + 1 count = 8 <= 17.
+        """
+        _init_circuit()
+        config, regs = _make_config_and_regs(3, 2)
+
+        # Move from root (h[3]) to depth 2 (h[2])
+        _prepare_at_depth(regs, target_depth=2)
+        sv_before = _simulate_statevector(ql.to_openqasm())
+
+        build_R_A(config, regs)
+
+        _keepalive = [regs]
+        sv_after = _simulate_statevector(ql.to_openqasm())
+
+        assert not np.allclose(sv_before, sv_after, atol=1e-6), (
+            "R_A should modify state when walk is at even non-root depth 2"
+        )
+
     def test_R_A_preserves_norm(self):
         """R_A preserves statevector norm."""
         _init_circuit()
@@ -247,6 +326,24 @@ class TestBuildRA:
         sv = _simulate_statevector(ql.to_openqasm())
         norm = np.linalg.norm(sv)
         assert abs(norm - 1.0) < 1e-6, f"R_A should preserve norm, got {norm}"
+
+    def test_R_A_preserves_norm_at_active_depth(self):
+        """R_A preserves norm when at an active even depth.
+
+        Qubits: 4 height + 3 branch + 1 count = 8 <= 17.
+        """
+        _init_circuit()
+        config, regs = _make_config_and_regs(3, 2)
+        _prepare_at_depth(regs, target_depth=2)
+
+        build_R_A(config, regs)
+
+        _keepalive = [regs]
+        sv = _simulate_statevector(ql.to_openqasm())
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"R_A should preserve norm at active depth, got {norm}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -555,3 +652,131 @@ class TestQubitBudget:
         _keepalive = [regs]
         nq = _get_num_qubits(ql.to_openqasm())
         assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+
+
+# ---------------------------------------------------------------------------
+# Group 8: Variable-Branching Path Tests
+# ---------------------------------------------------------------------------
+
+
+class TestVariableBranching:
+    """Variable-branching diffusion via make_move/is_valid/state callbacks.
+
+    The variable-branching path dispatches from _apply_local_diffusion
+    when config has make_move, is_valid, and state set.  These tests
+    verify the path executes without errors, preserves norm, and
+    allocates a reasonable number of qubits.
+
+    Note: with a classical-state input (qint initialized to a fixed
+    value), the framework optimizes away arithmetic on known values.
+    The variable diffusion emits gates but the counting may produce
+    trivial results.  The important properties are: the code path
+    runs, norm is preserved, and qubit budget is respected.
+    """
+
+    def test_variable_path_dispatched(self):
+        """Config with callbacks takes the variable-branching path.
+
+        Verify the variable path is exercised by checking that more
+        qubits are allocated (comparison/count ancillae) than the
+        fixed-branching path would use.
+
+        Fixed: height + branch + count = 2 + 1 + 1 = 4 qubits.
+        Variable: additional state + comparison ancillae.
+        """
+        _init_circuit()
+        config, regs, state = _make_variable_config_and_regs(
+            max_depth=1, num_moves=1, state_width=3, state_value=0,
+        )
+
+        walk_step(config, regs)
+
+        _keepalive = [regs, state]
+        qasm = ql.to_openqasm()
+        nq = _get_num_qubits(qasm)
+
+        # Variable path allocates state (3) + walk regs + ancillae
+        # Fixed path would only use walk regs (4 qubits)
+        assert nq > 4, (
+            f"Variable path should allocate more qubits than fixed, "
+            f"got {nq}"
+        )
+        assert nq <= 17, f"Variable walk uses {nq} qubits (limit: 17)"
+
+    def test_variable_walk_step_preserves_norm(self):
+        """walk_step with variable-branching callbacks preserves norm.
+
+        Qubits: 3 state + 2 height + 1 branch + 1 count + ancillae.
+        """
+        _init_circuit()
+        config, regs, state = _make_variable_config_and_regs(
+            max_depth=1, num_moves=1, state_width=3, state_value=0,
+        )
+
+        walk_step(config, regs)
+
+        _keepalive = [regs, state]
+        qasm = ql.to_openqasm()
+        sv = _simulate_statevector(qasm)
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"Variable-branching walk_step should preserve norm, got {norm}"
+        )
+
+    def test_variable_R_B_preserves_norm(self):
+        """R_B with variable branching preserves norm."""
+        _init_circuit()
+        config, regs, state = _make_variable_config_and_regs(
+            max_depth=1, num_moves=1, state_width=3, state_value=0,
+        )
+
+        build_R_B(config, regs)
+
+        _keepalive = [regs, state]
+        sv = _simulate_statevector(ql.to_openqasm())
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"Variable R_B should preserve norm, got {norm}"
+        )
+
+    def test_variable_double_walk_step_preserves_norm(self):
+        """Two variable walk steps preserve norm."""
+        _init_circuit()
+        config, regs, state = _make_variable_config_and_regs(
+            max_depth=1, num_moves=1, state_width=3, state_value=0,
+        )
+
+        walk_step(config, regs)
+        walk_step(config, regs)
+
+        _keepalive = [regs, state]
+        sv = _simulate_statevector(ql.to_openqasm())
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"Two variable walk steps should preserve norm, got {norm}"
+        )
+
+    def test_variable_num_moves_2_preserves_norm(self):
+        """Variable diffusion with num_moves=2 preserves norm.
+
+        Larger branching factor exercises the cascade rotations
+        in the variable diffusion path.
+        """
+        _init_circuit()
+        config, regs, state = _make_variable_config_and_regs(
+            max_depth=1, num_moves=2, state_width=2, state_value=0,
+        )
+
+        walk_step(config, regs)
+
+        _keepalive = [regs, state]
+        qasm = ql.to_openqasm()
+        nq = _get_num_qubits(qasm)
+        assert nq <= 17, f"Variable walk uses {nq} qubits (limit: 17)"
+
+        sv = _simulate_statevector(qasm)
+        norm = np.linalg.norm(sv)
+        assert abs(norm - 1.0) < 1e-6, (
+            f"Variable walk with num_moves=2 should preserve norm, "
+            f"got {norm}"
+        )
