@@ -223,7 +223,7 @@ def _emit_multi_controlled_x(target_qubit, ctrl_qubits):
     for cq in ctrl_qubits[1:]:
         combined = combined & _make_qbool_wrapper(cq)
     with combined:
-        target_wrapper ^= 1
+        _flip_all(target_wrapper)
 
 
 # ------------------------------------------------------------------
