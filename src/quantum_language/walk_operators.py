@@ -18,11 +18,10 @@ References
     Theory of Computing, 2018 (arXiv:1509.02374).
 """
 
-from .diffusion import _flip_all, _qubit_index, _register_indices
+from .diffusion import _qubit_index, _register_indices
 from .walk_core import WalkConfig
 from .walk_diffusion import _evaluate_validity, walk_diffusion_with_regs
 from .walk_registers import WalkRegisters
-
 
 # ------------------------------------------------------------------
 # Validation
@@ -45,14 +44,9 @@ def _validate_operator_args(config, registers):
         If arguments are wrong type.
     """
     if not isinstance(config, WalkConfig):
-        raise TypeError(
-            f"config must be a WalkConfig, got {type(config).__name__}"
-        )
+        raise TypeError(f"config must be a WalkConfig, got {type(config).__name__}")
     if not isinstance(registers, WalkRegisters):
-        raise TypeError(
-            f"registers must be a WalkRegisters, got "
-            f"{type(registers).__name__}"
-        )
+        raise TypeError(f"registers must be a WalkRegisters, got {type(registers).__name__}")
 
 
 # ------------------------------------------------------------------
@@ -92,7 +86,7 @@ def _apply_local_diffusion(config, registers, depth):
     if depth == 0:
         return  # Leaf: no children, no diffusion
 
-    is_root = (depth == config.max_depth)
+    is_root = depth == config.max_depth
 
     h_qbool = registers.height_qubit(depth)
     h_child_qbool = registers.height_qubit(depth - 1)
@@ -108,23 +102,30 @@ def _apply_local_diffusion(config, registers, depth):
         # Step 2-3: Evaluate is_marked(state) quantumly, negate so
         # that the marking qbool is |1> for UNMARKED nodes.
         marked = config.is_marked(config.state)
-        _flip_all(marked)
+        marked ^= 1
 
         # Step 4: Pass marked qbool into diffusion -- only the
         # rotation / S_0 steps are controlled on it.  Validity
         # is pre-evaluated and passed in so it runs unconditionally.
         walk_diffusion_with_regs(
-            config, h_child_qbool, branch_reg,
-            is_root=is_root, control_qbool=h_qbool,
-            marking_qbool=marked, validity=validity,
+            config,
+            h_child_qbool,
+            branch_reg,
+            is_root=is_root,
+            control_qbool=h_qbool,
+            marking_qbool=marked,
+            validity=validity,
         )
 
         # Step 5: Undo the negation.
-        _flip_all(marked)
+        marked ^= 1
     else:
         walk_diffusion_with_regs(
-            config, h_child_qbool, branch_reg,
-            is_root=is_root, control_qbool=h_qbool,
+            config,
+            h_child_qbool,
+            branch_reg,
+            is_root=is_root,
+            control_qbool=h_qbool,
         )
 
 
@@ -255,10 +256,8 @@ def verify_disjointness(config, registers):
         r_b_depths.add(config.max_depth)
 
     # Map to physical qubit indices via _qubit_index helper
-    r_a_qubits = {_qubit_index(registers.height_qubit(d))
-                   for d in r_a_depths}
-    r_b_qubits = {_qubit_index(registers.height_qubit(d))
-                   for d in r_b_depths}
+    r_a_qubits = {_qubit_index(registers.height_qubit(d)) for d in r_a_depths}
+    r_b_qubits = {_qubit_index(registers.height_qubit(d)) for d in r_b_depths}
 
     overlap = r_a_qubits & r_b_qubits
     return {
@@ -343,6 +342,7 @@ class WalkOperatorState:
             A qint backed by all walk register qubits.
         """
         import numpy as np
+
         from .qint import qint
 
         all_indices = []
@@ -380,9 +380,7 @@ class WalkOperatorState:
                 build_R_A(cfg_ref, regs_ref)
                 build_R_B(cfg_ref, regs_ref)
 
-            self._compiled_fn = ql_compile(
-                key=lambda r: regs_ref.total_qubits()
-            )(_walk_body)
+            self._compiled_fn = ql_compile(key=lambda r: regs_ref.total_qubits())(_walk_body)
 
             self._all_qubits_reg = self._build_all_qubits_register()
 
