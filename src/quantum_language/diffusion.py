@@ -16,7 +16,7 @@ Usage
 
 import math
 
-from ._core import _set_layer_floor, get_current_layer, option
+from ._core import _set_layer_floor, get_current_layer
 from .compile import compile as ql_compile
 from .qarray import qarray
 from .qint import qint
@@ -117,27 +117,17 @@ def _flip_all(*registers):
     applies ``~register`` (bitwise NOT) to each.  Handles controlled
     context automatically via the DSL ``__invert__`` implementation.
 
-    Temporarily enables ``simulate`` mode so that the underlying
-    ``run_instruction`` path stores gates in the circuit.
-
     Parameters
     ----------
     *registers : qint, qbool, or qarray
         Quantum registers whose qubits should be flipped.
     """
-    was_simulating = option('simulate')
-    if not was_simulating:
-        option('simulate', True)
-    try:
-        for reg in registers:
-            if isinstance(reg, qarray):
-                for elem in reg:
-                    ~elem
-            elif isinstance(reg, qint):
-                ~reg
-    finally:
-        if not was_simulating:
-            option('simulate', False)
+    for reg in registers:
+        if isinstance(reg, qarray):
+            for elem in reg:
+                ~elem  # noqa: B018 — side-effecting quantum NOT
+        elif isinstance(reg, qint):
+            ~reg  # noqa: B018 — side-effecting quantum NOT
 
 
 def _extract_qbools(*registers):
@@ -180,6 +170,7 @@ def _nested_phase_flip(bits, target_register):
     target_register : qint
         Register used for the ``phase += pi`` call.
     """
+
     def _recurse(idx):
         if idx == len(bits):
             target_register.phase += math.pi
@@ -224,9 +215,8 @@ def diffusion(*registers):
     for the multi-controlled phase flip.
     Works on qint, qbool, and qarray. Multiple registers are flattened.
 
-    Enables ``simulate`` mode so that DSL operations produce gates in
-    the circuit.  The inner implementation is ``@ql.compile``-cached so
-    that repeated calls replay the captured gate sequence.
+    The inner implementation is ``@ql.compile``-cached so that repeated
+    calls replay the captured gate sequence.
 
     Parameters
     ----------
@@ -246,11 +236,4 @@ def diffusion(*registers):
     >>> x.branch()
     >>> ql.diffusion(x)
     """
-    was_simulating = option('simulate')
-    if not was_simulating:
-        option('simulate', True)
-    try:
-        _diffusion_impl(*registers)
-    finally:
-        if not was_simulating:
-            option('simulate', False)
+    _diffusion_impl(*registers)

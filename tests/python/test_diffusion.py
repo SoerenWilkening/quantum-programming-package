@@ -68,6 +68,7 @@ class TestDiffusionOperator:
         """1-qubit diffusion: X-P(pi)-X pattern (phase flip via DSL)."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x = ql.qint(0, width=1)
         ql.diffusion(x)
@@ -89,6 +90,7 @@ class TestDiffusionOperator:
         """2-qubit diffusion: X-CCX-P(pi)-CCX-X pattern (AND + phase)."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x = ql.qint(0, width=2)
         ql.diffusion(x)
@@ -110,6 +112,7 @@ class TestDiffusionOperator:
         """3-qubit diffusion: X-CCX chain-P(pi)-CCX uncompute-X pattern."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x = ql.qint(0, width=3)
         ql.diffusion(x)
@@ -117,9 +120,7 @@ class TestDiffusionOperator:
         qasm = ql.to_openqasm()
 
         # 3-qubit: CCX AND chain + P(pi)
-        assert _gate_present(qasm, "ccx"), (
-            f"Expected CCX (Toffoli) gates in QASM:\n{qasm}"
-        )
+        assert _gate_present(qasm, "ccx"), f"Expected CCX (Toffoli) gates in QASM:\n{qasm}"
 
         # Count X gates: should be 6 (3 before + 3 after)
         x_count = _count_gate(qasm, "x")
@@ -136,6 +137,7 @@ class TestDiffusionOperator:
         """
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x = ql.qint(0, width=2)
         x.branch()
@@ -169,6 +171,7 @@ class TestDiffusionOperator:
         """
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x = ql.qint(0, width=3)
         x.branch()
@@ -203,6 +206,7 @@ class TestDiffusionOperator:
         """Multi-register diffusion: ql.diffusion(x, y) flattens to total width."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x = ql.qint(0, width=2)
         y = ql.qint(0, width=1)
@@ -218,14 +222,13 @@ class TestDiffusionOperator:
         assert x_count == 6, f"Expected 6 X gates, got {x_count}"
 
         # Should have CCX (Toffoli AND chain) for 3 qubits
-        assert _gate_present(qasm, "ccx"), (
-            f"Expected CCX gates:\n{qasm}"
-        )
+        assert _gate_present(qasm, "ccx"), f"Expected CCX gates:\n{qasm}"
 
     def test_diffusion_qbool(self):
         """Diffusion on qbool: 1-qubit case (X-P(pi)-X)."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         b = ql.qbool(False)
         ql.diffusion(b)
@@ -244,6 +247,7 @@ class TestDiffusionOperator:
         """Diffusion on qarray: 2 qbool elements = 2 data qubits + 1 AND ancilla."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         arr = ql.array(dim=2, dtype=ql.qbool)
         ql.diffusion(arr)
@@ -262,6 +266,7 @@ class TestDiffusionOperator:
         """Diffusion with no arguments raises ValueError."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         with pytest.raises((ValueError, TypeError)):
             ql.diffusion()
@@ -270,6 +275,7 @@ class TestDiffusionOperator:
         """Calling diffusion twice on same-width register uses compile cache."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x1 = ql.qint(0, width=3)
         ql.diffusion(x1)
@@ -278,6 +284,7 @@ class TestDiffusionOperator:
         # Second call on a different register of same width
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
         x2 = ql.qint(0, width=3)
         ql.diffusion(x2)
         qasm2 = ql.to_openqasm()
@@ -293,6 +300,7 @@ class TestDiffusionOperator:
         """Diffusion inside with-block: controlled context."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         flag = ql.qbool(True)
         x = ql.qint(0, width=2)
@@ -309,14 +317,13 @@ class TestDiffusionOperator:
         assert _gate_present(qasm, "x") or _gate_present(qasm, "ccx"), (
             f"Expected X or CCX gates in controlled diffusion:\n{qasm}"
         )
-        assert _gate_present(qasm, "p("), (
-            f"Expected P gate in controlled diffusion:\n{qasm}"
-        )
+        assert _gate_present(qasm, "p("), f"Expected P gate in controlled diffusion:\n{qasm}"
 
     def test_diffusion_4qubit_statevector(self):
         """4-qubit diffusion: confirms S_0 reflection for width=4."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x = ql.qint(0, width=4)
         x.branch()
@@ -353,6 +360,7 @@ class TestPhaseProperty:
         """Uncontrolled phase emits no gate (global phase is unobservable)."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x = ql.qint(0, width=2)
         x.phase += 3.14
@@ -381,6 +389,7 @@ class TestPhaseProperty:
         """
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x = ql.qint(0, width=2)
         flag = ql.qbool(True)
@@ -397,6 +406,7 @@ class TestPhaseProperty:
         """phase *= -1 is equivalent to phase += pi."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x = ql.qint(0, width=2)
         flag = ql.qbool(True)
@@ -406,6 +416,7 @@ class TestPhaseProperty:
 
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         y = ql.qint(0, width=2)
         flag2 = ql.qbool(True)
@@ -425,6 +436,7 @@ class TestPhaseProperty:
         """phase *= 2 raises ValueError."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x = ql.qint(0, width=2)
 
@@ -435,6 +447,7 @@ class TestPhaseProperty:
         """Phase property works on qbool (inherited from qint)."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         b = ql.qbool(False)
         flag = ql.qbool(True)
@@ -449,6 +462,7 @@ class TestPhaseProperty:
         """Phase property works on qarray."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         arr = ql.array(dim=2, dtype=ql.qbool)
         flag = ql.qbool(True)
@@ -468,6 +482,7 @@ class TestPhaseProperty:
         """
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
 
         x = ql.qint(0, width=2)
         x.branch()
@@ -513,6 +528,7 @@ class TestPhaseProperty:
         # in the same controlled context
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
         x = ql.qint(0, width=2)
         flag_x = ql.qbool(True)
         with flag_x:
@@ -521,6 +537,7 @@ class TestPhaseProperty:
 
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
         y = ql.qint(0, width=2)
         flag_y = ql.qbool(True)
         with flag_y:
@@ -544,6 +561,7 @@ class TestPhaseProperty:
         # First, get reference statevector from ql.diffusion()
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
         x_ref = ql.qint(0, width=3)
         x_ref.branch()
         ql.diffusion(x_ref)
@@ -554,6 +572,7 @@ class TestPhaseProperty:
         # Now test manual S_0 path
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
         x = ql.qint(0, width=3)
         x.branch()
         with x == 0:
@@ -585,6 +604,7 @@ class TestPhaseProperty:
         """Manual S_0 path emits visible P gate in QASM (not self-controlled CP)."""
         ql.circuit()
         ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
         x = ql.qint(0, width=2)
         x.branch()
         with x == 0:

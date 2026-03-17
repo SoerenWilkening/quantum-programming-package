@@ -321,6 +321,7 @@ def _run_grover_attempt(oracle, register_widths, j):
     # Fresh circuit for each attempt (required: circuit state not resettable)
     circuit()
     option("fault_tolerant", True)
+    option("simulate", True)
 
     # Allocate registers
     registers = [qint_type(0, width=w) for w in register_widths]

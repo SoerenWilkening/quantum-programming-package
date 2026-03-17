@@ -362,6 +362,7 @@ def _build_and_simulate(oracle, register_widths, k, shots):
     # Fresh circuit for each round (required: global circuit state)
     circuit()
     option("fault_tolerant", True)
+    option("simulate", True)
 
     # Allocate registers
     registers = [qint_type(0, width=w) for w in register_widths]

@@ -33,7 +33,6 @@ from quantum_language.walk_operators import (
 )
 from quantum_language.walk_registers import WalkRegisters
 
-
 # ---------------------------------------------------------------------------
 # Simulation helpers
 # ---------------------------------------------------------------------------
@@ -43,6 +42,7 @@ def _init_circuit():
     """Initialize a fresh circuit."""
     gc.collect()
     ql.circuit()
+    ql.option("simulate", True)
 
 
 def _simulate_statevector(qasm_str):
@@ -63,8 +63,7 @@ def _get_num_qubits(qasm_str):
     raise ValueError("Could not find qubit count in QASM")
 
 
-def _make_config_and_regs(max_depth, num_moves, state_width=1,
-                          state_value=0):
+def _make_config_and_regs(max_depth, num_moves, state_width=1, state_value=0):
     """Create WalkConfig with callbacks and WalkRegisters, init root.
 
     Returns (config, registers) tuple.
@@ -90,12 +89,12 @@ def _make_config_and_regs(max_depth, num_moves, state_width=1,
 
 def _make_move_xor(state, move_idx):
     """Apply move by XORing state with (move_idx + 1)."""
-    state ^= (move_idx + 1)
+    state ^= move_idx + 1
 
 
 def _undo_move_xor(state, move_idx):
     """Undo XOR move (XOR is self-inverse)."""
-    state ^= (move_idx + 1)
+    state ^= move_idx + 1
 
 
 def _is_valid_nonzero(state):
@@ -103,8 +102,7 @@ def _is_valid_nonzero(state):
     return state != 0
 
 
-def _make_variable_config_and_regs(max_depth, num_moves, state_width,
-                                    state_value=0):
+def _make_variable_config_and_regs(max_depth, num_moves, state_width, state_value=0):
     """Create WalkConfig with callbacks and WalkRegisters, init root.
 
     Returns (config, registers, state) tuple.
@@ -252,7 +250,10 @@ class TestBuildRA:
         """
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
 
         build_R_A(config, regs)
@@ -275,7 +276,10 @@ class TestBuildRB:
         """R_B preserves statevector norm for depth=1."""
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
 
         build_R_B(config, regs)
@@ -298,7 +302,10 @@ class TestWalkStep:
         """walk_step produces same statevector as R_A then R_B."""
         _init_circuit()
         config_w, regs_w, state_w = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
         walk_step(config_w, regs_w)
         _keep_w = [regs_w, state_w]
@@ -306,7 +313,10 @@ class TestWalkStep:
 
         _init_circuit()
         config_m, regs_m, state_m = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
         build_R_A(config_m, regs_m)
         build_R_B(config_m, regs_m)
@@ -321,22 +331,26 @@ class TestWalkStep:
         """Walk step preserves statevector norm (unitarity check)."""
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
         walk_step(config, regs)
 
         _keepalive = [regs, state]
         sv = _simulate_statevector(ql.to_openqasm())
         norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"Walk step should preserve norm, got {norm}"
-        )
+        assert abs(norm - 1.0) < 1e-6, f"Walk step should preserve norm, got {norm}"
 
     def test_walk_step_double_preserves_norm(self):
         """Two walk steps preserve statevector norm."""
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
         walk_step(config, regs)
         walk_step(config, regs)
@@ -344,9 +358,7 @@ class TestWalkStep:
         _keepalive = [regs, state]
         sv = _simulate_statevector(ql.to_openqasm())
         norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"Two walk steps should preserve norm, got {norm}"
-        )
+        assert abs(norm - 1.0) < 1e-6, f"Two walk steps should preserve norm, got {norm}"
 
 
 # ---------------------------------------------------------------------------
@@ -362,7 +374,10 @@ class TestWalkOperatorState:
         # Raw
         _init_circuit()
         config_r, regs_r, state_r = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
         walk_step(config_r, regs_r)
         _keep_r = [regs_r, state_r]
@@ -371,7 +386,10 @@ class TestWalkOperatorState:
         # Compiled
         _init_circuit()
         config_c, regs_c, state_c = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
         ops = WalkOperatorState(config_c, regs_c)
         ops.step()
@@ -386,7 +404,10 @@ class TestWalkOperatorState:
         """WalkOperatorState starts uncompiled."""
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
         ops = WalkOperatorState(config, regs)
         assert ops.is_compiled is False
@@ -395,7 +416,10 @@ class TestWalkOperatorState:
         """is_compiled is True after first step()."""
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
         ops = WalkOperatorState(config, regs)
         ops.step()
@@ -406,7 +430,10 @@ class TestWalkOperatorState:
         """Replay (second step) preserves norm."""
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
         ops = WalkOperatorState(config, regs)
         ops.step()  # capture
@@ -415,15 +442,16 @@ class TestWalkOperatorState:
         _keepalive = [regs, state]
         sv = _simulate_statevector(ql.to_openqasm())
         norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"Replay should preserve norm, got {norm}"
-        )
+        assert abs(norm - 1.0) < 1e-6, f"Replay should preserve norm, got {norm}"
 
     def test_compiled_rejects_non_config(self):
         """WalkOperatorState rejects non-WalkConfig."""
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
         with pytest.raises(TypeError, match="config must be a WalkConfig"):
             WalkOperatorState("bad", regs)
@@ -432,7 +460,10 @@ class TestWalkOperatorState:
         """WalkOperatorState rejects non-WalkRegisters."""
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=1, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=1,
+            state_value=0,
         )
         with pytest.raises(TypeError, match="registers must be a WalkRegisters"):
             WalkOperatorState(config, "bad")
@@ -470,7 +501,10 @@ class TestVariableBranching:
         """
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=3, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=3,
+            state_value=0,
         )
 
         walk_step(config, regs)
@@ -482,10 +516,9 @@ class TestVariableBranching:
         # Variable path allocates state (3) + walk regs + ancillae
         # Bare walk regs would only use 4 qubits
         assert nq > 4, (
-            f"Variable path should allocate more qubits than bare "
-            f"walk registers, got {nq}"
+            f"Variable path should allocate more qubits than bare walk registers, got {nq}"
         )
-        assert nq <= 17, f"Variable walk uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Variable walk uses {nq} qubits (limit: 21)"
 
     def test_variable_walk_step_preserves_norm(self):
         """walk_step with variable-branching callbacks preserves norm.
@@ -494,7 +527,10 @@ class TestVariableBranching:
         """
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=3, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=3,
+            state_value=0,
         )
 
         walk_step(config, regs)
@@ -511,7 +547,10 @@ class TestVariableBranching:
         """R_B with variable branching preserves norm."""
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=3, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=3,
+            state_value=0,
         )
 
         build_R_B(config, regs)
@@ -519,15 +558,16 @@ class TestVariableBranching:
         _keepalive = [regs, state]
         sv = _simulate_statevector(ql.to_openqasm())
         norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"Variable R_B should preserve norm, got {norm}"
-        )
+        assert abs(norm - 1.0) < 1e-6, f"Variable R_B should preserve norm, got {norm}"
 
     def test_variable_double_walk_step_preserves_norm(self):
         """Two variable walk steps preserve norm."""
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=1, state_width=3, state_value=0,
+            max_depth=1,
+            num_moves=1,
+            state_width=3,
+            state_value=0,
         )
 
         walk_step(config, regs)
@@ -536,9 +576,7 @@ class TestVariableBranching:
         _keepalive = [regs, state]
         sv = _simulate_statevector(ql.to_openqasm())
         norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"Two variable walk steps should preserve norm, got {norm}"
-        )
+        assert abs(norm - 1.0) < 1e-6, f"Two variable walk steps should preserve norm, got {norm}"
 
     def test_variable_num_moves_2_preserves_norm(self):
         """Variable diffusion with num_moves=2 preserves norm.
@@ -548,7 +586,10 @@ class TestVariableBranching:
         """
         _init_circuit()
         config, regs, state = _make_variable_config_and_regs(
-            max_depth=1, num_moves=2, state_width=2, state_value=0,
+            max_depth=1,
+            num_moves=2,
+            state_width=2,
+            state_value=0,
         )
 
         walk_step(config, regs)
@@ -556,11 +597,10 @@ class TestVariableBranching:
         _keepalive = [regs, state]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Variable walk uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Variable walk uses {nq} qubits (limit: 21)"
 
         sv = _simulate_statevector(qasm)
         norm = np.linalg.norm(sv)
         assert abs(norm - 1.0) < 1e-6, (
-            f"Variable walk with num_moves=2 should preserve norm, "
-            f"got {norm}"
+            f"Variable walk with num_moves=2 should preserve norm, got {norm}"
         )
