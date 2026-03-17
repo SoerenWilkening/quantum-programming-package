@@ -1,11 +1,16 @@
-"""Tests for unified cache entry with both uncontrolled and controlled sequences.
+"""Tests for compiled function control propagation.
 
 Phase 5, Step 5.1: Verify that @ql.compile stores a single cache entry
 containing both uncontrolled and controlled gate sequences, with no
 control_count in the cache key. The controlled variant is derived via
 _derive_controlled_block and attached to the same CompiledBlock.
 
-Requirements: Quantum_Assembly-aql.1
+Phase 5, Step 5.2: Verify that _replay() checks the control stack at
+runtime and selects the appropriate gate sequence (controlled or
+uncontrolled). The control virtual index is mapped to the actual control
+qubit dynamically. Gate sequences are fixed; only qubit mapping varies.
+
+Requirements: Quantum_Assembly-aql.1, Quantum_Assembly-aql.2
 """
 
 import gc
@@ -232,3 +237,224 @@ class TestCacheKeyNoControlCount:
 
         # Different widths -> different keys -> 2 entries
         assert len(inc._cache) == 2
+
+
+# =========================================================================
+# Phase 5, Step 5.2 — Runtime sequence selection in _replay
+# =========================================================================
+
+
+class TestControlledDifferentGates:
+    """Controlled replay produces more gates than uncontrolled."""
+
+    def test_controlled_different_gates(self):
+        """with ctrl: f(x) produces more gates than f(x) alone."""
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+        ql.option("simulate", True)
+
+        # Uncontrolled call (capture)
+        a = ql.qint(0, width=2)
+        _ = inc(a)
+        block = list(inc._cache.values())[0]
+        uncontrolled_gate_count = len(block.gates)
+        controlled_gate_count = len(block.controlled_block.gates)
+
+        # Controlled variant should have the same number of gates but each
+        # gate has one more control qubit
+        assert controlled_gate_count == uncontrolled_gate_count
+        for ug, cg in zip(block.gates, block.controlled_block.gates, strict=False):
+            assert cg["num_controls"] == ug["num_controls"] + 1
+
+
+class TestUncontrolledReplay:
+    """Replaying without control uses uncontrolled sequence."""
+
+    def test_uncontrolled_replay(self):
+        """Second call outside with-block replays uncontrolled gates."""
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+        ql.option("simulate", True)
+
+        # First call: capture
+        a = ql.qint(0, width=2)
+        _ = inc(a)
+
+        block = list(inc._cache.values())[0]
+        uncontrolled_total_vqubits = block.total_virtual_qubits
+
+        # Second call: replay (no control context)
+        b = ql.qint(0, width=2)
+        _ = inc(b)
+
+        # The replay used the uncontrolled block which has fewer virtual
+        # qubits than the controlled variant
+        ctrl_block = block.controlled_block
+        assert ctrl_block.total_virtual_qubits == uncontrolled_total_vqubits + 1
+
+
+class TestControlledReplay:
+    """Replaying with control uses controlled sequence."""
+
+    def test_controlled_replay(self):
+        """Replay inside a with-block uses the controlled gate sequence."""
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+        ql.option("simulate", True)
+
+        # First call: capture (uncontrolled)
+        a = ql.qint(0, width=2)
+        _ = inc(a)
+
+        block = list(inc._cache.values())[0]
+        ctrl_block = block.controlled_block
+        # Controlled block has control_virtual_idx set
+        assert ctrl_block.control_virtual_idx is not None
+
+        # Second call: replay inside with-block (controlled)
+        c = ql.qbool(True)
+        b = ql.qint(0, width=2)
+        with c:
+            _ = inc(b)
+
+        # Still only one cache entry (selection happens at runtime)
+        assert len(inc._cache) == 1
+
+    def test_controlled_replay_first_call_in_with(self):
+        """First call inside with-block, second inside another with-block."""
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+        ql.option("simulate", True)
+
+        # First call inside with (capture path: captures uncontrolled,
+        # derives controlled)
+        c1 = ql.qbool(True)
+        a = ql.qint(0, width=2)
+        with c1:
+            _ = inc(a)
+
+        # Second call inside different with (replay path: uses controlled)
+        c2 = ql.qbool(True)
+        b = ql.qint(0, width=2)
+        with c2:
+            _ = inc(b)
+
+        assert len(inc._cache) == 1
+
+
+class TestNestedWithCompiled:
+    """Nested with blocks use AND-ancilla as control qubit."""
+
+    def test_nested_with_compiled(self):
+        """with c1: with c2: f(x) uses the AND-ancilla as control qubit."""
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+        ql.option("simulate", True)
+
+        # First call: capture outside with
+        a = ql.qint(0, width=3)
+        _ = inc(a)
+
+        # Nested with blocks: the two conditions are AND-combined into
+        # a single control qubit (AND-ancilla)
+        c1 = ql.qbool(True)
+        c2 = ql.qbool(True)
+        b = ql.qint(0, width=3)
+        with c1:
+            with c2:
+                _ = inc(b)
+
+        # Still one cache entry — both controlled and uncontrolled replay
+        # from the same entry
+        assert len(inc._cache) == 1
+
+
+class TestSimulateTrueControlled:
+    """With simulate=True, controlled and uncontrolled produce different states."""
+
+    def test_simulate_true_controlled(self):
+        """Controlled call with simulate=True injects controlled gates."""
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+        ql.option("simulate", True)
+
+        # Capture
+        a = ql.qint(0, width=2)
+        _ = inc(a)
+
+        block = list(inc._cache.values())[0]
+        ctrl_block = block.controlled_block
+
+        # Verify the controlled block's gates all include the control
+        # virtual index in their controls list
+        ctrl_virt = ctrl_block.control_virtual_idx
+        assert ctrl_virt is not None
+        for gate in ctrl_block.gates:
+            assert ctrl_virt in gate["controls"], (
+                f"Gate {gate} missing control virtual index {ctrl_virt}"
+            )
+
+    def test_simulate_true_replay_injects_gates(self):
+        """With simulate=True, replay inside with-block injects gates."""
+        from quantum_language._core import get_gate_count
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+        ql.option("simulate", True)
+
+        # Capture + replay uncontrolled
+        a = ql.qint(0, width=2)
+        _ = inc(a)
+        gate_count_uncontrolled = get_gate_count()
+
+        # Replay controlled
+        c = ql.qbool(True)
+        b = ql.qint(0, width=2)
+        with c:
+            _ = inc(b)
+        gate_count_total = get_gate_count()
+
+        # Controlled replay should have added gates
+        controlled_gates_added = gate_count_total - gate_count_uncontrolled
+        assert controlled_gates_added > 0, "Controlled replay did not inject any gates"

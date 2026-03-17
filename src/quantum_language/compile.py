@@ -832,13 +832,8 @@ class CompiledFunc:
             self._cache.move_to_end(cache_key)
             _track_fwd = self._inverse_func is not None
             block = self._cache[cache_key]
-            # Select controlled variant at runtime if inside a with-block
-            replay_block = (
-                block.controlled_block if is_controlled and block.controlled_block else block
-            )
-            result = self._replay(
-                replay_block, quantum_args, track_forward=_track_fwd, kind="compiled_fn"
-            )
+            # _replay selects controlled/uncontrolled variant at runtime
+            result = self._replay(block, quantum_args, track_forward=_track_fwd, kind="compiled_fn")
             # Manually credit the gate count when simulate=False (no gates
             # injected) or opt=1 (inject_remapped_gates/add_gate does not
             # increment gate_count) so get_gate_count() reflects the
@@ -1265,12 +1260,7 @@ class CompiledFunc:
                 if is_hit:
                     self._cache.move_to_end(cache_key)
                     block = self._cache[cache_key]
-                    replay_block = (
-                        block.controlled_block
-                        if is_controlled and block.controlled_block
-                        else block
-                    )
-                    return self._replay(replay_block, quantum_args, kind="compiled_fn")
+                    return self._replay(block, quantum_args, kind="compiled_fn")
                 else:
                     # Mode flags changed -- re-probe from scratch
                     self._parametric_probed = False
@@ -1320,10 +1310,7 @@ class CompiledFunc:
             if is_hit:
                 self._cache.move_to_end(cache_key)
                 block = self._cache[cache_key]
-                replay_block = (
-                    block.controlled_block if is_controlled and block.controlled_block else block
-                )
-                return self._replay(replay_block, quantum_args, kind="compiled_fn")
+                return self._replay(block, quantum_args, kind="compiled_fn")
             return self._capture_and_cache_both(
                 args,
                 kwargs,
@@ -1339,10 +1326,7 @@ class CompiledFunc:
         if cache_key in self._cache:
             self._cache.move_to_end(cache_key)
             block = self._cache[cache_key]
-            replay_block = (
-                block.controlled_block if is_controlled and block.controlled_block else block
-            )
-            return self._replay(replay_block, quantum_args, kind="compiled_fn")
+            return self._replay(block, quantum_args, kind="compiled_fn")
 
         # New classical value: capture to get correct gates and cache per-value
         result = self._capture_and_cache_both(
@@ -1369,7 +1353,31 @@ class CompiledFunc:
         return result
 
     def _replay(self, block, quantum_args, track_forward=True, kind=None):
-        """Replay cached gates with qubit remapping."""
+        """Replay cached gates with qubit remapping.
+
+        Checks the control stack at runtime and selects the appropriate gate
+        sequence.  If the block has a ``controlled_block`` and we are inside
+        a controlled context (``with qbool:``), the controlled variant is
+        used and its control virtual index is mapped to the actual control
+        qubit.  Otherwise the uncontrolled variant is used directly.
+
+        Parameters
+        ----------
+        block : CompiledBlock
+            The *base* (uncontrolled) block.  ``block.controlled_block`` is
+            used automatically when the control stack is active.
+        quantum_args : list
+            Caller's quantum arguments (qint / qarray).
+        track_forward : bool
+            Whether to record ancilla allocations for inverse support.
+        kind : str or None
+            History kind tag (e.g. ``"compiled_fn"``).
+        """
+        # --- Runtime sequence selection (Phase 5, Step 5.2) ---
+        is_controlled = _get_controlled()
+        if is_controlled and block.controlled_block is not None:
+            block = block.controlled_block
+
         # Build virtual-to-real mapping from caller's qints/qarrays
         virtual_to_real = {}
         vidx = 0
@@ -1654,9 +1662,6 @@ class _InverseCompiledFunc:
         """Call the inverse compiled function."""
         quantum_args, classical_args, widths = self._original._classify_args(args, kwargs)
 
-        # Detect controlled context
-        is_controlled = _get_controlled()
-
         # Build cache key (no control_count -- matches CompiledFunc.__call__)
         qubit_saving = _get_qubit_saving_mode()
         mode_flags = _get_mode_flags()
@@ -1707,13 +1712,9 @@ class _InverseCompiledFunc:
             self._inv_cache[cache_key] = inverted_block
 
         inv_block = self._inv_cache[cache_key]
-        replay_block = (
-            inv_block.controlled_block
-            if is_controlled and inv_block.controlled_block
-            else inv_block
-        )
+        # _replay selects controlled/uncontrolled variant at runtime
         return self._original._replay(
-            replay_block, quantum_args, track_forward=False, kind="compiled_fn_inv"
+            inv_block, quantum_args, track_forward=False, kind="compiled_fn_inv"
         )
 
     def inverse(self):
