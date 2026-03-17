@@ -103,8 +103,15 @@ def _apply_nested_with(ctrl_wrappers, body_fn):
         body_fn()
 
     # Prevent cascade uncomputation from destroying external control
-    # qbools when the AND-chain temporary goes out of scope.
-    combined.dependency_parents.clear()
+    # qbools when AND-chain temporaries go out of scope.  Only needed
+    # when _and_chain actually created new AND results (len > 1);
+    # with a single control, combined IS the original qbool.
+    if len(ctrl_wrappers) > 1:
+        combined.dependency_parents.clear()
+        for child_ref in combined.history.children:
+            child = child_ref()
+            if child is not None:
+                child.dependency_parents.clear()
 
 
 # ------------------------------------------------------------------

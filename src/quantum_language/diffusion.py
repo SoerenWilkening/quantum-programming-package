@@ -170,7 +170,8 @@ def _and_chain(bits):
     Returns
     -------
     qbool
-        Combined AND result.
+        Combined AND result.  When ``len(bits) == 1`` this is
+        ``bits[0]`` itself (no AND allocated).
     """
     combined = bits[0]
     for b in bits[1:]:
