@@ -14,6 +14,42 @@ meaningless because qubits have collapsed).
 import weakref
 
 
+class Blocker:
+    """A blocker prevents uncomputation while a dependent qint is alive.
+
+    Holds a weakref to the dependent qint and the entry index at which
+    it was inserted.  A blocker is "active" when the dependent qint
+    still has allocated qubits; once the qint is deallocated (or
+    garbage-collected), the blocker becomes inactive.
+
+    Attributes
+    ----------
+    _ref : weakref.ref
+        Weakref to the dependent qint.
+    index : int
+        Entry index at time of insertion (len(entries) when added).
+    """
+
+    __slots__ = ("_ref", "index")
+
+    def __init__(self, dependent, index):
+        self._ref = weakref.ref(dependent)
+        self.index = index
+
+    @property
+    def is_active(self):
+        """Return True if the dependent qint's qubits are still allocated."""
+        obj = self._ref()
+        if obj is None:
+            return False
+        return getattr(obj, "allocated_qubits", False)
+
+    @property
+    def dependent(self):
+        """Return the dependent object, or None if garbage-collected."""
+        return self._ref()
+
+
 class HistoryGraph:
     """Lightweight history of operations that produced a quantum variable.
 
@@ -25,11 +61,12 @@ class HistoryGraph:
         Weakrefs to child variables consumed during creation.
     """
 
-    __slots__ = ("entries", "children")
+    __slots__ = ("entries", "children", "blockers")
 
     def __init__(self):
         self.entries = []
         self.children = []
+        self.blockers = []
 
     # ------------------------------------------------------------------
     # Recording
@@ -61,6 +98,26 @@ class HistoryGraph:
             A qint/qbool whose lifetime is tracked via weakref.
         """
         self.children.append(weakref.ref(child))
+
+    def add_blocker(self, dependent):
+        """Register a blocker for *dependent*.
+
+        The blocker records the current entry count as its index and
+        remains active as long as *dependent*'s qubits are allocated.
+
+        Parameters
+        ----------
+        dependent : object
+            A qint/qbool whose liveness gates uncomputation.
+
+        Returns
+        -------
+        Blocker
+            The newly created blocker.
+        """
+        blocker = Blocker(dependent, len(self.entries))
+        self.blockers.append(blocker)
+        return blocker
 
     # ------------------------------------------------------------------
     # Iteration
@@ -140,17 +197,34 @@ class HistoryGraph:
     # ------------------------------------------------------------------
 
     def discard(self):
-        """Clear all entries and children.
+        """Clear all entries, children, and blockers.
 
         Called on measurement — qubits have collapsed so inverse gates
         are physically meaningless.
         """
         self.entries.clear()
         self.children.clear()
+        self.blockers.clear()
 
     # ------------------------------------------------------------------
     # Queries
     # ------------------------------------------------------------------
+
+    def active_blockers_after(self, index):
+        """Return blockers inserted at or after *index* that are still active.
+
+        Parameters
+        ----------
+        index : int
+            Entry index threshold.  Only blockers whose ``index`` is
+            >= this value are considered.
+
+        Returns
+        -------
+        list[Blocker]
+            Active blockers with ``blocker.index >= index``.
+        """
+        return [b for b in self.blockers if b.index >= index and b.is_active]
 
     def __len__(self):
         return len(self.entries)
