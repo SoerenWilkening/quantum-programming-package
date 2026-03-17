@@ -256,7 +256,49 @@ class TestAmplitudeEstimationEndToEnd:
         """Lambda x == 1 in 2-bit space. True probability = 1/4 = 0.25.
 
         Tests minimal register size. 2-bit register stays well under
-        17-qubit limit even with ancilla overhead.
+        21-qubit limit even with ancilla overhead.
         """
         result = ql.amplitude_estimate(lambda x: x == 1, width=2, epsilon=0.05)
         assert abs(result.estimate - 0.25) < 0.15, f"Expected ~0.25, got {result.estimate}"
+
+    def test_oracle_gates_present_in_circuit(self):
+        """IQAE circuit at k>=1 must contain oracle comparison gates.
+
+        Builds a single Grover circuit with k=1 and verifies that the
+        QASM output contains gates from the oracle's comparison logic
+        (e.g. ccx from equality check).  A broken oracle that emits no
+        gates would produce only branch + H + diffusion, missing the
+        comparison ancillae and Toffoli gates.
+        """
+        from quantum_language.oracle import _predicate_to_oracle
+
+        oracle = _predicate_to_oracle(lambda x: x == 1, [2])
+
+        # Build a circuit with k=1 (one Grover iteration)
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        ql.option("simulate", True)
+
+        reg = ql.qint(0, width=2)
+        reg.branch(0.5)
+
+        oracle(reg)
+
+        qasm = ql.to_openqasm()
+
+        # The equality oracle must produce comparison gates (ccx/cx)
+        # If the oracle is broken (simulate=False), no gates are stored
+        assert "ccx" in qasm or "cx" in qasm, (
+            f"Oracle must emit comparison gates (ccx/cx) into the circuit. "
+            f"Got QASM with no comparison gates:\n{qasm}"
+        )
+
+        # Circuit must use more qubits than just the 2-bit register
+        # (comparison allocates ancillae)
+        for line in qasm.split("\n"):
+            if line.strip().startswith("qubit["):
+                nq = int(line.strip().split("[")[1].split("]")[0])
+                assert nq > 2, (
+                    f"Oracle should allocate ancilla qubits, but circuit only has {nq} qubits"
+                )
+                break

@@ -362,6 +362,7 @@ def _build_and_simulate(oracle, register_widths, k, shots):
     # Fresh circuit for each round (required: global circuit state)
     circuit()
     option("fault_tolerant", True)
+    option("simulate", True)
 
     # Allocate registers
     registers = [qint_type(0, width=w) for w in register_widths]
@@ -604,10 +605,10 @@ def amplitude_estimate(
 
     # 5. Warn about register width approaching simulator limit
     total_register_width = sum(register_widths)
-    if total_register_width > 14:
+    if total_register_width > 18:
         warnings.warn(
             f"Search register width sum ({total_register_width} qubits) is close to "
-            f"the 17-qubit simulator limit. Ancilla overhead from predicate "
+            f"the 21-qubit simulator limit. Ancilla overhead from predicate "
             f"evaluation may exceed the budget.",
             stacklevel=2,
         )

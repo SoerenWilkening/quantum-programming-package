@@ -227,26 +227,23 @@ def diffusion(*registers):
     ------
     ValueError
         If no qubits provided (empty registers or zero-width).
-
-    Notes
-    -----
-    Internally ensures ``ql.option('simulate')`` is ``True`` during
-    execution so that DSL operations emit gates into the circuit.
-    The previous simulate setting is restored on return.
+    RuntimeError
+        If ``ql.option('simulate')`` is not ``True``.  Callers must
+        set ``ql.option('simulate', True)`` after ``ql.circuit()`` so
+        that DSL operations emit gates into the circuit.
 
     Examples
     --------
     >>> import quantum_language as ql
     >>> ql.circuit()
+    >>> ql.option('simulate', True)
     >>> x = ql.qint(0, width=3)
     >>> x.branch()
     >>> ql.diffusion(x)
     """
-    was_simulating = option("simulate")
-    if not was_simulating:
-        option("simulate", True)
-    try:
-        _diffusion_impl(*registers)
-    finally:
-        if not was_simulating:
-            option("simulate", False)
+    if not option("simulate"):
+        raise RuntimeError(
+            "diffusion() requires ql.option('simulate', True). "
+            "Call ql.option('simulate', True) after ql.circuit()."
+        )
+    _diffusion_impl(*registers)
