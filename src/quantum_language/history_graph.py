@@ -72,8 +72,20 @@ class HistoryGraph:
     # Recording
     # ------------------------------------------------------------------
 
-    def append(self, sequence_ptr, qubit_mapping, num_ancilla=0):
+    # Inverse-pair lookup: maps a kind to its inverse kind.
+    _INVERSE_KIND = {
+        "add": "sub",
+        "sub": "add",
+        "xor": "xor",
+    }
+
+    def append(self, sequence_ptr, qubit_mapping, num_ancilla=0, kind=None):
         """Record an operation entry.
+
+        If *kind* is set and the new entry is the exact inverse of the
+        current tail entry (same ``sequence_ptr`` and ``qubit_mapping``,
+        inverse ``kind``), **and** there are no active blockers after the
+        tail, both entries cancel and neither is stored.
 
         Parameters
         ----------
@@ -86,8 +98,29 @@ class HistoryGraph:
             Number of temporary ancilla qubits that must be allocated
             at the end of *qubit_mapping* when replaying the inverse.
             Default 0 (no ancilla needed).
+        kind : str or None, optional
+            Operation kind (``"add"``, ``"sub"``, ``"xor"``).  Used for
+            tail-only inverse cancellation.  Default ``None`` (no
+            cancellation check).
         """
-        self.entries.append((sequence_ptr, qubit_mapping, num_ancilla))
+        # Tail-only inverse cancellation (Step 6.4)
+        if kind is not None and self.entries:
+            tail = self.entries[-1]
+            tail_kind = tail[3] if len(tail) > 3 else None
+            if tail_kind is not None:
+                expected_inverse = self._INVERSE_KIND.get(kind)
+                if (
+                    expected_inverse is not None
+                    and tail_kind == expected_inverse
+                    and tail[0] == sequence_ptr
+                    and tail[1] == qubit_mapping
+                ):
+                    # Check no active blockers after the tail entry
+                    tail_index = len(self.entries) - 1
+                    if not self.active_blockers_after(tail_index):
+                        self.entries.pop()
+                        return
+        self.entries.append((sequence_ptr, qubit_mapping, num_ancilla, kind))
 
     def add_child(self, child):
         """Register *child* as a weakref dependency.
@@ -173,7 +206,8 @@ class HistoryGraph:
             caller.
         """
         # 1. Reverse-iterate entries and invoke inverted run_instruction
-        for seq_ptr, qubit_mapping, num_ancilla in self.reversed_entries():
+        for entry in self.reversed_entries():
+            seq_ptr, qubit_mapping, num_ancilla = entry[0], entry[1], entry[2]
             if seq_ptr != 0:
                 run_fn(seq_ptr, qubit_mapping, num_ancilla)
 
