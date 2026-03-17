@@ -9,7 +9,7 @@ Root node uses phi_root = 2 * arctan(sqrt(n * d)).
 Reference: Montanaro, "Quantum speedup of backtracking algorithms", 2018.
 """
 
-from .diffusion import _extract_qbools, _flip_all, _nested_phase_flip
+from .diffusion import _and_chain, _extract_qbools, _flip_all, _nested_phase_flip
 from .walk_branching import (
     _cascade_multi_controlled,
     _multi_controlled_ry,
@@ -23,14 +23,12 @@ from .walk_core import (
     root_angle,
 )
 
-
 # ------------------------------------------------------------------
 # S_0 reflection on parent_flag + branch register
 # ------------------------------------------------------------------
 
 
-def _s0_reflection(parent_flag, branch_reg, control_qbool=None,
-                   marking_qbool=None):
+def _s0_reflection(parent_flag, branch_reg, control_qbool=None, marking_qbool=None):
     """Phase flip on |0...0> of parent_flag + branch_reg using DSL ops.
 
     Uses the same pattern as ``diffusion.py``: flip all qubits (XOR),
@@ -85,6 +83,9 @@ def _s0_reflection(parent_flag, branch_reg, control_qbool=None,
 def _apply_nested_with(ctrl_wrappers, body_fn):
     """Apply body_fn inside nested ``with`` blocks for all controls.
 
+    Builds a flat ``&``-chain of all control qbools, then executes
+    ``body_fn()`` inside a single ``with combined:`` block.
+
     Parameters
     ----------
     ctrl_wrappers : list[qbool]
@@ -96,14 +97,14 @@ def _apply_nested_with(ctrl_wrappers, body_fn):
         body_fn()
         return
 
-    def _recurse(idx):
-        if idx == len(ctrl_wrappers):
-            body_fn()
-        else:
-            with ctrl_wrappers[idx]:
-                _recurse(idx + 1)
+    combined = _and_chain(ctrl_wrappers)
 
-    _recurse(0)
+    with combined:
+        body_fn()
+
+    # Prevent cascade uncomputation from destroying external control
+    # qbools when the AND-chain temporary goes out of scope.
+    combined.dependency_parents.clear()
 
 
 # ------------------------------------------------------------------
@@ -150,9 +151,16 @@ def _evaluate_validity(config):
     return validity
 
 
-def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
-                        is_root=False, control_qbool=None,
-                        marking_qbool=None, validity=None):
+def _variable_diffusion(
+    config,
+    parent_flag,
+    branch_reg,
+    angle_data,
+    is_root=False,
+    control_qbool=None,
+    marking_qbool=None,
+    validity=None,
+):
     """Variable-branching diffusion: count -> conditional rotations -> S_0.
 
     Parameters
@@ -207,7 +215,7 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
     cond_map = {}
     for c in range(1, num_moves + 1):
         if c in angle_data:
-            cond_map[c] = (count == c)
+            cond_map[c] = count == c
 
     extra_ctrls = []
     if control_qbool is not None:
@@ -226,14 +234,18 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
 
         if c > 1 and cascade_ops:
             _cascade_multi_controlled(
-                branch_reg, cascade_ops, ctrl_qbools, sign=-1,
+                branch_reg,
+                cascade_ops,
+                ctrl_qbools,
+                sign=-1,
             )
         _multi_controlled_ry(parent_flag, -phi, ctrl_qbools)
 
     # Step 5: S_0 reflection
     # (controlled on marking_qbool if set)
-    _s0_reflection(parent_flag, branch_reg, control_qbool=control_qbool,
-                   marking_qbool=marking_qbool)
+    _s0_reflection(
+        parent_flag, branch_reg, control_qbool=control_qbool, marking_qbool=marking_qbool
+    )
 
     # Step 6: U forward (state preparation)
     # (controlled on marking_qbool if set)
@@ -247,7 +259,10 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
         _multi_controlled_ry(parent_flag, phi, ctrl_qbools)
         if c > 1 and cascade_ops:
             _cascade_multi_controlled(
-                branch_reg, cascade_ops, ctrl_qbools, sign=1,
+                branch_reg,
+                cascade_ops,
+                ctrl_qbools,
+                sign=1,
             )
 
     # Step 7: Uncompute count register (reverse controlled decrement)
@@ -262,8 +277,9 @@ def _variable_diffusion(config, parent_flag, branch_reg, angle_data,
 # ------------------------------------------------------------------
 
 
-def walk_diffusion(state, make_move, is_valid, num_moves,
-                   undo_move=None, max_depth=1, is_root=False):
+def walk_diffusion(
+    state, make_move, is_valid, num_moves, undo_move=None, max_depth=1, is_root=False
+):
     """Local diffusion operator at the current depth.
 
     Combines counting and branching into a single reflection operator
@@ -306,6 +322,7 @@ def walk_diffusion(state, make_move, is_valid, num_moves,
     _validate_args(state, make_move, is_valid, num_moves)
 
     import quantum_language as ql
+
     from .qbool import qbool as new_qbool
 
     # Build WalkConfig
@@ -325,14 +342,14 @@ def walk_diffusion(state, make_move, is_valid, num_moves,
 
     # Pre-compute angles
     angles = _precompute_angles(
-        num_moves, bw,
+        num_moves,
+        bw,
         is_root=is_root,
         max_depth=max_depth,
     )
 
     # Apply the variable-branching diffusion
-    _variable_diffusion(config, parent_flag, branch_reg, angles,
-                        is_root=is_root)
+    _variable_diffusion(config, parent_flag, branch_reg, angles, is_root=is_root)
 
 
 # ------------------------------------------------------------------
@@ -340,9 +357,15 @@ def walk_diffusion(state, make_move, is_valid, num_moves,
 # ------------------------------------------------------------------
 
 
-def walk_diffusion_with_regs(config, parent_flag, branch_reg, is_root=False,
-                             control_qbool=None, marking_qbool=None,
-                             validity=None):
+def walk_diffusion_with_regs(
+    config,
+    parent_flag,
+    branch_reg,
+    is_root=False,
+    control_qbool=None,
+    marking_qbool=None,
+    validity=None,
+):
     """Local diffusion using pre-allocated registers.
 
     Like :func:`walk_diffusion` but takes a ``WalkConfig`` and
@@ -376,14 +399,22 @@ def walk_diffusion_with_regs(config, parent_flag, branch_reg, is_root=False,
     bw = branch_reg.width
 
     angles = _precompute_angles(
-        num_moves, bw,
+        num_moves,
+        bw,
         is_root=is_root,
         max_depth=config.max_depth,
     )
 
-    _variable_diffusion(config, parent_flag, branch_reg, angles,
-                        is_root=is_root, control_qbool=control_qbool,
-                        marking_qbool=marking_qbool, validity=validity)
+    _variable_diffusion(
+        config,
+        parent_flag,
+        branch_reg,
+        angles,
+        is_root=is_root,
+        control_qbool=control_qbool,
+        marking_qbool=marking_qbool,
+        validity=validity,
+    )
 
 
 # ------------------------------------------------------------------
@@ -400,9 +431,7 @@ def _validate_args(state, make_move, is_valid, num_moves):
     if is_valid is None:
         raise ValueError("is_valid must not be None")
     if not isinstance(num_moves, int):
-        raise TypeError(
-            f"num_moves must be an int, got {type(num_moves).__name__}"
-        )
+        raise TypeError(f"num_moves must be an int, got {type(num_moves).__name__}")
     if num_moves < 1:
         raise ValueError(f"num_moves must be >= 1, got {num_moves}")
 
@@ -410,9 +439,7 @@ def _validate_args(state, make_move, is_valid, num_moves):
 def _validate_config(config):
     """Validate a WalkConfig for diffusion."""
     if not isinstance(config, WalkConfig):
-        raise TypeError(
-            f"config must be a WalkConfig, got {type(config).__name__}"
-        )
+        raise TypeError(f"config must be a WalkConfig, got {type(config).__name__}")
     if config.state is None:
         raise ValueError("config.state must not be None")
     if config.make_move is None:

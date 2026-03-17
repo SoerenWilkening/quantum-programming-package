@@ -155,13 +155,37 @@ def _extract_qbools(*registers):
     return bits
 
 
+def _and_chain(bits):
+    """Build a flat ``&``-chain of qbools with proper history linkage.
+
+    Returns the combined qbool.  Intermediate AND results are registered
+    as history children of the final result so that
+    ``history.uncompute()`` cascades correctly through all temporaries.
+
+    Parameters
+    ----------
+    bits : list[qbool]
+        Qubits to AND together (must be non-empty).
+
+    Returns
+    -------
+    qbool
+        Combined AND result.
+    """
+    combined = bits[0]
+    for b in bits[1:]:
+        prev = combined
+        combined = combined & b
+        if prev is not bits[0]:
+            combined.history.add_child(prev)
+    return combined
+
+
 def _nested_phase_flip(bits, target_register):
     """Apply phase flip controlled on all qubits in *bits* being |1>.
 
-    Recursively nests ``with`` blocks so that the innermost level
-    applies ``target_register.phase += pi``.  The ``with`` block
-    ``__exit__`` automatically uncomputes AND-ancillas in the correct
-    order, avoiding gate-reordering issues.
+    Builds a flat ``&``-chain of all qbools, then applies the phase
+    flip inside a single ``with combined:`` block.
 
     Parameters
     ----------
@@ -170,15 +194,14 @@ def _nested_phase_flip(bits, target_register):
     target_register : qint
         Register used for the ``phase += pi`` call.
     """
+    if not bits:
+        target_register.phase += math.pi
+        return
 
-    def _recurse(idx):
-        if idx == len(bits):
-            target_register.phase += math.pi
-        else:
-            with bits[idx]:
-                _recurse(idx + 1)
+    combined = _and_chain(bits)
 
-    _recurse(0)
+    with combined:
+        target_register.phase += math.pi
 
 
 @ql_compile(key=_total_width)
