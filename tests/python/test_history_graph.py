@@ -11,7 +11,6 @@ import gc
 import quantum_language as ql
 from quantum_language.history_graph import HistoryGraph
 
-
 # ---------------------------------------------------------------------------
 # Pure data-structure tests (no circuit required)
 # ---------------------------------------------------------------------------
@@ -28,22 +27,22 @@ class TestAppendAndReverse:
 
         reversed_list = list(hg.reversed_entries())
         assert reversed_list == [
-            (300, (5,), 0),
-            (200, (3, 4), 0),
-            (100, (0, 1, 2), 0),
+            (300, (5,), 0, None),
+            (200, (3, 4), 0, None),
+            (100, (0, 1, 2), 0, None),
         ]
 
     def test_single_entry_reverse(self):
         hg = HistoryGraph()
         hg.append(42, (7, 8))
         reversed_list = list(hg.reversed_entries())
-        assert reversed_list == [(42, (7, 8), 0)]
+        assert reversed_list == [(42, (7, 8), 0, None)]
 
     def test_entries_preserve_insertion_order(self):
         hg = HistoryGraph()
         for i in range(5):
             hg.append(i * 10, (i,))
-        assert hg.entries == [(i * 10, (i,), 0) for i in range(5)]
+        assert hg.entries == [(i * 10, (i,), 0, None) for i in range(5)]
 
 
 class TestLen:
@@ -80,6 +79,7 @@ class TestBool:
 
 class _Dummy:
     """Weakref-able placeholder used instead of real qint in pure tests."""
+
     pass
 
 
@@ -197,6 +197,7 @@ class TestQintEmptyHistory:
         """qint created via bit_list also has empty history."""
         ql.circuit()
         import numpy as np
+
         bl = np.zeros(64, dtype=np.uint32)
         a = ql.qint(0, width=4, create_new=False, bit_list=bl)
         assert isinstance(a.history, HistoryGraph)

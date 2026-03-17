@@ -1,7 +1,7 @@
 """Tests for per-variable history recording in arithmetic/comparison/bitwise ops.
 
 Validates that operations producing new qint/qbool values record
-(sequence_ptr, qubit_mapping) entries into the result's history graph,
+(sequence_ptr, qubit_mapping, num_ancilla, kind) entries into the result's history graph,
 and that intermediate temporaries are tracked as weakref children.
 
 Step 1.2 of Phase 1: Record Operations into Per-Variable History
@@ -11,8 +11,6 @@ Step 1.2 of Phase 1: Record Operations into Per-Variable History
 import gc
 
 import quantum_language as ql
-from quantum_language.history_graph import HistoryGraph
-
 
 # ---------------------------------------------------------------------------
 # Arithmetic: addition records history
@@ -40,7 +38,7 @@ class TestAdditionRecordsHistory:
         a = ql.qint(3, width=4)
         b = ql.qint(2, width=4)
         c = a + b
-        seq_ptr, qm, _nac = c.history.entries[0]
+        seq_ptr, qm, _nac, _kind = c.history.entries[0]
         # qubit_mapping should be a tuple of integer-like values
         assert isinstance(qm, tuple)
         assert len(qm) > 0
@@ -114,47 +112,47 @@ class TestComparisonRecordsHistory:
     def test_eq_cq_records_history(self):
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         assert len(cond.history) >= 1
 
     def test_eq_qq_records_history(self):
         ql.circuit()
         a = ql.qint(5, width=4)
         b = ql.qint(5, width=4)
-        cond = (a == b)
+        cond = a == b
         assert len(cond.history) >= 1
 
     def test_gt_cq_records_history(self):
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a > 3)
+        cond = a > 3
         assert len(cond.history) >= 1
 
     def test_lt_cq_records_history(self):
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a < 7)
+        cond = a < 7
         assert len(cond.history) >= 1
 
     def test_gt_qq_records_history(self):
         ql.circuit()
         a = ql.qint(5, width=4)
         b = ql.qint(3, width=4)
-        cond = (a > b)
+        cond = a > b
         assert len(cond.history) >= 1
 
     def test_lt_qq_records_history(self):
         ql.circuit()
         a = ql.qint(3, width=4)
         b = ql.qint(5, width=4)
-        cond = (a < b)
+        cond = a < b
         assert len(cond.history) >= 1
 
     def test_comparison_history_has_qubit_mapping(self):
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
-        seq_ptr, qm, _nac = cond.history.entries[0]
+        cond = a == 5
+        seq_ptr, qm, _nac, _kind = cond.history.entries[0]
         assert isinstance(qm, tuple)
         assert len(qm) > 0
 
@@ -211,7 +209,7 @@ class TestBitwiseRecordsHistory:
         a = ql.qint(0b1101, width=4)
         b = ql.qint(0b1011, width=4)
         c = a & b
-        seq_ptr, qm, _nac = c.history.entries[0]
+        seq_ptr, qm, _nac, _kind = c.history.entries[0]
         assert isinstance(qm, tuple)
         assert len(qm) > 0
 
@@ -229,7 +227,7 @@ class TestChainedExpressionRecordsChildren:
         ql.circuit()
         a = ql.qint(4, width=4)
         temp = a + 3
-        cond = (temp > 5)
+        cond = temp > 5
         # The > comparison on qint > int delegates to qint > qint,
         # which creates widened temporaries tracked as children.
         # At minimum, the comparison result should have history entries.
@@ -240,7 +238,7 @@ class TestChainedExpressionRecordsChildren:
         ql.circuit()
         a = ql.qint(3, width=4)
         b = ql.qint(5, width=4)
-        cond = (a < b)
+        cond = a < b
         # __lt__ creates temp_self and temp_other as widened copies
         # and registers them as weakref children via add_child.
         # The temps are local to __lt__ and may already be GC'd,
@@ -252,7 +250,7 @@ class TestChainedExpressionRecordsChildren:
         ql.circuit()
         a = ql.qint(5, width=4)
         b = ql.qint(3, width=4)
-        cond = (a > b)
+        cond = a > b
         assert len(cond.history.children) >= 2
 
     def test_children_dead_after_scope_exit(self):
@@ -260,7 +258,7 @@ class TestChainedExpressionRecordsChildren:
         ql.circuit()
         a = ql.qint(3, width=4)
         b = ql.qint(5, width=4)
-        cond = (a < b)
+        cond = a < b
         gc.collect()
         # The widened temps are local to __lt__, so their weakrefs
         # are expected to be dead after __lt__ returns and GC runs.
@@ -334,10 +332,10 @@ class TestHistoryEntryContents:
         a = ql.qint(3, width=4)
         b = ql.qint(2, width=4)
         c = a + b
-        _, qm, _nac = c.history.entries[0]
+        _, qm, _nac, _kind = c.history.entries[0]
         # Result qubits should be in the mapping
         c_offset = 64 - c.width
-        result_qubits = set(int(c.qubits[c_offset + i]) for i in range(c.width))
+        result_qubits = {int(c.qubits[c_offset + i]) for i in range(c.width)}
         mapping_set = set(qm)
         assert result_qubits.issubset(mapping_set)
 
@@ -345,8 +343,8 @@ class TestHistoryEntryContents:
         """CQ equality comparison captures the sequence pointer."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
-        seq_ptr, _, _nac = cond.history.entries[0]
+        cond = a == 5
+        seq_ptr, _, _nac, _kind = cond.history.entries[0]
         # The CQ equality path has a real sequence pointer
         assert seq_ptr != 0
 
@@ -356,7 +354,7 @@ class TestHistoryEntryContents:
         a = ql.qint(3, width=4)
         b = ql.qint(2, width=4)
         c = a + b
-        seq_ptr, _, _nac = c.history.entries[0]
+        seq_ptr, _, _nac, _kind = c.history.entries[0]
         # Out-of-place addition is a compound op (copy + add),
         # so no single sequence_ptr
         assert seq_ptr == 0

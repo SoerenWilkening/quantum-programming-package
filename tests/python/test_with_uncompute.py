@@ -10,7 +10,6 @@ Step 1.3 of Phase 1: __exit__ Uncomputation for with Blocks
 
 import quantum_language as ql
 
-
 # ---------------------------------------------------------------------------
 # Test: with block uncomputes qbool
 # ---------------------------------------------------------------------------
@@ -23,7 +22,7 @@ class TestWithBlockUncomputesQbool:
         """CQ equality condition: history cleared after with block."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         assert len(cond.history) == 1
         with cond:
             pass
@@ -33,7 +32,7 @@ class TestWithBlockUncomputesQbool:
         """CQ equality: inverse gates are appended to circuit."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         gc_before = ql.get_gate_count()
         with cond:
             pass
@@ -46,10 +45,8 @@ class TestWithBlockUncomputesQbool:
         ql.circuit()
         flag = ql.qbool(True)
         assert len(flag.history) == 0
-        gc_before = ql.get_gate_count()
         with flag:
             pass
-        gc_after = ql.get_gate_count()
         # No history entries means no inverse gates emitted by history path
         assert len(flag.history) == 0
 
@@ -57,8 +54,8 @@ class TestWithBlockUncomputesQbool:
         """Verify entries list is actually cleared (not just iterated)."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
-        seq_ptr, qm, _nac = cond.history.entries[0]
+        cond = a == 5
+        seq_ptr, qm, _nac, _kind = cond.history.entries[0]
         assert seq_ptr != 0
         with cond:
             pass
@@ -79,7 +76,7 @@ class TestWithBlockUncomputesTemporaries:
         ql.circuit()
         a = ql.qint(4, width=4)
         temp = a + 3
-        cond = (temp > 5)
+        cond = temp > 5
         # cond should have children (widened temporaries from comparison)
         assert len(cond.history.children) >= 2
         with cond:
@@ -92,7 +89,7 @@ class TestWithBlockUncomputesTemporaries:
         ql.circuit()
         a = ql.qint(4, width=4)
         temp = a + 3
-        cond = (temp > 5)
+        cond = temp > 5
         assert len(cond.history) >= 1
         with cond:
             pass
@@ -113,7 +110,7 @@ class TestWithBlockPreservesLiveVariables:
         a = ql.qint(5, width=4)
         original_width = a.width
         original_history_len = len(a.history)
-        cond = (a == 5)
+        cond = a == 5
         with cond:
             pass
         assert a.width == original_width
@@ -125,7 +122,7 @@ class TestWithBlockPreservesLiveVariables:
         ql.circuit()
         a = ql.qint(5, width=4)
         b = ql.qint(5, width=4)
-        cond = (a == b)
+        cond = a == b
         with cond:
             pass
         assert a.width == 4
@@ -140,7 +137,7 @@ class TestWithBlockPreservesLiveVariables:
         ql.circuit()
         a = ql.qint(5, width=4)
         result = ql.qint(0, width=4)
-        cond = (a == 5)
+        cond = a == 5
         with cond:
             result += 1
         assert a.width == 4
@@ -162,10 +159,10 @@ class TestNestedWithBlocks:
         ql.circuit()
         a = ql.qint(5, width=4)
         b = ql.qint(3, width=4)
-        cond_outer = (a == 5)
+        cond_outer = a == 5
         assert len(cond_outer.history) == 1
         with cond_outer:
-            cond_inner = (b == 3)
+            cond_inner = b == 3
             assert len(cond_inner.history) == 1
             with cond_inner:
                 pass
@@ -179,9 +176,9 @@ class TestNestedWithBlocks:
         ql.circuit()
         a = ql.qint(5, width=4)
         b = ql.qint(3, width=4)
-        cond_outer = (a == 5)
+        cond_outer = a == 5
         with cond_outer:
-            cond_inner = (b == 3)
+            cond_inner = b == 3
             with cond_inner:
                 pass
         assert a.width == 4
@@ -194,11 +191,9 @@ class TestNestedWithBlocks:
         ql.circuit()
         a = ql.qint(5, width=4)
         b = ql.qint(3, width=4)
-        cond_outer = (a == 5)
-        gc0 = ql.get_gate_count()
+        cond_outer = a == 5
         with cond_outer:
-            gc1 = ql.get_gate_count()
-            cond_inner = (b == 3)
+            cond_inner = b == 3
             gc2 = ql.get_gate_count()
             with cond_inner:
                 pass
@@ -221,6 +216,7 @@ class TestHistoryGraphUncompute:
     def test_uncompute_clears_entries(self):
         """After uncompute(), entries list is empty."""
         from quantum_language.history_graph import HistoryGraph
+
         hg = HistoryGraph()
         hg.append(0, (0, 1, 2))
         hg.append(0, (3, 4))
@@ -245,6 +241,7 @@ class TestHistoryGraphUncompute:
     def test_uncompute_skips_zero_seq_ptr(self):
         """Entries with seq_ptr=0 are skipped (compound ops)."""
         from quantum_language.history_graph import HistoryGraph
+
         hg = HistoryGraph()
         hg.append(0, (0, 1))
         hg.append(0, (2, 3))
@@ -256,6 +253,7 @@ class TestHistoryGraphUncompute:
     def test_uncompute_calls_run_fn_for_nonzero(self):
         """Entries with non-zero seq_ptr invoke run_fn."""
         from quantum_language.history_graph import HistoryGraph
+
         hg = HistoryGraph()
         hg.append(100, (0, 1))
         hg.append(200, (2, 3))
@@ -286,6 +284,7 @@ class TestHistoryGraphUncompute:
     def test_uncompute_skips_dead_children(self):
         """Dead weakrefs are skipped without error."""
         import gc as _gc
+
         from quantum_language.history_graph import HistoryGraph
 
         class _Dummy:
@@ -307,6 +306,7 @@ class TestHistoryGraphUncompute:
     def test_uncompute_idempotent(self):
         """Calling uncompute() twice is safe (second call is no-op)."""
         from quantum_language.history_graph import HistoryGraph
+
         hg = HistoryGraph()
         hg.append(100, (0,))
         calls = []
@@ -331,8 +331,8 @@ class TestQubitMappingCorrectness:
         and include AND-ancilla count."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
-        seq_ptr, qm, num_anc = cond.history.entries[0]
+        cond = a == 5
+        seq_ptr, qm, num_anc, _kind = cond.history.entries[0]
         # seq_ptr is a real sequence pointer
         assert seq_ptr != 0
         # qm[0] is the result qubit
@@ -343,8 +343,7 @@ class TestQubitMappingCorrectness:
         msb_first = [int(a.qubits[a_offset + (a.width - 1 - i)]) for i in range(a.width)]
         recorded = [int(qm[1 + i]) for i in range(a.width)]
         assert recorded == msb_first, (
-            f"Operand qubit order mismatch: expected MSB-first {msb_first}, "
-            f"got {recorded}"
+            f"Operand qubit order mismatch: expected MSB-first {msb_first}, got {recorded}"
         )
         # For 4-bit uncontrolled: needs (bits-2) = 2 AND-ancilla
         assert num_anc == 2
@@ -353,16 +352,16 @@ class TestQubitMappingCorrectness:
         """1-bit CQ equality needs 0 AND-ancilla."""
         ql.circuit()
         a = ql.qbool(True)
-        cond = (a == 1)
-        _, _, num_anc = cond.history.entries[0]
+        cond = a == 1
+        _, _, num_anc, _ = cond.history.entries[0]
         assert num_anc == 0
 
     def test_eq_cq_2bit_no_ancilla(self):
         """2-bit uncontrolled CQ equality needs 0 AND-ancilla."""
         ql.circuit()
         a = ql.qint(2, width=2)
-        cond = (a == 2)
-        _, _, num_anc = cond.history.entries[0]
+        cond = a == 2
+        _, _, num_anc, _ = cond.history.entries[0]
         assert num_anc == 0
 
     def test_and_qq_mapping_includes_padding(self):
@@ -371,7 +370,7 @@ class TestQubitMappingCorrectness:
         a = ql.qint(1, width=2)
         b = ql.qint(3, width=4)
         c = a & b
-        _, qm, _ = c.history.entries[0]
+        _, qm, _, _ = c.history.entries[0]
         # QQ AND: mapping should be 3*result_bits = 3*4 = 12 entries
         assert len(qm) == 12
 
@@ -380,7 +379,7 @@ class TestQubitMappingCorrectness:
         ql.circuit()
         a = ql.qint(1, width=2)
         c = a & 0b1111
-        _, qm, _ = c.history.entries[0]
+        _, qm, _, _ = c.history.entries[0]
         # CQ AND: mapping should be 2*result_bits = 2*4 = 8 entries
         assert len(qm) == 8
 
@@ -390,7 +389,7 @@ class TestQubitMappingCorrectness:
         a = ql.qint(1, width=2)
         b = ql.qint(3, width=4)
         c = a | b
-        _, qm, _ = c.history.entries[0]
+        _, qm, _, _ = c.history.entries[0]
         # QQ OR: mapping should be 3*result_bits = 3*4 = 12 entries
         assert len(qm) == 12
 
@@ -407,7 +406,7 @@ class TestExceptionInWithBody:
         """History is cleared even when the with-body raises an exception."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         assert len(cond.history) == 1
         try:
             with cond:
@@ -421,7 +420,7 @@ class TestExceptionInWithBody:
         """Inverse gates are emitted even when the with-body raises."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         gc_before = ql.get_gate_count()
         try:
             with cond:
@@ -435,7 +434,7 @@ class TestExceptionInWithBody:
         """Input variables are intact after exception in with body."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         try:
             with cond:
                 raise KeyError("deliberate test error")

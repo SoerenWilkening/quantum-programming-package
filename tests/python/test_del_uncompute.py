@@ -14,12 +14,11 @@ import gc
 
 import quantum_language as ql
 from quantum_language._core import (
+    _atexit_disable_circuit,
     _get_circuit_active,
     _set_circuit_active,
-    _atexit_disable_circuit,
 )
 from quantum_language.history_graph import HistoryGraph
-
 
 # ---------------------------------------------------------------------------
 # Test: del uncomputes when circuit active
@@ -34,7 +33,7 @@ class TestDelUncomputesWhenCircuitActive:
         ql.circuit()
         assert _get_circuit_active()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         assert len(cond.history) == 1
         gc_before = ql.get_gate_count()
         del cond
@@ -51,7 +50,7 @@ class TestDelUncomputesWhenCircuitActive:
         """
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         assert len(cond.history) == 1
         # First del + GC
         del cond
@@ -67,7 +66,7 @@ class TestDelUncomputesWhenCircuitActive:
         ql.circuit()
         a = ql.qint(5, width=4)
         b = ql.qint(5, width=4)
-        cond = (a == b)
+        cond = a == b
         del cond
         gc.collect()
         # Input variables should be unaffected
@@ -103,7 +102,7 @@ class TestDelSkipsWhenCircuitInactive:
         """Setting circuit-active to False prevents __del__ uncomputation."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         assert len(cond.history) == 1
         gc_before = ql.get_gate_count()
         # Simulate circuit finalization
@@ -122,7 +121,7 @@ class TestDelSkipsWhenCircuitInactive:
         """__del__ with inactive circuit does not raise or print errors."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         _set_circuit_active(False)
         try:
             # Should not raise
@@ -168,7 +167,7 @@ class TestDelCascadesToOrphanedChildren:
         """Cascading via history does not touch user-created input variables."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         del cond
         gc.collect()
         # Input variable 'a' must remain untouched
@@ -236,12 +235,12 @@ class TestDelCascadesToOrphanedChildren:
         a = ql.qint(5, width=4)
 
         # Create a second equality result to use as a "child"
-        child_cond = (a == 3)
-        child_seq_ptr, _, _ = child_cond.history.entries[0]
+        child_cond = a == 3
+        child_seq_ptr, _, _, _ = child_cond.history.entries[0]
         assert child_seq_ptr != 0
 
         # Create the parent equality
-        parent_cond = (a == 5)
+        parent_cond = a == 5
         # Register child_cond as a weakref child of parent_cond
         parent_cond.history.add_child(child_cond)
 
@@ -268,9 +267,9 @@ class TestDelEagerMode:
     def test_eager_del_emits_inverse_gates(self):
         """In EAGER mode, __del__ emits inverse gates for comparison."""
         ql.circuit()
-        ql.option('qubit_saving', True)
+        ql.option("qubit_saving", True)
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         assert len(cond.history) == 1
         gc_before = ql.get_gate_count()
         del cond
@@ -281,10 +280,10 @@ class TestDelEagerMode:
     def test_eager_no_double_uncompute(self):
         """EAGER mode does not double-uncompute history + legacy path."""
         ql.circuit()
-        ql.option('qubit_saving', True)
+        ql.option("qubit_saving", True)
         a = ql.qint(5, width=4)
         gc_after_init = ql.get_gate_count()
-        cond = (a == 5)
+        cond = a == 5
         gc_after_compare = ql.get_gate_count()
         forward_compare_gates = gc_after_compare - gc_after_init
         del cond
@@ -302,9 +301,9 @@ class TestDelEagerMode:
     def test_eager_skips_when_inactive(self):
         """EAGER mode still respects circuit-active guard."""
         ql.circuit()
-        ql.option('qubit_saving', True)
+        ql.option("qubit_saving", True)
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         gc_before = ql.get_gate_count()
         _set_circuit_active(False)
         try:
@@ -318,7 +317,7 @@ class TestDelEagerMode:
     def test_eager_bitwise_and(self):
         """EAGER mode uncomputes bitwise AND on del."""
         ql.circuit()
-        ql.option('qubit_saving', True)
+        ql.option("qubit_saving", True)
         a = ql.qint(5, width=4)
         c = a & 0b1011
         assert len(c.history) == 1
@@ -350,7 +349,7 @@ class TestAtexitShutdownGuard:
         """__del__ after atexit hook does not emit gates."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         gc_before = ql.get_gate_count()
         _atexit_disable_circuit()
         try:
@@ -373,9 +372,9 @@ class TestAtexitShutdownGuard:
     def test_del_after_atexit_eager_mode_is_noop(self):
         """__del__ in EAGER mode after atexit hook does not emit gates."""
         ql.circuit()
-        ql.option('qubit_saving', True)
+        ql.option("qubit_saving", True)
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         gc_before = ql.get_gate_count()
         _atexit_disable_circuit()
         try:
@@ -390,8 +389,8 @@ class TestAtexitShutdownGuard:
         """__del__ with cascading children after atexit emits no gates."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        child_cond = (a == 3)
-        parent_cond = (a == 5)
+        child_cond = a == 3
+        parent_cond = a == 5
         parent_cond.history.add_child(child_cond)
         gc_before = ql.get_gate_count()
         _atexit_disable_circuit()
@@ -408,6 +407,7 @@ class TestAtexitShutdownGuard:
     def test_atexit_hook_is_registered(self):
         """The atexit hook is registered in the atexit module."""
         import atexit
+
         # atexit._run_exitfuncs would run all; we just check registration
         # by verifying _atexit_disable_circuit is callable and the module
         # import + register call in _core.pyx executed at import time.
@@ -430,7 +430,7 @@ class TestExitDelNoDoubleUncompute:
         """After with-block exits, deleting the condition emits no more gates."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         with cond:
             pass
         gc_after_exit = ql.get_gate_count()
@@ -443,9 +443,9 @@ class TestExitDelNoDoubleUncompute:
     def test_with_then_del_eager_no_extra_gates(self):
         """EAGER mode: after with-block, del does not double-uncompute."""
         ql.circuit()
-        ql.option('qubit_saving', True)
+        ql.option("qubit_saving", True)
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         with cond:
             pass
         gc_after_exit = ql.get_gate_count()
@@ -470,10 +470,9 @@ class TestDelSimulationCorrectness:
     def test_del_inverse_gate_count_matches_forward(self):
         """Inverse gate count from __del__ matches forward gate count."""
         ql.circuit()
-        gc_start = ql.get_gate_count()
         a = ql.qint(5, width=4)
         gc_after_init = ql.get_gate_count()
-        cond = (a == 5)
+        cond = a == 5
         gc_after_compare = ql.get_gate_count()
         forward_compare_gates = gc_after_compare - gc_after_init
         del cond
@@ -490,13 +489,13 @@ class TestDelSimulationCorrectness:
         """After del uncomputation, peak_allocated is not reduced."""
         ql.circuit()
         a = ql.qint(5, width=4)
-        cond = (a == 5)
+        cond = a == 5
         stats_before = ql.circuit_stats()
-        peak_before = stats_before['peak_allocated']
+        peak_before = stats_before["peak_allocated"]
         del cond
         gc.collect()
         stats_after = ql.circuit_stats()
-        peak_after = stats_after['peak_allocated']
+        peak_after = stats_after["peak_allocated"]
         # Peak allocated should not decrease after uncomputation
         # (qubits were used at some point, even if freed back)
         assert peak_after >= peak_before

@@ -1,7 +1,7 @@
 """Per-variable history graph for automatic uncomputation.
 
 Each qint/qbool carries a HistoryGraph that records the operations
-(sequence_ptr, qubit_mapping) that produced it.  Children (intermediate
+(sequence_ptr, qubit_mapping, num_ancilla, kind) that produced it.  Children (intermediate
 temporaries consumed during creation) are tracked via weakrefs so they
 can be garbage-collected independently when no longer referenced
 elsewhere.
@@ -56,7 +56,8 @@ class HistoryGraph:
     Attributes
     ----------
     entries : list[tuple]
-        List of (sequence_ptr, qubit_mapping) tuples in insertion order.
+        List of (sequence_ptr, qubit_mapping, num_ancilla, kind) tuples
+        in insertion order.
     children : list[weakref.ref]
         Weakrefs to child variables consumed during creation.
     """
@@ -162,7 +163,8 @@ class HistoryGraph:
         Yields
         ------
         tuple
-            (sequence_ptr, qubit_mapping) from newest to oldest.
+            (sequence_ptr, qubit_mapping, num_ancilla, kind) from newest
+            to oldest.
         """
         return reversed(self.entries)
 
