@@ -8,7 +8,7 @@ Verifies the walk() public API:
 - Walk step preserves norm
 - Marked states get identity (unchanged by walk step)
 
-All test circuits use <= 17 qubits.
+All test circuits use <= 21 qubits.
 """
 
 import gc
@@ -515,7 +515,7 @@ class TestQuantumMarkingIntegration:
         (different gate sequences).  Together these confirm that the
         marking predicate is wired into the walk operator correctly.
 
-        Qubits: 2 height + 1 branch + 1 count + 2 state + ancillae <= 17
+        Qubits: 2 height + 1 branch + 1 count + 2 state + ancillae <= 21
         """
         from quantum_language._gates import emit_x
 

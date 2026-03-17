@@ -205,7 +205,7 @@ ql.option('tradeoff', 'min_qubits')   # Use ripple-carry (fewer qubits)
 6. **Comparisons return qbool**, not classical bool -- use them in `with` blocks
 7. **`&` between qbools is Toffoli AND**, not classical and -- use it for compound conditions
 8. **Division/modulo only works with classical divisors** (`a // 3` works, `a // b` doesn't for general b)
-9. **Max simulation size: 17 qubits** -- keep test circuits small
+9. **Max simulation size: 21 qubits** -- keep test circuits small
 
 ---
 

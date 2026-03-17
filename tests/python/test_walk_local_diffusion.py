@@ -2,7 +2,7 @@
 
 Verifies the reflection property (D^2 = I), correct amplitudes after
 one diffusion, root angle formula usage, and identity behavior when
-no children are valid.  All tests stay within the 17-qubit limit.
+no children are valid.  All tests stay within the 21-qubit limit.
 
 Requirements from acceptance criteria:
 - D^2 = I (statevector tolerance 1e-6)
@@ -24,11 +24,10 @@ from quantum_language.walk_core import (
     branch_width,
 )
 from quantum_language.walk_diffusion import (
+    _s0_reflection,
     walk_diffusion,
     walk_diffusion_with_regs,
-    _s0_reflection,
 )
-
 
 # ---------------------------------------------------------------------------
 # Simulation helpers
@@ -68,7 +67,7 @@ def _simulate_and_extract(qasm_str, num_qubits, result_start, result_width):
 
     msb_pos = num_qubits - result_start - result_width
     lsb_pos = num_qubits - 1 - result_start
-    result_bits = bitstring[msb_pos: lsb_pos + 1]
+    result_bits = bitstring[msb_pos : lsb_pos + 1]
     return int(result_bits, 2)
 
 
@@ -88,7 +87,7 @@ def _init_circuit():
     """Initialize a fresh circuit."""
     gc.collect()
     ql.circuit()
-    ql.option('simulate', True)
+    ql.option("simulate", True)
 
 
 # ---------------------------------------------------------------------------
@@ -98,12 +97,12 @@ def _init_circuit():
 
 def _make_move_xor(state, move_idx):
     """Apply move by XORing state with (move_idx + 1)."""
-    state ^= (move_idx + 1)
+    state ^= move_idx + 1
 
 
 def _undo_move_xor(state, move_idx):
     """Undo XOR move (XOR is self-inverse)."""
-    state ^= (move_idx + 1)
+    state ^= move_idx + 1
 
 
 def _is_valid_nonzero(state):
@@ -165,7 +164,10 @@ class TestVariableBranching:
         _init_circuit()
         state = ql.qint(0, width=2)
         walk_diffusion(
-            state, _make_move_xor, _is_valid_nonzero, 1,
+            state,
+            _make_move_xor,
+            _is_valid_nonzero,
+            1,
             undo_move=_undo_move_xor,
         )
 
@@ -174,9 +176,13 @@ class TestVariableBranching:
         _init_circuit()
         state = ql.qint(0, width=2)
         walk_diffusion(
-            state, _make_move_xor, _is_valid_nonzero, 1,
+            state,
+            _make_move_xor,
+            _is_valid_nonzero,
+            1,
             undo_move=_undo_move_xor,
-            max_depth=2, is_root=True,
+            max_depth=2,
+            is_root=True,
         )
 
     def test_state_preserved_after_variable_diffusion(self):
@@ -188,7 +194,10 @@ class TestVariableBranching:
         state = ql.qint(5, width=4)
 
         walk_diffusion(
-            state, _make_move_xor, _is_valid_nonzero, 1,
+            state,
+            _make_move_xor,
+            _is_valid_nonzero,
+            1,
             undo_move=_undo_move_xor,
         )
 
@@ -197,12 +206,10 @@ class TestVariableBranching:
         _keepalive = [state]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, state_start, state_width)
-        assert extracted == 5, (
-            f"State should be preserved at 5, got {extracted}"
-        )
+        assert extracted == 5, f"State should be preserved at 5, got {extracted}"
 
     def test_with_regs_preserves_state(self):
         """walk_diffusion_with_regs preserves state register."""
@@ -214,7 +221,8 @@ class TestVariableBranching:
         br = ql.qint(0, width=bw)
 
         config = WalkConfig(
-            max_depth=1, num_moves=num_moves,
+            max_depth=1,
+            num_moves=num_moves,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_nonzero,
@@ -227,12 +235,10 @@ class TestVariableBranching:
         _keepalive = [state, pf, br]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17
+        assert nq <= 21
 
         extracted = _simulate_and_extract(qasm, nq, state_start, state.width)
-        assert extracted == 3, (
-            f"State should be preserved at 3, got {extracted}"
-        )
+        assert extracted == 3, f"State should be preserved at 3, got {extracted}"
 
     def test_variable_diffusion_parent_flag_in_superposition(self):
         """After variable diffusion with valid children, parent_flag
@@ -248,7 +254,8 @@ class TestVariableBranching:
         br = ql.qint(0, width=bw)
 
         config = WalkConfig(
-            max_depth=1, num_moves=num_moves,
+            max_depth=1,
+            num_moves=num_moves,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_nonzero,
@@ -261,7 +268,7 @@ class TestVariableBranching:
         _keepalive = [state, pf, br]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17
+        assert nq <= 21
 
         sv = _get_statevector(qasm)
         pf_probs = _extract_register_probs(sv, pf_start, 1)
@@ -283,7 +290,10 @@ class TestVariableBranching:
         state = ql.qint(0, width=2)
 
         walk_diffusion(
-            state, _make_move_xor, _is_valid_nonzero, 2,
+            state,
+            _make_move_xor,
+            _is_valid_nonzero,
+            2,
             undo_move=_undo_move_xor,
         )
 
@@ -291,13 +301,11 @@ class TestVariableBranching:
         _keepalive = [state]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         # State should be preserved (counting apply-check-undo is clean)
         extracted = _simulate_and_extract(qasm, nq, state_start, state.width)
-        assert extracted == 0, (
-            f"State should be preserved at 0, got {extracted}"
-        )
+        assert extracted == 0, f"State should be preserved at 0, got {extracted}"
 
     def test_variable_diffusion_num_moves_2_partial_validity(self):
         """Variable diffusion with num_moves=2, partial validity.
@@ -311,7 +319,10 @@ class TestVariableBranching:
         state = ql.qint(1, width=2)
 
         walk_diffusion(
-            state, _make_move_xor, _is_valid_nonzero, 2,
+            state,
+            _make_move_xor,
+            _is_valid_nonzero,
+            2,
             undo_move=_undo_move_xor,
         )
 
@@ -319,12 +330,10 @@ class TestVariableBranching:
         _keepalive = [state]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, state_start, state.width)
-        assert extracted == 1, (
-            f"State should be preserved at 1, got {extracted}"
-        )
+        assert extracted == 1, f"State should be preserved at 1, got {extracted}"
 
     def test_variable_diffusion_num_moves_2_qubit_indices_sane(self):
         """Variable diffusion with num_moves=2 produces sane qubit indices.
@@ -336,16 +345,17 @@ class TestVariableBranching:
         state = ql.qint(0, width=2)
 
         walk_diffusion(
-            state, _make_move_xor, _is_valid_nonzero, 2,
+            state,
+            _make_move_xor,
+            _is_valid_nonzero,
+            2,
             undo_move=_undo_move_xor,
         )
 
         _keepalive = [state]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq < 100, (
-            f"Circuit uses {nq} qubits -- garbage qubit indices detected"
-        )
+        assert nq < 100, f"Circuit uses {nq} qubits -- garbage qubit indices detected"
 
 
 # ---------------------------------------------------------------------------
@@ -354,20 +364,23 @@ class TestVariableBranching:
 
 
 class TestQubitBudget:
-    """Verify circuits stay within the 17-qubit simulation limit."""
+    """Verify circuits stay within the 21-qubit simulation limit."""
 
     def test_variable_1bit_1move_within_budget(self):
         """Variable diffusion with 1-bit state, 1 move within budget."""
         _init_circuit()
         state = ql.qint(0, width=1)
         walk_diffusion(
-            state, _make_move_xor, _is_valid_nonzero, 1,
+            state,
+            _make_move_xor,
+            _is_valid_nonzero,
+            1,
             undo_move=_undo_move_xor,
         )
         _keepalive = [state]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
 
 # ---------------------------------------------------------------------------
@@ -390,9 +403,7 @@ class TestS0Reflection:
         sv = _get_statevector(ql.to_openqasm())
 
         # |0,0> should have amplitude -1 (phase flipped)
-        assert abs(sv[0] - (-1.0)) < 1e-6, (
-            f"S_0|0,0> should be -|0,0>, got amplitude {sv[0]}"
-        )
+        assert abs(sv[0] - (-1.0)) < 1e-6, f"S_0|0,0> should be -|0,0>, got amplitude {sv[0]}"
 
     def test_s0_preserves_nonzero(self):
         """S_0 preserves |1,0> (non-zero state)."""
@@ -443,9 +454,7 @@ class TestS0Reflection:
         # larger than sv_init.  Compare the data-qubit subspace only
         # (ancillas are uncomputed to |0>).
         n = len(sv_init)
-        assert np.allclose(sv_init, sv_after[:n], atol=1e-10), (
-            "S_0^2 should equal identity"
-        )
+        assert np.allclose(sv_init, sv_after[:n], atol=1e-10), "S_0^2 should equal identity"
         if len(sv_after) > n:
             assert np.allclose(sv_after[n:], 0, atol=1e-10), (
                 "Ancilla qubits should be uncomputed to |0>"
