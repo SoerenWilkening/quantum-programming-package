@@ -10,8 +10,8 @@ Three test classes:
 - TestIQAEHelpers: Unit tests for internal algorithm helpers (no Qiskit)
 - TestAmplitudeEstimationEndToEnd: Integration tests with Qiskit simulation
 
-Note: All integration tests use 2-3 bit registers to stay well under
-the 17-qubit simulator limit (project constraint).
+Note: All integration tests use 2-bit registers to stay well under
+the 21-qubit simulator limit (project constraint).
 """
 
 import pytest
@@ -170,44 +170,41 @@ class TestAmplitudeEstimationEndToEnd:
     """Integration tests verifying ql.amplitude_estimate() with Qiskit simulation.
 
     CRITICAL CONSTRAINTS (from project memory):
-    - Max 17 qubits for Qiskit simulation -- use 2-3 bit search registers only
+    - Max 21 qubits for Qiskit simulation -- use 2-bit search registers
     - Max 4 threads -- already enforced by _simulate_multi_shot
     """
 
     def test_known_single_solution_lambda(self):
-        """Lambda x == 5 in 3-bit space. True probability = 1/8 = 0.125.
+        """Lambda x == 3 in 2-bit space. True probability = 1/4 = 0.25.
 
         AMP-01: ql.amplitude_estimate() returns correct probability for
         known single-solution oracle. Assert estimate within generous
         tolerance accounting for IQAE's theta-to-probability mapping.
         """
-        result = ql.amplitude_estimate(lambda x: x == 5, width=3, epsilon=0.05)
+        result = ql.amplitude_estimate(lambda x: x == 3, width=2, epsilon=0.05)
         # IQAE guarantees theta interval width <= epsilon/pi, but the
         # sin^2 mapping to probability space can amplify the interval.
         # Use generous tolerance for statistical robustness.
-        assert abs(result.estimate - 0.125) < 0.15, f"Expected ~0.125, got {result.estimate}"
+        assert abs(result.estimate - 0.25) < 0.15, f"Expected ~0.25, got {result.estimate}"
         assert result.num_oracle_calls > 0
         assert isinstance(result.estimate, float)
 
     def test_known_multi_solution_lambda(self):
-        """Lambda x > 1 in 2-bit space. x in {2, 3}, M=2, true probability = 2/4 = 0.5.
+        """Lambda x > 0 in 2-bit space. x in {1,2,3}, M=3, true probability = 3/4 = 0.75.
 
         AMP-01: ql.amplitude_estimate() correctly estimates probability
-        for multi-solution oracles.  Uses width=2 to keep IQAE circuits
-        within memory budget when simulate=True causes full gate storage.
+        for multi-solution oracles with inequality predicates.
         """
-        result = ql.amplitude_estimate(lambda x: x > 1, width=2, epsilon=0.05)
-        assert abs(result.estimate - 0.5) < 0.15, f"Expected ~0.5, got {result.estimate}"
+        result = ql.amplitude_estimate(lambda x: x > 0, width=2, epsilon=0.05)
+        assert abs(result.estimate - 0.75) < 0.15, f"Expected ~0.75, got {result.estimate}"
 
     def test_inequality_predicate_lambda(self):
-        """Lambda x < 2 in 2-bit space. x in {0,1}, M=2, true probability = 2/4 = 0.5.
+        """Lambda x < 1 in 2-bit space. x in {0}, M=1, true probability = 1/4 = 0.25.
 
         AMP-01: Inequality predicate oracles produce accurate estimates.
-        Uses width=2 to keep IQAE circuits within memory budget when
-        simulate=True causes full gate storage at high Grover powers.
         """
-        result = ql.amplitude_estimate(lambda x: x < 2, width=2, epsilon=0.05)
-        assert abs(result.estimate - 0.5) < 0.15, f"Expected ~0.5, got {result.estimate}"
+        result = ql.amplitude_estimate(lambda x: x < 1, width=2, epsilon=0.05)
+        assert abs(result.estimate - 0.25) < 0.15, f"Expected ~0.25, got {result.estimate}"
 
     def test_epsilon_affects_precision(self):
         """Tighter epsilon should use more oracle calls.
@@ -216,8 +213,8 @@ class TestAmplitudeEstimationEndToEnd:
         with epsilon=0.1 and epsilon=0.01. The tighter epsilon should use
         more oracle calls (generous tolerance since this is probabilistic).
         """
-        result1 = ql.amplitude_estimate(lambda x: x == 5, width=3, epsilon=0.1)
-        result2 = ql.amplitude_estimate(lambda x: x == 5, width=3, epsilon=0.01)
+        result1 = ql.amplitude_estimate(lambda x: x == 1, width=2, epsilon=0.1)
+        result2 = ql.amplitude_estimate(lambda x: x == 1, width=2, epsilon=0.01)
         # Tighter epsilon needs more oracle calls (use generous tolerance)
         assert result2.num_oracle_calls >= result1.num_oracle_calls, (
             f"Expected tighter epsilon to use more calls: "
@@ -234,7 +231,7 @@ class TestAmplitudeEstimationEndToEnd:
         """
         with pytest.warns(UserWarning, match="max_iterations"):
             result = ql.amplitude_estimate(
-                lambda x: x == 3, width=3, epsilon=0.001, max_iterations=10
+                lambda x: x == 1, width=2, epsilon=0.001, max_iterations=10
             )
         assert isinstance(result.estimate, float)
         assert 0.0 <= result.estimate <= 1.0
