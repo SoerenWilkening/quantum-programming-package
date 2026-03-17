@@ -2596,7 +2596,42 @@ cdef class qint(circuit):
 					qubit_array[2*result_bits + (<qint>other).bits + i] = pad_qubits[64 - _other_pad + i]
 
 			if _controlled:
-				raise NotImplementedError("Controlled quantum-quantum AND not yet supported")
+				# Controlled quantum-quantum AND: decompose C-CCX into
+				# standard Toffolis + ancilla.
+				# For each bit i, C-CCX(output[i], A[i], B[i], ext_ctrl)
+				# decomposes as:
+				#   CCX(ancilla, A[i], ext_ctrl)  -- partial AND
+				#   CCX(output[i], ancilla, B[i]) -- use partial AND
+				#   CCX(ancilla, A[i], ext_ctrl)  -- uncompute ancilla
+				_control_bool = _get_control_bool()
+				_ctrl_qubit = (<qint>_control_bool).qubits[63]
+				from quantum_language._gates import emit_ccx as _emit_ccx
+				from quantum_language.qbool import qbool as _qbool_cls
+				gc_before_and = (<circuit_s*>_circuit).gate_count
+				_and_ancilla = _qbool_cls()
+				_anc_qubit = _and_ancilla.qubits[63]
+				for i in range(result_bits):
+					_a_qubit = qubit_array[result_bits + i]
+					_b_qubit = qubit_array[2 * result_bits + i]
+					_out_qubit = qubit_array[i]
+					_emit_ccx(_anc_qubit, _a_qubit, _ctrl_qubit)
+					_emit_ccx(_out_qubit, _anc_qubit, _b_qubit)
+					_emit_ccx(_anc_qubit, _a_qubit, _ctrl_qubit)
+				# Free ancilla
+				_and_ancilla._is_uncomputed = True
+				_and_ancilla.allocated_qubits = False
+				from ._core import _deallocate_qubits
+				_deallocate_qubits(_and_ancilla.allocated_start, 1)
+				gc_delta_and = (<circuit_s*>_circuit).gate_count - gc_before_and
+				_total_and = 3 * result_bits
+				_record_operation(
+					"and",
+					tuple(qubit_array[i] for i in range(_total_and)),
+					gate_count=gc_delta_and,
+				)
+				_qm = tuple(qubit_array[i] for i in range(_total_and))
+				result.history.append(0, _qm)
+				return result
 			else:
 				seq = Q_and(result_bits)
 
