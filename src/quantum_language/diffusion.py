@@ -16,7 +16,7 @@ Usage
 
 import math
 
-from ._core import _set_layer_floor, get_current_layer, option
+from ._core import _set_layer_floor, get_current_layer
 from .compile import compile as ql_compile
 from .qarray import qarray
 from .qint import qint
@@ -251,10 +251,6 @@ def diffusion(*registers):
     ------
     ValueError
         If no qubits provided (empty registers or zero-width).
-    RuntimeError
-        If ``ql.option('simulate')`` is not ``True``.  Callers must
-        set ``ql.option('simulate', True)`` after ``ql.circuit()`` so
-        that DSL operations emit gates into the circuit.
 
     Examples
     --------
@@ -265,9 +261,4 @@ def diffusion(*registers):
     >>> x.branch()
     >>> ql.diffusion(x)
     """
-    if not option("simulate"):
-        raise RuntimeError(
-            "diffusion() requires ql.option('simulate', True). "
-            "Call ql.option('simulate', True) after ql.circuit()."
-        )
     _diffusion_impl(*registers)

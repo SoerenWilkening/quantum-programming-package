@@ -103,6 +103,19 @@ Claude Code skill (`/quantum-walk`) for guided development of walk functions.
 | R13.5 | Independent verifier agent; flags user only for exotic/custom problems. | |
 | R13.6 | Idiom library: ternary assignment, XOR-based modification, counting, compound validity, all-assigned check. Extensible over time. | |
 
+#### R14: DSL Purity & Simulate-Mode Cleanup
+
+Eliminate all local `simulate` toggles and raw gate patterns from walk modules. The `simulate` option is global — internal helpers must never toggle it.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R14.1 | `simulate` is a global option only. Remove all local `option('simulate', ...)` toggles from `_flip_all`, `diffusion()` wrapper, and any other internal helper. Tests that need QASM output must set `ql.option('simulate', True)` in their fixture. | |
+| R14.2 | Controlled-AND support: `&` operator inside `with` blocks (controlled context) must work. Implement via C-CCX decomposition (Toffoli + ancilla). Currently raises `NotImplementedError`. | |
+| R14.3 | Replace `_flip_all` single-register calls with `^= 1` or `~reg` directly. Keep `_flip_all` only as multi-register convenience (without simulate toggle). | |
+| R14.4 | Replace `_nested_phase_flip` and `_apply_nested_with` (recursive nested `with` loops) with flat `&`-chain pattern. Depends on R14.2. | |
+| R14.5 | Raise test qubit budget from 17 to 21. Statevector simulation at 21 qubits takes ~0.2s (2M amplitudes), well within acceptable limits. | |
+| R14.6 | `qarray.all()` primitive for multi-controlled operations (future optimization): replace manual `&`-chain loops with internal AND-reduction. Fewer allocations, potential gate-level optimization. | |
+
 ### P1 — Should Have
 
 #### R8: Future Compilation Improvements
@@ -155,7 +168,7 @@ General improvements to the existing codebase.
 - R_A and R_B operate on disjoint height register qubits (even vs odd depths).
 - walk_step = R_B * R_A compiles and replays correctly (gate sequence cached).
 - Old `walk.py` and all associated test files removed.
-- All test circuits use ≤ 17 qubits.
+- All test circuits use ≤ 21 qubits (raised from 17; 21-qubit statevector simulation ~0.2s).
 - No implementation file exceeds 400 LOC.
 - `/quantum-walk` skill produces correct quantum functions with passing verification loop.
 - Marking is quantum: `is_marked(state)` returns `qbool`, diffusion applied only to unmarked nodes (`with ~marked:`). No classical enumeration.

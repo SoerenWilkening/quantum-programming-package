@@ -271,19 +271,13 @@ class TestDiffusionOperator:
         with pytest.raises((ValueError, TypeError)):
             ql.diffusion()
 
-    def test_diffusion_requires_simulate(self):
-        """Diffusion raises RuntimeError when simulate is not True.
-
-        Callers must set ql.option('simulate', True) before calling
-        diffusion(). This prevents silent corruption where DSL
-        operations do not emit gates into the circuit.
-        """
+    def test_diffusion_without_simulate(self):
+        """Diffusion works without simulate=True (no gates stored, no error)."""
         ql.circuit()
         ql.option("fault_tolerant", True)
-        # simulate defaults to False -- diffusion must reject this
+        # simulate defaults to False -- diffusion should not raise
         x = ql.qint(0, width=2)
-        with pytest.raises(RuntimeError, match="simulate"):
-            ql.diffusion(x)
+        ql.diffusion(x)  # should not raise
 
     def test_diffusion_compile_caching(self):
         """Calling diffusion twice on same-width register uses compile cache."""
