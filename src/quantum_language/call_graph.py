@@ -108,6 +108,7 @@ class DAGNode:
         "qubit_mapping",
         "operation_type",
         "invert",
+        "controlled",
         "_block_ref",
         "_v2r_ref",
         "_qubit_array",
@@ -126,6 +127,7 @@ class DAGNode:
         qubit_mapping: tuple = (),
         operation_type: str = "",
         invert: bool = False,
+        controlled: bool = False,
     ):
         self.func_name = func_name
         self.qubit_set = frozenset(qubit_set)
@@ -138,6 +140,7 @@ class DAGNode:
         self.qubit_mapping = qubit_mapping
         self.operation_type = operation_type
         self.invert = invert
+        self.controlled = controlled
         self._block_ref = None  # CompiledBlock ref for merge (opt=2)
         self._v2r_ref = None  # virtual-to-real mapping for merge (opt=2)
         # Pre-compute bitmask from qubit_set (Python int for >64 qubit support)
@@ -155,6 +158,8 @@ class DAGNode:
             parts.append(f", op={self.operation_type!r}")
         if self.invert:
             parts.append(", invert=True")
+        if self.controlled:
+            parts.append(", controlled=True")
         parts.append(")")
         return "".join(parts)
 
@@ -192,6 +197,7 @@ class CallGraphDAG:
         qubit_mapping: tuple = (),
         operation_type: str = "",
         invert: bool = False,
+        controlled: bool = False,
     ) -> int:
         """Add a node to the DAG.
 
@@ -217,6 +223,8 @@ class CallGraphDAG:
             Operation identifier (e.g. ``"add"``, ``"mul"``, ``"xor"``).
         invert : bool
             Whether this is an inverse operation.
+        controlled : bool
+            Whether this call was inside a controlled context.
 
         Returns
         -------
@@ -230,14 +238,20 @@ class CallGraphDAG:
         """
         if self._frozen:
             raise RuntimeError(
-                "Cannot add node to frozen CallGraphDAG. "
-                "The graph is immutable after capture."
+                "Cannot add node to frozen CallGraphDAG. The graph is immutable after capture."
             )
         node = DAGNode(
-            func_name, qubit_set, gate_count, cache_key,
-            depth=depth, t_count=t_count,
-            sequence_ptr=sequence_ptr, qubit_mapping=qubit_mapping,
-            operation_type=operation_type, invert=invert,
+            func_name,
+            qubit_set,
+            gate_count,
+            cache_key,
+            depth=depth,
+            t_count=t_count,
+            sequence_ptr=sequence_ptr,
+            qubit_mapping=qubit_mapping,
+            operation_type=operation_type,
+            invert=invert,
+            controlled=controlled,
         )
         idx = self._dag.add_node(node)
         self._nodes.append(node)
@@ -548,6 +562,7 @@ _dag_builder_stack: list[CallGraphDAG] = []
 Used during @ql.compile execution to track the active DAG for
 operation recording.
 """
+
 
 def push_dag_context(dag: CallGraphDAG) -> None:
     """Push a DAG context onto the builder stack.

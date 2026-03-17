@@ -399,6 +399,7 @@ class CompiledBlock:
         "return_type",  # 'qint', 'qarray', or None
         "_return_qarray_element_widths",  # List of element widths for qarray return
         "controlled_block",  # Derived controlled CompiledBlock (Phase 5)
+        "_captured_controlled",  # Whether capture was inside control context
     )
 
     def __init__(
@@ -427,6 +428,7 @@ class CompiledBlock:
         self.return_type = None
         self._return_qarray_element_widths = None
         self.controlled_block = None
+        self._captured_controlled = False
 
 
 # ---------------------------------------------------------------------------
@@ -822,6 +824,7 @@ class CompiledFunc:
                         cache_key,
                         depth=_compute_depth(_gates),
                         t_count=_compute_t_count(_gates),
+                        controlled=is_controlled,
                     )
             return result
 
@@ -869,6 +872,7 @@ class CompiledFunc:
                         cache_key,
                         depth=_compute_depth(_gates),
                         t_count=_compute_t_count(_gates),
+                        controlled=is_controlled,
                     )
                     # Store block ref for merge support (opt=2)
                     if block is not None:
@@ -884,6 +888,12 @@ class CompiledFunc:
                 is_controlled,
                 cache_key,
             )
+            # For opt=1 capture, record control state on the cached block
+            # so DAG consumers can query it without adding a wrapper node.
+            if self._opt == 1:
+                block = self._cache.get(cache_key)
+                if block is not None:
+                    block._captured_controlled = is_controlled
 
         if self._debug:
             block = self._cache.get(cache_key)
