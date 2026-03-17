@@ -609,10 +609,10 @@ class TestPartialMarking:
 
 
 class TestMarkingQubitBudget:
-    """Marking tests stay within the 17-qubit simulation limit."""
+    """Marking tests stay within the 21-qubit simulation limit."""
 
     def test_marking_depth1_within_budget(self):
-        """Depth-1 marked walk within 17 qubits."""
+        """Depth-1 marked walk within 21 qubits."""
         _init_circuit()
         state = ql.qint(0, width=2)
         pred, flag = _make_always_marked_predicate()
@@ -1054,7 +1054,7 @@ class TestMarkingWithVariableBranching:
         assert len(marking_warnings) == 0, "Should not warn about marking when is_marked is not set"
 
     def test_variable_branching_marking_within_qubit_budget(self):
-        """Variable-branching with marking stays within 17-qubit limit."""
+        """Variable-branching with marking stays within 21-qubit limit."""
         _init_circuit()
         state = ql.qint(0, width=2)
         pred, flag = _make_always_marked_predicate()

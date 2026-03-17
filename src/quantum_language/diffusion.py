@@ -16,7 +16,7 @@ Usage
 
 import math
 
-from ._core import _set_layer_floor, get_current_layer
+from ._core import _set_layer_floor, get_current_layer, option
 from .compile import compile as ql_compile
 from .qarray import qarray
 from .qint import qint
@@ -228,6 +228,12 @@ def diffusion(*registers):
     ValueError
         If no qubits provided (empty registers or zero-width).
 
+    Notes
+    -----
+    Internally ensures ``ql.option('simulate')`` is ``True`` during
+    execution so that DSL operations emit gates into the circuit.
+    The previous simulate setting is restored on return.
+
     Examples
     --------
     >>> import quantum_language as ql
@@ -236,4 +242,11 @@ def diffusion(*registers):
     >>> x.branch()
     >>> ql.diffusion(x)
     """
-    _diffusion_impl(*registers)
+    was_simulating = option("simulate")
+    if not was_simulating:
+        option("simulate", True)
+    try:
+        _diffusion_impl(*registers)
+    finally:
+        if not was_simulating:
+            option("simulate", False)

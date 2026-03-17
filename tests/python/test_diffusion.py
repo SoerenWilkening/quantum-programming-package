@@ -271,6 +271,23 @@ class TestDiffusionOperator:
         with pytest.raises((ValueError, TypeError)):
             ql.diffusion()
 
+    def test_diffusion_works_without_simulate(self):
+        """Diffusion works even when simulate is not explicitly set.
+
+        diffusion() internally ensures simulate=True for its own
+        execution and restores the previous setting afterward.
+        """
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        # simulate defaults to False -- diffusion handles this internally
+        x = ql.qint(0, width=2)
+        ql.diffusion(x)
+
+        qasm = ql.to_openqasm()
+        # Should produce X gates (the bit-flip layer)
+        x_count = _count_gate(qasm, "x")
+        assert x_count == 4, f"Expected 4 X gates, got {x_count}"
+
     def test_diffusion_compile_caching(self):
         """Calling diffusion twice on same-width register uses compile cache."""
         ql.circuit()

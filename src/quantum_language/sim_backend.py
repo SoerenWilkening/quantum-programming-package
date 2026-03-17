@@ -109,5 +109,8 @@ def simulate(circuit, *, shots=1, max_parallel_threads=4):
     if not circuit.cregs:
         circuit.measure_all()
     sim = AerSimulator(max_parallel_threads=max_parallel_threads)
-    result = sim.run(transpile(circuit, sim), shots=shots).result()
+    # Use coupling_map=None to avoid the default 28-qubit coupling-map
+    # constraint.  The statevector simulator supports arbitrary qubit
+    # counts; the coupling-map check is only relevant for hardware.
+    result = sim.run(transpile(circuit, coupling_map=None), shots=shots).result()
     return result.get_counts()
