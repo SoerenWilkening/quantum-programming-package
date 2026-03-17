@@ -125,19 +125,43 @@ def _flip_all(*registers):
     *registers : qint, qbool, or qarray
         Quantum registers whose qubits should be flipped.
     """
-    was_simulating = option('simulate')
+    was_simulating = option("simulate")
     if not was_simulating:
-        option('simulate', True)
+        option("simulate", True)
     try:
         for reg in registers:
             if isinstance(reg, qarray):
                 for elem in reg:
-                    ~elem
+                    ~elem  # noqa: B018 -- DSL side-effect: emits X gates
             elif isinstance(reg, qint):
-                ~reg
+                ~reg  # noqa: B018 -- DSL side-effect: emits X gates
     finally:
         if not was_simulating:
-            option('simulate', False)
+            option("simulate", False)
+
+
+def _xor_with_simulate(reg, value):
+    """Apply ``reg ^= value`` ensuring gates are stored in the circuit.
+
+    Wraps the XOR in a simulate-mode toggle so that ``run_instruction``
+    stores the resulting gates.  Used as a lightweight replacement for
+    ``_flip_all`` when only a single register needs to be flipped.
+
+    Parameters
+    ----------
+    reg : qint or qbool
+        Quantum register to XOR.
+    value : int
+        Classical value to XOR with.
+    """
+    was_simulating = option("simulate")
+    if not was_simulating:
+        option("simulate", True)
+    try:
+        reg ^= value
+    finally:
+        if not was_simulating:
+            option("simulate", False)
 
 
 def _extract_qbools(*registers):
@@ -180,6 +204,7 @@ def _nested_phase_flip(bits, target_register):
     target_register : qint
         Register used for the ``phase += pi`` call.
     """
+
     def _recurse(idx):
         if idx == len(bits):
             target_register.phase += math.pi
@@ -246,11 +271,11 @@ def diffusion(*registers):
     >>> x.branch()
     >>> ql.diffusion(x)
     """
-    was_simulating = option('simulate')
+    was_simulating = option("simulate")
     if not was_simulating:
-        option('simulate', True)
+        option("simulate", True)
     try:
         _diffusion_impl(*registers)
     finally:
         if not was_simulating:
-            option('simulate', False)
+            option("simulate", False)
