@@ -34,9 +34,10 @@ References
 
 import math
 
-from .diffusion import _flip_all, _qubit_index, _xor_with_simulate
-from .qbool import qbool as new_qbool
+from .diffusion import _flip_all, _qubit_index
 from .walk_core import WalkConfig, montanaro_phi
+from .qbool import qbool as new_qbool
+
 
 # ------------------------------------------------------------------
 # Internal: qbool wrapper for existing physical qubits
@@ -50,7 +51,6 @@ def _make_qbool_wrapper(qubit_idx):
     (right-aligned, as expected by the gate emission infrastructure).
     """
     import numpy as np
-
     from .qbool import qbool
 
     arr = np.zeros(64, dtype=np.uint32)
@@ -162,20 +162,14 @@ def _plan_cascade_recursive(d, w, bit_offset, ops, control_stack):
     # Left subtree: controlled on current bit = |0>
     if left_count > 1 and bit_offset + 1 < w:
         _plan_cascade_recursive(
-            left_count,
-            w,
-            bit_offset + 1,
-            ops,
+            left_count, w, bit_offset + 1, ops,
             control_stack + [(bit_offset, True)],
         )
 
     # Right subtree: controlled on current bit = |1>
     if right_count > 1 and bit_offset + 1 < w:
         _plan_cascade_recursive(
-            right_count,
-            w,
-            bit_offset + 1,
-            ops,
+            right_count, w, bit_offset + 1, ops,
             control_stack + [(bit_offset, False)],
         )
 
@@ -212,9 +206,9 @@ def _multi_controlled_ry(target, angle, ctrls):
 
     if not ctrls:
         if inverse:
-            _xor_with_simulate(target_w, 1)
+            _flip_all(target_w)
             target_w.branch(prob)
-            _xor_with_simulate(target_w, 1)
+            _flip_all(target_w)
         else:
             target_w.branch(prob)
         return
@@ -249,7 +243,7 @@ def _multi_controlled_x(target, ctrls):
     """
     target_wrapper = _wrap_qbool(target)
     if not ctrls:
-        _xor_with_simulate(target_wrapper, 1)
+        _flip_all(target_wrapper)
         return
     ctrl_wrappers = [_wrap_qbool(c) for c in ctrls]
     if len(ctrl_wrappers) == 1:
@@ -303,7 +297,9 @@ def _cascade_multi_controlled(branch_reg, ops, ctrls, sign=1):
             _, bit_off, angle, ctrl_bit_off = op
             target = _bit_qbool(bit_off)
             cascade_ctrl = _bit_qbool(ctrl_bit_off)
-            _multi_controlled_ry(target, sign * angle, ctrls + [cascade_ctrl])
+            _multi_controlled_ry(
+                target, sign * angle, ctrls + [cascade_ctrl]
+            )
         elif op[0] == "x":
             _, bit_off = op
             target = _bit_qbool(bit_off)
@@ -415,7 +411,7 @@ def branch_to_children(config, count_reg, branch_reg, parent_flag=None):
     # unbranch can reuse the same physical qubits.
     cond_map = {}
     for c in range(1, num_moves + 1):
-        cond_map[c] = count_reg == c
+        cond_map[c] = (count_reg == c)
 
     for c in range(1, num_moves + 1):
         ctrl_qbools = [cond_map[c]]
@@ -438,10 +434,7 @@ def branch_to_children(config, count_reg, branch_reg, parent_flag=None):
         # its inverse bracket the S_0 reflection.
         if c > 1 and cascade_ops:
             _cascade_multi_controlled(
-                branch_reg,
-                cascade_ops,
-                ctrl_qbools,
-                sign=1,
+                branch_reg, cascade_ops, ctrl_qbools, sign=1,
             )
 
     return BranchState(parent_flag, cond_map)
@@ -498,10 +491,7 @@ def unbranch(config, count_reg, branch_reg, branch_state=None):
         # controlled only on count comparison (matching forward pass).
         if c > 1 and cascade_ops:
             _cascade_multi_controlled(
-                branch_reg,
-                cascade_ops,
-                ctrl_qbools,
-                sign=-1,
+                branch_reg, cascade_ops, ctrl_qbools, sign=-1,
             )
 
         # Inverse phi rotation on parent-flag qubit
@@ -561,7 +551,9 @@ def _validate_branching_args(config, count_reg, branch_reg):
         If ``count_reg`` or ``branch_reg`` is None.
     """
     if not isinstance(config, WalkConfig):
-        raise TypeError(f"config must be a WalkConfig, got {type(config).__name__}")
+        raise TypeError(
+            f"config must be a WalkConfig, got {type(config).__name__}"
+        )
     if count_reg is None:
         raise ValueError("count_reg must not be None")
     if branch_reg is None:
