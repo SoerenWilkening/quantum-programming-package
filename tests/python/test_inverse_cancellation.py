@@ -341,3 +341,119 @@ class TestGateCountReduction:
         hg = HistoryGraph()
         hg.append(100, (0, 1), kind="xor")
         assert hg.entries[0][3] == "xor"
+
+
+# ---------------------------------------------------------------------------
+# compiled_fn_cancel
+# ---------------------------------------------------------------------------
+
+
+class TestCompiledFnCancel:
+    """compiled_fn followed by compiled_fn_inv with same seq_ptr and
+    qubit_mapping cancels (Step 6.5)."""
+
+    def test_compiled_fn_cancel(self):
+        hg = HistoryGraph()
+        hg.append(500, (0, 1, 2, 3), kind="compiled_fn")
+        assert len(hg) == 1
+        hg.append(500, (0, 1, 2, 3), kind="compiled_fn_inv")
+        assert len(hg) == 0
+
+    def test_compiled_fn_cancel_entries_empty(self):
+        hg = HistoryGraph()
+        hg.append(500, (0, 1, 2, 3), kind="compiled_fn")
+        hg.append(500, (0, 1, 2, 3), kind="compiled_fn_inv")
+        assert hg.entries == []
+
+    def test_compiled_fn_inv_then_fn_cancel(self):
+        """compiled_fn_inv followed by compiled_fn also cancels."""
+        hg = HistoryGraph()
+        hg.append(500, (0, 1, 2, 3), kind="compiled_fn_inv")
+        hg.append(500, (0, 1, 2, 3), kind="compiled_fn")
+        assert len(hg) == 0
+
+    def test_compiled_fn_chain_cancel(self):
+        """Chain cancellation: fn + other + cancel_other + cancel_fn."""
+        hg = HistoryGraph()
+        hg.append(500, (0, 1), kind="compiled_fn")
+        hg.append(200, (2, 3), kind="xor")
+        assert len(hg) == 2
+        # Cancel xor
+        hg.append(200, (2, 3), kind="xor")
+        assert len(hg) == 1
+        # Cancel compiled_fn
+        hg.append(500, (0, 1), kind="compiled_fn_inv")
+        assert len(hg) == 0
+
+
+# ---------------------------------------------------------------------------
+# compiled_fn_no_cancel_different_args
+# ---------------------------------------------------------------------------
+
+
+class TestCompiledFnNoCancelDifferentArgs:
+    """No cancellation when seq_ptr or qubit_mapping differs for compiled fns."""
+
+    def test_no_cancel_different_seq_ptr(self):
+        hg = HistoryGraph()
+        hg.append(500, (0, 1), kind="compiled_fn")
+        hg.append(600, (0, 1), kind="compiled_fn_inv")
+        assert len(hg) == 2
+
+    def test_no_cancel_different_qubit_mapping(self):
+        hg = HistoryGraph()
+        hg.append(500, (0, 1), kind="compiled_fn")
+        hg.append(500, (0, 2), kind="compiled_fn_inv")
+        assert len(hg) == 2
+
+    def test_no_cancel_same_kind(self):
+        """Two compiled_fn entries with same args do NOT cancel."""
+        hg = HistoryGraph()
+        hg.append(500, (0, 1), kind="compiled_fn")
+        hg.append(500, (0, 1), kind="compiled_fn")
+        assert len(hg) == 2
+
+    def test_no_cancel_same_kind_inv(self):
+        """Two compiled_fn_inv entries with same args do NOT cancel."""
+        hg = HistoryGraph()
+        hg.append(500, (0, 1), kind="compiled_fn_inv")
+        hg.append(500, (0, 1), kind="compiled_fn_inv")
+        assert len(hg) == 2
+
+
+# ---------------------------------------------------------------------------
+# compiled_fn_blocker
+# ---------------------------------------------------------------------------
+
+
+class TestCompiledFnBlocker:
+    """No cancellation for compiled fns when an active blocker exists."""
+
+    def test_no_cancel_with_active_blocker(self):
+        hg = HistoryGraph()
+        hg.append(500, (0, 1, 2), kind="compiled_fn")
+        dep = _Dummy(allocated=True)
+        hg.add_blocker(dep)
+        hg.append(500, (0, 1, 2), kind="compiled_fn_inv")
+        assert len(hg) == 2
+
+    def test_cancel_after_blocker_inactive(self):
+        hg = HistoryGraph()
+        hg.append(500, (0, 1, 2), kind="compiled_fn")
+        dep = _Dummy(allocated=True)
+        hg.add_blocker(dep)
+        dep.qubits_allocated = False
+        # Blocker now inactive — cancellation should proceed
+        hg.append(500, (0, 1, 2), kind="compiled_fn_inv")
+        assert len(hg) == 0
+
+    def test_cancel_after_blocker_gc(self):
+        hg = HistoryGraph()
+        hg.append(500, (0, 1, 2), kind="compiled_fn")
+        dep = _Dummy(allocated=True)
+        hg.add_blocker(dep)
+        del dep
+        gc.collect()
+        # Blocker GC'd — cancellation should proceed
+        hg.append(500, (0, 1, 2), kind="compiled_fn_inv")
+        assert len(hg) == 0

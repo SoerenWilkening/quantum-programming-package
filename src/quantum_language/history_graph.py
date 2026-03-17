@@ -78,6 +78,8 @@ class HistoryGraph:
         "add": "sub",
         "sub": "add",
         "xor": "xor",
+        "compiled_fn": "compiled_fn_inv",
+        "compiled_fn_inv": "compiled_fn",
     }
 
     def append(self, sequence_ptr, qubit_mapping, num_ancilla=0, kind=None):

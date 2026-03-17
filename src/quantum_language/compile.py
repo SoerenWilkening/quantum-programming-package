@@ -830,16 +830,14 @@ class CompiledFunc:
             self._cache.move_to_end(cache_key)
             _track_fwd = self._inverse_func is not None
             block = self._cache[cache_key]
-            result = self._replay(block, quantum_args, track_forward=_track_fwd)
+            result = self._replay(block, quantum_args, track_forward=_track_fwd, kind="compiled_fn")
             # Manually credit the gate count when simulate=False (no gates
             # injected) or opt=1 (inject_remapped_gates/add_gate does not
             # increment gate_count) so get_gate_count() reflects the
             # logical cost of this replay.
-            if (not option('simulate') or self._opt == 1) and block is not None:
+            if (not option("simulate") or self._opt == 1) and block is not None:
                 _replay_count = (
-                    block.original_gate_count
-                    if block.original_gate_count
-                    else len(block.gates)
+                    block.original_gate_count if block.original_gate_count else len(block.gates)
                 )
                 if _replay_count:
                     add_gate_count(_replay_count)
@@ -987,7 +985,7 @@ class CompiledFunc:
 
         # Check if circuit is in tracking-only mode (simulate=False).
         # Gate count is used to compute per-block cost when gates aren't stored.
-        _use_tracking = not option('simulate')
+        _use_tracking = not option("simulate")
         _gate_count_before = get_gate_count() if _use_tracking else 0
 
         # Collect parameter qubit indices BEFORE execution
@@ -1072,10 +1070,7 @@ class CompiledFunc:
 
         # Optimise the virtual gate list (cancel adjacent inverses, merge
         # consecutive rotations) before caching so every replay benefits.
-        original_count = (
-            _tracking_gate_count if _use_tracking
-            else len(virtual_gates)
-        )
+        original_count = _tracking_gate_count if _use_tracking else len(virtual_gates)
         if self._optimize:
             try:
                 virtual_gates = _optimize_gate_list(virtual_gates)
@@ -1271,7 +1266,7 @@ class CompiledFunc:
                 is_hit = cache_key in self._cache
                 if is_hit:
                     self._cache.move_to_end(cache_key)
-                    return self._replay(self._cache[cache_key], quantum_args)
+                    return self._replay(self._cache[cache_key], quantum_args, kind="compiled_fn")
                 else:
                     # Mode flags changed -- re-probe from scratch
                     self._parametric_probed = False
@@ -1320,7 +1315,7 @@ class CompiledFunc:
             is_hit = cache_key in self._cache
             if is_hit:
                 self._cache.move_to_end(cache_key)
-                return self._replay(self._cache[cache_key], quantum_args)
+                return self._replay(self._cache[cache_key], quantum_args, kind="compiled_fn")
             return self._capture_and_cache_both(
                 args,
                 kwargs,
@@ -1335,7 +1330,7 @@ class CompiledFunc:
         # Check for per-value cache hit first
         if cache_key in self._cache:
             self._cache.move_to_end(cache_key)
-            return self._replay(self._cache[cache_key], quantum_args)
+            return self._replay(self._cache[cache_key], quantum_args, kind="compiled_fn")
 
         # New classical value: capture to get correct gates and cache per-value
         result = self._capture_and_cache_both(
@@ -1361,7 +1356,7 @@ class CompiledFunc:
 
         return result
 
-    def _replay(self, block, quantum_args, track_forward=True):
+    def _replay(self, block, quantum_args, track_forward=True, kind=None):
         """Replay cached gates with qubit remapping."""
         # Build virtual-to-real mapping from caller's qints/qarrays
         virtual_to_real = {}
@@ -1405,7 +1400,7 @@ class CompiledFunc:
         _set_layer_floor(start_layer)
 
         # Inject remapped gates (skip when simulate=False)
-        if option('simulate'):
+        if option("simulate"):
             inject_remapped_gates(block.gates, virtual_to_real)
 
         # Restore layer_floor
@@ -1421,6 +1416,13 @@ class CompiledFunc:
                 result = _build_return_qarray(block, virtual_to_real)
             else:
                 result = _build_return_qint(block, virtual_to_real)
+
+        # Record compiled-function history entry for inverse cancellation
+        if kind is not None and quantum_args:
+            _qm = tuple(q for qa in quantum_args for q in _get_quantum_arg_qubit_indices(qa))
+            target = quantum_args[0]
+            if hasattr(target, "history"):
+                target.history.append(id(self), _qm, len(ancilla_qubits), kind=kind)
 
         # Record forward call for inverse support (only when ancillas were allocated)
         if track_forward and ancilla_qubits:
@@ -1689,7 +1691,9 @@ class _InverseCompiledFunc:
             inverted_block._return_qarray_element_widths = block._return_qarray_element_widths
             self._inv_cache[cache_key] = inverted_block
 
-        return self._original._replay(self._inv_cache[cache_key], quantum_args, track_forward=False)
+        return self._original._replay(
+            self._inv_cache[cache_key], quantum_args, track_forward=False, kind="compiled_fn_inv"
+        )
 
     def inverse(self):
         """Return the original ``CompiledFunc`` (round-trip)."""
@@ -1755,6 +1759,18 @@ class _AncillaInverseProxy:
         _set_layer_floor(get_current_layer())
         inject_remapped_gates(adjoint_gates, vtr)
         _set_layer_floor(saved_floor)
+
+        # Record compiled-function inverse history entry for cancellation
+        if quantum_args:
+            _qm = tuple(q for qa in quantum_args for q in _get_quantum_arg_qubit_indices(qa))
+            target = quantum_args[0]
+            if hasattr(target, "history"):
+                target.history.append(
+                    id(self._cf),
+                    _qm,
+                    len(record.ancilla_qubits),
+                    kind="compiled_fn_inv",
+                )
 
         # Deallocate ancilla qubits (one at a time, may be non-contiguous)
         for qubit_idx in record.ancilla_qubits:
