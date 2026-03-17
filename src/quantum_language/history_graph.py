@@ -42,7 +42,7 @@ class Blocker:
         obj = self._ref()
         if obj is None:
             return False
-        return getattr(obj, "allocated_qubits", False)
+        return getattr(obj, "qubits_allocated", False)
 
     @property
     def dependent(self):

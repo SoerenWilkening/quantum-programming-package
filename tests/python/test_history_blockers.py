@@ -12,15 +12,23 @@ import quantum_language as ql
 from quantum_language.history_graph import Blocker, HistoryGraph
 
 # ---------------------------------------------------------------------------
-# Helper: weakref-able dummy with allocated_qubits attribute
+# Helper: weakref-able dummy with qubits_allocated property
 # ---------------------------------------------------------------------------
 
 
 class _Dummy:
-    """Weakref-able placeholder simulating a qint with allocated_qubits."""
+    """Weakref-able placeholder simulating a qint with qubits_allocated."""
 
     def __init__(self, allocated=True):
-        self.allocated_qubits = allocated
+        self._allocated = allocated
+
+    @property
+    def qubits_allocated(self):
+        return self._allocated
+
+    @qubits_allocated.setter
+    def qubits_allocated(self, value):
+        self._allocated = value
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +68,7 @@ class TestBlockerInactiveAfterDeallocation:
         blocker = Blocker(dep, index=0)
         assert blocker.is_active is True
 
-        dep.allocated_qubits = False
+        dep.qubits_allocated = False
         assert blocker.is_active is False
 
     def test_blocker_inactive_after_gc(self):
@@ -167,7 +175,7 @@ class TestActiveBlockersAfter:
         hg = HistoryGraph()
         d1 = _Dummy(allocated=True)
         hg.add_blocker(d1)
-        d1.allocated_qubits = False
+        d1.qubits_allocated = False
         assert hg.active_blockers_after(0) == []
 
     def test_index_boundary_inclusive(self):
@@ -207,7 +215,7 @@ class TestMultipleBlockers:
         hg.add_blocker(d2)
         hg.add_blocker(d3)
 
-        d2.allocated_qubits = False
+        d2.qubits_allocated = False
         active = hg.active_blockers_after(0)
         assert len(active) == 2
         dependents = [b.dependent for b in active]
@@ -221,7 +229,7 @@ class TestMultipleBlockers:
         for d in deps:
             hg.add_blocker(d)
         for d in deps:
-            d.allocated_qubits = False
+            d.qubits_allocated = False
         assert hg.active_blockers_after(0) == []
 
     def test_multiple_blockers_at_different_indices(self):

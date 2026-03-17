@@ -87,8 +87,8 @@ Function-based quantum walk API replacing the monolithic QWalkTree class.
 | R12.13 | Correctness verified on tiny problems (≤ 17 qubits) via Qiskit simulation. | **Done** |
 | R12.14 | `is_marked` evaluated quantumly, returning `qbool`. Marking = identity (D_x = I for marked nodes per Montanaro 2015). Works with variable-branching diffusion via controlled XOR (Toffoli). | **Done** |
 | R12.15 | `walk_operators.py` composes `walk_diffusion.py` — no reimplementation of diffusion logic in the operator layer. | **Done** |
-| R12.16 | Single diffusion implementation: variable-branching only. No `_fixed_diffusion` path — fixed branching converges to plain Grover's (use `ql.grover()` for that). | |
-| R12.17 | Marking integrated with variable-branching path: `with ~marked:` wraps the variable diffusion call. No separate marking dispatch. | |
+| R12.16 | Single diffusion implementation: variable-branching only. No `_fixed_diffusion` path — fixed branching converges to plain Grover's (use `ql.grover()` for that). | **Done** |
+| R12.17 | Marking integrated with variable-branching path: `with ~marked:` wraps the variable diffusion call. No separate marking dispatch. | **Done** |
 
 #### R13: Quantum Walk Skill
 
@@ -109,12 +109,49 @@ Eliminate all local `simulate` toggles and raw gate patterns from walk modules. 
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| R14.1 | `simulate` is a global option only. Remove all local `option('simulate', ...)` toggles from `_flip_all`, `diffusion()` wrapper, and any other internal helper. Tests that need QASM output must set `ql.option('simulate', True)` in their fixture. | |
-| R14.2 | Controlled-AND support: `&` operator inside `with` blocks (controlled context) must work. Implement via C-CCX decomposition (Toffoli + ancilla). Currently raises `NotImplementedError`. | |
-| R14.3 | Replace `_flip_all` single-register calls with `^= 1` or `~reg` directly. Keep `_flip_all` only as multi-register convenience (without simulate toggle). | |
-| R14.4 | Replace `_nested_phase_flip` and `_apply_nested_with` (recursive nested `with` loops) with flat `&`-chain pattern. Depends on R14.2. | |
-| R14.5 | Raise test qubit budget from 17 to 21. Statevector simulation at 21 qubits takes ~0.2s (2M amplitudes), well within acceptable limits. | |
+| R14.1 | `simulate` is a global option only. Remove all local `option('simulate', ...)` toggles from `_flip_all`, `diffusion()` wrapper, and any other internal helper. Tests that need QASM output must set `ql.option('simulate', True)` in their fixture. | **Done** |
+| R14.2 | Controlled-AND support: `&` operator inside `with` blocks (controlled context) must work. Implement via C-CCX decomposition (Toffoli + ancilla). Currently raises `NotImplementedError`. | **Done** |
+| R14.3 | Replace `_flip_all` single-register calls with `^= 1` or `~reg` directly. Keep `_flip_all` only as multi-register convenience (without simulate toggle). | **Done** |
+| R14.4 | Replace `_nested_phase_flip` and `_apply_nested_with` (recursive nested `with` loops) with flat `&`-chain pattern. Depends on R14.2. | **Done** |
+| R14.5 | Raise test qubit budget from 17 to 21. Statevector simulation at 21 qubits takes ~0.2s (2M amplitudes), well within acceptable limits. | **Done** |
 | R14.6 | `qarray.all()` primitive for multi-controlled operations (future optimization): replace manual `&`-chain loops with internal AND-reduction. Fewer allocations, potential gate-level optimization. | |
+
+#### R15: In-Place Comparison Operators
+
+Replace copy-based `<`, `>`, `<=`, `>=` with in-place borrow-ancilla pattern. Eliminates widened temporary copies and reduces qubit overhead.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R15.1 | `__lt__` and `__gt__` use borrow-ancilla pattern: allocate single ancilla as (n+1)th bit, perform (n+1)-bit subtraction across `[a, ancilla]`, extract borrow into result qbool, restore via addition, deallocate ancilla. No operand copies. | |
+| R15.2 | `__le__` and `__ge__` automatically benefit (implemented as `~(a > b)` / `~(a < b)`). | |
+| R15.3 | Arithmetic backend supports subtraction/addition across a qint + separate qbool as a split register (qbool acts as MSB). | |
+| R15.4 | No history graph children for comparison temporaries — borrow ancilla is deallocated immediately. | |
+| R15.5 | Both operands unchanged after comparison (operand preservation). | |
+
+#### R16: Compiled Function Control Propagation
+
+Fix `@ql.compile` to correctly propagate control context from `with` blocks.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R16.1 | Single cache entry stores both uncontrolled (canonical) and derived controlled gate sequences. | |
+| R16.2 | Capture always produces uncontrolled gates (control stack cleared). Controlled variant derived mechanically via `_derive_controlled_block`. | |
+| R16.3 | `run_instruction` selects controlled vs uncontrolled sequence at runtime based on control stack. Control qubit index mapped dynamically. | |
+| R16.4 | Nested `with` blocks collapse to single control via AND-ancilla. Single-control derivation suffices for all nesting depths. | |
+| R16.5 | `opt=1` (DAG-only) mode respects control context. | |
+
+#### R17: History Graph Inverse Cancellation
+
+Detect and cancel manual uncomputation in the history graph, avoiding redundant inverse gates.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R17.1 | Tail-only matching: when an operation is the exact inverse of the last history entry and no active blockers exist, cancel both entries. | |
+| R17.2 | Supported inverse pairs: `+= k` / `-= k`, `^= x` / `^= x` (self-inverse), `f()` / `f.inverse()` (matched by sequence pointer). | |
+| R17.3 | Blocker mechanism: when a qint is used as a source operand (RHS), a blocker is added to its history referencing the dependent qint. | |
+| R17.4 | Blockers cleared on qubit deallocation (uncomputation) of the dependent qint, not on Python GC. Explicit notification mechanism. | |
+| R17.5 | No cancellation if active blockers exist after the last history entry. Operation added as normal entry instead. | |
+| R17.6 | `*= k` / `//= k` inverse cancellation deferred to future work. | |
 
 ### P1 — Should Have
 
@@ -160,6 +197,30 @@ General improvements to the existing codebase.
 - All sequences (including hardcoded) report non-zero gate counts that match actual gate content.
 - DAGNode.gate_count is populated from sequence data, not hardcoded to 0.
 
+### 5.0b In-Place Comparisons
+
+- `a < b` and `a > b` allocate at most 1 ancilla qubit (borrow bit), not 2×(n+1)-bit temporary copies.
+- Both operands are unchanged after comparison (statevector verification).
+- No history graph children created for comparison temporaries.
+- Gate count reduced compared to copy-based approach.
+- All existing comparison tests pass with identical results.
+
+### 5.0c Compiled Function Control Propagation
+
+- Calling a compiled function inside `with ctrl:` produces a different gate sequence than calling it uncontrolled.
+- A single cache entry contains both variants; replay does not re-capture.
+- Nested `with c1: with c2: f(x)` produces correct combined-controlled gates.
+- `opt=1` mode correctly handles controlled context.
+
+### 5.0d History Graph Inverse Cancellation
+
+- `a += 3; a -= 3` results in empty history for `a`.
+- `a ^= 5; a ^= 5` results in empty history for `a`.
+- `f(a); f.inverse(a)` results in empty history for `a`.
+- `a += 3; b += a; a -= 3` does NOT cancel (blocker from `b` is active).
+- `a += 3; b += a; del b; a -= 3` DOES cancel (blocker cleared on `b`'s deallocation).
+- No cancellation attempted for `*=` / `//=`.
+
 ### 5.1 Quantum Walk Rework
 
 - `ql.walk()` returns `(config, registers)` for use with `walk_step`. Detection via phase estimation is a future milestone.
@@ -192,7 +253,7 @@ General improvements to the existing codebase.
 
 ### Non-Goals
 
-- Quantum simulation beyond 17 qubits (hardware limitation, not a software goal).
+- Quantum simulation beyond 21 qubits (hardware limitation, not a software goal).
 - Execution on real quantum hardware (future milestone).
 - GUI or interactive interface.
 - Quantum advantage benchmarking (correctness first, performance later).
@@ -203,8 +264,9 @@ General improvements to the existing codebase.
 
 | Constraint | Impact |
 |------------|--------|
-| 17-qubit simulation ceiling | Cannot verify algorithms at scale via quantum simulation |
+| 21-qubit simulation ceiling | Cannot verify algorithms at scale via quantum simulation |
 | Division/modulo requires classical divisor | Limits some encoding strategies |
+| Arithmetic backend assumes contiguous registers | Split-register operations (qint + qbool as MSB) require backend extension for in-place comparisons |
 
 ---
 
@@ -255,7 +317,7 @@ Fixed correctness bugs discovered during review of the initial walk implementati
 - **Remove `walk.py`**: Deleted the deprecated `QWalkTree` class and all associated test files
 - **Rewrite `walk_search.py`**: `walk()` builds `WalkConfig` with `is_marked` and returns `(config, registers)`
 
-### Milestone 2c: Unify Diffusion Path *(current)*
+### Milestone 2c: Unify Diffusion Path *(completed)*
 
 Simplifies the walk implementation by removing the fixed-branching diffusion path and unifying on variable-branching diffusion as the single implementation:
 
@@ -263,6 +325,41 @@ Simplifies the walk implementation by removing the fixed-branching diffusion pat
 - **Marking on variable-branching path**: Remove the warning that marking is ignored in variable branching. Controlled XOR inside `with ~marked:` decomposes to Toffoli gates, which the framework handles natively. Wrap `_variable_diffusion` with `with ~marked:` in `_apply_local_diffusion`.
 - **Require `state`, `make_move`, `is_valid` in `walk()`**: These are no longer optional. Every walk needs a state register and move/validity callbacks. Simplifies the API and removes the three-way dispatch.
 - **Test consolidation**: Remove fixed-branching tests, update marking tests to use variable branching. Net LOC reduction in both implementation and tests.
+
+### Milestone 2d: DSL Purity & Simulate-Mode Cleanup *(completed)*
+
+- Removed all local `option('simulate', ...)` toggles from internal helpers
+- Implemented controlled-AND (`&` inside `with` blocks) via C-CCX decomposition
+- Replaced single-register `_flip_all` calls with `^= 1` / `~` DSL operators
+- Replaced recursive nested `with` patterns with flat `&`-chain + single `with combined:` block
+- Raised test qubit budget from 17 to 21
+
+### Milestone 3: In-Place Comparison Operators
+
+Replace copy-based `<`/`>`/`<=`/`>=` with borrow-ancilla pattern:
+
+- Extend arithmetic backend to support split-register subtraction/addition (qint + separate qbool as MSB)
+- Rewrite `__lt__` and `__gt__` in `qint_comparison.pxi` to use borrow-ancilla
+- Remove widened temporary copy logic and history graph child tracking for comparisons
+- Verify operand preservation and result correctness via statevector simulation
+
+### Milestone 4: Compiled Function Control Propagation
+
+Fix `@ql.compile` to correctly handle `with` block control context:
+
+- Single cache entry stores both uncontrolled and derived controlled gate sequences
+- `run_instruction` selects sequence at runtime based on control stack
+- Control qubit index mapped dynamically (gate sequences themselves are fixed)
+- Verify controlled vs uncontrolled produce different gate sequences with `simulate=True`
+
+### Milestone 5: History Graph Inverse Cancellation
+
+Detect and cancel manual uncomputation in the history graph:
+
+- Add blocker mechanism: source operand usage adds blockers referencing dependent qints
+- Blockers cleared on qubit deallocation (explicit notification, not Python GC)
+- Tail-only cancellation for `+=`/`-=`, `^=` self-inverse, `f()`/`f.inverse()` pairs
+- `*=`/`//=` deferred to future work
 
 ---
 

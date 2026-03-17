@@ -428,6 +428,11 @@ cdef class qint(circuit):
 			self.history = HistoryGraph()
 
 	@property
+	def qubits_allocated(self):
+		"""True if this qint still has live qubit assignments."""
+		return self.allocated_qubits
+
+	@property
 	def width(self):
 		"""Get the bit width of this quantum integer (read-only).
 

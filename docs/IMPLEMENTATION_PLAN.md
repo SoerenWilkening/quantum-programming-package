@@ -704,7 +704,7 @@ Fixed correctness bugs discovered during review of Phase 2:
 
 ---
 
-## Phase 2c — Unify Diffusion Path
+## Phase 2c — Unify Diffusion Path ✅
 
 The walk currently has two diffusion implementations:
 
@@ -748,7 +748,7 @@ Controlled XOR inside `with marked:` → each X gate becomes a CNOT, each CNOT b
 
 ---
 
-### Step 2c.1: Marking on Variable-Branching Path
+### Step 2c.1: Marking on Variable-Branching Path ✅
 
 **Goal**: Make marking work with variable-branching diffusion. Remove the warning
 that `is_marked` is ignored. Wrap `_variable_diffusion` with `with ~marked:`.
@@ -771,7 +771,7 @@ marking control — this is handled natively by the framework.
 
 ---
 
-### Step 2c.2: Remove Fixed Diffusion
+### Step 2c.2: Remove Fixed Diffusion ✅
 
 **Goal**: Delete `_fixed_diffusion`, `walk_diffusion_fixed`, and `_apply_fixed_diffusion`.
 Make `state`, `make_move`, `is_valid` required in `walk()`. Single diffusion path.
@@ -794,7 +794,7 @@ Make `state`, `make_move`, `is_valid` required in `walk()`. Single diffusion pat
 
 ---
 
-### Step 2c.3: Test Consolidation
+### Step 2c.3: Test Consolidation ✅
 
 **Goal**: Clean up test files after the fixed-branching removal. Merge or remove
 tests that are redundant now that there's a single diffusion path.
@@ -823,7 +823,7 @@ diffusion path, marking works with all walk configurations.
 
 ---
 
-## Phase 3 — DSL Purity & Simulate-Mode Cleanup
+## Phase 3 — DSL Purity & Simulate-Mode Cleanup ✅
 
 The `simulate` option is a **global setting** — internal helpers must never toggle it.
 Currently, `_flip_all` and `diffusion()` locally toggle `simulate=True`, creating a
@@ -837,7 +837,7 @@ takes ~0.2s (2M amplitudes), well within acceptable limits.
 
 ---
 
-### Step 3.1: Remove Local Simulate Toggles
+### Step 3.1: Remove Local Simulate Toggles ✅
 
 **Goal**: Remove all `option('simulate', True/False)` toggles from internal helpers.
 The `simulate` option is set globally by the user or test fixture. Internal code
@@ -858,7 +858,7 @@ budget assertions updated from 17 to 21 where needed.
 
 ---
 
-### Step 3.2: Controlled-AND Support
+### Step 3.2: Controlled-AND Support ✅
 
 **Goal**: Make the `&` operator on qbools work inside `with` blocks (controlled
 context). Currently raises `NotImplementedError: Controlled quantum-quantum AND
@@ -885,7 +885,7 @@ ancilla qubit.
 
 ---
 
-### Step 3.3: Replace _flip_all with Direct DSL Ops
+### Step 3.3: Replace _flip_all with Direct DSL Ops ✅
 
 **Goal**: Replace single-register `_flip_all(reg)` calls with `reg ^= 1` (for
 qbool) or `~reg` directly. Keep `_flip_all` only for multi-register convenience
@@ -902,7 +902,7 @@ qbool) or `~reg` directly. Keep `_flip_all` only for multi-register convenience
 
 ---
 
-### Step 3.4: Replace Recursive Nested `with` Patterns
+### Step 3.4: Replace Recursive Nested `with` Patterns ✅
 
 **Goal**: Replace `_nested_phase_flip` (diffusion.py) and `_apply_nested_with`
 (walk_diffusion.py) — both use recursive `with bits[idx]: _recurse(idx+1)` —
@@ -920,7 +920,7 @@ with combined: body()`.
 
 ---
 
-### Step 3.5: Update Qubit Budget Assertions
+### Step 3.5: Update Qubit Budget Assertions ✅
 
 **Goal**: Update all test assertions that enforce the 17-qubit limit to use 21.
 
@@ -953,3 +953,358 @@ sweep after the other changes land.
 
 **Future** (not in this phase): `qarray.all()` primitive to replace manual `&`-chain
 loops with internal AND-reduction.
+
+---
+
+## Phase 4 — In-Place Comparison Operators
+
+Replaces the copy-based `<`/`>` comparisons with an in-place borrow-ancilla pattern.
+Currently, `<` and `>` create (n+1)-bit temporary copies of both operands, perform
+subtraction on the copies, and extract the MSB. The new approach: allocate a single
+ancilla as a borrow bit, subtract in-place across `[a, ancilla]`, extract the result,
+add back to restore, deallocate the ancilla. No copies, one temporary ancilla.
+
+### Design Overview
+
+**Current** (copy-based):
+```
+temp_a = copy(a, width=n+1)     # CNOT copy, widened
+temp_b = copy(b, width=n+1)     # CNOT copy, widened
+temp_a -= temp_b                # subtraction on copies
+result = temp_a.msb             # extract sign
+# temp_a, temp_b linger as history children
+```
+
+**New** (borrow-ancilla):
+```
+ancilla = qbool()               # |0⟩, acts as bit n (borrow)
+(a, ancilla) -= b               # (n+1)-bit subtraction, ancilla captures borrow
+result ^= ancilla               # extract borrow into result
+(a, ancilla) += b               # restore a and ancilla
+# ancilla back to |0⟩, deallocate
+```
+
+**Prerequisite**: The C-level adder/subtractor must accept a split register
+(a qint's qubit array + a separate qbool qubit as the MSB). This requires
+extending the arithmetic backend.
+
+---
+
+### Step 4.1: Split-Register Arithmetic Backend
+
+**Goal**: Extend the C-level subtraction and addition to operate across a qint
+register plus an external qbool acting as the MSB. The subtractor/adder treats
+`[a_0..a_{n-1}, ancilla_qubit]` as an (n+1)-bit register.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `c_backend/include/types.h` | [MOD] Add `extra_msb_qubit` field to subtraction/addition parameters (or add a new function signature) | ~+5 |
+| `c_backend/src/hot_path_add.c` | [MOD] Add split-register variant of Toffoli subtractor that accepts an external MSB qubit index | ~+40 |
+| `c_backend/src/IntegerAddition.c` | [MOD] Add split-register variant for QFT-path subtractor | ~+30 |
+| `src/quantum_language/_core.pxd` | [MOD] Expose new C function signatures to Cython | ~+5 |
+
+**Tests** (`tests/c/test_split_register_arith.c` [NEW], ~150 LOC):
+- `test_split_sub_borrow_set` — `[3, 0] - 5` in 4-bit → ancilla = 1 (underflow)
+- `test_split_sub_no_borrow` — `[5, 0] - 3` in 4-bit → ancilla = 0
+- `test_split_add_restore` — sub then add restores original + ancilla to 0
+- `test_split_register_matches_widened` — results identical to full (n+1)-bit subtraction
+
+**DEP**: None
+
+---
+
+### Step 4.2: Rewrite `__lt__` and `__gt__`
+
+**Goal**: Replace copy-based comparison with borrow-ancilla pattern using the
+split-register arithmetic from Step 4.1.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/qint_comparison.pxi` | [MOD] Rewrite `__lt__` (CQ and QQ paths): allocate ancilla qbool, split-register subtraction, extract borrow, split-register addition to restore, deallocate ancilla. Remove CNOT copy logic and widened temporary creation. Same for `__gt__`. | ~-80, +50 |
+
+**Tests** (`tests/python/test_inplace_comparison.py` [NEW], ~200 LOC):
+- `test_lt_correctness` — exhaustive check for small widths (3-bit): all a < b pairs
+- `test_gt_correctness` — exhaustive check for small widths
+- `test_le_ge_derived` — `<=` and `>=` work via `~(>)` / `~(<)`
+- `test_operand_preservation` — both operands unchanged after comparison (statevector)
+- `test_no_history_children` — result qbool has no history children (no temporaries)
+- `test_ancilla_deallocated` — qubit count after comparison matches qubit count before + 1 (result only)
+- `test_comparison_in_with_block` — `with (a < b): c += 1` works correctly
+- `test_comparison_superposition` — comparison on superposition state produces correct amplitudes
+
+**DEP**: Step 4.1
+
+---
+
+### Step 4.3: Remove Widened Temporary Logic
+
+**Goal**: Clean up the old copy-based comparison code paths. Remove CNOT copy
+helpers if they were only used by comparisons.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/qint_comparison.pxi` | [MOD] Remove `_copy_to_widened` helper and related CNOT copy logic if unused elsewhere. Remove `history.add_child(temp_self)` / `history.add_child(temp_other)` patterns. | ~-60 |
+
+**Tests**: All existing comparison tests pass. No behavioral regression.
+
+**DEP**: Step 4.2
+
+---
+
+### Phase 4 Summary
+
+| Step | What | ~LOC delta | DEP |
+|------|------|------------|-----|
+| 4.1 | Split-register arithmetic backend | ~+80 | — |
+| 4.2 | Rewrite `__lt__` and `__gt__` | ~-30 | 4.1 |
+| 4.3 | Remove widened temporary logic | ~-60 | 4.2 |
+
+**Net**: ~-10 LOC implementation, significant qubit reduction per comparison.
+
+---
+
+## Phase 5 — Compiled Function Control Propagation
+
+Fixes the bug where `@ql.compile`-decorated functions don't correctly switch
+between controlled and uncontrolled gate sequences when called inside `with`
+blocks.
+
+### Design Overview
+
+**Current behavior** (broken):
+- Capture clears control stack → uncontrolled gates captured. ✓
+- `_derive_controlled_block` creates controlled variant. ✓
+- `run_instruction` does not select the correct variant at runtime. ✗
+- `opt=1` skips gate injection entirely, ignoring control context. ✗
+
+**Fixed behavior**:
+- Single cache entry stores both uncontrolled and derived controlled sequences.
+- `run_instruction` checks control stack at runtime → picks controlled or
+  uncontrolled sequence.
+- Control qubit index mapped dynamically to the actual control qubit (or
+  AND-ancilla for nested `with` blocks).
+- Gate sequences are fixed; only the qubit index mapping varies.
+
+---
+
+### Step 5.1: Unify Cache Entry with Both Sequences
+
+**Goal**: Modify the compiled function cache to store both uncontrolled and
+controlled gate sequences in a single entry. Remove `control_count` from the
+cache key (both variants live in the same entry).
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile.py` | [MOD] `CompiledBlock` stores `controlled_block` alongside uncontrolled. Cache key drops `control_count`. After capture, always derive controlled variant and attach to the same block. | ~+20, -10 |
+
+**Tests** (`tests/python/test_compile_control.py` [NEW], ~150 LOC):
+- `test_single_cache_entry` — calling f(x) then `with ctrl: f(x)` produces only one cache entry
+- `test_both_sequences_stored` — cache entry has both `.block` and `.controlled_block`
+- `test_cache_key_no_control_count` — cache key is the same for controlled and uncontrolled calls
+
+**DEP**: None
+
+---
+
+### Step 5.2: Runtime Sequence Selection in `run_instruction`
+
+**Goal**: `run_instruction` checks the control stack and selects the appropriate
+gate sequence (controlled or uncontrolled). Maps the control virtual index to
+the actual control qubit at runtime.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile.py` | [MOD] In `inject_remapped_gates` (replay path): check `_get_control_bool()`. If control active, use controlled block and map control virtual index → actual control qubit. Otherwise use uncontrolled block. | ~+25 |
+
+**Tests** (`tests/python/test_compile_control.py` [MOD]):
+- `test_controlled_different_gates` — `with ctrl: f(x)` produces more gates than `f(x)` (control adds gates)
+- `test_uncontrolled_replay` — replaying without control uses uncontrolled sequence
+- `test_controlled_replay` — replaying with control uses controlled sequence
+- `test_nested_with_compiled` — `with c1: with c2: f(x)` uses AND-ancilla as control qubit
+- `test_simulate_true_controlled` — with `simulate=True`, controlled call produces different circuit state
+
+**DEP**: Step 5.1
+
+---
+
+### Step 5.3: `opt=1` Control Context
+
+**Goal**: Ensure `opt=1` (DAG-only) mode respects control context. Even though
+`opt=1` skips `inject_remapped_gates` on replay, the DAG node should record
+whether the call was controlled, and the first (capture) call must handle
+control correctly.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile.py` | [MOD] In `opt=1` replay path: record control context in DAG node metadata. In capture path: ensure `simulate=True` calls inject the correct (controlled/uncontrolled) gates. | ~+15 |
+
+**Tests** (`tests/python/test_compile_dag_control.py` [NEW], ~100 LOC):
+- `test_opt1_dag_records_control` — DAG node metadata indicates controlled call
+- `test_opt1_capture_respects_control` — first call with `simulate=True` inside `with` block produces controlled gates
+
+**DEP**: Step 5.2
+
+---
+
+### Phase 5 Summary
+
+| Step | What | ~LOC delta | DEP |
+|------|------|------------|-----|
+| 5.1 | Unify cache entry with both sequences | ~+10 | — |
+| 5.2 | Runtime sequence selection | ~+25 | 5.1 |
+| 5.3 | `opt=1` control context | ~+15 | 5.2 |
+
+**Net**: ~+50 LOC implementation.
+
+---
+
+## Phase 6 — History Graph Inverse Cancellation
+
+Adds automatic detection and cancellation of manual uncomputation in the
+history graph, reducing unnecessary gate overhead when users explicitly reverse
+their own operations.
+
+### Design Overview
+
+**Core rule**: When an operation is appended to a qint's history, check if it is
+the exact inverse of the tail entry. If yes and no active blockers exist after
+that entry, cancel both (remove tail, skip append).
+
+**Blocker mechanism**: When a qint is used as a source operand (RHS of any
+operation), a blocker referencing the dependent qint is appended to the source
+qint's history. Blockers are cleared when the dependent qint's qubits are
+deallocated (uncomputed). This prevents incorrect cancellation when intermediate
+state has been read by other qints.
+
+---
+
+### Step 6.1: Blocker Data Structure
+
+**Goal**: Add a `Blocker` type to the history graph. Blockers hold a reference
+to the dependent qint and can be queried for liveness (is the dependent qint's
+qubits still allocated?).
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/history_graph.py` | [MOD] Add `Blocker` class with `dependent_ref` (reference to qint), `is_active` property (checks qubit allocation status). Add `add_blocker(dependent)` method to `HistoryGraph`. Add `active_blockers_after(index)` query. | ~+40 |
+
+**Tests** (`tests/python/test_history_blockers.py` [NEW], ~120 LOC):
+- `test_blocker_active_while_allocated` — blocker is active when dependent qint exists with qubits
+- `test_blocker_inactive_after_deallocation` — blocker becomes inactive after dependent's qubits deallocated
+- `test_add_blocker` — blocker added to history graph
+- `test_active_blockers_after` — query returns only blockers after given index
+- `test_multiple_blockers` — multiple blockers from different dependents
+
+**DEP**: None (builds on existing HistoryGraph)
+
+---
+
+### Step 6.2: Blocker Insertion on Source Operand Usage
+
+**Goal**: Every time a qint is used as a source operand (RHS of an operation),
+add a blocker to its history graph referencing the result/destination qint.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/qint_arithmetic.pxi` | [MOD] In `__add__`, `__sub__`, `__mul__`, `__iadd__`, `__isub__`, etc.: after operation, call `other.history.add_blocker(result)` for each source operand. | ~+25 |
+| `src/quantum_language/qint_comparison.pxi` | [MOD] In `__eq__`, `__lt__`, `__gt__`: add blockers to source operands. | ~+10 |
+| `src/quantum_language/qint_bitwise.pxi` | [MOD] In `__and__`, `__or__`, `__xor__`: add blockers to source operands. | ~+10 |
+
+**Tests** (`tests/python/test_blocker_insertion.py` [NEW], ~150 LOC):
+- `test_add_creates_blocker` — `b = a + c` adds blocker to `a` and `c`
+- `test_iadd_creates_blocker` — `a += b` adds blocker to `b` (not `a`, since `a` is modified)
+- `test_comparison_creates_blocker` — `r = (a < b)` adds blockers to `a` and `b`
+- `test_xor_creates_blocker` — `a ^= b` adds blocker to `b`
+- `test_no_self_blocker` — in-place operations don't add blocker to self
+
+**DEP**: Step 6.1
+
+---
+
+### Step 6.3: Qubit Deallocation Notification
+
+**Goal**: When a qint's qubits are deallocated (during uncomputation or
+explicit cleanup), notify all qints that have blockers referencing it. Blockers
+check qubit allocation status — no explicit notification list needed if the
+`is_active` check queries the qint's allocation state directly.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/history_graph.py` | [MOD] `Blocker.is_active` checks `dependent_ref.qubits_allocated` (or equivalent). No explicit notification needed if this is a live query. | ~+5 |
+| `src/quantum_language/qint.pyx` | [MOD] Add `qubits_allocated` property (True if qint has live qubit assignments). | ~+5 |
+
+**Tests** (`tests/python/test_blocker_lifecycle.py` [NEW], ~100 LOC):
+- `test_blocker_live_query` — blocker reports active/inactive based on real-time qubit state
+- `test_del_clears_blocker` — after `del b` (and GC/uncomputation), blocker on `a` becomes inactive
+- `test_with_exit_clears_blocker` — qbool uncomputed in `__exit__` clears its blockers
+
+**DEP**: Step 6.1
+
+---
+
+### Step 6.4: Tail-Only Inverse Cancellation
+
+**Goal**: In the history graph's append path, check if the new entry is the
+exact inverse of the tail entry. If yes and no active blockers after the tail,
+cancel both.
+
+**Inverse matching rules**:
+- Addition sequence ptr + subtraction sequence ptr with same qubit mapping → cancel
+- XOR with same operand and qubit mapping → cancel (self-inverse)
+- Compiled function sequence ptr + its adjoint sequence ptr → cancel
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/history_graph.py` | [MOD] Add `_is_inverse(entry_a, entry_b)` matcher. Modify `append()`: if tail exists and `_is_inverse(tail, new_entry)` and `not active_blockers_after(tail_index)`, pop tail and skip append. | ~+35 |
+
+**Tests** (`tests/python/test_inverse_cancellation.py` [NEW], ~200 LOC):
+- `test_add_sub_cancel` — `a += 3; a -= 3` → empty history
+- `test_sub_add_cancel` — `a -= 3; a += 3` → empty history
+- `test_xor_self_cancel` — `a ^= 5; a ^= 5` → empty history
+- `test_no_cancel_different_values` — `a += 3; a -= 5` → two entries
+- `test_no_cancel_with_blocker` — `a += 3; b += a; a -= 3` → no cancellation
+- `test_cancel_after_blocker_cleared` — `a += 3; b += a; del b; a -= 3` → cancels
+- `test_compiled_inverse_cancel` — `f(a); f.inverse(a)` → empty history
+- `test_no_cancel_non_tail` — `a += 3; a += 5; a -= 3` → three entries (not tail match)
+- `test_chain_cancellation` — `a += 3; a += 5; a -= 5; a -= 3` → each pair cancels in sequence → empty
+- `test_gate_count_reduction` — cancelled operations produce fewer gates in final circuit
+
+**DEP**: Steps 6.2, 6.3
+
+---
+
+### Step 6.5: Compiled Function Inverse Cancellation
+
+**Goal**: Extend inverse matching to recognize compiled function calls and their
+inverses. `f(a)` records a history entry with the function's sequence pointer;
+`f.inverse(a)` should recognize this as the inverse and cancel.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/history_graph.py` | [MOD] Extend `_is_inverse` to match forward/adjoint sequence pointer pairs. | ~+15 |
+| `src/quantum_language/compile.py` | [MOD] When `f.inverse(a)` is called, pass the forward sequence pointer to history so the matcher can identify the pair. | ~+10 |
+
+**Tests** (`tests/python/test_inverse_cancellation.py` [MOD]):
+- `test_compiled_fn_cancel` — `f(a); f.inverse(a)` → cancels
+- `test_compiled_fn_no_cancel_different_args` — `f(a); g.inverse(a)` → no cancel
+- `test_compiled_fn_blocker` — `f(a); b += a; f.inverse(a)` → no cancel
+
+**DEP**: Step 6.4
+
+---
+
+### Phase 6 Summary
+
+| Step | What | ~LOC delta | DEP |
+|------|------|------------|-----|
+| 6.1 | Blocker data structure | ~+40 | — |
+| 6.2 | Blocker insertion on source operand usage | ~+45 | 6.1 |
+| 6.3 | Qubit deallocation notification | ~+10 | 6.1 |
+| 6.4 | Tail-only inverse cancellation | ~+35 | 6.2, 6.3 |
+| 6.5 | Compiled function inverse cancellation | ~+25 | 6.4 |
+
+**Parallelizable**: Steps 6.2 and 6.3 are independent (both depend only on 6.1).
+
+**Net**: ~+155 LOC implementation, ~+570 LOC tests.
+
+**Future** (not in this phase): `*= k` / `//= k` inverse cancellation.
