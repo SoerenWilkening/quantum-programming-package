@@ -384,12 +384,12 @@ def _bbht_search(oracle, register_widths, max_attempts, predicate=None):
     if max_attempts is None:
         max_attempts = math.ceil(2 * math.log2(N))
 
-    # Warn when approaching the 17-qubit simulator limit
+    # Warn when approaching the 21-qubit simulator limit
     total_register_width = sum(register_widths)
-    if total_register_width > 14:
+    if total_register_width > 18:
         warnings.warn(
             f"Search register width sum ({total_register_width} qubits) is close to "
-            f"the 17-qubit simulator limit.  Ancilla overhead from predicate "
+            f"the 21-qubit simulator limit.  Ancilla overhead from predicate "
             f"evaluation may exceed the budget.",
             stacklevel=3,
         )

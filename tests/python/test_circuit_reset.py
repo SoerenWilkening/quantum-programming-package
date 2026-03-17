@@ -136,7 +136,7 @@ class TestCircuitReset:
         _keepalive = [a, b]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (max 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (max 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 4, f"Expected 4 (3+1), got {actual}"
 

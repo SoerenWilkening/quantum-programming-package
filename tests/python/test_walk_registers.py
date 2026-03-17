@@ -1,7 +1,7 @@
 """Tests for walk_registers: WalkRegisters allocation and management.
 
 Verifies register allocation, init_root() behavior, branch access, qubit
-counts, and cleanup.  All tests stay within the 17-qubit simulation limit.
+counts, and cleanup.  All tests stay within the 21-qubit simulation limit.
 
 Requirements from acceptance criteria:
 - Register allocation matches WalkConfig qubit counts
@@ -18,7 +18,6 @@ from qiskit_aer import AerSimulator
 import quantum_language as ql
 from quantum_language.walk_core import WalkConfig
 from quantum_language.walk_registers import WalkRegisters
-
 
 # ---------------------------------------------------------------------------
 # Simulation helpers
@@ -58,7 +57,7 @@ def _simulate_and_extract(qasm_str, num_qubits, result_start, result_width):
 
     msb_pos = num_qubits - result_start - result_width
     lsb_pos = num_qubits - 1 - result_start
-    result_bits = bitstring[msb_pos: lsb_pos + 1]
+    result_bits = bitstring[msb_pos : lsb_pos + 1]
     return int(result_bits, 2)
 
 
@@ -66,7 +65,7 @@ def _init_circuit():
     """Initialize a fresh circuit."""
     gc.collect()
     ql.circuit()
-    ql.option('simulate', True)
+    ql.option("simulate", True)
 
 
 # ---------------------------------------------------------------------------
@@ -184,7 +183,7 @@ class TestInitRoot:
         _keepalive = [regs.height, regs.branches, regs.count]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         sv = _simulate_statevector(qasm)
 
@@ -218,7 +217,7 @@ class TestInitRoot:
         _keepalive = [regs.height, regs.branches, regs.count]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         sv = _simulate_statevector(qasm)
         root_qbool = regs.height_qubit(cfg.max_depth)
@@ -249,12 +248,10 @@ class TestBranchesZeroed:
             _keepalive = [regs.height, regs.branches, regs.count]
             qasm = ql.to_openqasm()
             nq = _get_num_qubits(qasm)
-            assert nq <= 17
+            assert nq <= 21
 
             extracted = _simulate_and_extract(qasm, nq, br_start, br_width)
-            assert extracted == 0, (
-                f"Branch {i} should be 0, got {extracted}"
-            )
+            assert extracted == 0, f"Branch {i} should be 0, got {extracted}"
 
     def test_branches_zeroed_ternary_depth2(self):
         """Ternary depth 2: both 2-qubit branches measure 0."""
@@ -269,12 +266,10 @@ class TestBranchesZeroed:
             _keepalive = [regs.height, regs.branches, regs.count]
             qasm = ql.to_openqasm()
             nq = _get_num_qubits(qasm)
-            assert nq <= 17
+            assert nq <= 21
 
             extracted = _simulate_and_extract(qasm, nq, br_start, br_width)
-            assert extracted == 0, (
-                f"Branch {i} should be 0, got {extracted}"
-            )
+            assert extracted == 0, f"Branch {i} should be 0, got {extracted}"
 
 
 # ---------------------------------------------------------------------------
@@ -326,6 +321,7 @@ class TestHeightQubit:
     def test_height_qubit_returns_qbool(self):
         """height_qubit() returns qbool, not int."""
         from quantum_language.qbool import qbool
+
         _init_circuit()
         cfg = WalkConfig(max_depth=2, num_moves=2)
         regs = WalkRegisters(cfg)
@@ -346,8 +342,7 @@ class TestHeightQubit:
         _init_circuit()
         cfg = WalkConfig(max_depth=3, num_moves=2)
         regs = WalkRegisters(cfg)
-        qubits = [int(regs.height_qubit(d).qubits[63])
-                   for d in range(cfg.hw)]
+        qubits = [int(regs.height_qubit(d).qubits[63]) for d in range(cfg.hw)]
         assert len(set(qubits)) == cfg.hw
 
     def test_height_qubit_negative_raises(self):
@@ -486,7 +481,7 @@ class TestPostCleanupErrors:
 
 
 class TestQubitBudget:
-    """Verify register allocation stays within 17-qubit limit for test sizes."""
+    """Verify register allocation stays within 21-qubit limit for test sizes."""
 
     def test_binary_depth2_within_budget(self):
         _init_circuit()
@@ -496,7 +491,7 @@ class TestQubitBudget:
         _keepalive = [regs.height, regs.branches, regs.count]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
     def test_ternary_depth2_within_budget(self):
         _init_circuit()
@@ -506,7 +501,7 @@ class TestQubitBudget:
         _keepalive = [regs.height, regs.branches, regs.count]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
     def test_binary_depth3_within_budget(self):
         _init_circuit()
@@ -516,4 +511,4 @@ class TestQubitBudget:
         _keepalive = [regs.height, regs.branches, regs.count]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"

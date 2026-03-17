@@ -7,7 +7,7 @@ verifying:
 - walk_diffusion usable standalone
 - Custom walk via diffusion building block
 
-All circuits stay within the 17-qubit simulation limit.
+All circuits stay within the 21-qubit simulation limit.
 
 [Quantum_Assembly-nvx]
 """
@@ -32,7 +32,6 @@ from quantum_language.walk_operators import walk_step
 from quantum_language.walk_registers import WalkRegisters
 from quantum_language.walk_search import walk
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -42,7 +41,7 @@ def _init_circuit():
     """Initialize a fresh circuit."""
     gc.collect()
     ql.circuit()
-    ql.option('simulate', True)
+    ql.option("simulate", True)
 
 
 def _simulate_statevector(qasm_str):
@@ -76,7 +75,7 @@ def _simulate_and_extract(qasm_str, num_qubits, result_start, result_width):
 
     msb_pos = num_qubits - result_start - result_width
     lsb_pos = num_qubits - 1 - result_start
-    result_bits = bitstring[msb_pos:lsb_pos + 1]
+    result_bits = bitstring[msb_pos : lsb_pos + 1]
     return int(result_bits, 2)
 
 
@@ -87,12 +86,12 @@ def _simulate_and_extract(qasm_str, num_qubits, result_start, result_width):
 
 def _make_move_xor(state, move_idx):
     """Apply move by XORing state with (move_idx + 1)."""
-    state ^= (move_idx + 1)
+    state ^= move_idx + 1
 
 
 def _undo_move_xor(state, move_idx):
     """Undo XOR move (XOR is self-inverse)."""
-    state ^= (move_idx + 1)
+    state ^= move_idx + 1
 
 
 def _is_valid_nonzero_walk(state):
@@ -100,17 +99,21 @@ def _is_valid_nonzero_walk(state):
     return state != 0
 
 
-def _walk_with_state(is_marked, max_depth, num_moves, state_width=2,
-                     state_value=0, **kwargs):
+def _walk_with_state(is_marked, max_depth, num_moves, state_width=2, state_value=0, **kwargs):
     """Call walk() with required state/make_move/is_valid parameters.
 
     Creates a state register and calls walk(). Returns (config, regs, state).
     """
     state = ql.qint(state_value, width=state_width)
     config, regs = walk(
-        is_marked, max_depth, num_moves, state,
-        _make_move_xor, _is_valid_nonzero_walk,
-        undo_move=_undo_move_xor, **kwargs,
+        is_marked,
+        max_depth,
+        num_moves,
+        state,
+        _make_move_xor,
+        _is_valid_nonzero_walk,
+        undo_move=_undo_move_xor,
+        **kwargs,
     )
     return config, regs, state
 
@@ -181,7 +184,7 @@ class TestWalkReturnsConfigAndRegisters:
     """walk() returns (WalkConfig, WalkRegisters) with correct setup.
 
     Tree: max_depth=2, num_moves=2
-    Walk qubits: 3 height + 2 branch + 2 count = 7 <= 17
+    Walk qubits: 3 height + 2 branch + 2 count = 7 <= 21
     """
 
     def test_returns_tuple(self):
@@ -189,8 +192,12 @@ class TestWalkReturnsConfigAndRegisters:
         _init_circuit()
         state = ql.qint(0, width=2)
         result = walk(
-            lambda s: s == 0, 1, 1, state,
-            _make_move_xor, _is_valid_nonzero_walk,
+            lambda s: s == 0,
+            1,
+            1,
+            state,
+            _make_move_xor,
+            _is_valid_nonzero_walk,
             undo_move=_undo_move_xor,
         )
         assert isinstance(result, tuple)
@@ -200,7 +207,9 @@ class TestWalkReturnsConfigAndRegisters:
         """First element is WalkConfig."""
         _init_circuit()
         config, _, _ = _walk_with_state(
-            _sat_2var_satisfiable, max_depth=1, num_moves=1,
+            _sat_2var_satisfiable,
+            max_depth=1,
+            num_moves=1,
         )
         assert isinstance(config, WalkConfig)
 
@@ -208,7 +217,9 @@ class TestWalkReturnsConfigAndRegisters:
         """Second element is WalkRegisters."""
         _init_circuit()
         _, regs, _ = _walk_with_state(
-            _sat_2var_satisfiable, max_depth=1, num_moves=1,
+            _sat_2var_satisfiable,
+            max_depth=1,
+            num_moves=1,
         )
         assert isinstance(regs, WalkRegisters)
 
@@ -216,7 +227,9 @@ class TestWalkReturnsConfigAndRegisters:
         """Config has is_marked set to the SAT predicate."""
         _init_circuit()
         config, _, _ = _walk_with_state(
-            _sat_2var_satisfiable, max_depth=1, num_moves=1,
+            _sat_2var_satisfiable,
+            max_depth=1,
+            num_moves=1,
         )
         assert config.is_marked is _sat_2var_satisfiable
 
@@ -224,7 +237,9 @@ class TestWalkReturnsConfigAndRegisters:
         """Config has correct max_depth and num_moves."""
         _init_circuit()
         config, _, _ = _walk_with_state(
-            _sat_2var_satisfiable, max_depth=1, num_moves=1,
+            _sat_2var_satisfiable,
+            max_depth=1,
+            num_moves=1,
         )
         assert config.max_depth == 1
         assert config.num_moves == 1
@@ -233,10 +248,13 @@ class TestWalkReturnsConfigAndRegisters:
         """Registers are initialized at root (init_root already called)."""
         _init_circuit()
         _, regs, _ = _walk_with_state(
-            _sat_2var_satisfiable, max_depth=1, num_moves=1,
+            _sat_2var_satisfiable,
+            max_depth=1,
+            num_moves=1,
         )
         # init_root was already called, so calling again should raise
         import pytest
+
         with pytest.raises(RuntimeError, match="init_root.*already"):
             regs.init_root()
 
@@ -244,10 +262,12 @@ class TestWalkReturnsConfigAndRegisters:
         """Walk uses reasonable number of qubits."""
         _init_circuit()
         config, _, _ = _walk_with_state(
-            _sat_2var_satisfiable, max_depth=1, num_moves=1,
+            _sat_2var_satisfiable,
+            max_depth=1,
+            num_moves=1,
         )
         total = config.total_walk_qubits()
-        assert total <= 17, f"Walk uses {total} qubits"
+        assert total <= 21, f"Walk uses {total} qubits"
 
 
 # ---------------------------------------------------------------------------
@@ -264,26 +284,28 @@ class TestWalkStepWithMarking:
     def test_walk_step_preserves_norm(self):
         """walk_step on walk() output preserves statevector norm.
 
-        Qubits: 7 <= 17
+        Qubits: 7 <= 21
         """
         _init_circuit()
         config, regs, _state = _walk_with_state(
-            lambda s: s == 0, max_depth=1, num_moves=1,
+            lambda s: s == 0,
+            max_depth=1,
+            num_moves=1,
         )
         walk_step(config, regs)
 
         qasm = ql.to_openqasm()
         sv = _simulate_statevector(qasm)
         norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"Walk step should preserve norm, got {norm}"
-        )
+        assert abs(norm - 1.0) < 1e-6, f"Walk step should preserve norm, got {norm}"
 
     def test_multiple_walk_steps_preserve_norm(self):
         """Multiple walk steps preserve norm."""
         _init_circuit()
         config, regs, _state = _walk_with_state(
-            _sat_single_solution, max_depth=1, num_moves=1,
+            _sat_single_solution,
+            max_depth=1,
+            num_moves=1,
         )
         for _ in range(3):
             walk_step(config, regs)
@@ -292,9 +314,7 @@ class TestWalkStepWithMarking:
         qasm = ql.to_openqasm()
         sv = _simulate_statevector(qasm)
         norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"Multiple walk steps should preserve norm, got {norm}"
-        )
+        assert abs(norm - 1.0) < 1e-6, f"Multiple walk steps should preserve norm, got {norm}"
 
     def test_walk_step_emits_gates(self):
         """walk_step on walk() output emits gates (non-trivial).
@@ -303,28 +323,28 @@ class TestWalkStepWithMarking:
         """
         _init_circuit()
         config, regs, _state = _walk_with_state(
-            lambda s: s == 0, max_depth=1, num_moves=1,
+            lambda s: s == 0,
+            max_depth=1,
+            num_moves=1,
         )
         qasm_before = ql.to_openqasm()
         walk_step(config, regs)
         qasm_after = ql.to_openqasm()
-        assert len(qasm_after) > len(qasm_before), (
-            "walk_step should emit gates (QASM should grow)"
-        )
+        assert len(qasm_after) > len(qasm_before), "walk_step should emit gates (QASM should grow)"
 
     def test_never_marked_preserves_norm(self):
         """Config with never-marking predicate preserves norm."""
         _init_circuit()
         config, regs, _state = _walk_with_state(
-            lambda s: s != s, max_depth=1, num_moves=1,
+            lambda s: s != s,
+            max_depth=1,
+            num_moves=1,
         )
         walk_step(config, regs)
         _keepalive = [_state]
         sv = _simulate_statevector(ql.to_openqasm())
         norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"Walk with never-marking should preserve norm, got {norm}"
-        )
+        assert abs(norm - 1.0) < 1e-6, f"Walk with never-marking should preserve norm, got {norm}"
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +359,9 @@ class TestWalkEdgeCases:
         """walk() accepts custom max_iterations without error."""
         _init_circuit()
         config, _, _ = _walk_with_state(
-            lambda s: s == 0, max_depth=1, num_moves=1,
+            lambda s: s == 0,
+            max_depth=1,
+            num_moves=1,
             max_iterations=1,
         )
         assert isinstance(config, WalkConfig)
@@ -352,12 +374,12 @@ class TestWalkEdgeCases:
 
 def _make_move_flip(state, move_idx):
     """Move function: XOR state with (move_idx + 1)."""
-    state ^= (move_idx + 1)
+    state ^= move_idx + 1
 
 
 def _undo_move_flip(state, move_idx):
     """Undo XOR move (XOR is self-inverse)."""
-    state ^= (move_idx + 1)
+    state ^= move_idx + 1
 
 
 def _is_valid_nonzero(state):
@@ -377,12 +399,15 @@ class TestWalkDiffusionStandalone:
 
         state=1, 2-bit width, num_moves=2.
         Qubits: 2 (state) + 1 (pf) + 1 (branch) + 2 (count) + 2 (validity)
-               = 8 <= 17
+               = 8 <= 21
         """
         _init_circuit()
         state = ql.qint(1, width=2)
         walk_diffusion(
-            state, _make_move_flip, _is_valid_nonzero, 2,
+            state,
+            _make_move_flip,
+            _is_valid_nonzero,
+            2,
             undo_move=_undo_move_flip,
         )
 
@@ -392,24 +417,30 @@ class TestWalkDiffusionStandalone:
         gc_before = ql.get_gate_count()
         state = ql.qint(1, width=2)
         walk_diffusion(
-            state, _make_move_flip, _is_valid_nonzero, 2,
+            state,
+            _make_move_flip,
+            _is_valid_nonzero,
+            2,
             undo_move=_undo_move_flip,
         )
         gc_after = ql.get_gate_count()
         assert gc_after > gc_before, "walk_diffusion should emit gates"
 
     def test_standalone_diffusion_within_budget(self):
-        """walk_diffusion circuit stays within 17-qubit budget."""
+        """walk_diffusion circuit stays within 21-qubit budget."""
         _init_circuit()
         state = ql.qint(0, width=2)
         walk_diffusion(
-            state, _make_move_flip, _is_valid_nonzero, 2,
+            state,
+            _make_move_flip,
+            _is_valid_nonzero,
+            2,
             undo_move=_undo_move_flip,
         )
         _keepalive = [state]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
     def test_standalone_diffusion_preserves_state(self):
         """walk_diffusion preserves user's state register value.
@@ -421,7 +452,10 @@ class TestWalkDiffusionStandalone:
         _init_circuit()
         state = ql.qint(5, width=4)
         walk_diffusion(
-            state, _make_move_flip, _is_valid_nonzero, 1,
+            state,
+            _make_move_flip,
+            _is_valid_nonzero,
+            1,
             undo_move=_undo_move_flip,
         )
         state_start = state.allocated_start
@@ -429,51 +463,58 @@ class TestWalkDiffusionStandalone:
         _keepalive = [state]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17
+        assert nq <= 21
 
         extracted = _simulate_and_extract(
-            qasm, nq, state_start, state_width,
+            qasm,
+            nq,
+            state_start,
+            state_width,
         )
-        assert extracted == 5, (
-            f"State should be preserved at 5, got {extracted}"
-        )
+        assert extracted == 5, f"State should be preserved at 5, got {extracted}"
 
     def test_standalone_diffusion_valid_statevector(self):
         """walk_diffusion produces a normalized statevector."""
         _init_circuit()
         state = ql.qint(1, width=2)
         walk_diffusion(
-            state, _make_move_flip, _is_valid_nonzero, 2,
+            state,
+            _make_move_flip,
+            _is_valid_nonzero,
+            2,
             undo_move=_undo_move_flip,
         )
         _keepalive = [state]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17
+        assert nq <= 21
 
         sv = _simulate_statevector(qasm)
         norm = np.linalg.norm(sv)
-        assert abs(norm - 1.0) < 1e-6, (
-            f"Statevector norm should be 1.0, got {norm}"
-        )
+        assert abs(norm - 1.0) < 1e-6, f"Statevector norm should be 1.0, got {norm}"
 
     def test_standalone_diffusion_with_root_flag(self):
         """walk_diffusion accepts is_root=True without error."""
         _init_circuit()
         state = ql.qint(0, width=2)
         walk_diffusion(
-            state, _make_move_flip, _is_valid_nonzero, 2,
+            state,
+            _make_move_flip,
+            _is_valid_nonzero,
+            2,
             undo_move=_undo_move_flip,
-            max_depth=2, is_root=True,
+            max_depth=2,
+            is_root=True,
         )
         _keepalive = [state]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17
+        assert nq <= 21
 
     def test_standalone_diffusion_importable_from_ql(self):
         """walk_diffusion is importable from quantum_language top level."""
         from quantum_language import walk_diffusion as wd
+
         assert callable(wd)
 
 
@@ -496,7 +537,7 @@ class TestCustomWalkViaDiffusion:
         variable branching (predicate-based).
 
         Qubits: 4 (state) + 1 (pf) + 1 (branch) + 1 (count) + 1 (validity)
-               = 8 <= 17
+               = 8 <= 21
         """
         _init_circuit()
         state = ql.qint(5, width=4)
@@ -506,7 +547,8 @@ class TestCustomWalkViaDiffusion:
         br = ql.qint(0, width=bw)
 
         config = WalkConfig(
-            max_depth=1, num_moves=num_moves,
+            max_depth=1,
+            num_moves=num_moves,
             make_move=_make_move_flip,
             undo_move=_undo_move_flip,
             is_valid=_is_valid_nonzero,
@@ -518,7 +560,7 @@ class TestCustomWalkViaDiffusion:
         _keepalive = [state, pf, br]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         sv = _simulate_statevector(qasm)
         norm = np.linalg.norm(sv)
@@ -533,7 +575,7 @@ class TestCustomWalkViaDiffusion:
         After D^2, the state register should still read 2 (the initial
         value), verifying the diffusion is a reflection.
 
-        Qubits: <= 17
+        Qubits: <= 21
         """
         _init_circuit()
         state = ql.qint(2, width=3)
@@ -543,7 +585,8 @@ class TestCustomWalkViaDiffusion:
         br = ql.qint(0, width=bw)
 
         config = WalkConfig(
-            max_depth=1, num_moves=num_moves,
+            max_depth=1,
+            num_moves=num_moves,
             make_move=_make_move_flip,
             undo_move=_undo_move_flip,
             is_valid=_is_valid_nonzero,
@@ -559,14 +602,15 @@ class TestCustomWalkViaDiffusion:
         _keepalive = [state, pf, br]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17
+        assert nq <= 21
 
         extracted = _simulate_and_extract(
-            qasm, nq, state_start, state_width,
+            qasm,
+            nq,
+            state_start,
+            state_width,
         )
-        assert extracted == 2, (
-            f"State should be preserved at 2 after D^2, got {extracted}"
-        )
+        assert extracted == 2, f"State should be preserved at 2 after D^2, got {extracted}"
 
 
 # ---------------------------------------------------------------------------
@@ -583,7 +627,9 @@ class TestEndToEndScenarios:
         for _ in range(3):
             _init_circuit()
             c, _, _ = _walk_with_state(
-                lambda s: s == 0, max_depth=1, num_moves=1,
+                lambda s: s == 0,
+                max_depth=1,
+                num_moves=1,
             )
             results.append((c.max_depth, c.num_moves))
         assert all(r == results[0] for r in results)
@@ -592,6 +638,7 @@ class TestEndToEndScenarios:
         """Both walk and walk_diffusion importable from quantum_language."""
         from quantum_language import walk as w
         from quantum_language import walk_diffusion as wd
+
         assert callable(w)
         assert callable(wd)
 
@@ -605,13 +652,18 @@ class TestEndToEndScenarios:
         _init_circuit()
         state = ql.qint(1, width=2)
         walk_diffusion(
-            state, _make_move_flip, _is_valid_nonzero, 2,
+            state,
+            _make_move_flip,
+            _is_valid_nonzero,
+            2,
             undo_move=_undo_move_flip,
         )
 
         # Now run walk() on a new circuit
         _init_circuit()
         config, _, _ = _walk_with_state(
-            lambda s: s == 0, max_depth=1, num_moves=1,
+            lambda s: s == 0,
+            max_depth=1,
+            num_moves=1,
         )
         assert isinstance(config, WalkConfig)

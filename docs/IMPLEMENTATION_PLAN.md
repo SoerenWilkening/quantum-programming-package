@@ -398,7 +398,7 @@ ql.walk_diffusion(state, make_move, is_valid, num_moves=m)
 2. Conditional rotation: Montanaro angles based on count, include parent/self for backflow
 3. Apply chosen move: controlled on branch register value
 
-**Qubit budget for tests** (must fit ≤ 17 qubits):
+**Qubit budget for tests** (must fit ≤ 21 qubits):
 - 2 binary variables, ternary encoding: 2×2=4 state + 2 branch + 3 height + 2 count = 11 qubits
 - 3 binary variables: 3×2=6 state + 3 branch + 4 height + 2 count = 15 qubits
 
@@ -820,3 +820,136 @@ tests that are redundant now that there's a single diffusion path.
 
 **Net result**: ~90 LOC implementation reduction, ~300 LOC test reduction, single
 diffusion path, marking works with all walk configurations.
+
+---
+
+## Phase 3 — DSL Purity & Simulate-Mode Cleanup
+
+The `simulate` option is a **global setting** — internal helpers must never toggle it.
+Currently, `_flip_all` and `diffusion()` locally toggle `simulate=True`, creating a
+"mixed simulate mode" that masks bugs and prevents clean DSL replacements.
+
+This phase removes all local toggles, adds controlled-AND support, and replaces
+remaining raw gate patterns with pure DSL operations.
+
+**Qubit budget**: Raised from 17 to 21. Verified: 21-qubit statevector simulation
+takes ~0.2s (2M amplitudes), well within acceptable limits.
+
+---
+
+### Step 3.1: Remove Local Simulate Toggles
+
+**Goal**: Remove all `option('simulate', True/False)` toggles from internal helpers.
+The `simulate` option is set globally by the user or test fixture. Internal code
+must not care about it — if `simulate=False`, ALL operations skip gate storage
+(not just selected ones).
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/diffusion.py` | [MOD] Remove simulate toggle from `_flip_all`. Remove simulate toggle from `diffusion()` wrapper. | ~-15 |
+| `tests/python/test_walk_marking.py` | [MOD] Add `ql.option('simulate', True)` to `_init_circuit()`. | +1 |
+| `tests/python/test_walk_search.py` | [MOD] Add `ql.option('simulate', True)` to `_init_circuit()`. | +1 |
+| `tests/python/test_walk_operators_fn.py` | [MOD] Add `ql.option('simulate', True)` to `_init_circuit()`. | +1 |
+
+**Tests**: All existing walk tests pass with simulate=True set globally. Qubit
+budget assertions updated from 17 to 21 where needed.
+
+**DEP**: None
+
+---
+
+### Step 3.2: Controlled-AND Support
+
+**Goal**: Make the `&` operator on qbools work inside `with` blocks (controlled
+context). Currently raises `NotImplementedError: Controlled quantum-quantum AND
+not yet supported`.
+
+**Implementation**: In `__and__` (qint_bitwise.pxi), when inside a controlled
+context (`_get_controlled()` returns True), decompose the controlled Toffoli
+(C-CCX) into standard Toffolis + ancilla. The C-CCX gate (4-qubit: 1 control
+on the AND, 2 inputs, 1 output) decomposes into 3 standard Toffolis with one
+ancilla qubit.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/qint_bitwise.pxi` | [MOD] Add controlled-AND path in `__and__`: detect controlled context, decompose C-CCX into Toffolis + ancilla. | ~+30 |
+
+**Tests** (`tests/python/test_controlled_and.py` [NEW], ~100 LOC):
+- `test_and_outside_with` — `a & b` works as before (no regression)
+- `test_and_inside_with` — `with ctrl: c = a & b` produces correct result
+- `test_and_nested_with` — `with c1: with c2: d = a & b` (double-controlled AND)
+- `test_and_chain_inside_with` — `with ctrl: combined = a & b & c` (chained)
+- `test_controlled_and_statevector` — verify correct amplitudes via simulation
+
+**DEP**: None (parallel with Step 3.1)
+
+---
+
+### Step 3.3: Replace _flip_all with Direct DSL Ops
+
+**Goal**: Replace single-register `_flip_all(reg)` calls with `reg ^= 1` (for
+qbool) or `~reg` directly. Keep `_flip_all` only for multi-register convenience
+(without simulate toggle).
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/walk_operators.py` | [MOD] Replace `_flip_all(marked)` with `marked ^= 1` (2 call sites). Remove `_flip_all` import. | ~-2 |
+| `src/quantum_language/walk_branching.py` | [MOD] Replace `_flip_all(target_w)` with `target_w ^= 1` in no-controls paths of `_multi_controlled_ry` and `_multi_controlled_x`. Keep `_flip_all` in controlled paths (inside `with` blocks) until controlled-XOR is supported. | ~-4 |
+
+**Tests**: All walk tests pass. Qubit budget limits updated to 21.
+
+**DEP**: Step 3.1 (simulate toggles removed first)
+
+---
+
+### Step 3.4: Replace Recursive Nested `with` Patterns
+
+**Goal**: Replace `_nested_phase_flip` (diffusion.py) and `_apply_nested_with`
+(walk_diffusion.py) — both use recursive `with bits[idx]: _recurse(idx+1)` —
+with flat `&`-chain pattern: `combined = bits[0]; for b in bits[1:]: combined &= b;
+with combined: body()`.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/diffusion.py` | [MOD] Replace `_nested_phase_flip` body with `&`-chain + `with combined: target.phase += pi`. | ~-5 |
+| `src/quantum_language/walk_diffusion.py` | [MOD] Replace `_apply_nested_with` body with `&`-chain + `with combined: body_fn()`. | ~-10 |
+
+**Tests**: Existing diffusion and walk diffusion tests verify correctness (D²=I).
+
+**DEP**: Step 3.2 (controlled-AND must work inside `with` blocks)
+
+---
+
+### Step 3.5: Update Qubit Budget Assertions
+
+**Goal**: Update all test assertions that enforce the 17-qubit limit to use 21.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `tests/python/test_walk_marking.py` | [MOD] Update qubit budget assertions from 17 to 21. | ~+2 |
+| `tests/python/test_walk_operators_fn.py` | [MOD] Update qubit budget assertions from 17 to 21. | ~+2 |
+| `tests/python/test_walk_search.py` | [MOD] Update qubit budget assertions from 17 to 21. | ~+2 |
+| `tests/python/test_walk_local_diffusion.py` | [MOD] Update qubit budget assertions from 17 to 21. | ~+2 |
+
+**Tests**: All qubit budget tests pass with new limit.
+
+**DEP**: Steps 3.1, 3.3 (simulate cleanup may change qubit counts)
+
+---
+
+### Phase 3 Summary
+
+| Step | What | ~LOC delta | DEP |
+|------|------|------------|-----|
+| 3.1 | Remove local simulate toggles | ~-15 | — |
+| 3.2 | Controlled-AND support | ~+30 | — |
+| 3.3 | Replace `_flip_all` with `^= 1` / `~` | ~-6 | 3.1 |
+| 3.4 | Replace recursive nested `with` | ~-15 | 3.2 |
+| 3.5 | Update qubit budget to 21 | ~+8 | 3.1, 3.3 |
+
+**Parallelizable**: Steps 3.1 and 3.2 are independent and can proceed in parallel.
+Steps 3.3 and 3.4 follow their respective prerequisites. Step 3.5 is a final
+sweep after the other changes land.
+
+**Future** (not in this phase): `qarray.all()` primitive to replace manual `&`-chain
+loops with internal AND-reduction.

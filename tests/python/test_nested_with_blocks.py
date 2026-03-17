@@ -16,7 +16,7 @@ Single-level conditional tests are included as regression baselines to ensure
 the non-nested path remains functional (CTRL-05).
 
 Uses direct simulation via Qiskit AerSimulator to verify results.
-All tests use qbool(True/False) conditions to stay under 17-qubit limit.
+All tests use qbool(True/False) conditions to stay under 21-qubit limit.
 
 Requirements: CTRL-01, CTRL-04, CTRL-05
 """
@@ -142,7 +142,7 @@ class TestNestedWithBlocks:
     producing an AND-ancilla that becomes the active control. This ensures
     inner operations are controlled on (outer AND inner).
 
-    All tests use direct qbool(True/False) values to stay under 17-qubit
+    All tests use direct qbool(True/False) values to stay under 21-qubit
     simulation limit (~5-6 qubits per test).
     """
 
@@ -355,7 +355,7 @@ class TestThreeLevelNesting:
     controlled operations). 4-level nesting produces 3 AND-ancillas.
 
     All tests use qbool(True/False) conditions and 2-bit result registers
-    to stay well under 17-qubit simulation limit.
+    to stay well under 21-qubit simulation limit.
 
     Qubit budgets:
     - 3-level: 3 conds + 2 result + 2 AND-ancillas = 7 qubits
@@ -388,7 +388,7 @@ class TestThreeLevelNesting:
         _keepalive = [c1, c2, c3, result]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 3, f"Expected 3 (1+2), got {actual}"
 
@@ -533,7 +533,7 @@ class TestThreeLevelNesting:
         _keepalive = [c1, c2, c3, c4, result]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 1, f"Expected 1 (4-level all true), got {actual}"
 

@@ -2,7 +2,7 @@
 
 Verifies the apply-check-undo counting loop operates correctly in both
 computational basis states and superposition.  All tests stay within the
-17-qubit simulation limit.
+21-qubit simulation limit.
 
 Requirements from acceptance criteria:
 - All-valid state -> count == num_moves
@@ -23,7 +23,6 @@ from quantum_language.walk_counting import (
     count_valid_children,
     uncount_valid_children,
 )
-
 
 # ---------------------------------------------------------------------------
 # Simulation helpers
@@ -53,7 +52,7 @@ def _simulate_and_extract(qasm_str, num_qubits, result_start, result_width):
     # Qiskit bitstring: position i = qubit (N-1-i)
     msb_pos = num_qubits - result_start - result_width
     lsb_pos = num_qubits - 1 - result_start
-    result_bits = bitstring[msb_pos: lsb_pos + 1]
+    result_bits = bitstring[msb_pos : lsb_pos + 1]
     return int(result_bits, 2)
 
 
@@ -61,7 +60,7 @@ def _init_circuit():
     """Initialize a fresh circuit with simulate=True for gate storage."""
     gc.collect()
     ql.circuit()
-    ql.option('simulate', True)
+    ql.option("simulate", True)
 
 
 # ---------------------------------------------------------------------------
@@ -74,22 +73,22 @@ def _init_circuit():
 
 def _make_move_xor(state, move_idx):
     """Apply move by XORing state with (move_idx + 1)."""
-    state ^= (move_idx + 1)
+    state ^= move_idx + 1
 
 
 def _undo_move_xor(state, move_idx):
     """Undo XOR move (XOR is self-inverse)."""
-    state ^= (move_idx + 1)
+    state ^= move_idx + 1
 
 
 def _make_move_add(state, move_idx):
     """Apply move by adding (move_idx + 1)."""
-    state += (move_idx + 1)
+    state += move_idx + 1
 
 
 def _undo_move_add(state, move_idx):
     """Undo addition move by subtraction."""
-    state -= (move_idx + 1)
+    state -= move_idx + 1
 
 
 def _is_valid_always(state):
@@ -123,8 +122,10 @@ class TestValidation:
         _init_circuit()
         state = ql.qint(0, width=2)
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
-            is_valid=_is_valid_always, state=state,
+            max_depth=1,
+            num_moves=2,
+            is_valid=_is_valid_always,
+            state=state,
         )
         count_reg = ql.qint(0, width=count_width(2))
         with pytest.raises(ValueError, match="make_move must not be None"):
@@ -134,7 +135,8 @@ class TestValidation:
         _init_circuit()
         state = ql.qint(0, width=2)
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             state=state,
@@ -146,7 +148,8 @@ class TestValidation:
     def test_rejects_missing_state(self):
         _init_circuit()
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_always,
@@ -164,7 +167,8 @@ class TestValidation:
         _init_circuit()
         state = ql.qint(0, width=2)
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=_make_move_xor,
             is_valid=_is_valid_always,
             state=state,
@@ -190,7 +194,8 @@ class TestCountAllValid:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_always,
@@ -203,7 +208,7 @@ class TestCountAllValid:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, count_start, cw)
         assert extracted == 2, f"Expected count=2 (all valid), got {extracted}"
@@ -216,7 +221,8 @@ class TestCountAllValid:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=3,
+            max_depth=1,
+            num_moves=3,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_always,
@@ -229,7 +235,7 @@ class TestCountAllValid:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, count_start, cw)
         assert extracted == 3, f"Expected count=3 (all valid), got {extracted}"
@@ -251,7 +257,8 @@ class TestCountNoneValid:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_never,
@@ -264,7 +271,7 @@ class TestCountNoneValid:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, count_start, cw)
         assert extracted == 0, f"Expected count=0 (none valid), got {extracted}"
@@ -291,7 +298,8 @@ class TestCountPartialValid:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_nonzero,
@@ -304,7 +312,7 @@ class TestCountPartialValid:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, count_start, cw)
         assert extracted == 1, f"Expected count=1 (1 of 2 valid), got {extracted}"
@@ -323,7 +331,8 @@ class TestCountPartialValid:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=3,
+            max_depth=1,
+            num_moves=3,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_nonzero,
@@ -336,7 +345,7 @@ class TestCountPartialValid:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, count_start, cw)
         assert extracted == 2, f"Expected count=2 (2 of 3 valid), got {extracted}"
@@ -354,7 +363,8 @@ class TestCountPartialValid:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=_make_move_add,
             undo_move=_undo_move_add,
             is_valid=_is_valid_nonzero,
@@ -367,7 +377,7 @@ class TestCountPartialValid:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, count_start, cw)
         assert extracted == 2, f"Expected count=2 (both additions nonzero), got {extracted}"
@@ -392,7 +402,8 @@ class TestStateRestored:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=_make_move_add,
             undo_move=_undo_move_add,
             is_valid=_is_valid_always,
@@ -406,7 +417,7 @@ class TestStateRestored:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, state_start, state_width)
         assert extracted == 5, f"State should be unchanged at 5, got {extracted}"
@@ -419,7 +430,8 @@ class TestStateRestored:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_always,
@@ -433,7 +445,7 @@ class TestStateRestored:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, state_start, state_width)
         assert extracted == 3, f"State should be unchanged at 3, got {extracted}"
@@ -455,7 +467,8 @@ class TestUncount:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_always,
@@ -469,12 +482,10 @@ class TestUncount:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, count_start, cw)
-        assert extracted == 0, (
-            f"Count + uncount should leave count_reg at 0, got {extracted}"
-        )
+        assert extracted == 0, f"Count + uncount should leave count_reg at 0, got {extracted}"
 
     def test_uncount_restores_state_and_count(self):
         """count + uncount restores both state and count register.
@@ -488,7 +499,8 @@ class TestUncount:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_always,
@@ -504,17 +516,13 @@ class TestUncount:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         state_val = _simulate_and_extract(qasm, nq, state_start, state_width)
         count_val = _simulate_and_extract(qasm, nq, count_start, cw)
 
-        assert state_val == 3, (
-            f"State should be restored to 3, got {state_val}"
-        )
-        assert count_val == 0, (
-            f"Count should be restored to 0, got {count_val}"
-        )
+        assert state_val == 3, f"State should be restored to 3, got {state_val}"
+        assert count_val == 0, f"Count should be restored to 0, got {count_val}"
 
 
 # ---------------------------------------------------------------------------
@@ -536,7 +544,7 @@ class TestAdjointFallback:
 
         @ql.compile(inverse=True, opt=0)
         def move_xor(state, move_idx):
-            state ^= (move_idx + 1)
+            state ^= move_idx + 1
             return state
 
         state = ql.qint(0, width=2)
@@ -544,7 +552,8 @@ class TestAdjointFallback:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=move_xor,
             # undo_move intentionally omitted -- uses .adjoint fallback
             is_valid=_is_valid_always,
@@ -557,12 +566,10 @@ class TestAdjointFallback:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, count_start, cw)
-        assert extracted == 2, (
-            f"Adjoint fallback: expected count=2 (all valid), got {extracted}"
-        )
+        assert extracted == 2, f"Adjoint fallback: expected count=2 (all valid), got {extracted}"
 
 
 # ---------------------------------------------------------------------------
@@ -581,7 +588,8 @@ class TestBoundary:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=1,
+            max_depth=1,
+            num_moves=1,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_always,
@@ -594,7 +602,7 @@ class TestBoundary:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, count_start, cw)
         assert extracted == 1, f"Expected count=1 (1 move, valid), got {extracted}"
@@ -607,7 +615,8 @@ class TestBoundary:
         count_reg = ql.qint(0, width=cw)
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=1,
+            max_depth=1,
+            num_moves=1,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_never,
@@ -620,7 +629,7 @@ class TestBoundary:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits (limit: 17)"
+        assert nq <= 21, f"Circuit uses {nq} qubits (limit: 21)"
 
         extracted = _simulate_and_extract(qasm, nq, count_start, cw)
         assert extracted == 0, f"Expected count=0 (1 move, invalid), got {extracted}"
@@ -632,16 +641,17 @@ class TestBoundary:
 
 
 class TestQubitBudget:
-    """Verify circuits stay within the 17-qubit simulation limit."""
+    """Verify circuits stay within the 21-qubit simulation limit."""
 
     def test_binary_2bit_state_within_budget(self):
-        """2-bit state + 2-move counting fits within 17 qubits."""
+        """2-bit state + 2-move counting fits within 21 qubits."""
         _init_circuit()
         state = ql.qint(0, width=2)
         count_reg = ql.qint(0, width=count_width(2))
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=2,
+            max_depth=1,
+            num_moves=2,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_always,
@@ -653,16 +663,17 @@ class TestQubitBudget:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits, exceeds 17-qubit limit"
+        assert nq <= 21, f"Circuit uses {nq} qubits, exceeds 21-qubit limit"
 
     def test_ternary_3bit_state_within_budget(self):
-        """3-bit state + 3-move counting fits within 17 qubits."""
+        """3-bit state + 3-move counting fits within 21 qubits."""
         _init_circuit()
         state = ql.qint(0, width=3)
         count_reg = ql.qint(0, width=count_width(3))
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=3,
+            max_depth=1,
+            num_moves=3,
             make_move=_make_move_xor,
             undo_move=_undo_move_xor,
             is_valid=_is_valid_always,
@@ -674,4 +685,4 @@ class TestQubitBudget:
         _keepalive = [state, count_reg]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits, exceeds 17-qubit limit"
+        assert nq <= 21, f"Circuit uses {nq} qubits, exceeds 21-qubit limit"

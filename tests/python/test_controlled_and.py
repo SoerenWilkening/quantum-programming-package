@@ -11,7 +11,7 @@ quantum conditional contexts (with-blocks), including:
 Step 3.2: Controlled-AND support [Quantum_Assembly-8ct]
 
 Uses direct simulation via Qiskit AerSimulator to verify results.
-All tests stay under 17-qubit limit.
+All tests stay under 21-qubit limit.
 """
 
 import gc
@@ -156,7 +156,7 @@ class TestAndInsideWith:
         _keepalive = [ctrl, a, b, c]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 1, f"Expected 1 (ctrl=T, T&T=T), got {actual}"
 
@@ -224,7 +224,7 @@ class TestAndInsideWith:
         _keepalive = [ctrl, a, b, c]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 0b10, f"Expected 0b10, got {bin(actual)}"
 
@@ -254,7 +254,7 @@ class TestAndNestedWith:
         _keepalive = [c1, c2, a, b, d]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 1, f"Expected 1 (both ctrls True, T&T), got {actual}"
 
@@ -332,7 +332,7 @@ class TestAndChainInsideWith:
         _keepalive = [ctrl, a, b, c, combined]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 1, f"Expected 1 (all True), got {actual}"
 

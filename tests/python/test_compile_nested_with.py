@@ -14,7 +14,7 @@ are correctly controlled. This is documented behavior, not a bug.
 
 Test patterns:
 - Pre-populate compile cache on throwaway register within SAME circuit
-- Use qbool(True/False) for conditions (1 qubit each, stays under 17-qubit limit)
+- Use qbool(True/False) for conditions (1 qubit each, stays under 21-qubit limit)
 - Use 2-bit result registers
 - Keep all qints/qbools alive in _keepalive list before QASM export
 
@@ -103,7 +103,7 @@ class TestCompileNestedWith:
         _keepalive = [c1, c2, result, throwaway]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 1, f"Expected 1 (both True, inc executes), got {actual}"
 
@@ -137,7 +137,7 @@ class TestCompileNestedWith:
         _keepalive = [c1, c2, result, throwaway]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 0, f"Expected 0 (inner False, inc skipped), got {actual}"
 
@@ -171,7 +171,7 @@ class TestCompileNestedWith:
         _keepalive = [c1, c2, result, throwaway]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 0, f"Expected 0 (outer False, all blocked), got {actual}"
 
@@ -205,7 +205,7 @@ class TestCompileNestedWith:
         _keepalive = [c1, c2, result, throwaway]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 0, f"Expected 0 (both False), got {actual}"
 
@@ -241,7 +241,7 @@ class TestCompileNestedWith:
         _keepalive = [c1, c2, result]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         # First call emits uncontrolled gates -> result=1 even though c2=False
         assert actual == 1, f"Expected 1 (first-call trade-off: uncontrolled capture), got {actual}"
@@ -286,7 +286,7 @@ class TestCompileThreeLevelSmoke:
         _keepalive = [c1, c2, c3, result, throwaway]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 1, f"Expected 1 (all True, inc executes), got {actual}"
 
@@ -322,7 +322,7 @@ class TestCompileThreeLevelSmoke:
         _keepalive = [c1, c2, c3, result, throwaway]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 0, f"Expected 0 (innermost False, inc skipped), got {actual}"
 
@@ -357,7 +357,7 @@ class TestCompileSingleLevelRegression:
         _keepalive = [c1, result, throwaway]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 1, f"Expected 1 (single level True, inc executes), got {actual}"
 
@@ -385,7 +385,7 @@ class TestCompileSingleLevelRegression:
         _keepalive = [c1, result, throwaway]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 0, f"Expected 0 (single level False, inc skipped), got {actual}"
 
@@ -440,7 +440,7 @@ class TestCompileInverseNestedWith:
         _keepalive = [c1, c2, result, throwaway]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 0, f"Expected 0 (add1 then inverse -> net 0), got {actual}"
 
@@ -479,7 +479,7 @@ class TestCompileInverseNestedWith:
         _keepalive = [c1, c2, result, throwaway]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 0, f"Expected 0 (inner False, both skipped), got {actual}"
 
@@ -526,7 +526,7 @@ class TestCompileAdjointNestedWith:
         _keepalive = [c1, result, throwaway, throwaway2]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 0, f"Expected 0 (adjoint of +1 on value 1), got {actual}"
 
@@ -562,7 +562,7 @@ class TestCompileAdjointNestedWith:
         _keepalive = [c1, c2, result, throwaway, throwaway2]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 0, f"Expected 0 (adjoint of +1 on value 1, both True), got {actual}"
 
@@ -626,6 +626,6 @@ class TestCompiledCallingCompiled:
         _keepalive = [c1, c2, result, tw_inner, tw_outer]
 
         num_qubits = _get_num_qubits(qasm)
-        assert num_qubits <= 17, f"Circuit uses {num_qubits} qubits (limit: 17)"
+        assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
         assert actual == 1, f"Expected 1 (outer calls inner, both True), got {actual}"

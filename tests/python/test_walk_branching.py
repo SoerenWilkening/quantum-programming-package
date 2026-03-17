@@ -2,7 +2,7 @@
 
 Verifies that conditional Montanaro rotations based on count value
 produce the correct superposition over valid move indices, with the
-correct parent amplitude.  All tests stay within the 17-qubit limit.
+correct parent amplitude.  All tests stay within the 21-qubit limit.
 
 Requirements from acceptance criteria:
 - Uniform superposition over valid moves
@@ -20,15 +20,14 @@ import qiskit.qasm3
 from qiskit_aer import AerSimulator
 
 import quantum_language as ql
-from quantum_language.walk_core import WalkConfig, branch_width, count_width
 from quantum_language.walk_branching import (
     BranchState,
-    branch_to_children,
-    unbranch,
     _plan_cascade_ops,
     _precompute_angle_data,
+    branch_to_children,
+    unbranch,
 )
-
+from quantum_language.walk_core import WalkConfig, branch_width, count_width
 
 # ---------------------------------------------------------------------------
 # Simulation helpers
@@ -68,7 +67,7 @@ def _simulate_and_extract(qasm_str, num_qubits, result_start, result_width):
 
     msb_pos = num_qubits - result_start - result_width
     lsb_pos = num_qubits - 1 - result_start
-    result_bits = bitstring[msb_pos: lsb_pos + 1]
+    result_bits = bitstring[msb_pos : lsb_pos + 1]
     return int(result_bits, 2)
 
 
@@ -87,8 +86,7 @@ def _extract_register_probs(sv, num_qubits, reg_start, reg_width):
     return probs
 
 
-def _extract_joint_probs(sv, num_qubits, reg1_start, reg1_width,
-                         reg2_start, reg2_width):
+def _extract_joint_probs(sv, num_qubits, reg1_start, reg1_width, reg2_start, reg2_width):
     """Sum statevector probabilities by joint register values.
 
     Returns a dict mapping (reg1_val, reg2_val) -> probability.
@@ -109,7 +107,7 @@ def _init_circuit():
     """Initialize a fresh circuit."""
     gc.collect()
     ql.circuit()
-    ql.option('simulate', True)
+    ql.option("simulate", True)
 
 
 # ---------------------------------------------------------------------------
@@ -214,10 +212,10 @@ class TestCascadePlanning:
         """d=3 with w=2: Ry, X, CRy, X sequence."""
         ops = _plan_cascade_ops(3, 2)
         assert len(ops) == 4
-        assert ops[0][0] == "ry"   # initial split
-        assert ops[1][0] == "x"    # flip for control-on-zero
+        assert ops[0][0] == "ry"  # initial split
+        assert ops[1][0] == "x"  # flip for control-on-zero
         assert ops[2][0] == "cry"  # CRy for left subtree split
-        assert ops[3][0] == "x"    # undo flip
+        assert ops[3][0] == "x"  # undo flip
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +288,7 @@ class TestBranchAmplitudes:
         _keepalive = [count_reg, branch_reg, bs]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17
+        assert nq <= 21
 
         sv = _get_statevector(qasm)
 
@@ -301,9 +299,7 @@ class TestBranchAmplitudes:
         assert abs(parent_prob - 0.5) < 1e-6, (
             f"count=1: parent prob should be 0.5, got {parent_prob}"
         )
-        assert abs(child_prob - 0.5) < 1e-6, (
-            f"count=1: child prob should be 0.5, got {child_prob}"
-        )
+        assert abs(child_prob - 0.5) < 1e-6, f"count=1: child prob should be 0.5, got {child_prob}"
 
     def test_count2_amplitudes_binary(self):
         """count=2, binary branching: each of 3 components has prob 1/3.
@@ -326,7 +322,7 @@ class TestBranchAmplitudes:
         _keepalive = [count_reg, branch_reg, bs]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17
+        assert nq <= 21
 
         sv = _get_statevector(qasm)
 
@@ -338,9 +334,7 @@ class TestBranchAmplitudes:
         )
 
         # Children: parent_flag=1, each branch value (0 and 1) gets 1/3
-        joint = _extract_joint_probs(
-            sv, nq, pf_start, 1, br_start, bw
-        )
+        joint = _extract_joint_probs(sv, nq, pf_start, 1, br_start, bw)
         child0_prob = joint.get((1, 0), 0.0)
         child1_prob = joint.get((1, 1), 0.0)
         assert abs(child0_prob - 1.0 / 3.0) < 1e-6, (
@@ -372,7 +366,7 @@ class TestBranchAmplitudes:
         _keepalive = [count_reg, branch_reg, bs]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17
+        assert nq <= 21
 
         sv = _get_statevector(qasm)
 
@@ -478,8 +472,7 @@ class TestBranchAmplitudes:
 
         valid_child_prob = joint.get((1, 0), 0.0)
         assert abs(valid_child_prob - 0.5) < 1e-6, (
-            f"count=1: valid child (pf=1, branch=0) should have prob 0.5, "
-            f"got {valid_child_prob}"
+            f"count=1: valid child (pf=1, branch=0) should have prob 0.5, got {valid_child_prob}"
         )
 
 
@@ -513,12 +506,8 @@ class TestUnbranch:
         sv = _get_statevector(qasm)
 
         pf_probs = _extract_register_probs(sv, nq, pf_start, 1)
-        assert pf_probs.get(0, 0.0) > 0.1, (
-            "branch should produce non-trivial parent component"
-        )
-        assert pf_probs.get(1, 0.0) > 0.1, (
-            "branch should produce non-trivial child component"
-        )
+        assert pf_probs.get(0, 0.0) > 0.1, "branch should produce non-trivial parent component"
+        assert pf_probs.get(1, 0.0) > 0.1, "branch should produce non-trivial child component"
 
         # Phase 2: branch + unbranch
         _init_circuit()
@@ -533,9 +522,7 @@ class TestUnbranch:
         sv2 = _get_statevector(qasm2)
 
         max_prob = max(abs(a) ** 2 for a in sv2)
-        assert max_prob > 0.99, (
-            f"branch+unbranch should be identity; max prob = {max_prob}"
-        )
+        assert max_prob > 0.99, f"branch+unbranch should be identity; max prob = {max_prob}"
 
     def test_unbranch_restores_count2(self):
         """branch + unbranch with count=2 restores all registers."""
@@ -553,9 +540,7 @@ class TestUnbranch:
         sv = _get_statevector(qasm)
 
         max_prob = max(abs(a) ** 2 for a in sv)
-        assert max_prob > 0.99, (
-            f"branch+unbranch count=2 should be identity; max prob = {max_prob}"
-        )
+        assert max_prob > 0.99, f"branch+unbranch count=2 should be identity; max prob = {max_prob}"
 
     def test_unbranch_restores_count3(self):
         """branch + unbranch with count=3 restores all registers."""
@@ -574,9 +559,7 @@ class TestUnbranch:
         sv = _get_statevector(qasm)
 
         max_prob = max(abs(a) ** 2 for a in sv)
-        assert max_prob > 0.99, (
-            f"branch+unbranch count=3 should be identity; max prob = {max_prob}"
-        )
+        assert max_prob > 0.99, f"branch+unbranch count=3 should be identity; max prob = {max_prob}"
 
     def test_branch_reg_zero_after_unbranch(self):
         """Measurement confirms branch_reg is |0> after unbranch."""
@@ -595,9 +578,7 @@ class TestUnbranch:
         nq = _get_num_qubits(qasm)
 
         extracted = _simulate_and_extract(qasm, nq, br_start, bw)
-        assert extracted == 0, (
-            f"branch+unbranch should restore branch_reg to 0, got {extracted}"
-        )
+        assert extracted == 0, f"branch+unbranch should restore branch_reg to 0, got {extracted}"
 
     def test_count_reg_unchanged_after_unbranch(self):
         """count_reg value is unchanged after branch + unbranch."""
@@ -616,9 +597,7 @@ class TestUnbranch:
         nq = _get_num_qubits(qasm)
 
         extracted = _simulate_and_extract(qasm, nq, count_start, cw)
-        assert extracted == 2, (
-            f"count_reg should remain 2 after branch+unbranch, got {extracted}"
-        )
+        assert extracted == 2, f"count_reg should remain 2 after branch+unbranch, got {extracted}"
 
 
 # ---------------------------------------------------------------------------
@@ -627,7 +606,7 @@ class TestUnbranch:
 
 
 class TestQubitBudget:
-    """Verify circuits stay within the 17-qubit simulation limit."""
+    """Verify circuits stay within the 21-qubit simulation limit."""
 
     def test_binary_branching_within_budget(self):
         _init_circuit()
@@ -641,7 +620,7 @@ class TestQubitBudget:
         _keepalive = [count_reg, branch_reg, bs]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits, exceeds 17-qubit limit"
+        assert nq <= 21, f"Circuit uses {nq} qubits, exceeds 21-qubit limit"
 
     def test_ternary_branching_within_budget(self):
         _init_circuit()
@@ -656,7 +635,7 @@ class TestQubitBudget:
         _keepalive = [count_reg, branch_reg, bs]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17, f"Circuit uses {nq} qubits, exceeds 17-qubit limit"
+        assert nq <= 21, f"Circuit uses {nq} qubits, exceeds 21-qubit limit"
 
 
 # ---------------------------------------------------------------------------
@@ -684,16 +663,17 @@ class TestBranchingWithCounting:
         branch_reg = ql.qint(0, width=bw)
 
         def make_move(s, i):
-            s ^= (i + 1)
+            s ^= i + 1
 
         def undo_move(s, i):
-            s ^= (i + 1)
+            s ^= i + 1
 
         def is_valid_always(s):
             return s == s
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=num_moves,
+            max_depth=1,
+            num_moves=num_moves,
             make_move=make_move,
             undo_move=undo_move,
             is_valid=is_valid_always,
@@ -707,7 +687,7 @@ class TestBranchingWithCounting:
         _keepalive = [state, count_reg, branch_reg, bs]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17
+        assert nq <= 21
 
         sv = _get_statevector(qasm)
 
@@ -732,16 +712,17 @@ class TestBranchingWithCounting:
         branch_reg = ql.qint(0, width=bw)
 
         def make_move(s, i):
-            s ^= (i + 1)
+            s ^= i + 1
 
         def undo_move(s, i):
-            s ^= (i + 1)
+            s ^= i + 1
 
         def is_valid_always(s):
             return s == s
 
         cfg = WalkConfig(
-            max_depth=1, num_moves=num_moves,
+            max_depth=1,
+            num_moves=num_moves,
             make_move=make_move,
             undo_move=undo_move,
             is_valid=is_valid_always,
@@ -756,12 +737,11 @@ class TestBranchingWithCounting:
         _keepalive = [state, count_reg, branch_reg, bs]
         qasm = ql.to_openqasm()
         nq = _get_num_qubits(qasm)
-        assert nq <= 17
+        assert nq <= 21
 
         extracted = _simulate_and_extract(qasm, nq, br_start, bw)
         assert extracted == 0, (
-            f"count+branch+unbranch should restore branch_reg to 0, "
-            f"got {extracted}"
+            f"count+branch+unbranch should restore branch_reg to 0, got {extracted}"
         )
 
 
@@ -785,7 +765,7 @@ class TestBranchStateReturn:
         _keepalive = [count_reg, branch_reg, bs]
         assert isinstance(bs, BranchState)
         assert bs.parent_flag is not None
-        assert hasattr(bs.parent_flag, 'qubits')
+        assert hasattr(bs.parent_flag, "qubits")
         assert bs.parent_flag.width == 1
         assert len(bs.cond_map) == 2  # num_moves=2 -> conds for c=1,2
 
@@ -799,9 +779,7 @@ class TestBranchStateReturn:
         my_pf = ql.qbool()
 
         cfg = WalkConfig(max_depth=1, num_moves=2)
-        bs = branch_to_children(
-            cfg, count_reg, branch_reg, parent_flag=my_pf
-        )
+        bs = branch_to_children(cfg, count_reg, branch_reg, parent_flag=my_pf)
 
         _keepalive = [count_reg, branch_reg, bs]
         assert bs.parent_flag is my_pf
