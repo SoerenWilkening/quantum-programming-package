@@ -155,6 +155,10 @@
 				)
 				_qm = tuple(qubit_array[i] for i in range(_total_and))
 				result.history.append(0, _qm)
+				# Step 6.2: Blocker insertion — source operands reference the result
+				self.history.add_blocker(result)
+				if type(other) != int and isinstance(other, qint):
+					(<qint>other).history.add_blocker(result)
 				return result
 			else:
 				seq = Q_and(result_bits)
@@ -176,6 +180,11 @@
 		_total_and = 3 * result_bits if (type(other) != int and isinstance(other, qint)) else 2 * result_bits
 		_qm = tuple(qubit_array[i] for i in range(_total_and))
 		result.history.append(<unsigned long long>seq, _qm)
+
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(result)
+		if type(other) != int and isinstance(other, qint):
+			(<qint>other).history.add_blocker(result)
 
 		return result
 
@@ -332,6 +341,11 @@
 		_total_or = 3 * result_bits if (type(other) != int and isinstance(other, qint)) else 2 * result_bits
 		_qm = tuple(qubit_array[i] for i in range(_total_or))
 		result.history.append(<unsigned long long>seq, _qm)
+
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(result)
+		if type(other) != int and isinstance(other, qint):
+			(<qint>other).history.add_blocker(result)
 
 		return result
 
@@ -501,6 +515,11 @@
 			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
 		result.history.append(0, _qm)
 
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(result)
+		if type(other) != int and isinstance(other, qint):
+			(<qint>other).history.add_blocker(result)
+
 		return result
 
 	@cython.boundscheck(False)
@@ -566,6 +585,10 @@
 
 		if _controlled:
 			raise NotImplementedError("Controlled quantum-quantum XOR not yet supported")
+
+		# Step 6.2: Blocker insertion — source operand references dest
+		if other is not self:
+			(<qint>other).history.add_blocker(self)
 
 		# QQ path: self ^= other using Q_xor
 		# Layout: [0..xor_bits-1] = self (target), [xor_bits..2*xor_bits-1] = other (source)

@@ -83,6 +83,10 @@
 				+ tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
 			result.history.append(0, _qm)
 
+			# Step 6.2: Blocker insertion — source operands reference the result
+			self.history.add_blocker(result)
+			(<qint>other).history.add_blocker(result)
+
 			return result
 
 		# Handle qint == int case using C-level CQ_equal_width
@@ -179,6 +183,9 @@
 			# can allocate fresh ancilla at replay time.
 			_qm = tuple(qubit_array[i] for i in range(start))
 			result.history.append(<unsigned long long>seq, _qm, num_and_anc)
+
+			# Step 6.2: Blocker insertion — source operand references the result
+			self.history.add_blocker(result)
 
 			return result
 
@@ -312,6 +319,10 @@
 			result.history.add_child(temp_self)
 			result.history.add_child(temp_other)
 
+			# Step 6.2: Blocker insertion — source operands reference the result
+			self.history.add_blocker(result)
+			(<qint>other).history.add_blocker(result)
+
 			return result
 
 		# Handle int operand
@@ -421,6 +432,10 @@
 			# Add widened temporaries as weakref children
 			result.history.add_child(temp_other)
 			result.history.add_child(temp_self)
+
+			# Step 6.2: Blocker insertion — source operands reference the result
+			self.history.add_blocker(result)
+			(<qint>other).history.add_blocker(result)
 
 			return result
 

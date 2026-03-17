@@ -190,6 +190,11 @@
 		if type(other) == qint and (<qint>other).bits < result_width:
 			(<qint>a).history.add_child(padded_other)
 
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(a)
+		if type(other) == qint:
+			(<qint>other).history.add_blocker(a)
+
 		return a
 
 	def __radd__(self, other: qint | int):
@@ -248,6 +253,11 @@
 		if type(other) == qint and (<qint>other).bits < result_width:
 			(<qint>a).history.add_child(padded_other)
 
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(a)
+		if type(other) == qint:
+			(<qint>other).history.add_blocker(a)
+
 		return a
 
 	def __iadd__(self, other: qint | int):
@@ -269,6 +279,9 @@
 		>>> a += 3
 		>>> # a now represents |5+3> = |8>
 		"""
+		# Step 6.2: Blocker insertion — source operand references dest
+		if type(other) == qint and other is not self:
+			(<qint>other).history.add_blocker(self)
 		# in place addition
 		return self.addition_inplace(other)
 
@@ -331,6 +344,11 @@
 		if type(other) == qint and (<qint>other).bits < result_width:
 			(<qint>a).history.add_child(padded_other)
 
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(a)
+		if type(other) == qint:
+			(<qint>other).history.add_blocker(a)
+
 		return a
 
 	def __isub__(self, other: qint | int):
@@ -352,6 +370,9 @@
 		>>> a -= 3
 		>>> # a now represents |5-3> = |2>
 		"""
+		# Step 6.2: Blocker insertion — source operand references dest
+		if type(other) == qint and other is not self:
+			(<qint>other).history.add_blocker(self)
 		# in place addition
 		return self.addition_inplace(other, invert = True)
 
@@ -385,6 +406,9 @@
 		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
 			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
 		(<qint>result).history.append(0, _qm)
+
+		# Step 6.2: Blocker insertion — source operand references the result
+		self.history.add_blocker(result)
 
 		return result
 
@@ -433,6 +457,11 @@
 			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
 		(<qint>result).history.append(0, _qm)
 
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(result)
+		if type(other) == qint:
+			(<qint>other).history.add_blocker(result)
+
 		return result
 
 	def __lshift__(self, int other):
@@ -479,6 +508,9 @@
 		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
 			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
 		(<qint>result).history.append(0, _qm)
+
+		# Step 6.2: Blocker insertion — source operand references the result
+		self.history.add_blocker(result)
 
 		return result
 
@@ -535,6 +567,9 @@
 		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
 			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
 		(<qint>result).history.append(0, _qm)
+
+		# Step 6.2: Blocker insertion — source operand references the result
+		self.history.add_blocker(result)
 
 		return result
 
@@ -760,6 +795,11 @@
 			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
 		(<qint>result).history.append(0, _qm)
 
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(result)
+		if isinstance(other, qint):
+			(<qint>other).history.add_blocker(result)
+
 		return result
 
 	def __rmul__(self, other):
@@ -816,6 +856,11 @@
 			_other_offset_h = 64 - (<qint>other).bits
 			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
 		(<qint>result).history.append(0, _qm)
+
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(result)
+		if isinstance(other, qint):
+			(<qint>other).history.add_blocker(result)
 
 		return result
 

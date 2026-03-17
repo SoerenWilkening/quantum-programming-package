@@ -1806,6 +1806,11 @@ cdef class qint(circuit):
 		if type(other) == qint and (<qint>other).bits < result_width:
 			(<qint>a).history.add_child(padded_other)
 
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(a)
+		if type(other) == qint:
+			(<qint>other).history.add_blocker(a)
+
 		return a
 
 	def __radd__(self, other: qint | int):
@@ -1864,6 +1869,11 @@ cdef class qint(circuit):
 		if type(other) == qint and (<qint>other).bits < result_width:
 			(<qint>a).history.add_child(padded_other)
 
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(a)
+		if type(other) == qint:
+			(<qint>other).history.add_blocker(a)
+
 		return a
 
 	def __iadd__(self, other: qint | int):
@@ -1885,6 +1895,9 @@ cdef class qint(circuit):
 		>>> a += 3
 		>>> # a now represents |5+3> = |8>
 		"""
+		# Step 6.2: Blocker insertion — source operand references dest
+		if type(other) == qint and other is not self:
+			(<qint>other).history.add_blocker(self)
 		# in place addition
 		return self.addition_inplace(other)
 
@@ -1947,6 +1960,11 @@ cdef class qint(circuit):
 		if type(other) == qint and (<qint>other).bits < result_width:
 			(<qint>a).history.add_child(padded_other)
 
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(a)
+		if type(other) == qint:
+			(<qint>other).history.add_blocker(a)
+
 		return a
 
 	def __isub__(self, other: qint | int):
@@ -1968,6 +1986,9 @@ cdef class qint(circuit):
 		>>> a -= 3
 		>>> # a now represents |5-3> = |2>
 		"""
+		# Step 6.2: Blocker insertion — source operand references dest
+		if type(other) == qint and other is not self:
+			(<qint>other).history.add_blocker(self)
 		# in place addition
 		return self.addition_inplace(other, invert = True)
 
@@ -2001,6 +2022,9 @@ cdef class qint(circuit):
 		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
 			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
 		(<qint>result).history.append(0, _qm)
+
+		# Step 6.2: Blocker insertion — source operand references the result
+		self.history.add_blocker(result)
 
 		return result
 
@@ -2049,6 +2073,11 @@ cdef class qint(circuit):
 			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
 		(<qint>result).history.append(0, _qm)
 
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(result)
+		if type(other) == qint:
+			(<qint>other).history.add_blocker(result)
+
 		return result
 
 	def __lshift__(self, int other):
@@ -2095,6 +2124,9 @@ cdef class qint(circuit):
 		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
 			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
 		(<qint>result).history.append(0, _qm)
+
+		# Step 6.2: Blocker insertion — source operand references the result
+		self.history.add_blocker(result)
 
 		return result
 
@@ -2151,6 +2183,9 @@ cdef class qint(circuit):
 		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
 			+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
 		(<qint>result).history.append(0, _qm)
+
+		# Step 6.2: Blocker insertion — source operand references the result
+		self.history.add_blocker(result)
 
 		return result
 
@@ -2376,6 +2411,11 @@ cdef class qint(circuit):
 			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
 		(<qint>result).history.append(0, _qm)
 
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(result)
+		if isinstance(other, qint):
+			(<qint>other).history.add_blocker(result)
+
 		return result
 
 	def __rmul__(self, other):
@@ -2432,6 +2472,11 @@ cdef class qint(circuit):
 			_other_offset_h = 64 - (<qint>other).bits
 			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
 		(<qint>result).history.append(0, _qm)
+
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(result)
+		if isinstance(other, qint):
+			(<qint>other).history.add_blocker(result)
 
 		return result
 
@@ -2636,6 +2681,10 @@ cdef class qint(circuit):
 				)
 				_qm = tuple(qubit_array[i] for i in range(_total_and))
 				result.history.append(0, _qm)
+				# Step 6.2: Blocker insertion — source operands reference the result
+				self.history.add_blocker(result)
+				if type(other) != int and isinstance(other, qint):
+					(<qint>other).history.add_blocker(result)
 				return result
 			else:
 				seq = Q_and(result_bits)
@@ -2657,6 +2706,11 @@ cdef class qint(circuit):
 		_total_and = 3 * result_bits if (type(other) != int and isinstance(other, qint)) else 2 * result_bits
 		_qm = tuple(qubit_array[i] for i in range(_total_and))
 		result.history.append(<unsigned long long>seq, _qm)
+
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(result)
+		if type(other) != int and isinstance(other, qint):
+			(<qint>other).history.add_blocker(result)
 
 		return result
 
@@ -2813,6 +2867,11 @@ cdef class qint(circuit):
 		_total_or = 3 * result_bits if (type(other) != int and isinstance(other, qint)) else 2 * result_bits
 		_qm = tuple(qubit_array[i] for i in range(_total_or))
 		result.history.append(<unsigned long long>seq, _qm)
+
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(result)
+		if type(other) != int and isinstance(other, qint):
+			(<qint>other).history.add_blocker(result)
 
 		return result
 
@@ -2982,6 +3041,11 @@ cdef class qint(circuit):
 			_qm = _qm + tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
 		result.history.append(0, _qm)
 
+		# Step 6.2: Blocker insertion — source operands reference the result
+		self.history.add_blocker(result)
+		if type(other) != int and isinstance(other, qint):
+			(<qint>other).history.add_blocker(result)
+
 		return result
 
 	@cython.boundscheck(False)
@@ -3047,6 +3111,10 @@ cdef class qint(circuit):
 
 		if _controlled:
 			raise NotImplementedError("Controlled quantum-quantum XOR not yet supported")
+
+		# Step 6.2: Blocker insertion — source operand references dest
+		if other is not self:
+			(<qint>other).history.add_blocker(self)
 
 		# QQ path: self ^= other using Q_xor
 		# Layout: [0..xor_bits-1] = self (target), [xor_bits..2*xor_bits-1] = other (source)
@@ -3384,6 +3452,10 @@ cdef class qint(circuit):
 				+ tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
 			result.history.append(0, _qm)
 
+			# Step 6.2: Blocker insertion — source operands reference the result
+			self.history.add_blocker(result)
+			(<qint>other).history.add_blocker(result)
+
 			return result
 
 		# Handle qint == int case using C-level CQ_equal_width
@@ -3480,6 +3552,9 @@ cdef class qint(circuit):
 			# can allocate fresh ancilla at replay time.
 			_qm = tuple(qubit_array[i] for i in range(start))
 			result.history.append(<unsigned long long>seq, _qm, num_and_anc)
+
+			# Step 6.2: Blocker insertion — source operand references the result
+			self.history.add_blocker(result)
 
 			return result
 
@@ -3613,6 +3688,10 @@ cdef class qint(circuit):
 			result.history.add_child(temp_self)
 			result.history.add_child(temp_other)
 
+			# Step 6.2: Blocker insertion — source operands reference the result
+			self.history.add_blocker(result)
+			(<qint>other).history.add_blocker(result)
+
 			return result
 
 		# Handle int operand
@@ -3722,6 +3801,10 @@ cdef class qint(circuit):
 			# Add widened temporaries as weakref children
 			result.history.add_child(temp_other)
 			result.history.add_child(temp_self)
+
+			# Step 6.2: Blocker insertion — source operands reference the result
+			self.history.add_blocker(result)
+			(<qint>other).history.add_blocker(result)
 
 			return result
 
