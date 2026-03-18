@@ -8,9 +8,9 @@ _get_control_bool().qubits[63], which is the AND-ancilla qubit in nested
 contexts. This means replayed gates are automatically controlled on the
 combined condition (outer AND inner).
 
-Trade-off: The first call to a compiled function inside a with-block always
-emits uncontrolled gates (capture mode). Only subsequent calls (replay path)
-are correctly controlled. This is documented behavior, not a bug.
+After Phase 5 step 5.2d, the first call to a compiled function inside a
+with-block is now correctly controlled (capture mode respects the control
+context). Pre-populating the cache is no longer required for correctness.
 
 Test patterns:
 - Pre-populate compile cache on throwaway register within SAME circuit
@@ -210,14 +210,11 @@ class TestCompileNestedWith:
         assert actual == 0, f"Expected 0 (both False), got {actual}"
 
     def test_first_call_trade_off(self):
-        """First call inside nested with emits uncontrolled gates (known trade-off).
+        """First call inside nested with is correctly controlled (Phase 5 fix).
 
-        When the compile cache is empty, the first call captures in uncontrolled
-        mode (compile.py:1204-1210). Gates emitted during capture are NOT
-        controlled, so result=1 even though c2=False. This is documented and
-        accepted behavior that also applies to single-level with blocks.
-
-        This test documents the trade-off, not a bug.
+        After Phase 5 step 5.2d, the first call (capture path) now respects the
+        control context. With c2=False, the AND-ancilla is 0 and inc is skipped,
+        so result=0. Pre-populating the cache is no longer required.
         """
 
         @ql.compile
@@ -243,8 +240,8 @@ class TestCompileNestedWith:
         num_qubits = _get_num_qubits(qasm)
         assert num_qubits <= 21, f"Circuit uses {num_qubits} qubits (limit: 21)"
         actual = _simulate_and_extract(qasm, num_qubits, result_start, result_width)
-        # First call emits uncontrolled gates -> result=1 even though c2=False
-        assert actual == 1, f"Expected 1 (first-call trade-off: uncontrolled capture), got {actual}"
+        # First call is now controlled (Phase 5 fix) -> c2=False means inc skipped -> result=0
+        assert actual == 0, f"Expected 0 (first call controlled, c2=False skips inc), got {actual}"
 
 
 class TestCompileThreeLevelSmoke:

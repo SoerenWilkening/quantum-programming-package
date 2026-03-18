@@ -84,9 +84,9 @@ class TestQintAPI:
 
     # Construction
     def test_qint_default_width(self):
-        """Default width is 8 bits."""
+        """Default width is auto-sized (minimum bits for value)."""
         a = ql.qint(5)
-        assert a.width == 8
+        assert a.width == 3
 
     def test_qint_explicit_width(self):
         """width parameter sets bit width."""
