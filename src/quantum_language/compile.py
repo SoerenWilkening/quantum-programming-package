@@ -1085,9 +1085,10 @@ class CompiledFunc:
                     )
                     if _ir_added > 0:
                         block._dag_built = True
-                if not (self._opt == 1 and _ir_added > 0):
-                    # Non-opt=1, or opt=1 without IR entries (Toffoli mode):
-                    # add a single call-level DAG node.
+                if not (self._opt == 1 and (block and block._dag_built)):
+                    # Non-opt=1, or opt=1 without IR nodes (Toffoli mode):
+                    # add a single call-level DAG node.  Skip when _dag_built
+                    # is set — IR nodes already cover this function.
                     dag = current_dag_context()
                     if dag is not None:
                         extra = (

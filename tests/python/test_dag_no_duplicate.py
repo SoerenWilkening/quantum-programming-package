@@ -148,6 +148,46 @@ class TestDAGNoDuplicateNodes:
         block = _make_block_with_ir([])
         assert block._dag_built is False
 
+    def test_replay_does_not_add_coarse_fallback_node(self):
+        """Regression: when _dag_built=True and _ir_added=0 (replay skips IR
+        build), the coarse call-level fallback node must NOT be appended.
+
+        Before the fix, the guard was `not (opt==1 and _ir_added>0)` which
+        evaluated to True on replays (since _ir_added was 0), causing a
+        spurious coarse node on every replay call.
+        """
+        import quantum_language as ql
+
+        ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode produces IR
+
+        @ql.compile(opt=1)
+        def add_five(x):
+            x += 5
+            return x
+
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = ql.qint(0, width=4)
+            # First call — capture, builds IR nodes
+            add_five(a)
+            n_after_first = dag.node_count
+
+            # Second call — replay, must NOT add any nodes
+            add_five(a)
+            assert dag.node_count == n_after_first, (
+                f"Replay added nodes: expected {n_after_first}, got {dag.node_count}"
+            )
+
+            # Third call — same
+            add_five(a)
+            assert dag.node_count == n_after_first, (
+                f"Second replay added nodes: expected {n_after_first}, got {dag.node_count}"
+            )
+        finally:
+            _dag_builder_stack.clear()
+
 
 # ---------------------------------------------------------------------------
 # test_dag_both_seq_stored
