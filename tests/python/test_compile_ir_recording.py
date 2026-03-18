@@ -3,6 +3,10 @@
 Covers issue Quantum_Assembly-5c2: DSL operators (+=, -=, <, &, etc.)
 record InstructionRecord entries when compile-mode is active, without
 calling run_instruction (no gates emitted to circuit).
+
+Note: Arithmetic IR recording only happens in QFT mode (fault_tolerant=False).
+In Toffoli mode (default), arithmetic ops bypass IR recording and emit gates
+directly through the Toffoli dispatch path, producing correct gate types.
 """
 
 import quantum_language as ql
@@ -64,8 +68,9 @@ def test_compile_mode_global_cleared_on_exception():
 
 
 def test_iadd_int_records_ir():
-    """a += 1 in compile mode records one 'add_cq' IR entry."""
+    """a += 1 in compile mode records one 'add_cq' IR entry (QFT mode)."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for arithmetic IR recording
     a = ql.qint(0, width=4)
 
     @ql.compile
@@ -90,8 +95,9 @@ def test_iadd_int_records_ir():
 
 
 def test_isub_int_records_ir():
-    """a -= 2 in compile mode records one 'add_cq' IR entry with invert=True."""
+    """a -= 2 in compile mode records one 'add_cq' IR entry with invert=True (QFT mode)."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for arithmetic IR recording
     a = ql.qint(5, width=4)
 
     @ql.compile
@@ -109,8 +115,9 @@ def test_isub_int_records_ir():
 
 
 def test_two_iadd_records_two_entries():
-    """a += 1; a += 2 produces 2 IR entries (acceptance criterion)."""
+    """a += 1; a += 2 produces 2 IR entries (acceptance criterion, QFT mode)."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for arithmetic IR recording
     a = ql.qint(0, width=4)
 
     @ql.compile
@@ -128,8 +135,9 @@ def test_two_iadd_records_two_entries():
 
 
 def test_iadd_qint_records_add_qq():
-    """a += b (both qint) records an 'add_qq' IR entry."""
+    """a += b (both qint) records an 'add_qq' IR entry (QFT mode)."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for arithmetic IR recording
     a = ql.qint(3, width=4)
     b = ql.qint(2, width=4)
 
@@ -148,8 +156,9 @@ def test_iadd_qint_records_add_qq():
 
 
 def test_no_gates_emitted_in_compile_mode():
-    """No gates are emitted to the circuit during compile phase."""
+    """No gates are emitted to the circuit during compile phase (QFT mode)."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for arithmetic IR recording
     a = ql.qint(0, width=4)
 
     @ql.compile
@@ -172,8 +181,9 @@ def test_no_gates_emitted_in_compile_mode():
 
 
 def test_mul_cq_records_ir():
-    """a * 3 in compile mode records a 'mul_cq' IR entry."""
+    """a * 3 in compile mode records a 'mul_cq' IR entry (QFT mode)."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for arithmetic IR recording
     a = ql.qint(2, width=4)
 
     @ql.compile
@@ -382,8 +392,9 @@ def test_compile_mode_unset_after_completion():
 
 
 def test_each_ir_entry_has_valid_sequence():
-    """Each IR entry has a valid sequence_t (acceptance criterion)."""
+    """Each IR entry has a valid sequence_t (acceptance criterion, QFT mode)."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for arithmetic IR recording
     a = ql.qint(0, width=4)
 
     @ql.compile

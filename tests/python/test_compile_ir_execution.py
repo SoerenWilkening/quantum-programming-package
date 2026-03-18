@@ -3,11 +3,20 @@
 Covers issue Quantum_Assembly-pzl: _execute_ir iterates block._instruction_ir
 and calls run_instruction for each entry to produce gates in the circuit.
 The compile-mode capture records IR, then _execute_ir replays it.
+
+IR recording for arithmetic operations only happens in QFT mode
+(fault_tolerant=False). In Toffoli mode (default), arithmetic operations
+bypass IR recording and emit gates directly through the Toffoli dispatch
+path, producing correct gate types (X/CX/CCX instead of QFT rotations).
 """
 
 import quantum_language as ql
 from quantum_language._compile_state import InstructionRecord
-from quantum_language._core import get_current_layer, get_gate_count
+from quantum_language._core import (
+    extract_gate_range,
+    get_current_layer,
+    get_gate_count,
+)
 from quantum_language.compile import (
     CompiledBlock,
     _execute_ir,
@@ -26,8 +35,14 @@ def _make_block():
     )
 
 
+def _get_gate_types(start_layer, end_layer):
+    """Extract gate types from a circuit layer range as a sorted list."""
+    gates = extract_gate_range(start_layer, end_layer)
+    return sorted(g["type"] for g in gates)
+
+
 # ---------------------------------------------------------------------------
-# _execute_ir — basic functionality
+# _execute_ir — basic functionality (QFT mode, where IR recording is active)
 # ---------------------------------------------------------------------------
 
 
@@ -38,6 +53,7 @@ class TestExecuteIR:
         """_execute_ir with recorded IR produces gates in the circuit."""
         ql.circuit()
         ql.option("simulate", True)
+        ql.option("fault_tolerant", False)  # QFT mode for IR recording
         a = ql.qint(0, width=4)
 
         @ql.compile
@@ -90,6 +106,7 @@ class TestExecuteIR:
         """_execute_ir remaps qubit indices when qubit_mapping is provided."""
         ql.circuit()
         ql.option("simulate", True)
+        ql.option("fault_tolerant", False)  # QFT mode for IR recording
 
         # Create two qints at different physical qubits
         a = ql.qint(0, width=4)
@@ -121,6 +138,7 @@ class TestExecuteIR:
         """_execute_ir handles multiple IR entries."""
         ql.circuit()
         ql.option("simulate", True)
+        ql.option("fault_tolerant", False)  # QFT mode for IR recording
         a = ql.qint(0, width=4)
 
         @ql.compile
@@ -145,6 +163,7 @@ class TestExecuteIR:
         """_execute_ir respects the invert flag on IR entries."""
         ql.circuit()
         ql.option("simulate", True)
+        ql.option("fault_tolerant", False)  # QFT mode for IR recording
         a = ql.qint(5, width=4)
 
         @ql.compile
@@ -163,6 +182,24 @@ class TestExecuteIR:
         gc_after = get_gate_count()
 
         assert gc_after > gc_before, "Inverted IR should produce gates"
+
+    def test_toffoli_mode_skips_ir_recording(self):
+        """In Toffoli mode, arithmetic ops bypass IR recording."""
+        ql.circuit()
+        ql.option("simulate", True)
+        # fault_tolerant=True is default (Toffoli mode)
+        a = ql.qint(0, width=4)
+
+        @ql.compile
+        def dummy(x):
+            return x
+
+        block = _make_block()
+        with dummy.compile_mode(block):
+            a += 1
+
+        # Toffoli mode: arithmetic ops emit gates directly, no IR entries
+        assert len(block._instruction_ir) == 0, "Toffoli mode should not record IR for arithmetic"
 
 
 # ---------------------------------------------------------------------------
@@ -190,10 +227,11 @@ class TestCompiledFunctionIRExecution:
 
         assert gc_after > gc_before, "Compiled function should produce gates"
 
-    def test_first_call_stores_ir(self):
-        """First call records IR entries on the cached block."""
+    def test_first_call_stores_ir_qft_mode(self):
+        """First call records IR entries on the cached block in QFT mode."""
         ql.circuit()
         ql.option("simulate", True)
+        ql.option("fault_tolerant", False)  # QFT mode
 
         @ql.compile
         def inc(x):
@@ -425,6 +463,7 @@ class TestRunInstructionPy:
 
         ql.circuit()
         ql.option("simulate", True)
+        ql.option("fault_tolerant", False)  # QFT mode for IR recording
         a = ql.qint(0, width=4)
 
         @ql.compile
@@ -441,3 +480,204 @@ class TestRunInstructionPy:
         gc_after = get_gate_count()
 
         assert gc_after > gc_before
+
+
+# ---------------------------------------------------------------------------
+# Gate correctness — compiled path produces same gates as uncompiled path
+# ---------------------------------------------------------------------------
+
+
+class TestCompiledGateCorrectness:
+    """Verify compiled path produces same gate types/counts as uncompiled."""
+
+    def test_toffoli_mode_gate_count_matches(self):
+        """In Toffoli mode, compiled and uncompiled produce same gate count."""
+        # Uncompiled (direct)
+        ql.circuit()
+        ql.option("simulate", True)
+        # fault_tolerant=True is default (Toffoli mode)
+        gc_start_direct = get_gate_count()
+        start_layer_direct = get_current_layer()
+        a = ql.qint(0, width=4)
+        a += 7
+        gc_direct = get_gate_count() - gc_start_direct
+        end_layer_direct = get_current_layer()
+        types_direct = _get_gate_types(start_layer_direct, end_layer_direct)
+
+        # Compiled
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def add_seven(x):
+            x += 7
+            return x
+
+        gc_start_compiled = get_gate_count()
+        start_layer_compiled = get_current_layer()
+        b = ql.qint(0, width=4)
+        add_seven(b)
+        gc_compiled = get_gate_count() - gc_start_compiled
+        end_layer_compiled = get_current_layer()
+        types_compiled = _get_gate_types(start_layer_compiled, end_layer_compiled)
+
+        assert gc_compiled == gc_direct, (
+            f"Toffoli mode gate count mismatch: compiled={gc_compiled}, direct={gc_direct}"
+        )
+        assert types_compiled == types_direct, (
+            f"Toffoli mode gate types mismatch: compiled={types_compiled}, direct={types_direct}"
+        )
+
+    def test_toffoli_mode_produces_toffoli_gate_types(self):
+        """In Toffoli mode, compiled path produces only X/CX/CCX gates (type 0)."""
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def add_seven(x):
+            x += 7
+            return x
+
+        start = get_current_layer()
+        a = ql.qint(0, width=4)
+        add_seven(a)
+        end = get_current_layer()
+
+        gates = extract_gate_range(start, end)
+        assert len(gates) > 0, "Should produce gates"
+        gate_types = {g["type"] for g in gates}
+        # Toffoli mode: gate type 0 = X/CX/CCX (Pauli-X family)
+        assert gate_types == {0}, (
+            f"Expected only type-0 (X/CX/CCX) gates in Toffoli mode, got types {gate_types}"
+        )
+
+    def test_qft_mode_gate_count_matches(self):
+        """In QFT mode, compiled and uncompiled produce same gate count."""
+        # Uncompiled (direct)
+        ql.circuit()
+        ql.option("simulate", True)
+        ql.option("fault_tolerant", False)
+        gc_start_direct = get_gate_count()
+        start_layer_direct = get_current_layer()
+        a = ql.qint(0, width=4)
+        a += 7
+        gc_direct = get_gate_count() - gc_start_direct
+        end_layer_direct = get_current_layer()
+        types_direct = _get_gate_types(start_layer_direct, end_layer_direct)
+
+        # Compiled
+        ql.circuit()
+        ql.option("simulate", True)
+        ql.option("fault_tolerant", False)
+
+        @ql.compile
+        def add_seven(x):
+            x += 7
+            return x
+
+        gc_start_compiled = get_gate_count()
+        start_layer_compiled = get_current_layer()
+        b = ql.qint(0, width=4)
+        add_seven(b)
+        gc_compiled = get_gate_count() - gc_start_compiled
+        end_layer_compiled = get_current_layer()
+        types_compiled = _get_gate_types(start_layer_compiled, end_layer_compiled)
+
+        assert gc_compiled == gc_direct, (
+            f"QFT mode gate count mismatch: compiled={gc_compiled}, direct={gc_direct}"
+        )
+        assert types_compiled == types_direct, (
+            f"QFT mode gate types mismatch: compiled={types_compiled}, direct={types_direct}"
+        )
+
+    def test_qft_mode_produces_rotation_gates(self):
+        """In QFT mode, compiled path produces rotation gates (Phase/Hadamard)."""
+        ql.circuit()
+        ql.option("simulate", True)
+        ql.option("fault_tolerant", False)
+
+        @ql.compile
+        def add_seven(x):
+            x += 7
+            return x
+
+        start = get_current_layer()
+        a = ql.qint(0, width=4)
+        add_seven(a)
+        end = get_current_layer()
+
+        gates = extract_gate_range(start, end)
+        assert len(gates) > 0, "Should produce gates"
+        gate_types = {g["type"] for g in gates}
+        # QFT mode: should include Phase (8) and/or Hadamard (4) gates
+        assert gate_types != {0}, f"QFT mode should NOT produce only type-0 gates, got {gate_types}"
+
+    def test_subtraction_gate_correctness(self):
+        """Compiled subtraction matches uncompiled in Toffoli mode."""
+        # Uncompiled
+        ql.circuit()
+        ql.option("simulate", True)
+        gc_start = get_gate_count()
+        start_layer = get_current_layer()
+        a = ql.qint(10, width=4)
+        a -= 3
+        gc_direct = get_gate_count() - gc_start
+        end_layer = get_current_layer()
+        types_direct = _get_gate_types(start_layer, end_layer)
+
+        # Compiled
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def sub_three(x):
+            x -= 3
+            return x
+
+        gc_start2 = get_gate_count()
+        start_layer2 = get_current_layer()
+        b = ql.qint(10, width=4)
+        sub_three(b)
+        gc_compiled = get_gate_count() - gc_start2
+        end_layer2 = get_current_layer()
+        types_compiled = _get_gate_types(start_layer2, end_layer2)
+
+        assert gc_compiled == gc_direct, (
+            f"Subtraction gate count mismatch: compiled={gc_compiled}, direct={gc_direct}"
+        )
+        assert types_compiled == types_direct, "Subtraction gate types mismatch"
+
+    def test_multiplication_gate_correctness(self):
+        """Compiled multiplication matches uncompiled in Toffoli mode."""
+        # Uncompiled
+        ql.circuit()
+        ql.option("simulate", True)
+        gc_start = get_gate_count()
+        start_layer = get_current_layer()
+        a = ql.qint(3, width=4)
+        a *= 5
+        gc_direct = get_gate_count() - gc_start
+        end_layer = get_current_layer()
+        types_direct = _get_gate_types(start_layer, end_layer)
+
+        # Compiled
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def mul_five(x):
+            x *= 5
+            return x
+
+        gc_start2 = get_gate_count()
+        start_layer2 = get_current_layer()
+        b = ql.qint(3, width=4)
+        mul_five(b)
+        gc_compiled = get_gate_count() - gc_start2
+        end_layer2 = get_current_layer()
+        types_compiled = _get_gate_types(start_layer2, end_layer2)
+
+        assert gc_compiled == gc_direct, (
+            f"Multiplication gate count mismatch: compiled={gc_compiled}, direct={gc_direct}"
+        )
+        assert types_compiled == types_direct, "Multiplication gate types mismatch"

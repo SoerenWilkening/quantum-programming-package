@@ -1657,8 +1657,10 @@ cdef class qint(circuit):
 		if type(other) == int:
 			classical_value = <int64_t>other
 
-			# Compile-mode: record IR entry, skip gate emission
-			if _is_compile_mode():
+			# Compile-mode: record IR entry, skip gate emission.
+			# Only for QFT mode — Toffoli mode falls through to direct dispatch
+			# which produces correct gate types (X/CX/CCX instead of QFT rotations).
+			if _is_compile_mode() and _circ.arithmetic_mode != 1:
 				regs = tuple(self_qa[i] for i in range(self_bits))
 				if _controlled:
 					regs = regs + (control_qubit,)
@@ -1723,8 +1725,9 @@ cdef class qint(circuit):
 
 		result_bits = self_bits if self_bits > other_bits else other_bits
 
-		# Compile-mode: record IR entry, skip gate emission
-		if _is_compile_mode():
+		# Compile-mode: record IR entry, skip gate emission.
+		# Only for QFT mode — Toffoli mode falls through to direct dispatch.
+		if _is_compile_mode() and _circ.arithmetic_mode != 1:
 			regs = (tuple(self_qa[i] for i in range(self_bits))
 			        + tuple(other_qa[i] for i in range(other_bits)))
 			if _controlled:
@@ -2276,8 +2279,9 @@ cdef class qint(circuit):
 		if type(other) == int:
 			classical_value = <int64_t>other
 
-			# Compile-mode: record IR entry, skip gate emission
-			if _is_compile_mode():
+			# Compile-mode: record IR entry, skip gate emission.
+			# Only for QFT mode — Toffoli mode falls through to direct dispatch.
+			if _is_compile_mode() and _circ.arithmetic_mode != 1:
 				regs = (tuple(ret_qa[i] for i in range(result_bits))
 				        + tuple(self_qa[i] for i in range(self_bits)))
 				if _controlled:
@@ -2346,8 +2350,9 @@ cdef class qint(circuit):
 		for i in range(other_bits):
 			other_qa[i] = other_qubits_mv[other_offset + i]
 
-		# Compile-mode: record IR entry, skip gate emission
-		if _is_compile_mode():
+		# Compile-mode: record IR entry, skip gate emission.
+		# Only for QFT mode — Toffoli mode falls through to direct dispatch.
+		if _is_compile_mode() and _circ.arithmetic_mode != 1:
 			regs = (tuple(ret_qa[i] for i in range(result_bits))
 			        + tuple(self_qa[i] for i in range(self_bits))
 			        + tuple(other_qa[i] for i in range(other_bits)))
