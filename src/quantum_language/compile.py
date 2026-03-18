@@ -329,6 +329,39 @@ def _derive_controlled_gates(gates):
     return controlled
 
 
+def _strip_control_qubit(gates, control_qubit):
+    """Remove a physical control qubit from each gate's controls list.
+
+    Used to normalise controlled gates back to uncontrolled form for
+    the gate-level cache.  Each gate's ``num_controls`` is decremented
+    by 1 and *control_qubit* is removed from ``controls``.  Gates that
+    do not reference *control_qubit* in their controls are left unchanged.
+
+    Parameters
+    ----------
+    gates : list[dict]
+        Raw gate dicts from ``extract_gate_range`` (physical qubit indices).
+    control_qubit : int
+        Physical qubit index of the control to strip.
+
+    Returns
+    -------
+    list[dict]
+        Gate dicts with the control qubit removed.
+    """
+    stripped = []
+    for g in gates:
+        if control_qubit in g.get("controls", []):
+            sg = dict(g)
+            new_controls = [c for c in g["controls"] if c != control_qubit]
+            sg["controls"] = new_controls
+            sg["num_controls"] = len(new_controls)
+            stripped.append(sg)
+        else:
+            stripped.append(g)
+    return stripped
+
+
 # ---------------------------------------------------------------------------
 # Nesting depth limit for compiled function capture
 # ---------------------------------------------------------------------------
@@ -382,9 +415,14 @@ def _execute_ir(block, qubit_mapping=None):
     """Execute recorded IR entries to produce gates in the circuit.
 
     Iterates ``block._instruction_ir`` and calls ``run_instruction`` for
-    each entry using the uncontrolled sequence.  An optional *qubit_mapping*
-    dict remaps capture-time physical qubit indices to replay-time physical
-    indices (for replaying on different qubits).
+    each entry.  Checks the control stack at runtime: if inside a ``with``
+    block (controlled context), uses ``entry.controlled_seq`` and appends
+    the control qubit to the register tuple.  Otherwise uses
+    ``entry.uncontrolled_seq``.
+
+    An optional *qubit_mapping* dict remaps capture-time physical qubit
+    indices to replay-time physical indices (for replaying on different
+    qubits).
 
     Parameters
     ----------
@@ -395,14 +433,25 @@ def _execute_ir(block, qubit_mapping=None):
         replay-time physical qubit index (int).  When *None*, registers
         are used as-is (identity mapping — same physical qubits as capture).
     """
+    is_controlled = _get_controlled()
+    control_qubit = None
+    if is_controlled:
+        control_bool = _get_control_bool()
+        control_qubit = int(control_bool.qubits[63])
+
     for entry in block._instruction_ir:
-        seq_ptr = entry.uncontrolled_seq
+        if is_controlled and entry.controlled_seq != 0:
+            seq_ptr = entry.controlled_seq
+        else:
+            seq_ptr = entry.uncontrolled_seq
         if seq_ptr == 0:
             continue
         if qubit_mapping is not None:
             regs = tuple(qubit_mapping[r] for r in entry.registers)
         else:
             regs = entry.registers
+        if is_controlled and control_qubit is not None:
+            regs = regs + (control_qubit,)
         _run_instruction_py(seq_ptr, regs, int(entry.invert))
 
 
@@ -1083,9 +1132,28 @@ class CompiledFunc:
         active (no gates emitted), then ``_execute_ir`` replays the recorded
         entries to produce actual gates.  The resulting gates are extracted
         and virtualised for the gate-level cache as before.
+
+        The compile-mode (IR recording) phase always runs with the control
+        stack cleared so that IR entries record uncontrolled registers.
+        The execute phase (``_execute_ir``) runs with the original control
+        stack intact so it can select controlled sequences and inject
+        the control qubit when inside a ``with`` block.  This ensures the
+        first call inside a ``with`` block produces correctly controlled
+        gates in the circuit.
+
+        The extracted gates are then normalised to uncontrolled form (any
+        injected control qubit is stripped) before building the gate-level
+        cache, so ``_derive_controlled_block`` can re-add control correctly.
         """
         # Record start layer
         start_layer = get_current_layer()
+
+        # Detect controlled context BEFORE clearing the control stack
+        is_controlled = _get_controlled()
+        control_physical_qubit = None
+        if is_controlled:
+            control_bool = _get_control_bool()
+            control_physical_qubit = int(control_bool.qubits[63])
 
         # Check if circuit is in tracking-only mode (simulate=False).
         # Gate count is used to compute per-block cost when gates aren't stored.
@@ -1099,6 +1167,14 @@ class CompiledFunc:
 
         # Compile-mode capture: run the body with IR recording active,
         # then execute the recorded IR to produce gates in the circuit.
+        #
+        # Mode-dependent control stack handling:
+        # - QFT mode: control stack is cleared during compile_mode so IR
+        #   entries record uncontrolled registers.  After compile_mode, the
+        #   stack is restored and _execute_ir selects controlled sequences.
+        # - Toffoli mode: control stack is NOT cleared.  Toffoli dispatch
+        #   handles control natively (passes _controlled + control_qubit).
+        #   No IR entries are recorded, so _execute_ir is a no-op.
         ir_block = CompiledBlock(
             gates=[],
             total_virtual_qubits=0,
@@ -1106,10 +1182,28 @@ class CompiledFunc:
             internal_qubit_count=0,
             return_qubit_range=None,
         )
-        with self.compile_mode(ir_block):
-            result = self._func(*args, **kwargs)
+        _is_toffoli = option("fault_tolerant")
+        if _is_toffoli:
+            # Toffoli mode: keep control stack intact.  Toffoli dispatch
+            # emits gates directly with the correct control context.
+            with self.compile_mode(ir_block):
+                result = self._func(*args, **kwargs)
+        else:
+            # QFT mode: clear control stack during IR recording, restore
+            # it before IR execution so _execute_ir can inject control.
+            saved_stack = list(_get_control_stack())
+            _set_control_stack([])
+            try:
+                with self.compile_mode(ir_block):
+                    result = self._func(*args, **kwargs)
+            finally:
+                _set_control_stack(saved_stack)
 
-        # Execute the recorded IR to produce gates in the circuit
+        # Execute the recorded IR to produce gates in the circuit.
+        # In QFT mode, _execute_ir checks the (now-restored) control
+        # stack and uses controlled sequences when inside a with block.
+        # In Toffoli mode, _instruction_ir is empty (Toffoli dispatch
+        # emitted gates directly), so this is a no-op.
         _execute_ir(ir_block)
 
         # Record end layer
@@ -1124,6 +1218,13 @@ class CompiledFunc:
         # Extract captured gates (empty in tracking-only mode (simulate=False)
         # since gates are counted but not stored)
         raw_gates = extract_gate_range(start_layer, end_layer)
+
+        # If the capture ran in a controlled context, the extracted gates
+        # include the control qubit.  Strip it to get uncontrolled gates
+        # for the gate-level cache (controlled variant is derived later
+        # by _derive_controlled_block).
+        if is_controlled and control_physical_qubit is not None and raw_gates:
+            raw_gates = _strip_control_qubit(raw_gates, control_physical_qubit)
 
         # Build virtual mapping
         virtual_gates, real_to_virtual, total_virtual = _build_virtual_mapping(
@@ -1231,22 +1332,14 @@ class CompiledFunc:
     ):
         """Handle cache miss: capture uncontrolled, derive controlled, cache both.
 
-        First call of a compiled function inside a ``with`` block executes
-        the uncontrolled body; subsequent calls correctly replay controlled
-        gates.  This is an accepted trade-off -- the first-call circuit
-        contains uncontrolled gates because gates already emitted into the
-        circuit cannot be retroactively controlled.
+        IR recording always happens with the control stack cleared (inside
+        ``_capture_inner``).  IR execution (``_execute_ir``) runs with
+        the original control stack intact, so the first call inside a
+        ``with`` block produces correctly controlled gates.
         """
-        # Always capture in uncontrolled mode
-        if is_controlled:
-            saved_stack = list(_get_control_stack())
-            _set_control_stack([])
-            try:
-                block = self._capture(args, kwargs, quantum_args)
-            finally:
-                _set_control_stack(saved_stack)
-        else:
-            block = self._capture(args, kwargs, quantum_args)
+        # _capture_inner handles control stack save/clear/restore internally:
+        # IR recording runs uncontrolled, IR execution sees the real stack.
+        block = self._capture(args, kwargs, quantum_args)
 
         # Derive controlled variant and attach to the same block
         try:
