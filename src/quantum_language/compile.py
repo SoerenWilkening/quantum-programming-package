@@ -1740,10 +1740,12 @@ class CompiledFunc:
         # gates are not stored — gate counts are credited separately
         # in _call_inner.
         #
-        # opt=1 DAG-only replay: skip gate injection in uncontrolled
-        # context (the DAG node in _call_inner records the cost).
-        # Gate injection IS required in controlled contexts (inside
-        # ``with`` blocks) for correct quantum state evolution.
+        # opt=1 DAG-only replay: skip gate injection only in uncontrolled
+        # context AND when simulate=False (the DAG node in _call_inner
+        # records the cost).  When simulate=True the user expects gates
+        # in the circuit for every call.  Gate injection is also always
+        # required in controlled contexts (inside ``with`` blocks) for
+        # correct quantum state evolution.
         #
         # Track which path was used so _call_inner can decide whether to
         # credit gate_count manually:
@@ -1751,7 +1753,7 @@ class CompiledFunc:
         # - Gate-level path: inject_remapped_gates does NOT increment it
         # - No path (simulate=False or opt=1 skip): nothing increments it
         self._last_replay_used_ir = False
-        _skip_injection = self._opt == 1 and not is_controlled
+        _skip_injection = self._opt == 1 and not is_controlled and not option("simulate")
         if option("simulate") and not _skip_injection:
             if _ir_source is not None and _ir_source._instruction_ir:
                 # IR path: _execute_ir handles controlled sequences and
