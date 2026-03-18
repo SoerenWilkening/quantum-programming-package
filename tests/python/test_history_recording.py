@@ -222,48 +222,43 @@ class TestBitwiseRecordsHistory:
 class TestChainedExpressionRecordsChildren:
     """Compound expressions add intermediate temporaries as weakref children."""
 
-    def test_chained_add_gt_records_children(self):
+    def test_chained_add_gt_records_history(self):
         """cond = (a + 3) > 5 -> cond's history has entries from the comparison."""
         ql.circuit()
         a = ql.qint(4, width=4)
         temp = a + 3
         cond = temp > 5
-        # The > comparison on qint > int delegates to qint > qint,
-        # which creates widened temporaries tracked as children.
-        # At minimum, the comparison result should have history entries.
+        # Borrow-ancilla pattern: comparison result has history entries.
         assert len(cond.history) >= 1
 
-    def test_lt_qq_has_widened_children_registered(self):
-        """a < b registers widened temps as weakref children."""
+    def test_lt_qq_no_children(self):
+        """a < b uses borrow-ancilla (no children in history)."""
         ql.circuit()
         a = ql.qint(3, width=4)
         b = ql.qint(5, width=4)
         cond = a < b
-        # Borrow-ancilla pattern: no widened temporaries, no children
+        # Borrow-ancilla pattern: no temporaries, no children
         assert len(cond.history.children) == 0
 
-    def test_gt_qq_no_widened_children(self):
-        """a > b uses borrow-ancilla (no widened temp children)."""
+    def test_gt_qq_no_children(self):
+        """a > b uses borrow-ancilla (no children in history)."""
         ql.circuit()
         a = ql.qint(5, width=4)
         b = ql.qint(3, width=4)
         cond = a > b
         assert len(cond.history.children) == 0
 
-    def test_children_dead_after_scope_exit(self):
-        """Widened temp weakrefs become dead after method scope exits."""
+    def test_comparison_no_children_after_gc(self):
+        """Borrow-ancilla comparisons leave no children even after GC."""
         ql.circuit()
         a = ql.qint(3, width=4)
         b = ql.qint(5, width=4)
         cond = a < b
         gc.collect()
-        # The widened temps are local to __lt__, so their weakrefs
-        # are expected to be dead after __lt__ returns and GC runs.
-        # This verifies the weakref mechanism handles dead refs gracefully.
-        # live_children() should return empty or fewer than children count
+        # Borrow-ancilla: no temporaries created, so no children at all.
         alive = cond.history.live_children()
-        dead_count = len(cond.history.children) - len(alive)
-        assert dead_count >= 0  # At least some may be dead
+        assert len(alive) == 0
+        assert len(cond.history.children) == 0
 
 
 # ---------------------------------------------------------------------------

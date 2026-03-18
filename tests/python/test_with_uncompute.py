@@ -77,7 +77,7 @@ class TestWithBlockUncomputesTemporaries:
         a = ql.qint(4, width=4)
         temp = a + 3
         cond = temp > 5
-        # Borrow-ancilla: no widened temp children
+        # Borrow-ancilla: no temporary children
         with cond:
             pass
         # After exit, children list is cleared

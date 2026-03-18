@@ -54,7 +54,7 @@ class TestWithBlockSimpleComparison:
     def test_gt_cq_records_then_uncomputes(self):
         """CQ greater-than: history recorded on creation, cleared on exit.
 
-        Uses borrow-ancilla pattern (no widened temporaries / children).
+        Uses borrow-ancilla pattern (no temporary children).
         The key invariant is that history is cleared after the with block.
         """
         ql.circuit()
@@ -119,7 +119,7 @@ class TestCompoundExpression:
         temp = a + 3
         cond = temp > 5
 
-        # Borrow-ancilla pattern: no widened temporaries (no children)
+        # Borrow-ancilla pattern: no temporary children
         assert len(cond.history) >= 1
 
     def test_compound_with_clears_history(self):
@@ -647,7 +647,7 @@ class TestFullEndToEnd:
             result += 1
         assert len(cond1.history) == 0
 
-        # Compound expression (borrow-ancilla: no widened temp children)
+        # Compound expression (borrow-ancilla: no temporary children)
         temp = a + 3
         cond2 = temp > 5
         assert len(cond2.history) >= 1

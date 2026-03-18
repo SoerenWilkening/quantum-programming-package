@@ -1,14 +1,14 @@
 """Tests for Phase ix4.2: In-place comparison with borrow-ancilla pattern.
 
 Verifies that __lt__ and __gt__ use the borrow-ancilla pattern
-(split-register arithmetic) instead of widened temporary copies.
+(split-register arithmetic) instead of temporary copies.
 
 Tests:
   - lt_correctness: qint < int and qint < qint produce correct results
   - gt_correctness: qint > int and qint > qint produce correct results
   - le_ge_derived: <= and >= work correctly (derived from lt/gt)
   - operand_preservation: operands unchanged after comparison
-  - no_history_children: no widened temporaries in history.children
+  - no_history_children: no temporary children in history.children
   - ancilla_deallocated: borrow ancilla freed after comparison
   - comparison_in_with_block: comparison result usable in with block
   - comparison_superposition: comparison works in Grover oracle context
@@ -308,10 +308,10 @@ class TestOperandPreservation:
 
 
 class TestNoHistoryChildren:
-    """Borrow-ancilla comparisons should not create widened temporaries."""
+    """Borrow-ancilla comparisons should not create temporary children."""
 
     def test_lt_cq_no_children(self):
-        """CQ less-than should have no history children (no widened temps)."""
+        """CQ less-than should have no history children."""
         ql.circuit()
         a = ql.qint(3, width=4)
         result = a < 5
