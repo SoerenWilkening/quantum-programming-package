@@ -597,7 +597,7 @@ class CallGraphDAG:
 
         lines.append(sep)
         totals = (
-            f"{'TOTAL':<20s} | {agg['gates']:>8d} | {agg['depth']:>8d} | "
+            f"{'TOTAL':<20s} | {str(agg['gates']):>15s} | {agg['depth']:>8d} | "
             f"{agg['qubits']:>8d} | {agg['t_count']:>8d} | {'-':>8s}"
         )
         lines.append(totals)

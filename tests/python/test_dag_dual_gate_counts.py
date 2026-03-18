@@ -7,12 +7,16 @@ Tests:
 1. test_dag_node_dual_gate_counts — both fields stored and formatted correctly.
 2. test_dag_node_single_variant — '-' shown for unavailable variant.
 3. test_to_dot_dual_format — to_dot() output uses 'gates: X / Y' format.
+4. test_resolve_gate_count — _resolve_gate_count code paths.
 """
+
+from unittest.mock import patch
 
 from quantum_language.call_graph import (
     CallGraphDAG,
     DAGNode,
     _format_dual_gates,
+    _resolve_gate_count,
 )
 
 # ---------------------------------------------------------------------------
@@ -223,8 +227,49 @@ class TestReportDualGateColumn:
         assert "24 / -" in report
 
     def test_report_still_has_total(self):
-        """report() still has a TOTAL row."""
+        """report() TOTAL row is aligned with header and data rows."""
         dag = CallGraphDAG()
         dag.add_node("fn", {0}, 10, (), uncontrolled_gate_count=24, controlled_gate_count=18)
         report = dag.report()
-        assert "TOTAL" in report
+        lines = report.split("\n")
+        # Find the header, separator, data, and total rows
+        header_line = next(ln for ln in lines if "Gates (U/C)" in ln)
+        total_line = next(ln for ln in lines if "TOTAL" in ln)
+        # TOTAL row must have the same width as the header row
+        assert len(total_line) == len(header_line), (
+            f"TOTAL row length {len(total_line)} != header length {len(header_line)}\n"
+            f"  header: {header_line!r}\n"
+            f"  total:  {total_line!r}"
+        )
+        # TOTAL row must contain the aggregate gate count (15-char padded)
+        assert "TOTAL" in total_line
+        assert "|" in total_line
+
+
+# ---------------------------------------------------------------------------
+# _resolve_gate_count code paths
+# ---------------------------------------------------------------------------
+
+
+class TestResolveGateCount:
+    """_resolve_gate_count resolves gate count from a sequence pointer."""
+
+    def test_returns_zero_when_helper_unavailable(self):
+        """Returns 0 when _sequence_gate_count is None (Cython not built)."""
+        with patch("quantum_language.call_graph._sequence_gate_count", None):
+            assert _resolve_gate_count(12345) == 0
+
+    def test_returns_zero_for_null_pointer(self):
+        """Returns 0 when seq_ptr is 0 (null pointer)."""
+        # Even if _sequence_gate_count is available, ptr=0 should return 0
+        with patch("quantum_language.call_graph._sequence_gate_count", lambda p: 999):
+            assert _resolve_gate_count(0) == 0
+
+    def test_calls_helper_with_valid_pointer(self):
+        """Delegates to _sequence_gate_count when helper is available and ptr != 0."""
+        sentinel = 42
+        with patch(
+            "quantum_language.call_graph._sequence_gate_count",
+            lambda p: sentinel if p == 7777 else 0,
+        ):
+            assert _resolve_gate_count(7777) == sentinel
