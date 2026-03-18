@@ -502,7 +502,9 @@ def _build_dag_from_ir(block, func_name, is_controlled=False, qubit_mapping=None
             regs = entry.registers
         qubit_set = frozenset(regs)
 
-        # Select the appropriate sequence pointer for gate count metadata
+        # Store both sequence pointers from InstructionRecord on the node.
+        # sequence_ptr is set to the variant matching the current context
+        # for backward compatibility.
         if is_controlled and entry.controlled_seq != 0:
             seq_ptr = entry.controlled_seq
         else:
@@ -514,6 +516,8 @@ def _build_dag_from_ir(block, func_name, is_controlled=False, qubit_mapping=None
             0,  # gate_count -- not available from IR alone
             (),  # cache_key
             sequence_ptr=seq_ptr,
+            uncontrolled_seq=entry.uncontrolled_seq,
+            controlled_seq=entry.controlled_seq,
             qubit_mapping=regs,
             operation_type=entry.name,
             invert=entry.invert,
@@ -562,6 +566,7 @@ class CompiledBlock:
         "controlled_block",  # Derived controlled CompiledBlock (Phase 5)
         "_captured_controlled",  # Whether capture was inside control context
         "_instruction_ir",  # list[InstructionRecord] – compile-mode IR
+        "_dag_built",  # bool – DAG nodes already built from IR (no duplication on replay)
     )
 
     def __init__(
@@ -592,6 +597,7 @@ class CompiledBlock:
         self.controlled_block = None
         self._captured_controlled = False
         self._instruction_ir = []
+        self._dag_built = False
 
 
 # ---------------------------------------------------------------------------
@@ -1060,14 +1066,18 @@ class CompiledFunc:
             # re-executed).
             if _building_dag:
                 _ir_added = 0
-                if self._opt == 1 and block and block._instruction_ir:
+                if self._opt == 1 and block and block._instruction_ir and not block._dag_built:
                     # opt=1 with IR: build DAG nodes from instruction IR
-                    # so replays populate the DAG (even with simulate=False).
+                    # only on the first replay (capture already built the
+                    # DAG on the capture path).  Skip if _dag_built is set
+                    # to avoid duplicating nodes on subsequent replays.
                     _ir_added = _build_dag_from_ir(
                         block,
                         self._func.__name__,
                         is_controlled=is_controlled,
                     )
+                    if _ir_added > 0:
+                        block._dag_built = True
                 if not (self._opt == 1 and _ir_added > 0):
                     # Non-opt=1, or opt=1 without IR entries (Toffoli mode):
                     # add a single call-level DAG node.
@@ -1117,12 +1127,14 @@ class CompiledFunc:
                 block = self._cache.get(cache_key)
                 if block is not None:
                     block._captured_controlled = is_controlled
-                    if _building_dag and block._instruction_ir:
-                        _build_dag_from_ir(
+                    if _building_dag and block._instruction_ir and not block._dag_built:
+                        _ir_added = _build_dag_from_ir(
                             block,
                             self._func.__name__,
                             is_controlled=is_controlled,
                         )
+                        if _ir_added > 0:
+                            block._dag_built = True
 
         if self._debug:
             block = self._cache.get(cache_key)

@@ -88,6 +88,10 @@ class DAGNode:
     sequence_ptr : int
         C pointer to ``sequence_t`` (cast to Python int). Used for call-graph
         replay without re-executing the function body.
+    uncontrolled_seq : int
+        Pointer to the uncontrolled ``sequence_t`` variant (as Python int), or 0.
+    controlled_seq : int
+        Pointer to the controlled ``sequence_t`` variant (as Python int), or 0.
     qubit_mapping : tuple[int, ...]
         Physical qubit indices for ``run_instruction``.
     operation_type : str
@@ -105,6 +109,8 @@ class DAGNode:
         "depth",
         "t_count",
         "sequence_ptr",
+        "uncontrolled_seq",
+        "controlled_seq",
         "qubit_mapping",
         "operation_type",
         "invert",
@@ -124,6 +130,8 @@ class DAGNode:
         depth: int = 0,
         t_count: int = 0,
         sequence_ptr: int = 0,
+        uncontrolled_seq: int = 0,
+        controlled_seq: int = 0,
         qubit_mapping: tuple = (),
         operation_type: str = "",
         invert: bool = False,
@@ -137,6 +145,8 @@ class DAGNode:
         self.depth = depth
         self.t_count = t_count
         self.sequence_ptr = sequence_ptr
+        self.uncontrolled_seq = uncontrolled_seq
+        self.controlled_seq = controlled_seq
         self.qubit_mapping = qubit_mapping
         self.operation_type = operation_type
         self.invert = invert
@@ -194,6 +204,8 @@ class CallGraphDAG:
         depth: int = 0,
         t_count: int = 0,
         sequence_ptr: int = 0,
+        uncontrolled_seq: int = 0,
+        controlled_seq: int = 0,
         qubit_mapping: tuple = (),
         operation_type: str = "",
         invert: bool = False,
@@ -217,6 +229,10 @@ class CallGraphDAG:
             T-gate count for this node.
         sequence_ptr : int
             C pointer to ``sequence_t`` (cast to Python int).
+        uncontrolled_seq : int
+            Pointer to the uncontrolled ``sequence_t`` variant (as Python int).
+        controlled_seq : int
+            Pointer to the controlled ``sequence_t`` variant (as Python int).
         qubit_mapping : tuple of int
             Physical qubit indices for ``run_instruction``.
         operation_type : str
@@ -248,6 +264,8 @@ class CallGraphDAG:
             depth=depth,
             t_count=t_count,
             sequence_ptr=sequence_ptr,
+            uncontrolled_seq=uncontrolled_seq,
+            controlled_seq=controlled_seq,
             qubit_mapping=qubit_mapping,
             operation_type=operation_type,
             invert=invert,
