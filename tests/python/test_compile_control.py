@@ -148,7 +148,7 @@ class TestBothSequencesStored:
             assert cg["num_controls"] == ug["num_controls"] + 1
 
     def test_controlled_block_total_virtual_qubits(self):
-        """Controlled block has one more virtual qubit than uncontrolled."""
+        """Controlled block has same total_virtual_qubits as uncontrolled."""
 
         @ql.compile
         def inc(x):
@@ -163,7 +163,7 @@ class TestBothSequencesStored:
         block = list(inc._cache.values())[0]
         ctrl_block = block.controlled_block
 
-        assert ctrl_block.total_virtual_qubits == block.total_virtual_qubits + 1
+        assert ctrl_block.total_virtual_qubits == block.total_virtual_qubits
 
 
 class TestCacheKeyNoControlCount:
@@ -299,10 +299,10 @@ class TestUncontrolledReplay:
         b = ql.qint(0, width=2)
         _ = inc(b)
 
-        # The replay used the uncontrolled block which has fewer virtual
-        # qubits than the controlled variant
+        # Both variants now share the same total_virtual_qubits (index 0
+        # reserved for control in both)
         ctrl_block = block.controlled_block
-        assert ctrl_block.total_virtual_qubits == uncontrolled_total_vqubits + 1
+        assert ctrl_block.total_virtual_qubits == uncontrolled_total_vqubits
 
 
 class TestControlledReplay:

@@ -312,17 +312,17 @@ def _merge_and_optimize(blocks_with_mappings, optimize=True):
 # ---------------------------------------------------------------------------
 # Controlled variant derivation
 # ---------------------------------------------------------------------------
-def _derive_controlled_gates(gates, control_virtual_idx):
-    """Add one control qubit to every gate in the list.
+def _derive_controlled_gates(gates):
+    """Add virtual index 0 as a control qubit to every gate.
 
-    Each gate's ``num_controls`` is incremented by 1 and
-    *control_virtual_idx* is prepended to the ``controls`` list.
+    Each gate's ``num_controls`` is incremented by 1 and index 0
+    (the reserved control slot) is prepended to the ``controls`` list.
     """
     controlled = []
     for g in gates:
         cg = dict(g)
         cg["num_controls"] = g["num_controls"] + 1
-        cg["controls"] = [control_virtual_idx] + list(g["controls"])
+        cg["controls"] = [0] + list(g["controls"])
         controlled.append(cg)
     return controlled
 
@@ -375,7 +375,7 @@ class CompiledBlock:
     total_virtual_qubits : int
         Total count of virtual qubits (params + ancillas).
     param_qubit_ranges : list[tuple[int, int]]
-        (start_virtual_idx, width) per quantum argument.
+        (start_virtual_idx, end_virtual_idx) per quantum argument.
     internal_qubit_count : int
         Number of ancilla/temporary virtual qubits.
     return_qubit_range : tuple[int, int] or None
@@ -457,8 +457,10 @@ class AncillaRecord:
 def _build_virtual_mapping(gates, param_qubit_indices):
     """Map real qubit indices to a virtual namespace.
 
-    Parameter qubits are mapped first (in argument order), then any
-    ancilla/temporary qubits encountered in the gate list.
+    Virtual index 0 is reserved for the control qubit (used by
+    ``_derive_controlled_block``).  Parameter qubits are mapped starting
+    at index 1, then any ancilla/temporary qubits encountered in the
+    gate list.
 
     Parameters
     ----------
@@ -473,7 +475,7 @@ def _build_virtual_mapping(gates, param_qubit_indices):
         (virtual_gates, real_to_virtual, total_virtual_count)
     """
     real_to_virtual = {}
-    virtual_idx = 0
+    virtual_idx = 1  # Reserve index 0 for control qubit
 
     # Map parameter qubits first (in argument order)
     for qubit_list in param_qubit_indices:
@@ -1072,12 +1074,12 @@ class CompiledFunc:
             virt_ret = [real_to_virtual[r] for r in ret_indices]
             return_range = (min(virt_ret), result.width)
 
-        # Build param ranges in virtual space
+        # Build param ranges in virtual space (start, end) starting at 1
         param_ranges = []
-        vidx = 0
+        vidx = 1  # params start at virtual index 1 (0 reserved for control)
         for qa in quantum_args:
             qa_width = _get_quantum_arg_width(qa)
-            param_ranges.append((vidx, qa_width))
+            param_ranges.append((vidx, vidx + qa_width))
             vidx += qa_width
         internal_count = total_virtual - vidx
 
@@ -1180,27 +1182,24 @@ class CompiledFunc:
     def _derive_controlled_block(self, uncontrolled_block):
         """Create a controlled ``CompiledBlock`` from an uncontrolled one.
 
-        The control qubit receives virtual index
-        ``uncontrolled_block.total_virtual_qubits`` (one beyond all
-        uncontrolled virtual qubits).
+        The control qubit uses virtual index 0 (reserved by
+        ``_build_virtual_mapping``).  ``total_virtual_qubits`` is the
+        same as the uncontrolled block since index 0 is already counted.
         """
-        control_virt_idx = uncontrolled_block.total_virtual_qubits
-
         controlled_gates = _derive_controlled_gates(
             uncontrolled_block.gates,
-            control_virt_idx,
         )
 
         controlled_block = CompiledBlock(
             gates=controlled_gates,
-            total_virtual_qubits=uncontrolled_block.total_virtual_qubits + 1,
+            total_virtual_qubits=uncontrolled_block.total_virtual_qubits,
             param_qubit_ranges=list(uncontrolled_block.param_qubit_ranges),
             internal_qubit_count=uncontrolled_block.internal_qubit_count,
             return_qubit_range=uncontrolled_block.return_qubit_range,
             return_is_param_index=uncontrolled_block.return_is_param_index,
             original_gate_count=uncontrolled_block.original_gate_count,
         )
-        controlled_block.control_virtual_idx = control_virt_idx
+        controlled_block.control_virtual_idx = 0
         controlled_block.return_type = uncontrolled_block.return_type
         controlled_block._return_qarray_element_widths = (
             uncontrolled_block._return_qarray_element_widths
@@ -1388,9 +1387,17 @@ class CompiledFunc:
         if is_controlled and block.controlled_block is not None:
             block = block.controlled_block
 
-        # Build virtual-to-real mapping from caller's qints/qarrays
+        # Build virtual-to-real mapping from caller's qints/qarrays.
+        # Virtual index 0 is reserved for the control qubit; params
+        # start at index 1.
         virtual_to_real = {}
-        vidx = 0
+
+        # Map control qubit at index 0 when in controlled context
+        if is_controlled and block.control_virtual_idx is not None:
+            control_bool = _get_control_bool()
+            virtual_to_real[0] = int(control_bool.qubits[63])
+
+        vidx = 1  # params start at virtual index 1
         for qa in quantum_args:
             indices = _get_quantum_arg_qubit_indices(qa)
             for real_q in indices:
@@ -1398,25 +1405,20 @@ class CompiledFunc:
                 vidx += 1
 
         # Validate total qubit count matches cached block's param ranges
-        expected_param_qubits = sum(w for _, w in block.param_qubit_ranges)
-        if vidx != expected_param_qubits:
+        expected_param_qubits = sum(end - start for start, end in block.param_qubit_ranges)
+        if vidx - 1 != expected_param_qubits:
             raise ValueError(
                 f"qarray element widths don't match captured widths: "
-                f"expected {expected_param_qubits} qubits, got {vidx}"
+                f"expected {expected_param_qubits} qubits, got {vidx - 1}"
             )
 
-        # Allocate fresh ancillas for internal qubits, with control
-        # qubit remapping for controlled variants
+        # Allocate fresh ancillas for internal qubits (skip index 0
+        # which is the control slot, already mapped or unused)
         ancilla_qubits = []
         for v in range(vidx, block.total_virtual_qubits):
-            if block.control_virtual_idx is not None and v == block.control_virtual_idx:
-                # Map control placeholder to actual control qubit
-                control_bool = _get_control_bool()
-                virtual_to_real[v] = int(control_bool.qubits[63])
-            else:
-                real_q = _allocate_qubit()
-                virtual_to_real[v] = real_q
-                ancilla_qubits.append(real_q)
+            real_q = _allocate_qubit()
+            virtual_to_real[v] = real_q
+            ancilla_qubits.append(real_q)
 
         # Save layer_floor, set to current layer to prevent gate reordering
         # into earlier circuit layers. This ensures consistent depth behavior:
@@ -1779,10 +1781,9 @@ class _AncillaInverseProxy:
         if is_controlled:
             control_bool = _get_control_bool()
             ctrl_qubit = int(control_bool.qubits[63])
-            ctrl_virt_idx = record.block.total_virtual_qubits
-            adjoint_gates = _derive_controlled_gates(adjoint_gates, ctrl_virt_idx)
+            adjoint_gates = _derive_controlled_gates(adjoint_gates)
             vtr = dict(record.virtual_to_real)
-            vtr[ctrl_virt_idx] = ctrl_qubit
+            vtr[0] = ctrl_qubit  # control at reserved index 0
         else:
             vtr = record.virtual_to_real
 

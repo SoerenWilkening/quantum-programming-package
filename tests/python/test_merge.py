@@ -113,7 +113,7 @@ def _make_block(gates, total_vqubits=4):
     return CompiledBlock(
         gates=gates,
         total_virtual_qubits=total_vqubits,
-        param_qubit_ranges=[(0, total_vqubits)],
+        param_qubit_ranges=[(1, 1 + total_vqubits)],
         internal_qubit_count=0,
         return_qubit_range=None,
     )
