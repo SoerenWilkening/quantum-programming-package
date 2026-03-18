@@ -1059,6 +1059,26 @@ def inject_remapped_gates(list gates, dict qubit_map):
 		add_gate(circ, &g)
 
 
+def _sequence_gate_count(unsigned long long seq_ptr):
+	"""Return total gate count from a sequence pointer.
+
+	Parameters
+	----------
+	seq_ptr : int
+		Pointer to a ``sequence_t`` (as unsigned long long).
+		Pass 0 for a null pointer.
+
+	Returns
+	-------
+	int
+		``total_gate_count`` field of the sequence, or 0 if *seq_ptr* is null.
+	"""
+	if seq_ptr == 0:
+		return 0
+	cdef sequence_t *seq = <sequence_t*>seq_ptr
+	return <int>seq.total_gate_count
+
+
 def _run_instruction_py(unsigned long long seq_ptr, tuple registers, int invert):
 	"""Execute a compiled sequence on the current circuit.
 
