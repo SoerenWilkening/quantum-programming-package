@@ -206,4 +206,73 @@ extern sequence_t *precompiled_cQQ_mul;
 extern sequence_t *precompiled_QQ_mul_width[65];
 extern sequence_t *precompiled_cQQ_mul_width[65];
 
+// ============================================================================
+// Split-Register Arithmetic (Phase 4: In-Place Comparison Operators)
+// ============================================================================
+
+/**
+ * @brief Split-register QFT addition: [a, msb] += classical value.
+ *
+ * Treats [a_0..a_{bits-1}, msb_qubit] as an (bits+1)-bit register and adds
+ * a classical value using the Draper QFT adder on the full (bits+1) width.
+ *
+ * @param bits  Width of the base register a (1-63)
+ * @param value Classical value to add
+ * @return Fresh sequence - CALLER MUST FREE
+ *
+ * Qubit layout: [0..bits-1] = register a, [bits] = msb qubit
+ *
+ * OWNERSHIP: Caller owns returned sequence_t*, must free
+ */
+sequence_t *split_CQ_add(int bits, int64_t value);
+
+/**
+ * @brief Split-register QFT subtraction: [a, msb] -= classical value.
+ *
+ * Equivalent to split_CQ_add(bits, -value).
+ *
+ * @param bits  Width of the base register a (1-63)
+ * @param value Classical value to subtract
+ * @return Fresh sequence - CALLER MUST FREE
+ *
+ * Qubit layout: [0..bits-1] = register a, [bits] = msb qubit
+ *
+ * OWNERSHIP: Caller owns returned sequence_t*, must free
+ */
+sequence_t *split_CQ_sub(int bits, int64_t value);
+
+/**
+ * @brief Split-register Toffoli addition: [a, msb] += classical value.
+ *
+ * Uses CDKM ripple-carry adder on (bits+1) qubits. The temp register and
+ * carry ancilla are internal to the sequence.
+ *
+ * @param bits  Width of the base register a (1-63)
+ * @param value Classical value to add
+ * @return Fresh sequence - CALLER MUST FREE via toffoli_sequence_free()
+ *
+ * Qubit layout (of returned sequence, same as toffoli_CQ_add(bits+1)):
+ *   [0..bits]        = temp register
+ *   [bits+1..2*bits+1] = target register [a, msb]
+ *   [2*(bits+1)]     = carry ancilla
+ *
+ * OWNERSHIP: Caller owns returned sequence_t*, must free via toffoli_sequence_free()
+ */
+sequence_t *split_toffoli_CQ_add(int bits, int64_t value);
+
+/**
+ * @brief Split-register Toffoli subtraction: [a, msb] -= classical value.
+ *
+ * Equivalent to split_toffoli_CQ_add(bits, -value).
+ *
+ * @param bits  Width of the base register a (1-63)
+ * @param value Classical value to subtract
+ * @return Fresh sequence - CALLER MUST FREE via toffoli_sequence_free()
+ *
+ * Qubit layout: same as split_toffoli_CQ_add
+ *
+ * OWNERSHIP: Caller owns returned sequence_t*, must free via toffoli_sequence_free()
+ */
+sequence_t *split_toffoli_CQ_sub(int bits, int64_t value);
+
 #endif // QUANTUM_ARITHMETIC_OPS_H

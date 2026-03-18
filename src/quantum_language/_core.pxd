@@ -37,6 +37,13 @@ cdef extern from "arithmetic_ops.h":
 	sequence_t *cCQ_mul(int bits, long long value);
 	sequence_t *cQQ_mul(int bits);
 
+cdef extern from "arithmetic_ops.h":
+	# Split-register arithmetic (Phase 4: In-Place Comparison Operators)
+	sequence_t *split_CQ_add(int bits, int64_t value)
+	sequence_t *split_CQ_sub(int bits, int64_t value)
+	sequence_t *split_toffoli_CQ_add(int bits, int64_t value)
+	sequence_t *split_toffoli_CQ_sub(int bits, int64_t value)
+
 cdef extern from "toffoli_arithmetic_ops.h":
 	sequence_t *toffoli_QQ_add(int bits)
 	sequence_t *toffoli_CQ_add(int bits, int64_t value)

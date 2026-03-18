@@ -4,6 +4,7 @@
 #        make test_allocator_block && ./test_allocator_block
 #        make test_tracking_only && ./test_tracking_only
 #        make test_sequence_gate_count && ./test_sequence_gate_count
+#        make test_split_register_arith && ./test_split_register_arith
 
 CC = gcc
 CFLAGS = -Wall -Wextra -g -I../../c_backend/include
@@ -63,6 +64,22 @@ SEQ_COUNT_SRCS = $(BACKEND_SRC)/execution.c \
                  $(BACKEND_SRC)/Integer.c \
                  $(wildcard $(BACKEND_SRC)/sequences/*.c)
 
+# Sources for split-register arithmetic tests (Toffoli CDKM + QFT adders + hot_path_add)
+SPLIT_ARITH_SRCS = $(BACKEND_SRC)/execution.c \
+                   $(BACKEND_SRC)/optimizer.c \
+                   $(BACKEND_SRC)/gate.c \
+                   $(BACKEND_SRC)/qubit_allocator.c \
+                   $(BACKEND_SRC)/circuit_allocations.c \
+                   $(BACKEND_SRC)/circuit_output.c \
+                   $(BACKEND_SRC)/circuit_stats.c \
+                   $(BACKEND_SRC)/circuit_optimizer.c \
+                   $(BACKEND_SRC)/ToffoliAdditionHelpers.c \
+                   $(BACKEND_SRC)/ToffoliAdditionCDKM.c \
+                   $(BACKEND_SRC)/IntegerAddition.c \
+                   $(BACKEND_SRC)/Integer.c \
+                   $(BACKEND_SRC)/hot_path_add.c \
+                   $(wildcard $(BACKEND_SRC)/sequences/*.c)
+
 # Test targets
 test_comparison: test_comparison.c $(BACKEND_SRCS)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
@@ -83,9 +100,12 @@ test_allocator_block: test_allocator_block.c $(ALLOC_SRCS)
 test_allocator_block_debug: test_allocator_block.c $(ALLOC_SRCS)
 	$(CC) $(CFLAGS) -DDEBUG -o $@ $^ $(LDFLAGS)
 
+test_split_register_arith: test_split_register_arith.c $(SPLIT_ARITH_SRCS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
 .PHONY: clean
 clean:
-	rm -f test_comparison test_reverse_circuit test_tracking_only test_sequence_gate_count test_allocator_block test_allocator_block_debug
+	rm -f test_comparison test_reverse_circuit test_tracking_only test_sequence_gate_count test_allocator_block test_allocator_block_debug test_split_register_arith
 
 .PHONY: run
 run: test_comparison
