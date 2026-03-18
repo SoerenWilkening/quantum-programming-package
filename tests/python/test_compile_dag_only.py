@@ -13,14 +13,14 @@ class TestOpt1DagOnlyReplay:
     """Verify opt=1 replay skips gate injection while still recording DAG."""
 
     def test_opt1_replay_does_not_inject_gates(self):
-        """opt=1 with simulate=False: replay should NOT increase flat circuit layers.
+        """opt=1 capture injects gates, but replay should NOT increase layers.
 
-        When simulate=False (tracking-only / DAG-only mode), gates are
-        not stored in the circuit.  Replay skips injection and only
-        credits gate count.
+        With simulate=True, capture (first call) injects gates into the
+        circuit.  The replay (second call) should NOT inject gates for
+        opt=1 -- only a DAG node is recorded.
         """
         ql.circuit()
-        ql.option("simulate", False)
+        ql.option("simulate", True)
 
         @ql.compile(opt=1)
         def inc(x):
@@ -28,21 +28,27 @@ class TestOpt1DagOnlyReplay:
             return x
 
         a = ql.qint(0, width=4)
-        inc(a)  # capture -- no gates stored (simulate=False)
+        layer_before_capture = get_current_layer()
+        inc(a)  # capture -- gates injected
+        layer_after_capture = get_current_layer()
+
+        capture_layers = layer_after_capture - layer_before_capture
+        assert capture_layers > 0, "Capture must inject gates (layers should increase)"
 
         b = ql.qint(0, width=4)
         layer_before_replay = get_current_layer()
-        inc(b)  # replay -- no gates stored (simulate=False)
+        inc(b)  # replay -- opt=1 should NOT inject gates
         layer_after_replay = get_current_layer()
 
         replay_layers = layer_after_replay - layer_before_replay
         assert replay_layers == 0, (
-            f"simulate=False replay should not inject gates (expected 0 new layers, got {replay_layers})"
+            f"opt=1 replay should not inject gates (expected 0 new layers, got {replay_layers})"
         )
 
     def test_opt0_replay_injects_gates_both_times(self):
         """opt=0 both calls should inject gates -- old behavior unchanged."""
         ql.circuit()
+        ql.option("simulate", True)
 
         @ql.compile(opt=0)
         def inc(x):
@@ -68,16 +74,15 @@ class TestOpt1DagOnlyReplay:
         )
 
     def test_opt1_dag_records_three_nodes(self):
-        """opt=1 with simulate=False in QFT mode: 3 calls record DAG nodes.
+        """opt=1 called 3 times produces DAG with >= 3 nodes and correct aggregate.
 
-        In QFT mode (fault_tolerant=False) with simulate=False, IR
-        entries are recorded and _build_dag_from_ir populates the DAG
-        on replay.  In Toffoli mode (default), no IR entries exist so
-        replay does not add DAG nodes — only the capture node is present.
+        Capture produces an operation-type node (from record_operation
+        during body execution) and replays produce call-level nodes
+        (from dag.add_node in _call_inner).  All replay call nodes
+        should have equal gate counts.
         """
         ql.circuit()
-        ql.option("simulate", False)
-        ql.option("fault_tolerant", False)  # QFT mode: IR entries recorded
+        ql.option("simulate", True)
 
         @ql.compile(opt=1)
         def inc(x):
@@ -85,19 +90,37 @@ class TestOpt1DagOnlyReplay:
             return x
 
         a = ql.qint(0, width=4)
-        inc(a)  # capture (1st call = node 1 + IR entries)
+        inc(a)  # capture (1st call = operation-type node)
 
         b = ql.qint(0, width=4)
-        inc(b)  # replay (2nd call = DAG from IR)
+        inc(b)  # replay (2nd call = call-level node)
 
         c = ql.qint(0, width=4)
-        inc(c)  # replay (3rd call = DAG from IR)
+        inc(c)  # replay (3rd call = call-level node)
 
         dag = inc._call_graph
         assert dag is not None, "opt=1 should build a call graph DAG"
-        # QFT mode + simulate=False: capture produces IR, replays
-        # build DAG from IR entries.
-        assert dag.node_count >= 1, f"Expected >= 1 DAG nodes, got {dag.node_count}"
+        assert dag.node_count >= 3, f"Expected >= 3 DAG nodes, got {dag.node_count}"
+
+        agg = dag.aggregate()
+        assert agg["gates"] > 0, "Aggregate gate count should be positive"
+
+        # Replay call-level nodes (no operation_type) should have equal
+        # gate counts.
+        call_nodes = [n for n in dag.nodes if not n.operation_type or n.operation_type == ""]
+        assert len(call_nodes) >= 2, (
+            f"Expected >= 2 call-level nodes from replays, got {len(call_nodes)}"
+        )
+        gate_counts = [n.gate_count for n in call_nodes]
+        assert len(set(gate_counts)) == 1, (
+            f"All replay call nodes should have same gate count, got {gate_counts}"
+        )
+
+        # Aggregate should equal sum of all node gate counts
+        total = sum(n.gate_count for n in dag.nodes)
+        assert agg["gates"] == total, (
+            f"Aggregate should equal sum of all nodes ({total}), got {agg['gates']}"
+        )
 
     def test_opt1_replay_returns_correct_qint(self):
         """opt=1 replay still correctly returns quantum values."""

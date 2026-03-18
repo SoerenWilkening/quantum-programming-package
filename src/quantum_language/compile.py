@@ -384,13 +384,13 @@ def _clear_all_caches():
     Also enables simulate mode so gates are stored in the circuit.
     The C default is simulate=0 (tracking-only), but full simulation
     is required for QASM export, compiled function replay, and any
-    operation that needs gate data in the circuit.
+    operation that needs gate data in the circuit.  Users who want
+    tracking-only mode should set ql.option('simulate', False) after
+    calling ql.circuit().
     """
     global _capture_depth
     _capture_depth = 0
     _dag_builder_stack.clear()
-    # Enable simulate so gates are stored in the circuit (required for
-    # QASM export, compiled function capture/replay, and simulation).
     option("simulate", True)
     alive = []
     for ref in _compiled_funcs:
@@ -1043,11 +1043,14 @@ class CompiledFunc:
             block = self._cache[cache_key]
             # _replay selects controlled/uncontrolled variant at runtime
             result = self._replay(block, quantum_args, track_forward=_track_fwd, kind="compiled_fn")
-            # Manually credit the gate count so get_gate_count() reflects
-            # the logical cost of this replay.  inject_remapped_gates
-            # (gate-level replay) does not increment circ->gate_count,
-            # so we always credit it here regardless of simulate mode.
-            if block is not None:
+            # Manually credit gate count when run_instruction did NOT
+            # already increment it.  run_instruction (IR path) always
+            # increments circ->gate_count, so skip the manual credit
+            # when the IR path was used.  inject_remapped_gates (gate-
+            # level path) does NOT increment gate_count, and when
+            # simulate=False neither path runs — both need manual credit.
+            _used_ir = getattr(self, "_last_replay_used_ir", False)
+            if not _used_ir and block is not None:
                 _replay_count = (
                     block.original_gate_count if block.original_gate_count else len(block.gates)
                 )
@@ -1056,15 +1059,18 @@ class CompiledFunc:
             # Record DAG node for replay path (no nesting -- body not
             # re-executed).
             if _building_dag:
-                if self._opt == 1:
-                    # opt=1: build DAG nodes from instruction IR so that
-                    # replays populate the DAG (even with simulate=False).
-                    _build_dag_from_ir(
+                _ir_added = 0
+                if self._opt == 1 and block and block._instruction_ir:
+                    # opt=1 with IR: build DAG nodes from instruction IR
+                    # so replays populate the DAG (even with simulate=False).
+                    _ir_added = _build_dag_from_ir(
                         block,
                         self._func.__name__,
                         is_controlled=is_controlled,
                     )
-                else:
+                if not (self._opt == 1 and _ir_added > 0):
+                    # Non-opt=1, or opt=1 without IR entries (Toffoli mode):
+                    # add a single call-level DAG node.
                     dag = current_dag_context()
                     if dag is not None:
                         extra = (
@@ -1733,7 +1739,20 @@ class CompiledFunc:
         # When simulate is False (tracking-only / DAG-only mode),
         # gates are not stored — gate counts are credited separately
         # in _call_inner.
-        if option("simulate"):
+        #
+        # opt=1 DAG-only replay: skip gate injection in uncontrolled
+        # context (the DAG node in _call_inner records the cost).
+        # Gate injection IS required in controlled contexts (inside
+        # ``with`` blocks) for correct quantum state evolution.
+        #
+        # Track which path was used so _call_inner can decide whether to
+        # credit gate_count manually:
+        # - IR path: run_instruction already increments circ->gate_count
+        # - Gate-level path: inject_remapped_gates does NOT increment it
+        # - No path (simulate=False or opt=1 skip): nothing increments it
+        self._last_replay_used_ir = False
+        _skip_injection = self._opt == 1 and not is_controlled
+        if option("simulate") and not _skip_injection:
             if _ir_source is not None and _ir_source._instruction_ir:
                 # IR path: _execute_ir handles controlled sequences and
                 # control qubit injection internally.
@@ -1749,6 +1768,7 @@ class CompiledFunc:
                         if virt_idx in virtual_to_real:
                             ir_qubit_mapping[capture_phys] = virtual_to_real[virt_idx]
                 _execute_ir(_ir_source, qubit_mapping=ir_qubit_mapping)
+                self._last_replay_used_ir = True
             elif block.gates:
                 # Gate-level path: inject remapped gates into the circuit.
                 inject_remapped_gates(block.gates, virtual_to_real)
