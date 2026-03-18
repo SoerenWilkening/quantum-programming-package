@@ -103,6 +103,27 @@
 				# Return qbool initialized to |0> (False)
 				return qbool(False)
 
+			# Compile-mode: record IR entry, skip gate emission
+			if _is_compile_mode():
+				result = qbool()
+				_uc_seq = CQ_equal_width(self.bits, other)
+				_cc_seq = cCQ_equal_width(self.bits, other)
+				self_offset = 64 - self.bits
+				regs = ((<qint>result).qubits[63],)
+				regs = regs + tuple(
+					self.qubits[self_offset + (self.bits - 1 - i)]
+					for i in range(self.bits)
+				)
+				_record_instruction(
+					"eq_cq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+				)
+				result.add_dependency(self)
+				result.operation_type = 'EQ'
+				self.history.add_blocker(result)
+				return result
+
 			# Get comparison sequence from C
 			if _controlled:
 				seq = cCQ_equal_width(self.bits, other)
@@ -265,6 +286,28 @@
 		# Self-comparison optimization
 		if self is other:
 			return qbool(False)  # x < x is always false
+
+		# Compile-mode: record a single "lt" IR entry for the whole comparison
+		if _is_compile_mode():
+			result = qbool()
+			self_offset = 64 - self.bits
+			regs = ((<qint>result).qubits[63],)
+			regs = regs + tuple(self.qubits[self_offset + i] for i in range(self.bits))
+			if isinstance(other, qint):
+				other_offset = 64 - (<qint>other).bits
+				regs = regs + tuple(
+					(<qint>other).qubits[other_offset + i]
+					for i in range((<qint>other).bits)
+				)
+			_record_instruction("lt", regs)
+			result.add_dependency(self)
+			if isinstance(other, qint):
+				result.add_dependency(other)
+			result.operation_type = 'LT'
+			self.history.add_blocker(result)
+			if isinstance(other, qint):
+				(<qint>other).history.add_blocker(result)
+			return result
 
 		# Handle qint operand: borrow-ancilla via (n+1)-bit QQ addition
 		if type(other) == qint:
@@ -520,6 +563,28 @@
 		# Self-comparison optimization
 		if self is other:
 			return qbool(False)  # x > x is always false
+
+		# Compile-mode: record a single "gt" IR entry for the whole comparison
+		if _is_compile_mode():
+			result = qbool()
+			regs = ((<qint>result).qubits[63],)
+			regs = regs + tuple(self.qubits[self_offset + i] for i in range(self_bits))
+			if isinstance(other, qint):
+				other_bits = (<qint>other).bits
+				other_offset = 64 - other_bits
+				regs = regs + tuple(
+					(<qint>other).qubits[other_offset + i]
+					for i in range(other_bits)
+				)
+			_record_instruction("gt", regs)
+			result.add_dependency(self)
+			if isinstance(other, qint):
+				result.add_dependency(other)
+			result.operation_type = 'GT'
+			self.history.add_blocker(result)
+			if isinstance(other, qint):
+				(<qint>other).history.add_blocker(result)
+			return result
 
 		# Handle qint operand: a > b computed as b < a via borrow-ancilla
 		if type(other) == qint:

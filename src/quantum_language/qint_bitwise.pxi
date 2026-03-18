@@ -55,6 +55,40 @@
 		else:
 			raise TypeError("Operand must be qint or int")
 
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			result = qint(width=result_bits)
+			result.add_dependency(self)
+			if type(other) != int:
+				result.add_dependency(other)
+			result.operation_type = 'AND'
+			self_offset = 64 - self.bits
+			result_offset = 64 - result_bits
+			regs = tuple((<qint>result).qubits[result_offset + i] for i in range(result_bits))
+			regs = regs + tuple(self.qubits[self_offset + i] for i in range(self.bits))
+			if type(other) != int and isinstance(other, qint):
+				other_offset = 64 - (<qint>other).bits
+				regs = regs + tuple(
+					(<qint>other).qubits[other_offset + i]
+					for i in range((<qint>other).bits)
+				)
+			if type(other) == int:
+				_uc_seq = CQ_and(result_bits, other)
+				_record_instruction(
+					"and_cq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				)
+			else:
+				_uc_seq = Q_and(result_bits)
+				_record_instruction(
+					"and_qq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				)
+			self.history.add_blocker(result)
+			if type(other) != int and isinstance(other, qint):
+				(<qint>other).history.add_blocker(result)
+			return result
+
 		# Phase 84: Validate qubit_array bounds before writes
 		# AND uses up to 3*result_bits slots: [output:N], [self:N], [other:N]
 		validate_qubit_slots(3 * result_bits, "__and__")
@@ -266,6 +300,40 @@
 		else:
 			raise TypeError("Operand must be qint or int")
 
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			result = qint(width=result_bits)
+			result.add_dependency(self)
+			if type(other) != int:
+				result.add_dependency(other)
+			result.operation_type = 'OR'
+			self_offset = 64 - self.bits
+			result_offset = 64 - result_bits
+			regs = tuple((<qint>result).qubits[result_offset + i] for i in range(result_bits))
+			regs = regs + tuple(self.qubits[self_offset + i] for i in range(self.bits))
+			if type(other) != int and isinstance(other, qint):
+				other_offset = 64 - (<qint>other).bits
+				regs = regs + tuple(
+					(<qint>other).qubits[other_offset + i]
+					for i in range((<qint>other).bits)
+				)
+			if type(other) == int:
+				_uc_seq = CQ_or(result_bits, other)
+				_record_instruction(
+					"or_cq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				)
+			else:
+				_uc_seq = Q_or(result_bits)
+				_record_instruction(
+					"or_qq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				)
+			self.history.add_blocker(result)
+			if type(other) != int and isinstance(other, qint):
+				(<qint>other).history.add_blocker(result)
+			return result
+
 		# Phase 84: Validate qubit_array bounds before writes
 		# OR uses up to 3*result_bits slots: [output:N], [self:N], [other:N]
 		validate_qubit_slots(3 * result_bits, "__or__")
@@ -432,6 +500,33 @@
 		else:
 			raise TypeError("Operand must be qint or int")
 
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			result = qint(width=result_bits)
+			result.add_dependency(self)
+			if type(other) != int:
+				result.add_dependency(other)
+			result.operation_type = 'XOR'
+			self_offset = 64 - self.bits
+			result_offset = 64 - result_bits
+			regs = tuple((<qint>result).qubits[result_offset + i] for i in range(result_bits))
+			regs = regs + tuple(self.qubits[self_offset + i] for i in range(self.bits))
+			if type(other) != int and isinstance(other, qint):
+				other_offset = 64 - (<qint>other).bits
+				regs = regs + tuple(
+					(<qint>other).qubits[other_offset + i]
+					for i in range((<qint>other).bits)
+				)
+			_uc_seq = Q_xor(self.bits)
+			_record_instruction(
+				"xor", regs,
+				uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+			)
+			self.history.add_blocker(result)
+			if type(other) != int and isinstance(other, qint):
+				(<qint>other).history.add_blocker(result)
+			return result
+
 		# Phase 84: Validate qubit_array bounds before writes
 		# XOR uses up to 2*result_bits slots: [target:N], [source:N]
 		validate_qubit_slots(2 * result_bits, "__xor__")
@@ -560,6 +655,32 @@
 		if isinstance(other, qint):
 			(<qint>other)._check_not_uncomputed()
 
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			regs = tuple(self.qubits[self_offset + i] for i in range(self_bits))
+			if type(other) == int:
+				_uc_seq = Q_not(1)
+				_record_instruction(
+					"ixor_cq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				)
+			elif isinstance(other, qint):
+				if other is not self:
+					(<qint>other).history.add_blocker(self)
+				_cm_other_offset = 64 - (<qint>other).bits
+				_cm_xor_bits = self_bits if self_bits < (<qint>other).bits else (<qint>other).bits
+				regs = tuple(self.qubits[self_offset + i] for i in range(_cm_xor_bits))
+				regs = regs + tuple(
+					(<qint>other).qubits[_cm_other_offset + i]
+					for i in range(_cm_xor_bits)
+				)
+				_uc_seq = Q_xor(_cm_xor_bits)
+				_record_instruction(
+					"ixor_qq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				)
+			return self
+
 		if type(other) == int:
 			if _controlled:
 				raise NotImplementedError("Controlled classical-quantum XOR not yet supported")
@@ -652,6 +773,19 @@
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
+
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			self_offset = 64 - self.bits
+			regs = tuple(self.qubits[self_offset + i] for i in range(self.bits))
+			_uc_seq = Q_not(self.bits)
+			_cc_seq = cQ_not(self.bits)
+			_record_instruction(
+				"not", regs,
+				uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+			)
+			return self
 
 		# Phase 84: Validate qubit_array bounds before writes
 		# NOT uses up to self.bits + 1 slots (controlled case)

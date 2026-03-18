@@ -38,6 +38,21 @@
 		if type(other) == int:
 			classical_value = <int64_t>other
 
+			# Compile-mode: record IR entry, skip gate emission
+			if _is_compile_mode():
+				regs = tuple(self_qa[i] for i in range(self_bits))
+				if _controlled:
+					regs = regs + (control_qubit,)
+				_uc_seq = CQ_add(self_bits, classical_value)
+				_cc_seq = cCQ_add(self_bits, classical_value)
+				_record_instruction(
+					"add_cq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+					invert=bool(invert),
+				)
+				return self
+
 			# Toffoli dispatch for CQ
 			if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
 				gc_before = _circ.gate_count
@@ -88,6 +103,22 @@
 			other_qa[i] = other_qubits_mv[other_offset + i]
 
 		result_bits = self_bits if self_bits > other_bits else other_bits
+
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			regs = (tuple(self_qa[i] for i in range(self_bits))
+			        + tuple(other_qa[i] for i in range(other_bits)))
+			if _controlled:
+				regs = regs + (control_qubit,)
+			_uc_seq = QQ_add(result_bits)
+			_cc_seq = cQQ_add(result_bits)
+			_record_instruction(
+				"add_qq", regs,
+				uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+				invert=bool(invert),
+			)
+			return self
 
 		# Toffoli dispatch for QQ
 		if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
@@ -626,6 +657,21 @@
 		if type(other) == int:
 			classical_value = <int64_t>other
 
+			# Compile-mode: record IR entry, skip gate emission
+			if _is_compile_mode():
+				regs = (tuple(ret_qa[i] for i in range(result_bits))
+				        + tuple(self_qa[i] for i in range(self_bits)))
+				if _controlled:
+					regs = regs + (control_qubit,)
+				_uc_seq = CQ_mul(result_bits, classical_value)
+				_cc_seq = cCQ_mul(result_bits, classical_value)
+				_record_instruction(
+					"mul_cq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+				)
+				return ret
+
 			# Toffoli dispatch for CQ
 			if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
 				gc_before = _circ.gate_count
@@ -680,6 +726,22 @@
 		cdef unsigned int[:] other_qubits_mv = (<qint>other).qubits
 		for i in range(other_bits):
 			other_qa[i] = other_qubits_mv[other_offset + i]
+
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			regs = (tuple(ret_qa[i] for i in range(result_bits))
+			        + tuple(self_qa[i] for i in range(self_bits))
+			        + tuple(other_qa[i] for i in range(other_bits)))
+			if _controlled:
+				regs = regs + (control_qubit,)
+			_uc_seq = QQ_mul(result_bits)
+			_cc_seq = cQQ_mul(result_bits)
+			_record_instruction(
+				"mul_qq", regs,
+				uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+			)
+			return ret
 
 		# Toffoli dispatch for QQ
 		if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI

@@ -72,6 +72,7 @@ import math
 from ._gates import emit_p, emit_p_raw, _toffoli_and, _uncompute_toffoli_and
 from ._core import _get_control_stack
 from .call_graph import record_operation as _record_operation
+from ._compile_state import _is_compile_mode, _record_instruction
 from .history_graph import HistoryGraph
 
 
@@ -1656,6 +1657,21 @@ cdef class qint(circuit):
 		if type(other) == int:
 			classical_value = <int64_t>other
 
+			# Compile-mode: record IR entry, skip gate emission
+			if _is_compile_mode():
+				regs = tuple(self_qa[i] for i in range(self_bits))
+				if _controlled:
+					regs = regs + (control_qubit,)
+				_uc_seq = CQ_add(self_bits, classical_value)
+				_cc_seq = cCQ_add(self_bits, classical_value)
+				_record_instruction(
+					"add_cq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+					invert=bool(invert),
+				)
+				return self
+
 			# Toffoli dispatch for CQ
 			if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
 				gc_before = _circ.gate_count
@@ -1706,6 +1722,22 @@ cdef class qint(circuit):
 			other_qa[i] = other_qubits_mv[other_offset + i]
 
 		result_bits = self_bits if self_bits > other_bits else other_bits
+
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			regs = (tuple(self_qa[i] for i in range(self_bits))
+			        + tuple(other_qa[i] for i in range(other_bits)))
+			if _controlled:
+				regs = regs + (control_qubit,)
+			_uc_seq = QQ_add(result_bits)
+			_cc_seq = cQQ_add(result_bits)
+			_record_instruction(
+				"add_qq", regs,
+				uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+				invert=bool(invert),
+			)
+			return self
 
 		# Toffoli dispatch for QQ
 		if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
@@ -2244,6 +2276,21 @@ cdef class qint(circuit):
 		if type(other) == int:
 			classical_value = <int64_t>other
 
+			# Compile-mode: record IR entry, skip gate emission
+			if _is_compile_mode():
+				regs = (tuple(ret_qa[i] for i in range(result_bits))
+				        + tuple(self_qa[i] for i in range(self_bits)))
+				if _controlled:
+					regs = regs + (control_qubit,)
+				_uc_seq = CQ_mul(result_bits, classical_value)
+				_cc_seq = cCQ_mul(result_bits, classical_value)
+				_record_instruction(
+					"mul_cq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+				)
+				return ret
+
 			# Toffoli dispatch for CQ
 			if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
 				gc_before = _circ.gate_count
@@ -2298,6 +2345,22 @@ cdef class qint(circuit):
 		cdef unsigned int[:] other_qubits_mv = (<qint>other).qubits
 		for i in range(other_bits):
 			other_qa[i] = other_qubits_mv[other_offset + i]
+
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			regs = (tuple(ret_qa[i] for i in range(result_bits))
+			        + tuple(self_qa[i] for i in range(self_bits))
+			        + tuple(other_qa[i] for i in range(other_bits)))
+			if _controlled:
+				regs = regs + (control_qubit,)
+			_uc_seq = QQ_mul(result_bits)
+			_cc_seq = cQQ_mul(result_bits)
+			_record_instruction(
+				"mul_qq", regs,
+				uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+			)
+			return ret
 
 		# Toffoli dispatch for QQ
 		if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
@@ -2583,6 +2646,40 @@ cdef class qint(circuit):
 		else:
 			raise TypeError("Operand must be qint or int")
 
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			result = qint(width=result_bits)
+			result.add_dependency(self)
+			if type(other) != int:
+				result.add_dependency(other)
+			result.operation_type = 'AND'
+			self_offset = 64 - self.bits
+			result_offset = 64 - result_bits
+			regs = tuple((<qint>result).qubits[result_offset + i] for i in range(result_bits))
+			regs = regs + tuple(self.qubits[self_offset + i] for i in range(self.bits))
+			if type(other) != int and isinstance(other, qint):
+				other_offset = 64 - (<qint>other).bits
+				regs = regs + tuple(
+					(<qint>other).qubits[other_offset + i]
+					for i in range((<qint>other).bits)
+				)
+			if type(other) == int:
+				_uc_seq = CQ_and(result_bits, other)
+				_record_instruction(
+					"and_cq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				)
+			else:
+				_uc_seq = Q_and(result_bits)
+				_record_instruction(
+					"and_qq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				)
+			self.history.add_blocker(result)
+			if type(other) != int and isinstance(other, qint):
+				(<qint>other).history.add_blocker(result)
+			return result
+
 		# Phase 84: Validate qubit_array bounds before writes
 		# AND uses up to 3*result_bits slots: [output:N], [self:N], [other:N]
 		validate_qubit_slots(3 * result_bits, "__and__")
@@ -2794,6 +2891,40 @@ cdef class qint(circuit):
 		else:
 			raise TypeError("Operand must be qint or int")
 
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			result = qint(width=result_bits)
+			result.add_dependency(self)
+			if type(other) != int:
+				result.add_dependency(other)
+			result.operation_type = 'OR'
+			self_offset = 64 - self.bits
+			result_offset = 64 - result_bits
+			regs = tuple((<qint>result).qubits[result_offset + i] for i in range(result_bits))
+			regs = regs + tuple(self.qubits[self_offset + i] for i in range(self.bits))
+			if type(other) != int and isinstance(other, qint):
+				other_offset = 64 - (<qint>other).bits
+				regs = regs + tuple(
+					(<qint>other).qubits[other_offset + i]
+					for i in range((<qint>other).bits)
+				)
+			if type(other) == int:
+				_uc_seq = CQ_or(result_bits, other)
+				_record_instruction(
+					"or_cq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				)
+			else:
+				_uc_seq = Q_or(result_bits)
+				_record_instruction(
+					"or_qq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				)
+			self.history.add_blocker(result)
+			if type(other) != int and isinstance(other, qint):
+				(<qint>other).history.add_blocker(result)
+			return result
+
 		# Phase 84: Validate qubit_array bounds before writes
 		# OR uses up to 3*result_bits slots: [output:N], [self:N], [other:N]
 		validate_qubit_slots(3 * result_bits, "__or__")
@@ -2960,6 +3091,33 @@ cdef class qint(circuit):
 		else:
 			raise TypeError("Operand must be qint or int")
 
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			result = qint(width=result_bits)
+			result.add_dependency(self)
+			if type(other) != int:
+				result.add_dependency(other)
+			result.operation_type = 'XOR'
+			self_offset = 64 - self.bits
+			result_offset = 64 - result_bits
+			regs = tuple((<qint>result).qubits[result_offset + i] for i in range(result_bits))
+			regs = regs + tuple(self.qubits[self_offset + i] for i in range(self.bits))
+			if type(other) != int and isinstance(other, qint):
+				other_offset = 64 - (<qint>other).bits
+				regs = regs + tuple(
+					(<qint>other).qubits[other_offset + i]
+					for i in range((<qint>other).bits)
+				)
+			_uc_seq = Q_xor(self.bits)
+			_record_instruction(
+				"xor", regs,
+				uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+			)
+			self.history.add_blocker(result)
+			if type(other) != int and isinstance(other, qint):
+				(<qint>other).history.add_blocker(result)
+			return result
+
 		# Phase 84: Validate qubit_array bounds before writes
 		# XOR uses up to 2*result_bits slots: [target:N], [source:N]
 		validate_qubit_slots(2 * result_bits, "__xor__")
@@ -3088,6 +3246,32 @@ cdef class qint(circuit):
 		if isinstance(other, qint):
 			(<qint>other)._check_not_uncomputed()
 
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			regs = tuple(self.qubits[self_offset + i] for i in range(self_bits))
+			if type(other) == int:
+				_uc_seq = Q_not(1)
+				_record_instruction(
+					"ixor_cq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				)
+			elif isinstance(other, qint):
+				if other is not self:
+					(<qint>other).history.add_blocker(self)
+				_cm_other_offset = 64 - (<qint>other).bits
+				_cm_xor_bits = self_bits if self_bits < (<qint>other).bits else (<qint>other).bits
+				regs = tuple(self.qubits[self_offset + i] for i in range(_cm_xor_bits))
+				regs = regs + tuple(
+					(<qint>other).qubits[_cm_other_offset + i]
+					for i in range(_cm_xor_bits)
+				)
+				_uc_seq = Q_xor(_cm_xor_bits)
+				_record_instruction(
+					"ixor_qq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				)
+			return self
+
 		if type(other) == int:
 			if _controlled:
 				raise NotImplementedError("Controlled classical-quantum XOR not yet supported")
@@ -3180,6 +3364,19 @@ cdef class qint(circuit):
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
+
+		# Compile-mode: record IR entry, skip gate emission
+		if _is_compile_mode():
+			self_offset = 64 - self.bits
+			regs = tuple(self.qubits[self_offset + i] for i in range(self.bits))
+			_uc_seq = Q_not(self.bits)
+			_cc_seq = cQ_not(self.bits)
+			_record_instruction(
+				"not", regs,
+				uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+			)
+			return self
 
 		# Phase 84: Validate qubit_array bounds before writes
 		# NOT uses up to self.bits + 1 slots (controlled case)
@@ -3474,6 +3671,27 @@ cdef class qint(circuit):
 				# Return qbool initialized to |0> (False)
 				return qbool(False)
 
+			# Compile-mode: record IR entry, skip gate emission
+			if _is_compile_mode():
+				result = qbool()
+				_uc_seq = CQ_equal_width(self.bits, other)
+				_cc_seq = cCQ_equal_width(self.bits, other)
+				self_offset = 64 - self.bits
+				regs = ((<qint>result).qubits[63],)
+				regs = regs + tuple(
+					self.qubits[self_offset + (self.bits - 1 - i)]
+					for i in range(self.bits)
+				)
+				_record_instruction(
+					"eq_cq", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+				)
+				result.add_dependency(self)
+				result.operation_type = 'EQ'
+				self.history.add_blocker(result)
+				return result
+
 			# Get comparison sequence from C
 			if _controlled:
 				seq = cCQ_equal_width(self.bits, other)
@@ -3636,6 +3854,28 @@ cdef class qint(circuit):
 		# Self-comparison optimization
 		if self is other:
 			return qbool(False)  # x < x is always false
+
+		# Compile-mode: record a single "lt" IR entry for the whole comparison
+		if _is_compile_mode():
+			result = qbool()
+			self_offset = 64 - self.bits
+			regs = ((<qint>result).qubits[63],)
+			regs = regs + tuple(self.qubits[self_offset + i] for i in range(self.bits))
+			if isinstance(other, qint):
+				other_offset = 64 - (<qint>other).bits
+				regs = regs + tuple(
+					(<qint>other).qubits[other_offset + i]
+					for i in range((<qint>other).bits)
+				)
+			_record_instruction("lt", regs)
+			result.add_dependency(self)
+			if isinstance(other, qint):
+				result.add_dependency(other)
+			result.operation_type = 'LT'
+			self.history.add_blocker(result)
+			if isinstance(other, qint):
+				(<qint>other).history.add_blocker(result)
+			return result
 
 		# Handle qint operand: borrow-ancilla via (n+1)-bit QQ addition
 		if type(other) == qint:
@@ -3891,6 +4131,28 @@ cdef class qint(circuit):
 		# Self-comparison optimization
 		if self is other:
 			return qbool(False)  # x > x is always false
+
+		# Compile-mode: record a single "gt" IR entry for the whole comparison
+		if _is_compile_mode():
+			result = qbool()
+			regs = ((<qint>result).qubits[63],)
+			regs = regs + tuple(self.qubits[self_offset + i] for i in range(self_bits))
+			if isinstance(other, qint):
+				other_bits = (<qint>other).bits
+				other_offset = 64 - other_bits
+				regs = regs + tuple(
+					(<qint>other).qubits[other_offset + i]
+					for i in range(other_bits)
+				)
+			_record_instruction("gt", regs)
+			result.add_dependency(self)
+			if isinstance(other, qint):
+				result.add_dependency(other)
+			result.operation_type = 'GT'
+			self.history.add_blocker(result)
+			if isinstance(other, qint):
+				(<qint>other).history.add_blocker(result)
+			return result
 
 		# Handle qint operand: a > b computed as b < a via borrow-ancilla
 		if type(other) == qint:

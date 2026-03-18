@@ -72,6 +72,7 @@ import math
 from ._gates import emit_p, emit_p_raw, _toffoli_and, _uncompute_toffoli_and
 from ._core import _get_control_stack
 from .call_graph import record_operation as _record_operation
+from ._compile_state import _is_compile_mode, _record_instruction
 from .history_graph import HistoryGraph
 
 

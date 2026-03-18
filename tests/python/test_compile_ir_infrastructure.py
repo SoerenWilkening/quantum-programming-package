@@ -16,31 +16,40 @@ def test_instruction_record_fields():
     """InstructionRecord stores name, registers, both sequences."""
     rec = InstructionRecord(
         name="add",
-        registers=["r0", "r1"],
-        uncontrolled_seq=[{"gate": "cx"}],
-        controlled_seq=[{"gate": "ccx"}],
+        registers=(10, 11),
+        uncontrolled_seq=42,
+        controlled_seq=43,
     )
     assert rec.name == "add"
-    assert rec.registers == ["r0", "r1"]
-    assert rec.uncontrolled_seq == [{"gate": "cx"}]
-    assert rec.controlled_seq == [{"gate": "ccx"}]
+    assert rec.registers == (10, 11)
+    assert rec.uncontrolled_seq == 42
+    assert rec.controlled_seq == 43
+    assert rec.invert is False
 
 
 def test_instruction_record_is_dataclass():
     """InstructionRecord is a dataclass (supports eq, repr, etc.)."""
-    a = InstructionRecord("add", [1], [], [])
-    b = InstructionRecord("add", [1], [], [])
+    a = InstructionRecord("add", (1,), 0, 0)
+    b = InstructionRecord("add", (1,), 0, 0)
     assert a == b
 
-    c = InstructionRecord("sub", [1], [], [])
+    c = InstructionRecord("sub", (1,), 0, 0)
     assert a != c
 
 
-def test_instruction_record_empty_sequences():
-    """InstructionRecord works with empty sequences."""
-    rec = InstructionRecord(name="noop", registers=[], uncontrolled_seq=[], controlled_seq=[])
-    assert rec.uncontrolled_seq == []
-    assert rec.controlled_seq == []
+def test_instruction_record_invert_flag():
+    """InstructionRecord stores invert flag."""
+    rec = InstructionRecord(
+        name="add", registers=(1,), uncontrolled_seq=0, controlled_seq=0, invert=True
+    )
+    assert rec.invert is True
+
+
+def test_instruction_record_zero_sequences():
+    """InstructionRecord works with zero (null) sequences."""
+    rec = InstructionRecord(name="noop", registers=(), uncontrolled_seq=0, controlled_seq=0)
+    assert rec.uncontrolled_seq == 0
+    assert rec.controlled_seq == 0
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +79,7 @@ def test_compiled_block_instruction_ir_mutable():
         internal_qubit_count=0,
         return_qubit_range=None,
     )
-    rec = InstructionRecord("xor", [0], [{"g": 1}], [{"g": 2}])
+    rec = InstructionRecord("xor", (0,), 1, 2)
     block._instruction_ir.append(rec)
     assert len(block._instruction_ir) == 1
     assert block._instruction_ir[0].name == "xor"
@@ -80,7 +89,7 @@ def test_compiled_block_instruction_ir_independent():
     """Each CompiledBlock gets its own _instruction_ir list."""
     b1 = CompiledBlock([], 1, [], 0, None)
     b2 = CompiledBlock([], 1, [], 0, None)
-    b1._instruction_ir.append(InstructionRecord("a", [], [], []))
+    b1._instruction_ir.append(InstructionRecord("a", (), 0, 0))
     assert len(b2._instruction_ir) == 0
 
 

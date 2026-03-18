@@ -22,7 +22,6 @@ Usage
 
 import collections
 import contextlib
-import dataclasses
 import functools
 import sys
 import weakref
@@ -365,28 +364,12 @@ _register_cache_clear_hook(_clear_all_caches)
 
 
 # ---------------------------------------------------------------------------
-# InstructionRecord -- single instruction in the compile-mode IR
+# InstructionRecord & compile-mode global state (from _compile_state)
 # ---------------------------------------------------------------------------
-@dataclasses.dataclass
-class InstructionRecord:
-    """A single instruction captured during compile-mode execution.
-
-    Attributes
-    ----------
-    name : str
-        Human-readable instruction name (e.g. ``'add'``, ``'compare_lt'``).
-    registers : list
-        Quantum registers involved in this instruction.
-    uncontrolled_seq : list[dict]
-        Gate sequence for the uncontrolled variant.
-    controlled_seq : list[dict]
-        Gate sequence for the controlled variant.
-    """
-
-    name: str
-    registers: list
-    uncontrolled_seq: list
-    controlled_seq: list
+from ._compile_state import (  # noqa: E402 – after qint import is fine
+    _get_active_compile_block,
+    _set_active_compile_block,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -748,18 +731,38 @@ class CompiledFunc:
     # -- compile-mode context manager ------------------------------------
 
     @contextlib.contextmanager
-    def compile_mode(self):
+    def compile_mode(self, block=None):
         """Activate compile-mode IR recording for the duration of the block.
 
-        While active, ``self._compile_mode`` is ``True``.  Callers can
-        check the flag to decide whether to emit ``InstructionRecord``
-        entries.  The flag is always reset on exit (even on exception).
+        While active, ``self._compile_mode`` is ``True`` and the module-level
+        ``_active_compile_block`` points to *block* (or a temporary
+        ``CompiledBlock`` if none is provided).  DSL operators check
+        ``_is_compile_mode()`` to decide whether to emit
+        ``InstructionRecord`` entries instead of calling ``run_instruction``.
+        The flag is always reset on exit (even on exception).
+
+        Parameters
+        ----------
+        block : CompiledBlock or None
+            Target block whose ``_instruction_ir`` receives the records.
+            If *None*, a lightweight temporary block is created.
         """
+        if block is None:
+            block = CompiledBlock(
+                gates=[],
+                total_virtual_qubits=0,
+                param_qubit_ranges=[],
+                internal_qubit_count=0,
+                return_qubit_range=None,
+            )
+        prev_block = _get_active_compile_block()
+        _set_active_compile_block(block)
         self._compile_mode = True
         try:
             yield self
         finally:
             self._compile_mode = False
+            _set_active_compile_block(prev_block)
 
     def __call__(self, *args, **kwargs):
         """Call the compiled function (capture or replay)."""
