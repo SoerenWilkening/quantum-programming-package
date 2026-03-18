@@ -21,6 +21,8 @@ Usage
 """
 
 import collections
+import contextlib
+import dataclasses
 import functools
 import sys
 import weakref
@@ -363,6 +365,31 @@ _register_cache_clear_hook(_clear_all_caches)
 
 
 # ---------------------------------------------------------------------------
+# InstructionRecord -- single instruction in the compile-mode IR
+# ---------------------------------------------------------------------------
+@dataclasses.dataclass
+class InstructionRecord:
+    """A single instruction captured during compile-mode execution.
+
+    Attributes
+    ----------
+    name : str
+        Human-readable instruction name (e.g. ``'add'``, ``'compare_lt'``).
+    registers : list
+        Quantum registers involved in this instruction.
+    uncontrolled_seq : list[dict]
+        Gate sequence for the uncontrolled variant.
+    controlled_seq : list[dict]
+        Gate sequence for the controlled variant.
+    """
+
+    name: str
+    registers: list
+    uncontrolled_seq: list
+    controlled_seq: list
+
+
+# ---------------------------------------------------------------------------
 # CompiledBlock -- stores a captured and virtualised gate sequence
 # ---------------------------------------------------------------------------
 class CompiledBlock:
@@ -400,6 +427,7 @@ class CompiledBlock:
         "_return_qarray_element_widths",  # List of element widths for qarray return
         "controlled_block",  # Derived controlled CompiledBlock (Phase 5)
         "_captured_controlled",  # Whether capture was inside control context
+        "_instruction_ir",  # list[InstructionRecord] – compile-mode IR
     )
 
     def __init__(
@@ -429,6 +457,7 @@ class CompiledBlock:
         self._return_qarray_element_widths = None
         self.controlled_block = None
         self._captured_controlled = False
+        self._instruction_ir = []
 
 
 # ---------------------------------------------------------------------------
@@ -709,11 +738,28 @@ class CompiledFunc:
         self._parametric_probed = False  # True after first capture (waiting for probe)
         self._parametric_safe = None  # True=safe, False=structural, None=unknown
         self._parametric_first_classical = None  # Classical args from first capture
+        self._compile_mode = False
         # Register for cache invalidation on circuit reset
         _compiled_funcs.append(weakref.ref(self))
         # Eagerly create inverse wrapper when inverse=True
         if inverse:
             self._inverse_func = _InverseCompiledFunc(self)
+
+    # -- compile-mode context manager ------------------------------------
+
+    @contextlib.contextmanager
+    def compile_mode(self):
+        """Activate compile-mode IR recording for the duration of the block.
+
+        While active, ``self._compile_mode`` is ``True``.  Callers can
+        check the flag to decide whether to emit ``InstructionRecord``
+        entries.  The flag is always reset on exit (even on exception).
+        """
+        self._compile_mode = True
+        try:
+            yield self
+        finally:
+            self._compile_mode = False
 
     def __call__(self, *args, **kwargs):
         """Call the compiled function (capture or replay)."""
