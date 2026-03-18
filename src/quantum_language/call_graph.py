@@ -62,6 +62,52 @@ def _compute_t_count(gates: list) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Dual gate count formatting
+# ---------------------------------------------------------------------------
+
+
+def _format_dual_gates(uncontrolled: int, controlled: int) -> str:
+    """Format dual gate counts as ``'X / Y'`` with ``'-'`` for unavailable.
+
+    Parameters
+    ----------
+    uncontrolled : int
+        Gate count for the uncontrolled variant.  0 means unavailable.
+    controlled : int
+        Gate count for the controlled variant.  0 means unavailable.
+
+    Returns
+    -------
+    str
+        Formatted string, e.g. ``'24 / 18'``, ``'24 / -'``, ``'- / 18'``.
+    """
+    uc = str(uncontrolled) if uncontrolled else "-"
+    ct = str(controlled) if controlled else "-"
+    return f"{uc} / {ct}"
+
+
+# ---------------------------------------------------------------------------
+# Sequence gate count resolution
+# ---------------------------------------------------------------------------
+
+try:
+    from ._core import _sequence_gate_count
+except ImportError:
+    _sequence_gate_count = None
+
+
+def _resolve_gate_count(seq_ptr: int) -> int:
+    """Resolve gate count from a sequence pointer.
+
+    Uses ``_sequence_gate_count`` from the Cython layer when available.
+    Returns 0 when the helper is not yet built or the pointer is null.
+    """
+    if _sequence_gate_count is None or seq_ptr == 0:
+        return 0
+    return _sequence_gate_count(seq_ptr)
+
+
+# ---------------------------------------------------------------------------
 # DAGNode
 # ---------------------------------------------------------------------------
 
@@ -77,6 +123,12 @@ class DAGNode:
         Physical qubit indices touched by this invocation.
     gate_count : int
         Number of gates in the compiled block.
+    uncontrolled_gate_count : int
+        Gate count for the uncontrolled variant (from ``_sequence_gate_count``).
+        0 when the uncontrolled sequence pointer is unavailable.
+    controlled_gate_count : int
+        Gate count for the controlled variant (from ``_sequence_gate_count``).
+        0 when the controlled sequence pointer is unavailable.
     cache_key : tuple
         Cache key identifying this compiled variant.
     bitmask : int
@@ -104,6 +156,8 @@ class DAGNode:
         "func_name",
         "qubit_set",
         "gate_count",
+        "uncontrolled_gate_count",
+        "controlled_gate_count",
         "cache_key",
         "bitmask",
         "depth",
@@ -132,6 +186,8 @@ class DAGNode:
         sequence_ptr: int = 0,
         uncontrolled_seq: int = 0,
         controlled_seq: int = 0,
+        uncontrolled_gate_count: int = 0,
+        controlled_gate_count: int = 0,
         qubit_mapping: tuple = (),
         operation_type: str = "",
         invert: bool = False,
@@ -141,6 +197,8 @@ class DAGNode:
         self.qubit_set = frozenset(qubit_set)
         self._qubit_array = np.array(sorted(self.qubit_set), dtype=np.intp)
         self.gate_count = gate_count
+        self.uncontrolled_gate_count = uncontrolled_gate_count
+        self.controlled_gate_count = controlled_gate_count
         self.cache_key = cache_key
         self.depth = depth
         self.t_count = t_count
@@ -206,6 +264,8 @@ class CallGraphDAG:
         sequence_ptr: int = 0,
         uncontrolled_seq: int = 0,
         controlled_seq: int = 0,
+        uncontrolled_gate_count: int = 0,
+        controlled_gate_count: int = 0,
         qubit_mapping: tuple = (),
         operation_type: str = "",
         invert: bool = False,
@@ -233,6 +293,10 @@ class CallGraphDAG:
             Pointer to the uncontrolled ``sequence_t`` variant (as Python int).
         controlled_seq : int
             Pointer to the controlled ``sequence_t`` variant (as Python int).
+        uncontrolled_gate_count : int
+            Gate count for the uncontrolled variant.
+        controlled_gate_count : int
+            Gate count for the controlled variant.
         qubit_mapping : tuple of int
             Physical qubit indices for ``run_instruction``.
         operation_type : str
@@ -266,6 +330,8 @@ class CallGraphDAG:
             sequence_ptr=sequence_ptr,
             uncontrolled_seq=uncontrolled_seq,
             controlled_seq=controlled_seq,
+            uncontrolled_gate_count=uncontrolled_gate_count,
+            controlled_gate_count=controlled_gate_count,
             qubit_mapping=qubit_mapping,
             operation_type=operation_type,
             invert=invert,
@@ -446,9 +512,10 @@ class CallGraphDAG:
         def _node_label(idx: int) -> str:
             nd = self._nodes[idx]
             name = nd.func_name.replace('"', '\\"')
+            dual = _format_dual_gates(nd.uncontrolled_gate_count, nd.controlled_gate_count)
             return (
                 f"{name}\\n"
-                f"gates: {nd.gate_count}\\n"
+                f"gates: {dual}\\n"
                 f"depth: {nd.depth}\\n"
                 f"qubits: {len(nd.qubit_set)}\\n"
                 f"T-count: {nd.t_count}"
@@ -510,9 +577,9 @@ class CallGraphDAG:
         lines.append(f"Compilation Report: {top_name}")
         lines.append("")
 
-        # Column widths: Name=20, Gates=8, Depth=8, Qubits=8, T-count=8, Group=8
+        # Column widths: Name=20, Gates(U/C)=15, Depth=8, Qubits=8, T-count=8, Group=8
         header = (
-            f"{'Name':<20s} | {'Gates':>8s} | {'Depth':>8s} | "
+            f"{'Name':<20s} | {'Gates (U/C)':>15s} | {'Depth':>8s} | "
             f"{'Qubits':>8s} | {'T-count':>8s} | {'Group':>8s}"
         )
         sep = "-" * len(header)
@@ -521,8 +588,9 @@ class CallGraphDAG:
 
         for idx, nd in enumerate(self._nodes):
             grp = node_to_group.get(idx, 0)
+            dual = _format_dual_gates(nd.uncontrolled_gate_count, nd.controlled_gate_count)
             row = (
-                f"{nd.func_name:<20s} | {nd.gate_count:>8d} | {nd.depth:>8d} | "
+                f"{nd.func_name:<20s} | {dual:>15s} | {nd.depth:>8d} | "
                 f"{len(nd.qubit_set):>8d} | {nd.t_count:>8d} | {grp:>8d}"
             )
             lines.append(row)

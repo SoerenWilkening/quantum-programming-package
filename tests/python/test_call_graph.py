@@ -696,10 +696,19 @@ class TestDot:
 
     def test_single_node_label(self):
         dag = CallGraphDAG()
-        dag.add_node("my_func", {0, 1, 2}, 42, (), depth=5, t_count=3)
+        dag.add_node(
+            "my_func",
+            {0, 1, 2},
+            42,
+            (),
+            depth=5,
+            t_count=3,
+            uncontrolled_gate_count=42,
+            controlled_gate_count=30,
+        )
         dot = dag.to_dot()
         assert "my_func" in dot
-        assert "gates: 42" in dot
+        assert "gates: 42 / 30" in dot
         assert "depth: 5" in dot
         assert "qubits: 3" in dot
         assert "T-count: 3" in dot

@@ -51,6 +51,7 @@ from .call_graph import (
     _compute_depth,
     _compute_t_count,
     _dag_builder_stack,
+    _resolve_gate_count,
     current_dag_context,
     pop_dag_context,
     push_dag_context,
@@ -510,6 +511,10 @@ def _build_dag_from_ir(block, func_name, is_controlled=False, qubit_mapping=None
         else:
             seq_ptr = entry.uncontrolled_seq
 
+        # Resolve gate counts from sequence pointers.
+        uc_gc = _resolve_gate_count(entry.uncontrolled_seq)
+        ct_gc = _resolve_gate_count(entry.controlled_seq)
+
         dag.add_node(
             entry.name,
             qubit_set,
@@ -518,6 +523,8 @@ def _build_dag_from_ir(block, func_name, is_controlled=False, qubit_mapping=None
             sequence_ptr=seq_ptr,
             uncontrolled_seq=entry.uncontrolled_seq,
             controlled_seq=entry.controlled_seq,
+            uncontrolled_gate_count=uc_gc,
+            controlled_gate_count=ct_gc,
             qubit_mapping=regs,
             operation_type=entry.name,
             invert=entry.invert,
