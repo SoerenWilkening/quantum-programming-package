@@ -1072,12 +1072,9 @@ class CompiledFunc:
             # Record DAG node for replay path (no nesting -- body not
             # re-executed).
             if _building_dag:
-                _ir_added = 0
                 if self._opt == 1 and block and block._instruction_ir and not block._dag_built:
-                    # opt=1 with IR: build DAG nodes from instruction IR
-                    # only on the first replay (capture already built the
-                    # DAG on the capture path).  Skip if _dag_built is set
-                    # to avoid duplicating nodes on subsequent replays.
+                    # opt=1 with IR (QFT mode): build DAG nodes from
+                    # instruction IR on the first replay only.
                     _ir_added = _build_dag_from_ir(
                         block,
                         self._func.__name__,
@@ -1085,10 +1082,11 @@ class CompiledFunc:
                     )
                     if _ir_added > 0:
                         block._dag_built = True
-                if not (self._opt == 1 and (block and block._dag_built)):
-                    # Non-opt=1, or opt=1 without IR nodes (Toffoli mode):
-                    # add a single call-level DAG node.  Skip when _dag_built
-                    # is set — IR nodes already cover this function.
+                if self._opt != 1:
+                    # Non-opt=1: add a coarse call-level DAG node per call.
+                    # opt=1 accumulates fine-grained nodes during capture
+                    # (via record_operation or _build_dag_from_ir), so
+                    # replays must not append duplicate coarse nodes.
                     dag = current_dag_context()
                     if dag is not None:
                         extra = (

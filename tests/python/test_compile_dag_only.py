@@ -73,13 +73,12 @@ class TestOpt1DagOnlyReplay:
             f"opt=0 replay should inject gates (expected > 0 layers, got {replay_layers})"
         )
 
-    def test_opt1_dag_records_three_nodes(self):
-        """opt=1 called 3 times produces DAG with >= 3 nodes and correct aggregate.
+    def test_opt1_dag_no_coarse_nodes_on_replay(self):
+        """opt=1 replays must not add coarse call-level DAG nodes.
 
-        Capture produces an operation-type node (from record_operation
-        during body execution) and replays produce call-level nodes
-        (from dag.add_node in _call_inner).  All replay call nodes
-        should have equal gate counts.
+        The first call (capture) adds fine-grained operation nodes via
+        record_operation.  Replay calls must NOT append additional coarse
+        wrapper nodes — the DAG node count stays constant.
         """
         ql.circuit()
         ql.option("simulate", True)
@@ -90,37 +89,27 @@ class TestOpt1DagOnlyReplay:
             return x
 
         a = ql.qint(0, width=4)
-        inc(a)  # capture (1st call = operation-type node)
-
-        b = ql.qint(0, width=4)
-        inc(b)  # replay (2nd call = call-level node)
-
-        c = ql.qint(0, width=4)
-        inc(c)  # replay (3rd call = call-level node)
+        inc(a)  # capture — adds fine-grained nodes
 
         dag = inc._call_graph
         assert dag is not None, "opt=1 should build a call graph DAG"
-        assert dag.node_count >= 3, f"Expected >= 3 DAG nodes, got {dag.node_count}"
+        count_after_capture = dag.node_count
+        assert count_after_capture >= 1, "Capture should add at least 1 node"
+
+        b = ql.qint(0, width=4)
+        inc(b)  # replay — must not add nodes
+        assert dag.node_count == count_after_capture, (
+            f"Replay added nodes: {count_after_capture} -> {dag.node_count}"
+        )
+
+        c = ql.qint(0, width=4)
+        inc(c)  # replay — must not add nodes
+        assert dag.node_count == count_after_capture, (
+            f"Second replay added nodes: {count_after_capture} -> {dag.node_count}"
+        )
 
         agg = dag.aggregate()
         assert agg["gates"] > 0, "Aggregate gate count should be positive"
-
-        # Replay call-level nodes (no operation_type) should have equal
-        # gate counts.
-        call_nodes = [n for n in dag.nodes if not n.operation_type or n.operation_type == ""]
-        assert len(call_nodes) >= 2, (
-            f"Expected >= 2 call-level nodes from replays, got {len(call_nodes)}"
-        )
-        gate_counts = [n.gate_count for n in call_nodes]
-        assert len(set(gate_counts)) == 1, (
-            f"All replay call nodes should have same gate count, got {gate_counts}"
-        )
-
-        # Aggregate should equal sum of all node gate counts
-        total = sum(n.gate_count for n in dag.nodes)
-        assert agg["gates"] == total, (
-            f"Aggregate should equal sum of all nodes ({total}), got {agg['gates']}"
-        )
 
     def test_opt1_replay_returns_correct_qint(self):
         """opt=1 replay still correctly returns quantum values."""
