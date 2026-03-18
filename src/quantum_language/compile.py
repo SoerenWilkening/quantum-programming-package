@@ -36,6 +36,7 @@ from ._core import (
     _get_layer_floor,
     _get_qubit_saving_mode,
     _register_cache_clear_hook,
+    _run_instruction_py,
     _set_control_stack,
     _set_layer_floor,
     add_gate_count,
@@ -367,9 +368,42 @@ _register_cache_clear_hook(_clear_all_caches)
 # InstructionRecord & compile-mode global state (from _compile_state)
 # ---------------------------------------------------------------------------
 from ._compile_state import (  # noqa: E402 – after qint import is fine
+    InstructionRecord,  # noqa: F401 – re-exported for tests
     _get_active_compile_block,
     _set_active_compile_block,
 )
+
+# ---------------------------------------------------------------------------
+# IR execution — replay InstructionRecord entries via run_instruction
+# ---------------------------------------------------------------------------
+
+
+def _execute_ir(block, qubit_mapping=None):
+    """Execute recorded IR entries to produce gates in the circuit.
+
+    Iterates ``block._instruction_ir`` and calls ``run_instruction`` for
+    each entry using the uncontrolled sequence.  An optional *qubit_mapping*
+    dict remaps capture-time physical qubit indices to replay-time physical
+    indices (for replaying on different qubits).
+
+    Parameters
+    ----------
+    block : CompiledBlock
+        Block whose ``_instruction_ir`` list contains the entries to execute.
+    qubit_mapping : dict or None
+        If provided, maps capture-time physical qubit index (int) to
+        replay-time physical qubit index (int).  When *None*, registers
+        are used as-is (identity mapping — same physical qubits as capture).
+    """
+    for entry in block._instruction_ir:
+        seq_ptr = entry.uncontrolled_seq
+        if seq_ptr == 0:
+            continue
+        if qubit_mapping is not None:
+            regs = tuple(qubit_mapping[r] for r in entry.registers)
+        else:
+            regs = entry.registers
+        _run_instruction_py(seq_ptr, regs, int(entry.invert))
 
 
 # ---------------------------------------------------------------------------
@@ -1043,7 +1077,13 @@ class CompiledFunc:
             _capture_depth -= 1
 
     def _capture_inner(self, args, kwargs, quantum_args):
-        """Inner capture logic (separated for nesting depth tracking)."""
+        """Inner capture logic (separated for nesting depth tracking).
+
+        Execution proceeds in compile mode: the body runs with IR recording
+        active (no gates emitted), then ``_execute_ir`` replays the recorded
+        entries to produce actual gates.  The resulting gates are extracted
+        and virtualised for the gate-level cache as before.
+        """
         # Record start layer
         start_layer = get_current_layer()
 
@@ -1057,11 +1097,20 @@ class CompiledFunc:
         for qa in quantum_args:
             param_qubit_indices.append(_get_quantum_arg_qubit_indices(qa))
 
-        # Execute function normally (gates flow to circuit as usual,
-        # or in tracking-only mode when ql.option('simulate') is False).
-        # Operations inside the body are recorded as direct DAG nodes
-        # via record_operation() — no wrapper/placeholder node.
-        result = self._func(*args, **kwargs)
+        # Compile-mode capture: run the body with IR recording active,
+        # then execute the recorded IR to produce gates in the circuit.
+        ir_block = CompiledBlock(
+            gates=[],
+            total_virtual_qubits=0,
+            param_qubit_ranges=[],
+            internal_qubit_count=0,
+            return_qubit_range=None,
+        )
+        with self.compile_mode(ir_block):
+            result = self._func(*args, **kwargs)
+
+        # Execute the recorded IR to produce gates in the circuit
+        _execute_ir(ir_block)
 
         # Record end layer
         end_layer = get_current_layer()
@@ -1164,6 +1213,9 @@ class CompiledFunc:
         block._capture_virtual_to_real = capture_vtr
         block.return_type = return_type
         block._return_qarray_element_widths = return_qarray_element_widths
+
+        # Transfer IR entries from the compile-mode block to the cached block
+        block._instruction_ir = ir_block._instruction_ir
 
         return block
 

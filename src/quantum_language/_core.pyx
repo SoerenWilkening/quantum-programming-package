@@ -1059,6 +1059,45 @@ def inject_remapped_gates(list gates, dict qubit_map):
 		add_gate(circ, &g)
 
 
+def _run_instruction_py(unsigned long long seq_ptr, tuple registers, int invert):
+	"""Execute a compiled sequence on the current circuit.
+
+	Python-callable wrapper around the C ``run_instruction`` function.
+	Used by the compile-mode IR execution path to replay recorded
+	``InstructionRecord`` entries.
+
+	Parameters
+	----------
+	seq_ptr : int
+		Pointer to a ``sequence_t`` (as unsigned long long from
+		``InstructionRecord.uncontrolled_seq`` or ``.controlled_seq``).
+	registers : tuple of int
+		Physical qubit indices, in the order expected by the sequence.
+	invert : int
+		Non-zero to run the inverse (adjoint) of the sequence.
+
+	Raises
+	------
+	ValueError
+		If the circuit is not initialised or *seq_ptr* is null.
+	"""
+	cdef circuit_t *circ
+	cdef sequence_t *seq
+	cdef unsigned int qa[256]
+	cdef int i, n
+	_validate_circuit()
+	circ = <circuit_t*>_circuit
+	if seq_ptr == 0:
+		raise ValueError("Cannot execute IR entry with null sequence pointer")
+	seq = <sequence_t*>seq_ptr
+	n = len(registers)
+	if n > 256:
+		raise ValueError(f"Register count {n} exceeds maximum (256)")
+	for i in range(n):
+		qa[i] = <unsigned int>registers[i]
+	run_instruction(seq, qa, invert, circ)
+
+
 def _get_layer_floor():
 	"""Get current layer floor value.
 
