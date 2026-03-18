@@ -42,6 +42,8 @@ from ._core cimport (
     copy_hardcoded_sequence,
     add_gate,
     x as gate_x, cx as gate_cx,
+    split_CQ_add, split_CQ_sub,
+    split_toffoli_CQ_add, split_toffoli_CQ_sub,
 )
 
 # Python-level imports for global state access via accessor functions

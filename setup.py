@@ -45,6 +45,8 @@ c_sources = [
     f"{C_BACKEND}/ToffoliMultiplication.c",
     f"{C_BACKEND}/ToffoliDivision.c",
     f"{C_BACKEND}/ToffoliModReduce.c",
+    # Split-register arithmetic (Phase ix4.1)
+    f"{C_BACKEND}/hot_path_add.c",
     # Hardcoded Toffoli addition sequences: 8 per-width files + dispatch
     *[f"{C_SEQ}/toffoli_add_seq_{i}.c" for i in range(1, 9)],
     f"{C_SEQ}/toffoli_add_seq_dispatch.c",

@@ -54,20 +54,18 @@ class TestWithBlockSimpleComparison:
     def test_gt_cq_records_then_uncomputes(self):
         """CQ greater-than: history recorded on creation, cleared on exit.
 
-        Note: > comparison is a compound op (seq_ptr=0), so children
-        handle the inverse rather than the entry itself.  The key
-        invariant is that history is cleared after the with block.
+        Uses borrow-ancilla pattern (no widened temporaries / children).
+        The key invariant is that history is cleared after the with block.
         """
         ql.circuit()
         a = ql.qint(6, width=4)
         cond = a > 3
 
         assert len(cond.history) >= 1
-        assert len(cond.history.children) >= 2
         with cond:
             pass
 
-        # History and children cleared after with exit
+        # History cleared after with exit
         assert len(cond.history) == 0
         assert len(cond.history.children) == 0
 
@@ -114,31 +112,27 @@ class TestCompoundExpression:
     """End-to-end: compound expression creates temporaries tracked as
     children, and with-block exit cascades uncomputation to them."""
 
-    def test_add_then_gt_creates_children(self):
-        """(a + 3) > 5 produces a condition with weakref children."""
+    def test_add_then_gt_creates_history(self):
+        """(a + 3) > 5 produces a condition with history entries."""
         ql.circuit()
         a = ql.qint(4, width=4)
         temp = a + 3
         cond = temp > 5
 
-        # Step 1.2: compound result has children from widened temporaries
+        # Borrow-ancilla pattern: no widened temporaries (no children)
         assert len(cond.history) >= 1
-        assert len(cond.history.children) >= 2
 
-    def test_compound_with_clears_children(self):
-        """with (temp > 5): cascades uncomputation to children."""
+    def test_compound_with_clears_history(self):
+        """with (temp > 5): cascades uncomputation."""
         ql.circuit()
         a = ql.qint(4, width=4)
         temp = a + 3
         cond = temp > 5
-
-        children_before = len(cond.history.children)
-        assert children_before >= 2
 
         with cond:
             pass
 
-        # Step 1.3: children cleared after cascade
+        # History cleared after cascade
         assert len(cond.history.children) == 0
         assert len(cond.history) == 0
 
@@ -383,12 +377,11 @@ class TestMeasurementDiscardsHistory:
         assert gc_after == gc_before
 
     def test_measure_clears_children(self):
-        """Measurement clears weakref children as well."""
+        """Measurement clears history (borrow-ancilla: no children)."""
         ql.circuit()
         a = ql.qint(4, width=4)
         temp = a + 3
         cond = temp > 5
-        assert len(cond.history.children) >= 2
 
         cond.measure()
         assert len(cond.history.children) == 0
@@ -654,11 +647,10 @@ class TestFullEndToEnd:
             result += 1
         assert len(cond1.history) == 0
 
-        # Compound expression (Step 1.2 children)
+        # Compound expression (borrow-ancilla: no widened temp children)
         temp = a + 3
         cond2 = temp > 5
         assert len(cond2.history) >= 1
-        assert len(cond2.history.children) >= 2
 
         with cond2:
             result += 1

@@ -72,13 +72,12 @@ class TestWithBlockUncomputesTemporaries:
     """Compound expressions like (a + 3) > 5 cascade to children."""
 
     def test_compound_condition_clears_children(self):
-        """with (temp > 5): uncomputes and clears children."""
+        """with (temp > 5): uncomputes and clears history."""
         ql.circuit()
         a = ql.qint(4, width=4)
         temp = a + 3
         cond = temp > 5
-        # cond should have children (widened temporaries from comparison)
-        assert len(cond.history.children) >= 2
+        # Borrow-ancilla: no widened temp children
         with cond:
             pass
         # After exit, children list is cleared

@@ -239,19 +239,16 @@ class TestChainedExpressionRecordsChildren:
         a = ql.qint(3, width=4)
         b = ql.qint(5, width=4)
         cond = a < b
-        # __lt__ creates temp_self and temp_other as widened copies
-        # and registers them as weakref children via add_child.
-        # The temps are local to __lt__ and may already be GC'd,
-        # but the weakref slots should still exist in the children list.
-        assert len(cond.history.children) >= 2
+        # Borrow-ancilla pattern: no widened temporaries, no children
+        assert len(cond.history.children) == 0
 
-    def test_gt_qq_has_widened_children_registered(self):
-        """a > b registers widened temps as weakref children."""
+    def test_gt_qq_no_widened_children(self):
+        """a > b uses borrow-ancilla (no widened temp children)."""
         ql.circuit()
         a = ql.qint(5, width=4)
         b = ql.qint(3, width=4)
         cond = a > b
-        assert len(cond.history.children) >= 2
+        assert len(cond.history.children) == 0
 
     def test_children_dead_after_scope_exit(self):
         """Widened temp weakrefs become dead after method scope exits."""

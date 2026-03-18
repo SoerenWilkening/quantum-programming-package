@@ -220,7 +220,10 @@
 	def __lt__(self, other):
 		"""Less-than comparison: self < other
 
-		Uses widened (n+1)-bit subtraction and sign bit check. Preserves inputs.
+		Uses borrow-ancilla pattern with split-register arithmetic.
+		Allocates a single ancilla qubit as borrow bit, performs (n+1)-bit
+		subtraction across [a, ancilla], extracts borrow into result qbool,
+		restores via addition, and deallocates ancilla.
 
 		Parameters
 		----------
@@ -238,18 +241,21 @@
 		>>> b = qint(5, width=8)
 		>>> result = (a < b)
 		>>> # result is qbool representing |True>
-
-		Notes
-		-----
-		Uses widened temporaries (n+1 bits) to handle MSB boundary cases correctly.
 		"""
 		from .qbool import qbool
-		cdef int comp_width
-		cdef int operand_bits, i_bit
+		cdef int comp_width, i
 		cdef sequence_t *seq
+		cdef sequence_t *seq_add
 		cdef unsigned int[:] arr
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
+		cdef circuit_s *_circ = <circuit_s*>_circuit
 		cdef bint _circuit_initialized = _get_circuit_initialized()
+		cdef qubit_allocator_t *alloc
+		cdef unsigned int borrow_ancilla, zero_ext, toff_ancilla
+		cdef unsigned int qa[256]
+		cdef int self_bits = self.bits
+		cdef int self_offset = 64 - self_bits
+		cdef int other_bits, other_offset
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
@@ -260,48 +266,96 @@
 		if self is other:
 			return qbool(False)  # x < x is always false
 
-		# Handle qint operand
+		# Handle qint operand: borrow-ancilla via (n+1)-bit QQ addition
 		if type(other) == qint:
-			# Phase 84: Validate qubit_array bounds before writes
-			# lt uses 2 slots per CNOT copy (qubit_array[0], qubit_array[1])
-			validate_qubit_slots(2, "__lt__")
+			other_bits = (<qint>other).bits
+			other_offset = 64 - other_bits
+			comp_width = (self_bits if self_bits > other_bits else other_bits) + 1
 
-			# a < b means (a - b) is negative in signed interpretation.
-			# To handle full unsigned range, use (n+1)-bit subtraction:
-			# extend both operands by 1 bit (MSB=0 = unsigned) so the sign bit
-			# is never polluted by valid data bits.
-			comp_width = max(self.bits, (<qint>other).bits) + 1
-			# Create widened copies (zero-extended to comp_width)
-			temp_self = qint(0, width=comp_width)
-			temp_other = qint(0, width=comp_width)
+			# 1. In-place mod-n subtraction: self -= other
+			self -= other
 
-			# Copy operand bits to temp using LSB-aligned CNOT (upper bits stay 0 = zero-extension)
-			# CRITICAL: Cannot use ^= operator here because __ixor__ misaligns qubits when widths differ.
+			# 2. Allocate borrow ancilla + zero-extension ancilla
+			alloc = circuit_get_allocator(_circ)
+			if _circ.arithmetic_mode == 1:  # Toffoli
+				if comp_width == 1:
+					borrow_ancilla = allocator_alloc(alloc, 2, True)
+					zero_ext = borrow_ancilla + 1
+				else:
+					# Toffoli QQ_add(n) needs 1 carry ancilla for n>=2
+					borrow_ancilla = allocator_alloc(alloc, 3, True)
+					zero_ext = borrow_ancilla + 1
+					toff_ancilla = borrow_ancilla + 2
+			else:
+				borrow_ancilla = allocator_alloc(alloc, 2, True)
+				zero_ext = borrow_ancilla + 1
 
-			# Copy self's bits to temp_self (LSB-aligned)
-			operand_bits = self.bits
-			for i_bit in range(operand_bits):
-				qubit_array[0] = (<qint>temp_self).qubits[64 - comp_width + i_bit]
-				qubit_array[1] = self.qubits[64 - operand_bits + i_bit]
-				arr = qubit_array
-				seq = Q_xor(1)
-				run_instruction(seq, &arr[0], False, _circuit)
+			# 3. Build qubit array for (comp_width)-bit QQ addition
+			#    After mod-n sub, self holds (self_orig - other) mod 2^n.
+			#    Adding other back in (n+1)-bit: carry into borrow_ancilla
+			#    iff self_orig < other (wrapping occurred).
+			if _circ.arithmetic_mode == 1:  # Toffoli
+				if comp_width == 1:
+					# toffoli_QQ_add(1): [target, other]
+					qa[0] = borrow_ancilla  # target = borrow (MSB of extended self)
+					qa[1] = zero_ext        # other = zero-ext MSB of other
+				else:
+					# toffoli_QQ_add(n>=2): [other, target, carry_ancilla]
+					# other = [other_qubits..., zero_ext]
+					for i in range(other_bits):
+						qa[i] = (<qint>other).qubits[other_offset + i]
+					qa[other_bits] = zero_ext
+					# Pad if other_bits < comp_width - 1 (handled by zero_ext at MSB)
+					# target = [self_qubits..., borrow_ancilla]
+					for i in range(self_bits):
+						qa[comp_width + i] = self.qubits[self_offset + i]
+					qa[comp_width + self_bits] = borrow_ancilla
+					# carry ancilla
+					qa[2 * comp_width] = toff_ancilla
+				seq = toffoli_QQ_add(comp_width)
+				if seq != NULL:
+					run_instruction(seq, qa, False, _circuit)
+			else:
+				# QFT QQ_add(n): [target(n), other(n)]
+				# target = [self_qubits..., borrow_ancilla]
+				for i in range(self_bits):
+					qa[i] = self.qubits[self_offset + i]
+				qa[self_bits] = borrow_ancilla
+				# other = [other_qubits..., zero_ext]
+				for i in range(other_bits):
+					qa[comp_width + i] = (<qint>other).qubits[other_offset + i]
+				qa[comp_width + other_bits] = zero_ext
+				seq = QQ_add(comp_width)
+				if seq != NULL:
+					run_instruction(seq, qa, False, _circuit)
 
-			# Copy other's bits to temp_other (LSB-aligned)
-			operand_bits = (<qint>other).bits
-			for i_bit in range(operand_bits):
-				qubit_array[0] = (<qint>temp_other).qubits[64 - comp_width + i_bit]
-				qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]
-				arr = qubit_array
-				seq = Q_xor(1)
-				run_instruction(seq, &arr[0], False, _circuit)
-
-			# Subtract: temp_self -= temp_other
-			temp_self -= temp_other
-			# MSB of widened result is the true sign bit
-			msb = temp_self[comp_width - 1]
+			# 4. Extract borrow into result qbool
 			result = qbool()
-			result ^= msb
+			qubit_array[0] = (<qint>result).qubits[63]
+			qubit_array[1] = borrow_ancilla
+			arr = qubit_array
+			seq_add = Q_xor(1)
+			run_instruction(seq_add, &arr[0], False, _circuit)
+
+			# 5. Undo the (n+1)-bit addition (inverse)
+			if _circ.arithmetic_mode == 1:  # Toffoli
+				seq = toffoli_QQ_add(comp_width)
+				if seq != NULL:
+					run_instruction(seq, qa, True, _circuit)
+			else:
+				seq = QQ_add(comp_width)
+				if seq != NULL:
+					run_instruction(seq, qa, True, _circuit)
+
+			# 6. Restore self: self += other
+			self += other
+
+			# 7. Deallocate ancilla
+			if _circ.arithmetic_mode == 1 and comp_width > 1:
+				allocator_free(alloc, borrow_ancilla, 3)
+			else:
+				allocator_free(alloc, borrow_ancilla, 2)
+
 			# Track dependencies on original operands
 			result.add_dependency(self)
 			result.add_dependency(other)
@@ -315,9 +369,6 @@
 				+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits)) \
 				+ tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
 			result.history.append(0, _qm)
-			# Add widened temporaries as weakref children
-			result.history.add_child(temp_self)
-			result.history.add_child(temp_other)
 
 			# Step 6.2: Blocker insertion — source operands reference the result
 			self.history.add_blocker(result)
@@ -325,26 +376,109 @@
 
 			return result
 
-		# Handle int operand
+		# Handle int operand: borrow-ancilla via split-register CQ subtraction
 		if type(other) == int:
 			# Classical overflow checks
-			max_val = (1 << self.bits) - 1 if self.bits < 64 else (1 << 63) - 1
+			max_val = (1 << self_bits) - 1 if self_bits < 64 else (1 << 63) - 1
 			if other < 0:
 				return qbool(False)  # qint always >= 0, so qint < negative is false
+			if other == 0:
+				return qbool(False)  # unsigned qint is never < 0
 			if other > max_val:
 				return qbool(True)  # qint always < large value that doesn't fit
 
-			# Create temp qint to use the qint-qint __lt__ path
-			temp = qint(other, width=self.bits)
-			return self < temp
+			alloc = circuit_get_allocator(_circ)
+
+			if _circ.arithmetic_mode == 1:  # Toffoli
+				# split_toffoli_CQ_sub qubit layout:
+				# [0..bits] = temp, [bits+1..2*bits+1] = target [a, msb], [2*(bits+1)] = carry
+				borrow_ancilla = allocator_alloc(alloc, 1, True)
+				toff_ancilla = allocator_alloc(alloc, self_bits + 2, True)
+
+				# Build qubit array: temp register, target=[self, borrow], carry
+				for i in range(self_bits + 1):
+					qa[i] = toff_ancilla + i
+				for i in range(self_bits):
+					qa[self_bits + 1 + i] = self.qubits[self_offset + i]
+				qa[self_bits + 1 + self_bits] = borrow_ancilla
+				qa[2 * (self_bits + 1)] = toff_ancilla + self_bits + 1
+
+				# Subtract
+				seq = split_toffoli_CQ_sub(self_bits, <int64_t>other)
+				if seq != NULL:
+					run_instruction(seq, qa, False, _circuit)
+					toffoli_sequence_free(seq)
+
+				# Extract borrow
+				result = qbool()
+				qubit_array[0] = (<qint>result).qubits[63]
+				qubit_array[1] = borrow_ancilla
+				arr = qubit_array
+				seq_add = Q_xor(1)
+				run_instruction(seq_add, &arr[0], False, _circuit)
+
+				# Restore via addition
+				seq = split_toffoli_CQ_add(self_bits, <int64_t>other)
+				if seq != NULL:
+					run_instruction(seq, qa, False, _circuit)
+					toffoli_sequence_free(seq)
+
+				allocator_free(alloc, toff_ancilla, self_bits + 2)
+				allocator_free(alloc, borrow_ancilla, 1)
+			else:
+				# QFT split-register: qubit layout [0..bits-1] = a, [bits] = msb
+				borrow_ancilla = allocator_alloc(alloc, 1, True)
+
+				for i in range(self_bits):
+					qa[i] = self.qubits[self_offset + i]
+				qa[self_bits] = borrow_ancilla
+
+				# Subtract
+				seq = split_CQ_sub(self_bits, <int64_t>other)
+				if seq != NULL:
+					run_instruction(seq, qa, False, _circuit)
+					toffoli_sequence_free(seq)
+
+				# Extract borrow
+				result = qbool()
+				qubit_array[0] = (<qint>result).qubits[63]
+				qubit_array[1] = borrow_ancilla
+				arr = qubit_array
+				seq_add = Q_xor(1)
+				run_instruction(seq_add, &arr[0], False, _circuit)
+
+				# Restore via addition
+				seq = split_CQ_add(self_bits, <int64_t>other)
+				if seq != NULL:
+					run_instruction(seq, qa, False, _circuit)
+					toffoli_sequence_free(seq)
+
+				allocator_free(alloc, borrow_ancilla, 1)
+
+			# Track dependencies
+			result.add_dependency(self)
+			result.operation_type = 'LT'
+
+			# Step 1.2: Record operation into result's per-variable history
+			_r_offset_h = 64 - (<qint>result).bits
+			_self_offset_h = 64 - self.bits
+			_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
+				+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits))
+			result.history.append(0, _qm)
+
+			# Step 6.2: Blocker insertion — source operand references the result
+			self.history.add_blocker(result)
+
+			return result
 
 		raise TypeError("Comparison requires qint or int")
 
 	def __gt__(self, other):
 		"""Greater-than comparison: self > other
 
-		Uses widened (n+1)-bit subtraction for qint operands.
-		For int operands, creates temp qint and delegates.
+		Uses borrow-ancilla pattern with split-register arithmetic.
+		a > b is computed as b < a: subtract self from other's extended
+		register and check the borrow bit.
 
 		Parameters
 		----------
@@ -364,12 +498,19 @@
 		>>> # result is qbool representing |True>
 		"""
 		from .qbool import qbool
-		cdef int comp_width
-		cdef int operand_bits, i_bit
+		cdef int comp_width, i
 		cdef sequence_t *seq
+		cdef sequence_t *seq_add
 		cdef unsigned int[:] arr
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
+		cdef circuit_s *_circ = <circuit_s*>_circuit
 		cdef bint _circuit_initialized = _get_circuit_initialized()
+		cdef qubit_allocator_t *alloc
+		cdef unsigned int borrow_ancilla, zero_ext, toff_ancilla
+		cdef unsigned int qa[256]
+		cdef int self_bits = self.bits
+		cdef int self_offset = 64 - self_bits
+		cdef int other_bits, other_offset
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
@@ -380,42 +521,90 @@
 		if self is other:
 			return qbool(False)  # x > x is always false
 
-		# Handle qint operand
+		# Handle qint operand: a > b computed as b < a via borrow-ancilla
 		if type(other) == qint:
-			# Phase 84: Validate qubit_array bounds before writes
-			validate_qubit_slots(2, "__gt__")
+			other_bits = (<qint>other).bits
+			other_offset = 64 - other_bits
+			comp_width = (self_bits if self_bits > other_bits else other_bits) + 1
 
-			# a > b means (b - a) is negative in signed interpretation.
-			comp_width = max(self.bits, (<qint>other).bits) + 1
-			# Create widened copies (zero-extended to comp_width)
-			temp_other = qint(0, width=comp_width)
-			temp_self = qint(0, width=comp_width)
+			# 1. In-place mod-n subtraction: other -= self
+			(<qint>other).__isub__(self)
 
-			# Copy operand bits to temp using LSB-aligned CNOT
-			# Copy other's bits to temp_other (LSB-aligned)
-			operand_bits = (<qint>other).bits
-			for i_bit in range(operand_bits):
-				qubit_array[0] = (<qint>temp_other).qubits[64 - comp_width + i_bit]
-				qubit_array[1] = (<qint>other).qubits[64 - operand_bits + i_bit]
-				arr = qubit_array
-				seq = Q_xor(1)
-				run_instruction(seq, &arr[0], False, _circuit)
+			# 2. Allocate borrow ancilla + zero-extension ancilla
+			alloc = circuit_get_allocator(_circ)
+			if _circ.arithmetic_mode == 1:  # Toffoli
+				if comp_width == 1:
+					borrow_ancilla = allocator_alloc(alloc, 2, True)
+					zero_ext = borrow_ancilla + 1
+				else:
+					borrow_ancilla = allocator_alloc(alloc, 3, True)
+					zero_ext = borrow_ancilla + 1
+					toff_ancilla = borrow_ancilla + 2
+			else:
+				borrow_ancilla = allocator_alloc(alloc, 2, True)
+				zero_ext = borrow_ancilla + 1
 
-			# Copy self's bits to temp_self (LSB-aligned)
-			operand_bits = self.bits
-			for i_bit in range(operand_bits):
-				qubit_array[0] = (<qint>temp_self).qubits[64 - comp_width + i_bit]
-				qubit_array[1] = self.qubits[64 - operand_bits + i_bit]
-				arr = qubit_array
-				seq = Q_xor(1)
-				run_instruction(seq, &arr[0], False, _circuit)
+			# 3. Build qubit array for (comp_width)-bit QQ addition
+			#    After mod-n sub, other holds (other_orig - self) mod 2^n.
+			#    Adding self back in (n+1)-bit: carry into borrow_ancilla
+			#    iff other_orig < self (wrapping occurred), i.e. self > other.
+			if _circ.arithmetic_mode == 1:  # Toffoli
+				if comp_width == 1:
+					qa[0] = borrow_ancilla
+					qa[1] = zero_ext
+				else:
+					# toffoli_QQ_add(n>=2): [self_ext, other_ext, carry]
+					for i in range(self_bits):
+						qa[i] = self.qubits[self_offset + i]
+					qa[self_bits] = zero_ext
+					for i in range(other_bits):
+						qa[comp_width + i] = (<qint>other).qubits[other_offset + i]
+					qa[comp_width + other_bits] = borrow_ancilla
+					qa[2 * comp_width] = toff_ancilla
+				seq = toffoli_QQ_add(comp_width)
+				if seq != NULL:
+					run_instruction(seq, qa, False, _circuit)
+			else:
+				# QFT QQ_add(n): [target(n), other(n)]
+				# target = [other_qubits..., borrow_ancilla]
+				for i in range(other_bits):
+					qa[i] = (<qint>other).qubits[other_offset + i]
+				qa[other_bits] = borrow_ancilla
+				# other_operand = [self_qubits..., zero_ext]
+				for i in range(self_bits):
+					qa[comp_width + i] = self.qubits[self_offset + i]
+				qa[comp_width + self_bits] = zero_ext
+				seq = QQ_add(comp_width)
+				if seq != NULL:
+					run_instruction(seq, qa, False, _circuit)
 
-			# Subtract: temp_other -= temp_self
-			temp_other -= temp_self
-			# MSB of widened result is the true sign bit
-			msb = temp_other[comp_width - 1]
+			# 4. Extract borrow into result qbool
 			result = qbool()
-			result ^= msb
+			qubit_array[0] = (<qint>result).qubits[63]
+			qubit_array[1] = borrow_ancilla
+			arr = qubit_array
+			seq_add = Q_xor(1)
+			run_instruction(seq_add, &arr[0], False, _circuit)
+
+			# 5. Undo the (n+1)-bit addition (inverse)
+			if _circ.arithmetic_mode == 1:  # Toffoli
+				seq = toffoli_QQ_add(comp_width)
+				if seq != NULL:
+					run_instruction(seq, qa, True, _circuit)
+			else:
+				seq = QQ_add(comp_width)
+				if seq != NULL:
+					run_instruction(seq, qa, True, _circuit)
+
+			# 6. Restore other: other += self
+			(<qint>other).__iadd__(self)
+
+			# 7. Deallocate ancilla
+			if _circ.arithmetic_mode == 1 and comp_width > 1:
+				allocator_free(alloc, borrow_ancilla, 3)
+			else:
+				allocator_free(alloc, borrow_ancilla, 2)
+
 			# Track dependencies on original operands
 			result.add_dependency(self)
 			result.add_dependency(other)
@@ -429,9 +618,6 @@
 				+ tuple(self.qubits[_self_offset_h + i] for i in range(self.bits)) \
 				+ tuple((<qint>other).qubits[_other_offset_h + i] for i in range((<qint>other).bits))
 			result.history.append(0, _qm)
-			# Add widened temporaries as weakref children
-			result.history.add_child(temp_other)
-			result.history.add_child(temp_self)
 
 			# Step 6.2: Blocker insertion — source operands reference the result
 			self.history.add_blocker(result)
@@ -439,18 +625,26 @@
 
 			return result
 
-		# Handle int operand
+		# Handle int operand: borrow-ancilla via split-register CQ subtraction
+		# a > b (int) is equivalent to b < a, i.e., classical < quantum.
+		# We compute self < (other+1) is wrong. Instead:
+		# self > other iff NOT(self <= other) iff NOT(self < other+1) for int.
+		# Simpler: self > other iff other < self. For CQ: subtract self_value
+		# from other... but self is quantum. Use: self > other iff NOT(self <= other).
+		# But <=  delegates to ~(self > other) creating recursion.
+		# Direct approach: self > int_val iff self >= int_val + 1 iff NOT(self < int_val + 1).
+		# Or: create temp qint and use QQ path.
 		if type(other) == int:
 			# Classical overflow checks
-			max_val = (1 << self.bits) - 1 if self.bits < 64 else (1 << 63) - 1
+			max_val = (1 << self_bits) - 1 if self_bits < 64 else (1 << 63) - 1
 			if other < 0:
 				return qbool(True)  # qint always >= 0, so qint > negative is true
-			if other > max_val:
-				return qbool(False)  # qint always < large value, so not >
+			if other >= max_val:
+				return qbool(False)  # qint can't exceed max_val, so not >
 
-			# Create temp qint to use the qint-qint __gt__ path
-			temp = qint(other, width=self.bits)
-			return self > temp
+			# self > other iff NOT(self < other + 1)
+			# (since self and other are integers, self > other <=> self >= other+1 <=> NOT(self < other+1))
+			return ~(self < (other + 1))
 
 		raise TypeError("Comparison requires qint or int")
 
@@ -530,7 +724,7 @@
 
 		Notes
 		-----
-		Delegates to NOT(self < other) which uses widened-temp pattern.
+		Delegates to NOT(self < other) which uses borrow-ancilla pattern.
 		"""
 		from .qbool import qbool
 
