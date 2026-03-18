@@ -455,6 +455,66 @@ def _execute_ir(block, qubit_mapping=None):
         _run_instruction_py(seq_ptr, regs, int(entry.invert))
 
 
+def _build_dag_from_ir(block, func_name, is_controlled=False, qubit_mapping=None):
+    """Build DAG nodes from a block's instruction IR.
+
+    Each ``InstructionRecord`` in ``block._instruction_ir`` becomes a DAG
+    node in the current DAG context.  This allows opt=1 (DAG-only) mode
+    to populate the DAG from IR entries even when ``simulate=False``
+    (no gates are emitted to the circuit).
+
+    Parameters
+    ----------
+    block : CompiledBlock
+        Block whose ``_instruction_ir`` list provides the entries.
+    func_name : str
+        Name of the compiled function (used as prefix for node names).
+    is_controlled : bool
+        Whether the call is inside a controlled context.  Recorded in
+        each DAGNode's ``controlled`` attribute.
+    qubit_mapping : dict or None
+        If provided, maps capture-time physical qubit indices to
+        replay-time physical indices.  When *None*, registers are
+        used as-is.
+
+    Returns
+    -------
+    int
+        Number of DAG nodes added.
+    """
+    dag = current_dag_context()
+    if dag is None:
+        return 0
+
+    count = 0
+    for entry in block._instruction_ir:
+        if qubit_mapping is not None:
+            regs = tuple(qubit_mapping.get(r, r) for r in entry.registers)
+        else:
+            regs = entry.registers
+        qubit_set = frozenset(regs)
+
+        # Select the appropriate sequence pointer for gate count metadata
+        if is_controlled and entry.controlled_seq != 0:
+            seq_ptr = entry.controlled_seq
+        else:
+            seq_ptr = entry.uncontrolled_seq
+
+        dag.add_node(
+            entry.name,
+            qubit_set,
+            0,  # gate_count -- not available from IR alone
+            (),  # cache_key
+            sequence_ptr=seq_ptr,
+            qubit_mapping=regs,
+            operation_type=entry.name,
+            invert=entry.invert,
+            controlled=is_controlled,
+        )
+        count += 1
+    return count
+
+
 # ---------------------------------------------------------------------------
 # CompiledBlock -- stores a captured and virtualised gate sequence
 # ---------------------------------------------------------------------------
@@ -902,7 +962,11 @@ class CompiledFunc:
                 if self._call_graph is not None:
                     if self._opt == 2:
                         self._apply_merge()
-                    self._call_graph.freeze()
+                    # opt=1 accumulates nodes across calls, so do not
+                    # freeze the DAG after each call.  Other opt levels
+                    # freeze immediately (graph is rebuilt each call).
+                    if self._opt != 1:
+                        self._call_graph.freeze()
 
         return result
 
@@ -982,36 +1046,44 @@ class CompiledFunc:
                 if _replay_count:
                     add_gate_count(_replay_count)
             # Record DAG node for replay path (no nesting -- body not
-            # re-executed).  Skip for opt=1: the DAG was fully built
-            # during capture and should not grow on subsequent calls.
-            if _building_dag and self._opt != 1:
-                dag = current_dag_context()
-                if dag is not None:
-                    extra = (
-                        block._capture_virtual_to_real
-                        if (block and block._capture_virtual_to_real)
-                        else None
-                    )
-                    qubit_set, _ = _build_qubit_set_numpy(quantum_args, extra)
-                    _gates = block.gates if block else []
-                    _node_gate_count = (
-                        block.original_gate_count
-                        if block and not _gates and block.original_gate_count
-                        else len(_gates)
-                    )
-                    node_idx = dag.add_node(
+            # re-executed).
+            if _building_dag:
+                if self._opt == 1:
+                    # opt=1: build DAG nodes from instruction IR so that
+                    # replays populate the DAG (even with simulate=False).
+                    _build_dag_from_ir(
+                        block,
                         self._func.__name__,
-                        qubit_set,
-                        _node_gate_count,
-                        cache_key,
-                        depth=_compute_depth(_gates),
-                        t_count=_compute_t_count(_gates),
-                        controlled=is_controlled,
+                        is_controlled=is_controlled,
                     )
-                    # Store block ref for merge support (opt=2)
-                    if block is not None:
-                        dag._nodes[node_idx]._block_ref = block
-                        dag._nodes[node_idx]._v2r_ref = block._capture_virtual_to_real
+                else:
+                    dag = current_dag_context()
+                    if dag is not None:
+                        extra = (
+                            block._capture_virtual_to_real
+                            if (block and block._capture_virtual_to_real)
+                            else None
+                        )
+                        qubit_set, _ = _build_qubit_set_numpy(quantum_args, extra)
+                        _gates = block.gates if block else []
+                        _node_gate_count = (
+                            block.original_gate_count
+                            if block and not _gates and block.original_gate_count
+                            else len(_gates)
+                        )
+                        node_idx = dag.add_node(
+                            self._func.__name__,
+                            qubit_set,
+                            _node_gate_count,
+                            cache_key,
+                            depth=_compute_depth(_gates),
+                            t_count=_compute_t_count(_gates),
+                            controlled=is_controlled,
+                        )
+                        # Store block ref for merge support (opt=2)
+                        if block is not None:
+                            dag._nodes[node_idx]._block_ref = block
+                            dag._nodes[node_idx]._v2r_ref = block._capture_virtual_to_real
         else:
             result = self._capture_and_cache_both(
                 args,
@@ -1024,10 +1096,19 @@ class CompiledFunc:
             )
             # For opt=1 capture, record control state on the cached block
             # so DAG consumers can query it without adding a wrapper node.
+            # Also build DAG nodes from the instruction IR so the DAG is
+            # populated even with simulate=False or QFT mode (where
+            # record_operation does not fire during compile-mode capture).
             if self._opt == 1:
                 block = self._cache.get(cache_key)
                 if block is not None:
                     block._captured_controlled = is_controlled
+                    if _building_dag and block._instruction_ir:
+                        _build_dag_from_ir(
+                            block,
+                            self._func.__name__,
+                            is_controlled=is_controlled,
+                        )
 
         if self._debug:
             block = self._cache.get(cache_key)
