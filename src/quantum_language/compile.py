@@ -380,10 +380,18 @@ def _clear_all_caches():
 
     Called automatically when a new circuit is created via ql.circuit().
     Dead weak references are pruned during iteration.
+
+    Also enables simulate mode so gates are stored in the circuit.
+    The C default is simulate=0 (tracking-only), but full simulation
+    is required for QASM export, compiled function replay, and any
+    operation that needs gate data in the circuit.
     """
     global _capture_depth
     _capture_depth = 0
     _dag_builder_stack.clear()
+    # Enable simulate so gates are stored in the circuit (required for
+    # QASM export, compiled function capture/replay, and simulation).
+    option("simulate", True)
     alive = []
     for ref in _compiled_funcs:
         obj = ref()
@@ -1035,11 +1043,11 @@ class CompiledFunc:
             block = self._cache[cache_key]
             # _replay selects controlled/uncontrolled variant at runtime
             result = self._replay(block, quantum_args, track_forward=_track_fwd, kind="compiled_fn")
-            # Manually credit the gate count when simulate=False (no gates
-            # injected) or opt=1 (inject_remapped_gates/add_gate does not
-            # increment gate_count) so get_gate_count() reflects the
-            # logical cost of this replay.
-            if (not option("simulate") or self._opt == 1) and block is not None:
+            # Manually credit the gate count so get_gate_count() reflects
+            # the logical cost of this replay.  inject_remapped_gates
+            # (gate-level replay) does not increment circ->gate_count,
+            # so we always credit it here regardless of simulate mode.
+            if block is not None:
                 _replay_count = (
                     block.original_gate_count if block.original_gate_count else len(block.gates)
                 )
@@ -1706,9 +1714,44 @@ class CompiledFunc:
         start_layer = get_current_layer()
         _set_layer_floor(start_layer)
 
-        # Inject remapped gates (skip when simulate=False)
+        # Execute replay: prefer IR path (handles controlled context via
+        # controlled_seq), fall back to gate-level injection.
+        #
+        # Find the base (uncontrolled) block that has IR entries.
+        # The derived controlled_block does not store IR — _execute_ir
+        # handles control selection internally using the control stack.
+        _ir_source = None
+        if block._instruction_ir:
+            _ir_source = block
+        elif hasattr(self, "_cache"):
+            for _cb in self._cache.values():
+                if _cb.controlled_block is block and _cb._instruction_ir:
+                    _ir_source = _cb
+                    break
+
+        # Inject gates into the circuit when simulate is True.
+        # When simulate is False (tracking-only / DAG-only mode),
+        # gates are not stored — gate counts are credited separately
+        # in _call_inner.
         if option("simulate"):
-            inject_remapped_gates(block.gates, virtual_to_real)
+            if _ir_source is not None and _ir_source._instruction_ir:
+                # IR path: _execute_ir handles controlled sequences and
+                # control qubit injection internally.
+                # Build capture-physical -> replay-physical mapping from
+                # the block's virtual-to-real data. IR entries store
+                # capture-time physical qubit indices, so we need to map
+                # them to the replay-time physical indices.
+                ir_qubit_mapping = None
+                v2r_capture = _ir_source._capture_virtual_to_real
+                if v2r_capture and virtual_to_real:
+                    ir_qubit_mapping = {}
+                    for virt_idx, capture_phys in v2r_capture.items():
+                        if virt_idx in virtual_to_real:
+                            ir_qubit_mapping[capture_phys] = virtual_to_real[virt_idx]
+                _execute_ir(_ir_source, qubit_mapping=ir_qubit_mapping)
+            elif block.gates:
+                # Gate-level path: inject remapped gates into the circuit.
+                inject_remapped_gates(block.gates, virtual_to_real)
 
         # Restore layer_floor
         _set_layer_floor(saved_floor)
