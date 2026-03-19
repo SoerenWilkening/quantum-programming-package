@@ -412,8 +412,10 @@ _register_cache_clear_hook(_clear_all_caches)
 # InstructionRecord & compile-mode global state (from _compile_state)
 # ---------------------------------------------------------------------------
 from ._compile_state import (  # noqa: E402 – after qint import is fine
+    CallRecord,  # noqa: F401 – re-exported for tests
     InstructionRecord,  # noqa: F401 – re-exported for tests
     _get_active_compile_block,
+    _record_call,  # noqa: F401 – re-exported for tests
     _set_active_compile_block,
 )
 
@@ -575,6 +577,7 @@ class CompiledBlock:
         "controlled_block",  # Derived controlled CompiledBlock (Phase 5)
         "_captured_controlled",  # Whether capture was inside control context
         "_instruction_ir",  # list[InstructionRecord] – compile-mode IR
+        "_call_records",  # list[CallRecord] – nested compiled function calls
         "_dag_built",  # bool – DAG nodes already built from IR (no duplication on replay)
     )
 
@@ -606,6 +609,7 @@ class CompiledBlock:
         self.controlled_block = None
         self._captured_controlled = False
         self._instruction_ir = []
+        self._call_records = []
         self._dag_built = False
 
 
@@ -1940,6 +1944,71 @@ class CompiledFunc:
         if orig == 0:
             return 0.0
         return 100.0 * (1.0 - self.optimized_gates / orig)
+
+    @property
+    def gate_count(self):
+        """Hierarchical gate count: own gates + sum of referenced function gate counts.
+
+        For each cached ``CompiledBlock``, computes the block's own gate count
+        plus the recursive gate count of any ``CallRecord`` references.
+        Returns a dict with ``'own'``, ``'referenced'``, and ``'total'`` keys.
+
+        If no blocks are cached, returns zeros.
+        """
+        return self._hierarchical_gate_count()
+
+    def _hierarchical_gate_count(self, visited=None):
+        """Compute hierarchical gate count, with cycle detection.
+
+        Parameters
+        ----------
+        visited : set or None
+            Set of ``id(CompiledFunc)`` already visited, to prevent infinite
+            recursion from circular references.
+
+        Returns
+        -------
+        dict
+            ``{'own': int, 'referenced': int, 'total': int,
+              'breakdown': list[dict]}``
+        """
+        if visited is None:
+            visited = set()
+
+        my_id = id(self)
+        if my_id in visited:
+            return {"own": 0, "referenced": 0, "total": 0, "breakdown": []}
+        visited.add(my_id)
+
+        total_own = 0
+        total_referenced = 0
+        breakdown = []
+
+        for _cache_key, block in self._cache.items():
+            own_gates = len(block.gates)
+            total_own += own_gates
+
+            call_records = getattr(block, "_call_records", None) or []
+            for cr in call_records:
+                inner_func = cr.compiled_func_ref
+                if inner_func is not None and hasattr(inner_func, "_hierarchical_gate_count"):
+                    inner_counts = inner_func._hierarchical_gate_count(visited=set(visited))
+                    ref_total = inner_counts["total"]
+                    total_referenced += ref_total
+                    breakdown.append(
+                        {
+                            "func_name": getattr(inner_func, "__name__", str(inner_func)),
+                            "cache_key": cr.cache_key,
+                            "gate_count": ref_total,
+                        }
+                    )
+
+        return {
+            "own": total_own,
+            "referenced": total_referenced,
+            "total": total_own + total_referenced,
+            "breakdown": breakdown,
+        }
 
     @property
     def inverse(self):

@@ -38,6 +38,35 @@ class InstructionRecord:
 
 
 # ---------------------------------------------------------------------------
+# CallRecord
+# ---------------------------------------------------------------------------
+
+
+@dataclasses.dataclass
+class CallRecord:
+    """A reference to a nested compiled function call during capture.
+
+    Instead of inlining the inner function's gates, the outer function
+    stores a ``CallRecord`` in its block's ``_call_records`` list.  This
+    enables hierarchical gate counting and visualization without memory
+    explosion from gate duplication.
+
+    Attributes
+    ----------
+    compiled_func_ref : object
+        Reference to the inner ``CompiledFunc`` instance.
+    cache_key : tuple
+        Cache key used for the inner function's ``CompiledBlock``.
+    quantum_arg_indices : list[list[int]]
+        Virtual qubit indices per quantum argument at call time.
+    """
+
+    compiled_func_ref: object
+    cache_key: tuple
+    quantum_arg_indices: list
+
+
+# ---------------------------------------------------------------------------
 # Global state
 # ---------------------------------------------------------------------------
 
@@ -87,5 +116,34 @@ def _record_instruction(name, registers, uncontrolled_seq=0, controlled_seq=0, i
             uncontrolled_seq=uncontrolled_seq,
             controlled_seq=controlled_seq,
             invert=invert,
+        )
+    )
+
+
+def _record_call(compiled_func, cache_key, quantum_arg_indices):
+    """Record a nested compiled function call on the active block.
+
+    Appends a ``CallRecord`` to the active block's ``_call_records``
+    list.  This is a no-op when compile-mode is not active.
+
+    Parameters
+    ----------
+    compiled_func : object
+        The inner ``CompiledFunc`` instance being called.
+    cache_key : tuple
+        Cache key identifying the inner function's compiled variant.
+    quantum_arg_indices : list[list[int]]
+        Virtual qubit indices for each quantum argument at call time.
+    """
+    block = _active_compile_block
+    if block is None:
+        return
+    if not hasattr(block, "_call_records") or block._call_records is None:
+        block._call_records = []
+    block._call_records.append(
+        CallRecord(
+            compiled_func_ref=compiled_func,
+            cache_key=cache_key,
+            quantum_arg_indices=quantum_arg_indices,
         )
     )

@@ -169,6 +169,7 @@ class DAGNode:
         "operation_type",
         "invert",
         "controlled",
+        "is_call_node",
         "_block_ref",
         "_v2r_ref",
         "_qubit_array",
@@ -192,6 +193,7 @@ class DAGNode:
         operation_type: str = "",
         invert: bool = False,
         controlled: bool = False,
+        is_call_node: bool = False,
     ):
         self.func_name = func_name
         self.qubit_set = frozenset(qubit_set)
@@ -209,6 +211,7 @@ class DAGNode:
         self.operation_type = operation_type
         self.invert = invert
         self.controlled = controlled
+        self.is_call_node = is_call_node
         self._block_ref = None  # CompiledBlock ref for merge (opt=2)
         self._v2r_ref = None  # virtual-to-real mapping for merge (opt=2)
         # Pre-compute bitmask from qubit_set (Python int for >64 qubit support)
@@ -270,6 +273,7 @@ class CallGraphDAG:
         operation_type: str = "",
         invert: bool = False,
         controlled: bool = False,
+        is_call_node: bool = False,
     ) -> int:
         """Add a node to the DAG.
 
@@ -305,6 +309,9 @@ class CallGraphDAG:
             Whether this is an inverse operation.
         controlled : bool
             Whether this call was inside a controlled context.
+        is_call_node : bool
+            Whether this node represents a hierarchical call reference
+            (from a ``CallRecord``).
 
         Returns
         -------
@@ -336,6 +343,7 @@ class CallGraphDAG:
             operation_type=operation_type,
             invert=invert,
             controlled=controlled,
+            is_call_node=is_call_node,
         )
         idx = self._dag.add_node(node)
         self._nodes.append(node)
@@ -367,6 +375,32 @@ class CallGraphDAG:
 
         for q in qubit_set:
             self._qubit_last_node[q] = node_idx
+
+    def add_call_edge(self, caller_idx: int, callee_idx: int) -> None:
+        """Add a call relationship edge from caller to callee.
+
+        These edges represent hierarchical function call relationships
+        (outer compiled function calls inner compiled function).  They
+        are distinct from execution-order edges.
+
+        Parameters
+        ----------
+        caller_idx : int
+            Node index of the calling (outer) function.
+        callee_idx : int
+            Node index of the called (inner) function.
+        """
+        self._dag.add_edge(caller_idx, callee_idx, {"type": "call"})
+
+    def call_edges(self) -> list[tuple[int, int]]:
+        """Return all call relationship edges as (caller, callee) pairs."""
+        result = []
+        for eidx in self._dag.edge_indices():
+            edata = self._dag.get_edge_data_by_index(eidx)
+            if isinstance(edata, dict) and edata.get("type") == "call":
+                src, tgt = self._dag.get_edge_endpoints_by_index(eidx)
+                result.append((src, tgt))
+        return result
 
     # -- Freeze control -----------------------------------------------------
 
@@ -522,6 +556,9 @@ class CallGraphDAG:
             )
 
         def _emit_node(idx: int) -> str:
+            nd = self._nodes[idx]
+            if nd.is_call_node:
+                return f'  n{idx} [label="{_node_label(idx)}", style=dashed];'
             return f'  n{idx} [label="{_node_label(idx)}"];'
 
         if use_clusters:
@@ -541,8 +578,11 @@ class CallGraphDAG:
             src, tgt = self._dag.get_edge_endpoints_by_index(eidx)
             edge_data = self._dag.get_edge_data_by_index(eidx)
             if isinstance(edge_data, dict):
-                if edge_data.get("type") == "execution_order":
+                etype = edge_data.get("type")
+                if etype == "execution_order":
                     lines.append(f'  n{src} -> n{tgt} [label="exec"];')
+                elif etype == "call":
+                    lines.append(f'  n{src} -> n{tgt} [label="call", style=dashed, color=blue];')
 
         lines.append("}")
         return "\n".join(lines)
@@ -601,6 +641,31 @@ class CallGraphDAG:
             f"{agg['qubits']:>8d} | {agg['t_count']:>8d} | {'-':>8s}"
         )
         lines.append(totals)
+
+        # Hierarchical breakdown: show own vs referenced gates when call
+        # nodes or call edges are present.
+        call_node_indices = [i for i, nd in enumerate(self._nodes) if nd.is_call_node]
+        cedges = self.call_edges()
+        if call_node_indices or cedges:
+            lines.append("")
+            lines.append("Hierarchical Breakdown:")
+
+            # Identify own-gate nodes vs call-reference nodes
+            own_gates = sum(
+                nd.gate_count for i, nd in enumerate(self._nodes) if not nd.is_call_node
+            )
+            ref_gates = sum(nd.gate_count for i, nd in enumerate(self._nodes) if nd.is_call_node)
+            lines.append(f"  Own gates:        {own_gates}")
+            lines.append(f"  Referenced gates:  {ref_gates}")
+            lines.append(f"  Total:            {own_gates + ref_gates}")
+
+            if cedges:
+                lines.append("")
+                lines.append("  Call relationships:")
+                for src, tgt in cedges:
+                    src_name = self._nodes[src].func_name
+                    tgt_name = self._nodes[tgt].func_name
+                    lines.append(f"    {src_name} -> {tgt_name}")
 
         return "\n".join(lines)
 
