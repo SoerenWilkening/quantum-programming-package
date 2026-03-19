@@ -539,6 +539,62 @@ def _build_dag_from_ir(block, func_name, is_controlled=False, qubit_mapping=None
 
 
 # ---------------------------------------------------------------------------
+# Recursive replay of nested compiled function calls via CallRecord
+# ---------------------------------------------------------------------------
+
+
+def _replay_call_records(block, virtual_to_real):
+    """Replay nested compiled function calls recorded during capture.
+
+    Iterates ``block._call_records`` and, for each ``CallRecord``, builds
+    the inner function's quantum arguments by mapping the record's virtual
+    qubit indices through *virtual_to_real* (outer virtual -> replay physical).
+    Then delegates to the inner function's ``_replay`` with the resolved
+    quantum args.
+
+    Parameters
+    ----------
+    block : CompiledBlock
+        Block whose ``_call_records`` list contains nested call references.
+    virtual_to_real : dict
+        Mapping from outer function's virtual qubit indices to replay-time
+        physical qubit indices.
+    """
+    call_records = getattr(block, "_call_records", None)
+    if not call_records:
+        return
+
+    for cr in call_records:
+        inner_func = cr.compiled_func_ref
+        if inner_func is None or not hasattr(inner_func, "_cache"):
+            continue
+
+        # Look up the inner function's cached block
+        inner_block = inner_func._cache.get(cr.cache_key)
+        if inner_block is None:
+            continue
+
+        # Build qint wrappers from the mapped physical qubit indices.
+        # Each entry in quantum_arg_indices is a list of virtual indices
+        # (in the outer function's virtual space) for one quantum arg.
+        inner_quantum_args = []
+        for arg_virtual_indices in cr.quantum_arg_indices:
+            # Map outer virtual -> replay physical
+            phys_indices = [virtual_to_real[v] for v in arg_virtual_indices]
+            width = len(phys_indices)
+
+            # Build a qint view over these physical qubits
+            qubits_arr = np.zeros(64, dtype=np.uint32)
+            for i, pq in enumerate(phys_indices):
+                qubits_arr[64 - width + i] = pq
+            q = qint(create_new=False, bit_list=qubits_arr, width=width)
+            inner_quantum_args.append(q)
+
+        # Delegate to the inner function's _replay
+        inner_func._replay(inner_block, inner_quantum_args, track_forward=False)
+
+
+# ---------------------------------------------------------------------------
 # CompiledBlock -- stores a captured and virtualised gate sequence
 # ---------------------------------------------------------------------------
 class CompiledBlock:
@@ -955,6 +1011,15 @@ class CompiledFunc:
                 tuple(widths),
                 qubit_saving,
             ) + mode_flags
+
+        # Record CallRecord when called from inside another compiled
+        # function's capture (compile-mode is active).  This stores a
+        # reference so the outer function can replay us recursively
+        # without inlining our gates.
+        parent_block = _get_active_compile_block()
+        if parent_block is not None:
+            arg_indices = [_get_quantum_arg_qubit_indices(qa) for qa in quantum_args]
+            _record_call(self, cache_key, arg_indices)
 
         # DAG building (opt != 3)
         _building_dag = self._opt != 3
@@ -1437,6 +1502,17 @@ class CompiledFunc:
         # Transfer IR entries from the compile-mode block to the cached block
         block._instruction_ir = ir_block._instruction_ir
 
+        # Transfer CallRecords from the compile-mode block, converting
+        # capture-time physical qubit indices to virtual qubit indices
+        # so that _replay can map them through virtual_to_real.
+        if ir_block._call_records:
+            for cr in ir_block._call_records:
+                cr.quantum_arg_indices = [
+                    [real_to_virtual.get(phys, phys) for phys in arg_indices]
+                    for arg_indices in cr.quantum_arg_indices
+                ]
+            block._call_records = ir_block._call_records
+
         return block
 
     def _capture_and_cache_both(
@@ -1798,6 +1874,11 @@ class CompiledFunc:
             elif block.gates:
                 # Gate-level path: inject remapped gates into the circuit.
                 inject_remapped_gates(block.gates, virtual_to_real)
+
+        # Replay nested compiled function calls via CallRecords.
+        # Each CallRecord stores virtual qubit indices per argument;
+        # compose with virtual_to_real to get replay-time physical qubits.
+        _replay_call_records(block, virtual_to_real)
 
         # Restore layer_floor
         _set_layer_floor(saved_floor)

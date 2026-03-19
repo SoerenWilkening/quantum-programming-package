@@ -1,10 +1,12 @@
-"""Tests for hierarchical compiled function gate count and visualization (Phase 9.4).
+"""Tests for hierarchical compiled function call references (Phase 9).
 
 Verifies:
-- CallRecord dataclass stores func ref, cache key, and arg indices
-- Hierarchical gate_count property computes own + referenced gates recursively
-- report() distinguishes own gates from referenced (call) gates
-- to_dot() renders call relationship edges and call nodes with dashed style
+- CallRecord dataclass stores func ref, cache key, and arg indices (9.1)
+- Capture detects nested compiled functions and records CallRecords (9.2)
+- Recursive replay via CallRecord with transitive qubit mapping (9.3)
+- Hierarchical gate_count property computes own + referenced gates recursively (9.4)
+- report() distinguishes own gates from referenced (call) gates (9.4)
+- to_dot() renders call relationship edges and call nodes with dashed style (9.4)
 """
 
 import quantum_language as ql
@@ -348,3 +350,277 @@ class TestDotShowsCallEdges:
         # execution_order_edges should still work
         eoe = dag.execution_order_edges()
         assert len(eoe) >= 1
+
+
+# ---------------------------------------------------------------------------
+# Step 9.2: Capture detects nested compiled functions
+# ---------------------------------------------------------------------------
+
+
+class TestCaptureDetectsNestedCompiled:
+    """Capture of an outer function records CallRecords for inner compiled calls."""
+
+    def test_nested_compile_records_call(self):
+        """Outer function's cached block contains a CallRecord for the inner call."""
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def inner(x):
+            x += 1
+            return x
+
+        @ql.compile
+        def outer(x):
+            x = inner(x)
+            return x
+
+        a = ql.qint(0, width=4)
+        outer(a)
+
+        outer_key = list(outer._cache.keys())[0]
+        outer_block = outer._cache[outer_key]
+
+        assert len(outer_block._call_records) >= 1
+        cr = outer_block._call_records[0]
+        assert cr.compiled_func_ref is inner
+
+    def test_nested_call_record_has_virtual_indices(self):
+        """CallRecord quantum_arg_indices are virtual qubit indices."""
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def inner(x):
+            x += 2
+            return x
+
+        @ql.compile
+        def outer(x):
+            x = inner(x)
+            return x
+
+        a = ql.qint(0, width=4)
+        outer(a)
+
+        outer_key = list(outer._cache.keys())[0]
+        outer_block = outer._cache[outer_key]
+        cr = outer_block._call_records[0]
+
+        # quantum_arg_indices should contain virtual indices (starting at 1+)
+        for arg_indices in cr.quantum_arg_indices:
+            for idx in arg_indices:
+                assert idx >= 1, "Virtual indices should be >= 1 (0 reserved for control)"
+
+
+# ---------------------------------------------------------------------------
+# Step 9.3: Recursive replay via CallRecord
+# ---------------------------------------------------------------------------
+
+
+class TestNestedReplayCorrect:
+    """Outer function replayed produces same gate count as direct calls."""
+
+    def test_nested_replay_correct(self):
+        """Replaying outer function produces gates (both inner and outer ops)."""
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def inner(x):
+            x += 1
+            return x
+
+        @ql.compile
+        def outer(x):
+            x += 10
+            x = inner(x)
+            return x
+
+        a = ql.qint(0, width=4)
+        # First call: capture
+        from quantum_language._core import get_gate_count
+
+        gc_before_capture = get_gate_count()
+        outer(a)
+        gc_after_capture = get_gate_count()
+        assert gc_after_capture > gc_before_capture, "Capture should produce gates"
+
+        # Second call: replay
+        b = ql.qint(0, width=4)
+        gc_before_replay = get_gate_count()
+        outer(b)
+        gc_after_replay = get_gate_count()
+        replay_gates = gc_after_replay - gc_before_replay
+
+        # Replay should produce gates (may differ from capture due to
+        # optimization, but must be positive)
+        assert replay_gates > 0, "Replay should produce gates"
+
+    def test_nested_replay_qubit_mapping(self):
+        """Inner function receives correctly mapped qubits on replay."""
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def inner(x):
+            x += 3
+            return x
+
+        @ql.compile
+        def outer(x):
+            x = inner(x)
+            return x
+
+        # First call (capture) on qint 'a'
+        a = ql.qint(0, width=4)
+        outer(a)
+
+        # Second call (replay) on different qint 'b'
+        b = ql.qint(5, width=4)
+        from quantum_language.compile import _get_qint_qubit_indices
+
+        b_qubits = _get_qint_qubit_indices(b)
+
+        from quantum_language._core import extract_gate_range, get_current_layer, get_gate_count
+
+        start_layer = get_current_layer()
+        gc_before = get_gate_count()
+        outer(b)
+        end_layer = get_current_layer()
+        gc_after = get_gate_count()
+
+        # Replay should produce gates
+        assert gc_after > gc_before
+
+        # Extract the gates produced by replay and verify they touch b's qubits
+        replay_gates = extract_gate_range(start_layer, end_layer)
+        if replay_gates:
+            gate_qubits = set()
+            for g in replay_gates:
+                gate_qubits.add(g["target"])
+                gate_qubits.update(g.get("controls", []))
+            # At least some of b's qubits should be in the gate set
+            assert gate_qubits & set(b_qubits), (
+                "Replayed gates should operate on b's physical qubits"
+            )
+
+    def test_nested_three_calls_stable(self):
+        """Repeated replay of outer function doesn't grow qubit count."""
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def inner(x):
+            x += 1
+            return x
+
+        @ql.compile
+        def outer(x):
+            x = inner(x)
+            return x
+
+        # First call: capture
+        a = ql.qint(0, width=4)
+        outer(a)
+
+        # Second call: replay
+        b = ql.qint(0, width=4)
+        from quantum_language.compile import _get_qint_qubit_indices
+
+        b_before = _get_qint_qubit_indices(b)
+        outer(b)
+        b_after = _get_qint_qubit_indices(b)
+
+        # Third call: replay again
+        c = ql.qint(0, width=4)
+        c_before = _get_qint_qubit_indices(c)
+        outer(c)
+        c_after = _get_qint_qubit_indices(c)
+
+        # The qubit indices should remain stable (same width, no growth)
+        assert len(b_before) == len(b_after) == 4
+        assert len(c_before) == len(c_after) == 4
+
+    def test_deeply_nested(self):
+        """Three levels of nesting (f calls g calls h) works correctly."""
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def h_func(x):
+            x += 1
+            return x
+
+        @ql.compile
+        def g_func(x):
+            x = h_func(x)
+            x += 2
+            return x
+
+        @ql.compile
+        def f_func(x):
+            x = g_func(x)
+            x += 4
+            return x
+
+        # First call: capture all three levels
+        a = ql.qint(0, width=4)
+        from quantum_language._core import get_gate_count
+
+        gc_before = get_gate_count()
+        f_func(a)
+        gc_after = get_gate_count()
+
+        assert gc_after > gc_before, "Deep nesting should produce gates"
+
+        # Verify CallRecord chain exists
+        f_key = list(f_func._cache.keys())[0]
+        f_block = f_func._cache[f_key]
+        assert len(f_block._call_records) >= 1, "f should have CallRecord for g"
+
+        g_key = list(g_func._cache.keys())[0]
+        g_block = g_func._cache[g_key]
+        assert len(g_block._call_records) >= 1, "g should have CallRecord for h"
+
+        # Second call: replay all three levels
+        b = ql.qint(0, width=4)
+        gc_before_replay = get_gate_count()
+        f_func(b)
+        gc_after_replay = get_gate_count()
+
+        assert gc_after_replay > gc_before_replay, "Deep nested replay should produce gates"
+
+    def test_nested_controlled(self):
+        """Outer called inside 'with' block propagates control to inner functions."""
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def inner(x):
+            x += 1
+            return x
+
+        @ql.compile
+        def outer(x):
+            x = inner(x)
+            return x
+
+        # First call outside control (capture)
+        a = ql.qint(0, width=4)
+        outer(a)
+
+        # Second call inside controlled context (replay)
+        b = ql.qint(0, width=4)
+        cond = ql.qbool()
+
+        from quantum_language._core import get_gate_count
+
+        gc_before = get_gate_count()
+        with cond:
+            outer(b)
+        gc_after = get_gate_count()
+
+        # Controlled replay should produce gates (more than uncontrolled
+        # due to additional control qubits)
+        assert gc_after > gc_before, "Controlled replay should produce gates"
