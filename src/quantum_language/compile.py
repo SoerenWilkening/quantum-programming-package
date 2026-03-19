@@ -1030,11 +1030,13 @@ class CompiledFunc:
         # without inlining our gates.
         parent_block = _get_active_compile_block()
         _nested_call_record = None
+        _nested_gc_before = 0
         if parent_block is not None:
             arg_indices = [_get_quantum_arg_qubit_indices(qa) for qa in quantum_args]
             _record_call(self, cache_key, arg_indices)
             _nested_call_record = parent_block._call_records[-1]
             _nested_call_record.gate_layer_start = get_current_layer()
+            _nested_gc_before = get_gate_count()
 
         # DAG building (opt != 3)
         _building_dag = self._opt != 3
@@ -1075,10 +1077,11 @@ class CompiledFunc:
                     if self._opt != 1:
                         self._call_graph.freeze()
 
-        # Record the layer range of the inner call so the outer capture
-        # can exclude these gates from its own block.
+        # Record the layer range and total gate count delta of the inner
+        # call so the outer capture can exclude these gates from its own block.
         if _nested_call_record is not None:
             _nested_call_record.gate_layer_end = get_current_layer()
+            _nested_call_record.gate_count_delta = get_gate_count() - _nested_gc_before
 
         return result
 
@@ -1415,19 +1418,17 @@ class CompiledFunc:
 
         # In tracking-only mode, compute gate count from circ->gate_count
         # difference (gates were counted but not stored in the circuit).
-        # Subtract inner call gate counts so original_gate_count reflects
-        # only this function's OWN gates (inner gates are replayed via
-        # _replay_call_records which credits them separately).
+        # Subtract inner call gate count deltas so original_gate_count
+        # reflects only this function's OWN gates (inner gates are replayed
+        # via _replay_call_records which credits them separately).
+        # gate_count_delta is the total recursive delta (including
+        # grandchildren), not just the inner function's own gates.
         _tracking_gate_count = 0
         if _use_tracking:
             _tracking_gate_count = get_gate_count() - _gate_count_before
             if ir_block._call_records:
                 for cr in ir_block._call_records:
-                    inner_func = cr.compiled_func_ref
-                    if inner_func is not None and hasattr(inner_func, "_cache"):
-                        inner_block = inner_func._cache.get(cr.cache_key)
-                        if inner_block is not None:
-                            _tracking_gate_count -= inner_block.original_gate_count or 0
+                    _tracking_gate_count -= cr.gate_count_delta
 
         # Extract captured gates (empty in tracking-only mode (simulate=False)
         # since gates are counted but not stored).

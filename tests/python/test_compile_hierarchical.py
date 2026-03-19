@@ -579,6 +579,49 @@ class TestCaptureDetectsNestedCompiled:
             f"capture gates ({capture_gates}) — double counting suspected"
         )
 
+    def test_no_double_gate_count_deep_nesting_simulate_false(self):
+        """3-level nesting in simulate=False: no double-counting at any level."""
+        ql.circuit()
+        ql.option("simulate", False)
+
+        from quantum_language._core import get_gate_count
+
+        @ql.compile
+        def h(x):
+            x += 1
+            return x
+
+        @ql.compile
+        def g(x):
+            x = h(x)
+            x += 2
+            return x
+
+        @ql.compile
+        def f(x):
+            x = g(x)
+            x += 3
+            return x
+
+        # Capture
+        a = ql.qint(0, width=4)
+        gc_before = get_gate_count()
+        f(a)
+        capture_gates = get_gate_count() - gc_before
+
+        # Replay
+        b = ql.qint(0, width=4)
+        gc_before = get_gate_count()
+        f(b)
+        replay_gates = get_gate_count() - gc_before
+
+        assert capture_gates > 0, "Capture should count gates"
+        assert replay_gates > 0, "Replay should count gates"
+        assert replay_gates <= capture_gates * 1.2, (
+            f"3-level replay gates ({replay_gates}) should not be much larger than "
+            f"capture gates ({capture_gates}) — double counting suspected"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Step 9.3: Recursive replay via CallRecord

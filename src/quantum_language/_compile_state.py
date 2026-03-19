@@ -66,6 +66,7 @@ class CallRecord:
     quantum_arg_indices: list
     gate_layer_start: int = -1  # circuit layer before inner call (inclusive)
     gate_layer_end: int = -1  # circuit layer after inner call (exclusive)
+    gate_count_delta: int = 0  # total gate count delta from inner call (recursive)
 
 
 # ---------------------------------------------------------------------------
