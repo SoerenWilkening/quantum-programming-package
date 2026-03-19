@@ -1,9 +1,10 @@
 You are guiding the user through designing quantum walk functions for the Quantum Assembly framework. The user writes **quantum functions** and **classical mirrors** that are kept in strict 1:1 correspondence. Follow these phases in order.
 
 **CRITICAL RULES**:
-1. **Classical mirrors are exact structural translations of quantum functions** — same control flow, same operations, just with classical types. Classical functions may only use operations that have a quantum equivalent. No shortcuts (no `sum()`, no list comprehensions, no `any()`/`all()` — use explicit loops and counters, matching the quantum structure).
-2. **Mirrors stay in sync**: When a classical function is adjusted based on test results, update the quantum function to match. When the quantum function changes, update the classical mirror to match.
-3. **Framework/program errors are never fixed** — if running the assembly script or framework code produces an error, report it as an issue. Do not modify framework source code (`walk_operators.py`, `walk_diffusion.py`, `compile.py`, etc.).
+1. **All output files go in `examples/<problem_name>/`** — e.g., `examples/3sat/`, `examples/graph_coloring/`. Create the `examples/` directory and subdirectory if they don't exist. Only store files elsewhere if the user explicitly requests a different location.
+2. **Classical mirrors are exact structural translations of quantum functions** — same control flow, same operations, just with classical types. Classical functions may only use operations that have a quantum equivalent. No shortcuts (no `sum()`, no list comprehensions, no `any()`/`all()` — use explicit loops and counters, matching the quantum structure).
+3. **Mirrors stay in sync**: When a classical function is adjusted based on test results, update the quantum function to match. When the quantum function changes, update the classical mirror to match.
+4. **Framework/program errors are never fixed** — if running the assembly script or framework code produces an error, report it as an issue. Do not modify framework source code (`walk_operators.py`, `walk_diffusion.py`, `compile.py`, etc.).
 
 ---
 
@@ -65,7 +66,7 @@ Wait for confirmation before proceeding.
 
 ## Phase 2: Write Quantum Functions
 
-Write the quantum functions to a dedicated file (e.g., `walk_functions.py` or a problem-specific name like `sat_walk.py`). This file contains `make_move`, `is_valid`, and `is_marked` — the user's quantum logic, separate from the walk assembly code.
+Write the quantum functions to a dedicated file inside `examples/<problem_name>/` (e.g., `examples/3sat/sat_walk.py`). Create the directory if it doesn't exist. This file contains `make_move`, `is_valid`, and `is_marked` — the user's quantum logic, separate from the walk assembly code.
 
 Generate three functions following these rules:
 
@@ -164,7 +165,7 @@ def is_marked(x):
 
 ## Phase 3: Build Classical Mirror & Verify
 
-The classical mirror is a **structural 1:1 translation** of each quantum function into plain Python. It lives in a **separate file** (e.g., `sat_walk_classical.py`). The two files are kept in strict correspondence — every change to one must be reflected in the other.
+The classical mirror is a **structural 1:1 translation** of each quantum function into plain Python. It lives in a **separate file** in the same `examples/<problem_name>/` directory (e.g., `examples/3sat/sat_walk_classical.py`). The two files are kept in strict correspondence — every change to one must be reflected in the other.
 
 ### Structural Mirroring Rules
 
@@ -267,7 +268,7 @@ Launch an independent verifier agent with the following protocol:
 
 ## Phase 4: Assemble
 
-Wire the verified functions into the walk API. The assembly script runs a **single walk step** and prints the gate count. All four user functions are required.
+Wire the verified functions into the walk API. The assembly script goes in the same `examples/<problem_name>/` directory (e.g., `examples/3sat/sat_walk_assembly.py`). It runs a **single walk step** and prints the gate count. All four user functions are required.
 
 ```python
 import time
