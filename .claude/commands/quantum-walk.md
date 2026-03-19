@@ -267,39 +267,31 @@ Launch an independent verifier agent with the following protocol:
 
 ## Phase 4: Assemble
 
-Wire the verified functions into the walk API. All four user functions are required:
+Wire the verified functions into the walk API. The assembly script runs a **single walk step** and prints the gate count. All four user functions are required.
 
 ```python
 import quantum_language as ql
+from quantum_language.walk_operators import walk_step
 
-ql.circuit()
+ql.option("simulate", False)  # gate counting only, no simulation
 
 # State initialization (from Phase 1)
 x = ...  # as designed
 
 # Build marked walk configuration and registers.
-# All parameters required. Returns (WalkConfig, WalkRegisters).
-# Detection via phase estimation is a future milestone.
 config, registers = ql.walk(
     is_marked, max_depth=..., num_moves=...,
     state=x, make_move=make_move, is_valid=is_valid,
 )
 
-# Apply walk steps manually (phase-estimation wrapper is TODO)
-from quantum_language.walk_operators import walk_step
-num_steps = 4  # or compute from tree size
-for _ in range(num_steps):
-    walk_step(config, registers)
+# Run a single walk step
+walk_step(config, registers)
+
+# Display gate count
+print(ql.get_gate_count())
 ```
 
-Or for custom walk construction using the diffusion building block:
-
-```python
-# User builds their own R_A / R_B using walk_diffusion at specific depths
-ql.walk_diffusion(x, make_move, is_valid, num_moves=...)
-```
-
-Present the complete code to the user.
+Present the complete code to the user and run it. The gate count output confirms the circuit was built successfully.
 
 If the assembly script produces errors:
 - **Framework errors** (in `walk_operators.py`, `walk_diffusion.py`, `compile.py`, etc.): Report as an issue. **NEVER modify framework source code.**
