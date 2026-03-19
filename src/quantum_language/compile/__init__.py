@@ -27,7 +27,7 @@ import weakref
 
 import numpy as np
 
-from ._core import (
+from .._core import (
     _allocate_qubit,
     _get_control_bool,
     _get_control_stack,
@@ -45,7 +45,7 @@ from ._core import (
     inject_remapped_gates,
     option,
 )
-from .call_graph import (
+from ..call_graph import (
     CallGraphDAG,
     _compute_depth,
     _compute_t_count,
@@ -55,15 +55,26 @@ from .call_graph import (
     pop_dag_context,
     push_dag_context,
 )
-from .qint import qint
-
-# ---------------------------------------------------------------------------
-# Gate type constants (from c_backend/include/types.h  Standardgate_t)
-# ---------------------------------------------------------------------------
-_X, _Y, _Z, _R, _H, _Rx, _Ry, _Rz, _P, _M = range(10)
-_SELF_ADJOINT = frozenset({_X, _Y, _Z, _H})
-_ROTATION_GATES = frozenset({_P, _Rx, _Ry, _Rz, _R})
-_NON_REVERSIBLE = frozenset({_M})
+from ..qint import qint
+from . import _block
+from ._block import _H as _H  # noqa: F401 – re-exported
+from ._block import (
+    _M,
+    _MAX_CAPTURE_DEPTH,
+    _NON_REVERSIBLE,
+    _ROTATION_GATES,
+    _SELF_ADJOINT,
+    AncillaRecord,
+    CompiledBlock,
+)
+from ._block import _P as _P  # noqa: F401 – re-exported
+from ._block import _R as _R  # noqa: F401 – re-exported
+from ._block import _X as _X  # noqa: F401 – re-exported
+from ._block import _Y as _Y  # noqa: F401 – re-exported
+from ._block import _Z as _Z  # noqa: F401 – re-exported
+from ._block import _Rx as _Rx  # noqa: F401 – re-exported
+from ._block import _Ry as _Ry  # noqa: F401 – re-exported
+from ._block import _Rz as _Rz  # noqa: F401 – re-exported
 
 
 # ---------------------------------------------------------------------------
@@ -363,13 +374,6 @@ def _strip_control_qubit(gates, control_qubit):
 
 
 # ---------------------------------------------------------------------------
-# Nesting depth limit for compiled function capture
-# ---------------------------------------------------------------------------
-_capture_depth = 0
-_MAX_CAPTURE_DEPTH = 16
-
-
-# ---------------------------------------------------------------------------
 # Global registry for cache invalidation on circuit reset
 # ---------------------------------------------------------------------------
 _compiled_funcs = []  # List of weakref.ref to CompiledFunc instances
@@ -391,8 +395,7 @@ def _clear_all_caches():
     AFTER calling ql.circuit(), or avoid calling ql.circuit() entirely
     (the circuit initializes automatically).
     """
-    global _capture_depth
-    _capture_depth = 0
+    _block._capture_depth = 0
     _dag_builder_stack.clear()
     option("simulate", True)
     alive = []
@@ -411,7 +414,7 @@ _register_cache_clear_hook(_clear_all_caches)
 # ---------------------------------------------------------------------------
 # InstructionRecord & compile-mode global state (from _compile_state)
 # ---------------------------------------------------------------------------
-from ._compile_state import (  # noqa: E402 – after qint import is fine
+from .._compile_state import (  # noqa: E402 – after qint import is fine
     CallRecord,  # noqa: F401 – re-exported for tests
     InstructionRecord,  # noqa: F401 – re-exported for tests
     _get_active_compile_block,
@@ -607,103 +610,6 @@ def _replay_call_records(block, virtual_to_real):
 
 
 # ---------------------------------------------------------------------------
-# CompiledBlock -- stores a captured and virtualised gate sequence
-# ---------------------------------------------------------------------------
-class CompiledBlock:
-    """A captured and virtualised gate sequence from a single function call.
-
-    Attributes
-    ----------
-    gates : list[dict]
-        Gate dicts with virtual qubit indices.
-    total_virtual_qubits : int
-        Total count of virtual qubits (params + ancillas).
-    param_qubit_ranges : list[tuple[int, int]]
-        (start_virtual_idx, end_virtual_idx) per quantum argument.
-    internal_qubit_count : int
-        Number of ancilla/temporary virtual qubits.
-    return_qubit_range : tuple[int, int] or None
-        (start_virtual_idx, width) of the return value, or None.
-    return_is_param_index : int or None
-        Index of the input parameter if the return value IS one of them.
-    """
-
-    __slots__ = (
-        "gates",
-        "total_virtual_qubits",
-        "param_qubit_ranges",
-        "internal_qubit_count",
-        "return_qubit_range",
-        "return_is_param_index",
-        "original_gate_count",
-        "control_virtual_idx",
-        "_first_call_result",
-        "_capture_ancilla_qubits",
-        "_capture_virtual_to_real",
-        "return_type",  # 'qint', 'qarray', or None
-        "_return_qarray_element_widths",  # List of element widths for qarray return
-        "controlled_block",  # Derived controlled CompiledBlock (Phase 5)
-        "_captured_controlled",  # Whether capture was inside control context
-        "_instruction_ir",  # list[InstructionRecord] – compile-mode IR
-        "_call_records",  # list[CallRecord] – nested compiled function calls
-        "_dag_built",  # bool – DAG nodes already built from IR (no duplication on replay)
-        "transient_virtual_indices",  # frozenset[int] – virtual indices freed during capture (Phase 8)
-    )
-
-    def __init__(
-        self,
-        gates,
-        total_virtual_qubits,
-        param_qubit_ranges,
-        internal_qubit_count,
-        return_qubit_range,
-        return_is_param_index=None,
-        original_gate_count=None,
-    ):
-        self.gates = gates
-        self.total_virtual_qubits = total_virtual_qubits
-        self.param_qubit_ranges = param_qubit_ranges
-        self.internal_qubit_count = internal_qubit_count
-        self.return_qubit_range = return_qubit_range
-        self.return_is_param_index = return_is_param_index
-        self.original_gate_count = (
-            original_gate_count if original_gate_count is not None else len(gates)
-        )
-        self.control_virtual_idx = None
-        self._first_call_result = None
-        self._capture_ancilla_qubits = None
-        self._capture_virtual_to_real = None
-        self.return_type = None
-        self._return_qarray_element_widths = None
-        self.controlled_block = None
-        self._captured_controlled = False
-        self._instruction_ir = []
-        self._call_records = []
-        self._dag_built = False
-        self.transient_virtual_indices = frozenset()
-
-
-# ---------------------------------------------------------------------------
-# Ancilla tracking record
-# ---------------------------------------------------------------------------
-class AncillaRecord:
-    """Record of a single forward call's ancilla allocations."""
-
-    __slots__ = (
-        "ancilla_qubits",
-        "virtual_to_real",
-        "block",
-        "return_qint",
-    )
-
-    def __init__(self, ancilla_qubits, virtual_to_real, block, return_qint):
-        self.ancilla_qubits = ancilla_qubits
-        self.virtual_to_real = virtual_to_real
-        self.block = block
-        self.return_qint = return_qint
-
-
-# ---------------------------------------------------------------------------
 # Virtual qubit mapping helpers
 # ---------------------------------------------------------------------------
 def _build_virtual_mapping(gates, param_qubit_indices):
@@ -774,7 +680,7 @@ def _get_qarray_qubit_indices(arr):
 
 def _get_quantum_arg_qubit_indices(qa):
     """Get qubit indices from a qint or qarray argument."""
-    from .qarray import qarray
+    from ..qarray import qarray
 
     if isinstance(qa, qarray):
         return _get_qarray_qubit_indices(qa)
@@ -784,7 +690,7 @@ def _get_quantum_arg_qubit_indices(qa):
 
 def _get_quantum_arg_width(qa):
     """Get total qubit count from a qint or qarray argument."""
-    from .qarray import qarray
+    from ..qarray import qarray
 
     if isinstance(qa, qarray):
         return sum(elem.width if hasattr(elem, "width") else 1 for elem in qa)
@@ -860,7 +766,7 @@ def _build_return_qarray(block, virtual_to_real):
     Creates new qint elements with qubits mapped from virtual space,
     preserving the original element widths stored in the CompiledBlock.
     """
-    from .qarray import qarray
+    from ..qarray import qarray
 
     ret_start, ret_qubit_count = block.return_qubit_range
     element_widths = block._return_qarray_element_widths
@@ -1272,7 +1178,7 @@ class CompiledFunc:
         classical_args: list of non-quantum values.
         widths: list of int widths for qint, or ('arr', length) for qarray.
         """
-        from .qarray import qarray
+        from ..qarray import qarray
 
         quantum_args = []
         classical_args = []
@@ -1322,17 +1228,16 @@ class CompiledFunc:
 
     def _capture(self, args, kwargs, quantum_args):
         """Capture gate sequence during first call."""
-        global _capture_depth
-        if _capture_depth >= _MAX_CAPTURE_DEPTH:
+        if _block._capture_depth >= _MAX_CAPTURE_DEPTH:
             raise RecursionError(
                 f"Compiled function nesting depth exceeded {_MAX_CAPTURE_DEPTH}. "
                 "Possible circular compiled function calls."
             )
-        _capture_depth += 1
+        _block._capture_depth += 1
         try:
             return self._capture_inner(args, kwargs, quantum_args)
         finally:
-            _capture_depth -= 1
+            _block._capture_depth -= 1
 
     def _capture_inner(self, args, kwargs, quantum_args):
         """Inner capture logic (separated for nesting depth tracking).
@@ -1469,7 +1374,7 @@ class CompiledFunc:
         )
 
         # Determine return value qubit range (if result is qint or qarray)
-        from .qarray import qarray
+        from ..qarray import qarray
 
         return_range = None
         return_is_param_index = None
@@ -1556,7 +1461,7 @@ class CompiledFunc:
         # After capture, query the allocator to determine which ancilla qubits
         # were freed during the operation (transient: carry bits, temp registers)
         # vs which are still allocated (result qubits, persistent intermediates).
-        from ._core import _is_qubit_allocated
+        from .._core import _is_qubit_allocated
 
         transient_virtuals = set()
         for real_q in capture_ancilla_qubits:
@@ -1970,7 +1875,7 @@ class CompiledFunc:
                 # growth on repeated gate-level replay calls.
                 _transients = getattr(block, "transient_virtual_indices", None)
                 if _transients:
-                    from ._core import _deallocate_qubits
+                    from .._core import _deallocate_qubits
 
                     for virt_idx in _transients:
                         real_q = virtual_to_real.get(virt_idx)
@@ -2380,7 +2285,7 @@ class _AncillaInverseProxy:
         self._cf = compiled_func
 
     def __call__(self, *args, **kwargs):
-        from ._core import _deallocate_qubits
+        from .._core import _deallocate_qubits
 
         quantum_args, _, _ = self._cf._classify_args(args, kwargs)
         input_key = _input_qubit_key(quantum_args)
