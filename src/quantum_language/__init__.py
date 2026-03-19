@@ -5,7 +5,6 @@ Import as: import quantum_language as ql
 Basic Usage
 -----------
 >>> import quantum_language as ql
->>> c = ql.circuit()
 >>> a = ql.qint(5, width=8)
 >>> b = ql.qint(3, width=8)
 >>> result = a + b
@@ -209,6 +208,7 @@ __all__ = [
     # Export
     "to_openqasm",
     # State (also in ql.state subpackage)
+    "add_gate_count",
     "circuit_stats",
     "get_current_layer",
     "get_gate_count",

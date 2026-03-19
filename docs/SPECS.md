@@ -90,7 +90,7 @@ Currently, full quantum circuits are stored in memory. For large algorithms, thi
 
 The `simulate` option (`ql.option('simulate')`) controls whether `run_instruction` stores gates in the circuit or only counts them. Currently:
 
-- `simulate` defaults to `False` after `ql.circuit()` (tracking-only mode).
+- `simulate` defaults to `False` at initialization (tracking-only mode).
 - Internal helpers like `_flip_all` and `diffusion()` locally toggle `simulate=True` before executing DSL operations, then restore it. This creates a "mixed simulate mode" where some operations store gates and others don't.
 - This is wrong. `simulate` is a **global option** that the user sets once. Internal code must never toggle it.
 

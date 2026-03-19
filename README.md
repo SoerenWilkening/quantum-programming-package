@@ -5,21 +5,17 @@ Write quantum algorithms in natural programming style that compiles to efficient
 ## Quick Start
 
 ```python
-from quantum_language import qint, qbool, circuit
+import quantum_language as ql
 
-# Create circuit and quantum integers
-c = circuit()
-a = qint(5, width=8)   # 8-bit quantum integer, value 5
-b = qint(3, width=8)   # 8-bit quantum integer, value 3
+# Create quantum integers (circuit initializes automatically)
+a = ql.qint(5, width=8)   # 8-bit quantum integer, value 5
+b = ql.qint(3, width=8)   # 8-bit quantum integer, value 3
 
 # Perform arithmetic (generates quantum circuit)
 result = a + b
 
-# View circuit statistics
-print(f"Gates: {c.gate_count}, Depth: {c.depth}")
-
-# Export to OpenQASM
-c.visualize()
+# View gate count
+print(ql.get_gate_count())
 ```
 
 ## Installation
@@ -150,57 +146,11 @@ result = x * 5 * 5  # (5^3) mod 17 = 6
 
 > **Note:** Currently supports `qint_mod * int`. Support for `qint_mod * qint_mod` requires C-layer enhancements and will be added in a future release.
 
-### circuit
+### Circuit Management
 
-Singleton circuit manager that tracks quantum operations.
+The circuit initializes automatically when you create your first quantum type. **Do not call `ql.circuit()`** — it resets all state including options and compiled function caches.
 
-**Constructor:**
-```python
-c = circuit()
-```
-
-**Properties:**
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `.gate_count` | `int` | Total number of gates |
-| `.depth` | `int` | Circuit depth (critical path) |
-| `.qubit_count` | `int` | Number of qubits allocated |
-| `.gate_counts` | `dict` | Gate breakdown: `{'X': 10, 'CNOT': 5, ...}` |
-| `.available_passes` | `list` | Available optimization passes |
-
-**Methods:**
-
-**`visualize()`**
-Print circuit in text format showing gate layers.
-
-```python
-c = circuit()
-a = qint(3, width=4)
-b = qint(5, width=4)
-result = a + b
-c.visualize()
-```
-
-**`optimize(passes=None)`**
-Optimize circuit using specified passes.
-
-**Parameters:**
-- `passes` (list of str, optional): Pass names (`'merge'`, `'cancel_inverse'`). Default: all passes
-
-**Returns:**
-- `dict`: Statistics with before/after comparison
-
-```python
-stats = c.optimize()
-# {'gate_count': {'before': 100, 'after': 85}, 'depth': {'before': 20, 'after': 18}, ...}
-```
-
-**`can_optimize()`**
-Check if circuit can be optimized.
-
-**Returns:**
-- `bool`: True if optimization passes can reduce gate count
+Use `ql.get_gate_count()` to inspect the current gate count, and `ql.circuit_stats()` for detailed statistics.
 
 ### Module Functions
 
@@ -233,13 +183,11 @@ Get current circuit statistics as dictionary.
 ### Quantum Arithmetic
 
 ```python
-from quantum_language import qint, circuit
-
-c = circuit()
+import quantum_language as ql
 
 # Variable-width arithmetic
-a = qint(15, width=8)
-b = qint(7, width=8)
+a = ql.qint(15, width=8)
+b = ql.qint(7, width=8)
 
 # Natural Python syntax generates quantum circuits
 sum_result = a + b
@@ -248,17 +196,16 @@ prod_result = a * b
 quot_result = a // b
 mod_result = a % b
 
-print(f"Addition circuit: {c.gate_count} gates, depth {c.depth}")
+print(f"Gates: {ql.get_gate_count()}")
 ```
 
 ### Quantum Comparisons
 
 ```python
-from quantum_language import qint, qbool, circuit
+import quantum_language as ql
 
-c = circuit()
-a = qint(5, width=8)
-b = qint(3, width=8)
+a = ql.qint(5, width=8)
+b = ql.qint(3, width=8)
 
 # Comparison operations return qbool (1-bit quantum integer)
 is_equal = a == b
@@ -267,34 +214,31 @@ is_greater = a > b
 
 # Use comparison results as control qubits
 with is_less:
-    result = a + qint(10, width=8)  # Conditional addition
+    result = a + ql.qint(10, width=8)  # Conditional addition
 ```
 
 ### Modular Arithmetic (for Cryptography)
 
 ```python
-from quantum_language import qint_mod, circuit
-
-c = circuit()
+import quantum_language as ql
 
 # Modular exponentiation for Shor's algorithm
 N = 15  # Number to factor
 a = 7   # Coprime to N
 
-x = qint_mod(a, N=N)
+x = ql.qint_mod(a, N=N)
 result = x * 7 * 7 * 7  # (7^4) mod 15 using classical multipliers
 
-print(f"Modular exponentiation: {c.gate_count} gates")
+print(f"Gates: {ql.get_gate_count()}")
 ```
 
 ### Bitwise Operations
 
 ```python
-from quantum_language import qint, circuit
+import quantum_language as ql
 
-c = circuit()
-a = qint(0b1010, width=4)  # Binary 10
-b = qint(0b1100, width=4)  # Binary 12
+a = ql.qint(0b1010, width=4)  # Binary 10
+b = ql.qint(0b1100, width=4)  # Binary 12
 
 # Bitwise operations with Python operators
 and_result = a & b   # 0b1000
@@ -309,42 +253,31 @@ a &= b  # a now references AND result qubits
 ### Circuit Optimization
 
 ```python
-from quantum_language import qint, circuit
-
-c = circuit()
+import quantum_language as ql
 
 # Generate circuit with potential optimizations
-a = qint(5, width=8)
-b = a + qint(3, width=8)
-c_val = b - qint(3, width=8)  # May cancel with previous addition
+a = ql.qint(5, width=8)
+b = a + ql.qint(3, width=8)
+c_val = b - ql.qint(3, width=8)  # May cancel with previous addition
 
-# Check if optimization is possible
-if c.can_optimize():
-    stats = c.optimize()
-    print(f"Reduced gates: {stats['gate_count']['before']} -> {stats['gate_count']['after']}")
-    print(f"Reduced depth: {stats['depth']['before']} -> {stats['depth']['after']}")
-
-# Optimize with specific passes
-stats = c.optimize(passes=['merge'])  # Only merge adjacent gates
+print(f"Gates: {ql.get_gate_count()}")
 ```
 
 ### Array Operations
 
 ```python
-from quantum_language import qint, array, circuit
-
-c = circuit()
+import quantum_language as ql
 
 # Create arrays of quantum integers
-arr = array([1, 2, 3, 4, 5])
+arr = ql.array([1, 2, 3, 4, 5])
 
 # Perform operations on array elements
 sum_val = arr[0] + arr[1]
 product = arr[2] * arr[3]
 
 # 2D arrays
-matrix = array((3, 3))  # 3x3 matrix of qint()
-matrix[0][0] = qint(5, width=8)
+matrix = ql.array((3, 3))  # 3x3 matrix of qint()
+matrix[0][0] = ql.qint(5, width=8)
 ```
 
 ## Performance

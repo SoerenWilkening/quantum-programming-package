@@ -270,6 +270,7 @@ Launch an independent verifier agent with the following protocol:
 Wire the verified functions into the walk API. The assembly script runs a **single walk step** and prints the gate count. All four user functions are required.
 
 ```python
+import time
 import quantum_language as ql
 from quantum_language.walk_operators import walk_step
 
@@ -285,10 +286,13 @@ config, registers = ql.walk(
 )
 
 # Run a single walk step
+t0 = time.perf_counter()
 walk_step(config, registers)
+elapsed = time.perf_counter() - t0
 
-# Display gate count
+# Display gate count and timing
 print(ql.get_gate_count())
+print(f"Walk step completed in {elapsed:.3f}s")
 ```
 
 Present the complete code to the user and run it. The gate count output confirms the circuit was built successfully.

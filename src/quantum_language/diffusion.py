@@ -8,7 +8,6 @@ avoiding raw ``emit_*`` calls.
 Usage
 -----
 >>> import quantum_language as ql
->>> ql.circuit()
 >>> x = ql.qint(0, width=3)
 >>> x.branch()  # Equal superposition
 >>> ql.diffusion(x)  # S_0 reflection
@@ -255,7 +254,6 @@ def diffusion(*registers):
     Examples
     --------
     >>> import quantum_language as ql
-    >>> ql.circuit()
     >>> ql.option('simulate', True)
     >>> x = ql.qint(0, width=3)
     >>> x.branch()

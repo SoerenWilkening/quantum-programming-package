@@ -122,7 +122,6 @@ def profile():
 
     >>> import quantum_language as ql
     >>> with ql.profile() as stats:
-    ...     c = ql.circuit()
     ...     a = ql.qint(5, width=8)
     ...     b = a + 3
     >>> print(stats.report())

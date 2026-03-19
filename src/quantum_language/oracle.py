@@ -11,7 +11,6 @@ adding oracle-specific validation and transformation:
 Usage
 -----
 >>> import quantum_language as ql
->>> ql.circuit()
 >>> @ql.grover_oracle
 ... @ql.compile
 ... def mark_five(x: ql.qint):

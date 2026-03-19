@@ -68,7 +68,6 @@ board = ql.qarray(dim=(8, 8), dtype=ql.qbool) # 2D array (e.g., chess board)
 ### Arithmetic (works like normal Python)
 
 ```python
-ql.circuit()
 a = ql.qint(5, width=8)
 b = ql.qint(3, width=8)
 
@@ -122,7 +121,6 @@ def add_values(x, y):
     return x
 
 # First call: captures gates. Subsequent calls: replays cached gates.
-ql.circuit()
 a = ql.qint(3, width=4)
 b = ql.qint(2, width=4)
 result = add_values(a, b)
@@ -197,7 +195,7 @@ ql.option('tradeoff', 'min_qubits')   # Use ripple-carry (fewer qubits)
 
 ### Important Rules for Writing Algorithms
 
-1. **Always call `ql.circuit()` before creating qints** to initialize a fresh circuit
+1. **Do not call `ql.circuit()`** -- it resets all state including options; the framework initializes automatically
 2. **Never import gates** -- use arithmetic operators and comparisons only
 3. **`with qbool:` is your conditional** -- it controls operations in superposition
 4. **Use `@ql.compile`** for any function you call more than once (caches gate sequences)

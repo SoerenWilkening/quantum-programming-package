@@ -9,7 +9,6 @@ cached, so every replay benefits from the reduced gate count.
 Usage
 -----
 >>> import quantum_language as ql
->>> ql.circuit()
 >>> @ql.compile
 ... def add_one(x):
 ...     x += 1
@@ -385,9 +384,12 @@ def _clear_all_caches():
     Also enables simulate mode so gates are stored in the circuit.
     The C default is simulate=0 (tracking-only), but full simulation
     is required for QASM export, compiled function replay, and any
-    operation that needs gate data in the circuit.  Users who want
-    tracking-only mode should set ql.option('simulate', False) after
-    calling ql.circuit().
+    operation that needs gate data in the circuit.
+
+    Note: this means ql.circuit() forces simulate=True.  Users who
+    want tracking-only mode should set ql.option('simulate', False)
+    AFTER calling ql.circuit(), or avoid calling ql.circuit() entirely
+    (the circuit initializes automatically).
     """
     global _capture_depth
     _capture_depth = 0
