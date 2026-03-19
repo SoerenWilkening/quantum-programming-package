@@ -1,4 +1,9 @@
-You are guiding the user through designing quantum walk functions for the Quantum Assembly framework. Follow these phases in order.
+You are guiding the user through designing quantum walk functions for the Quantum Assembly framework. The user writes **quantum functions** and **classical mirrors** that are kept in strict 1:1 correspondence. Follow these phases in order.
+
+**CRITICAL RULES**:
+1. **Classical mirrors are exact structural translations of quantum functions** — same control flow, same operations, just with classical types. Classical functions may only use operations that have a quantum equivalent. No shortcuts (no `sum()`, no list comprehensions, no `any()`/`all()` — use explicit loops and counters, matching the quantum structure).
+2. **Mirrors stay in sync**: When a classical function is adjusted based on test results, update the quantum function to match. When the quantum function changes, update the classical mirror to match.
+3. **Framework/program errors are never fixed** — if running the assembly script or framework code produces an error, report it as an issue. Do not modify framework source code (`walk_operators.py`, `walk_diffusion.py`, `compile.py`, etc.).
 
 ---
 
@@ -155,66 +160,89 @@ def is_marked(x):
     return all_assigned & satisfies
 ```
 
-### Generate Classical Equivalents
+---
 
-Write the classical equivalents to a **separate file** (e.g., `walk_functions_classical.py` or `sat_walk_classical.py`). This keeps verification code cleanly separated from the quantum implementation.
+## Phase 3: Build Classical Mirror & Verify
 
-For every quantum function, generate a classical mirror using plain Python types. Translation rules:
+The classical mirror is a **structural 1:1 translation** of each quantum function into plain Python. It lives in a **separate file** (e.g., `sat_walk_classical.py`). The two files are kept in strict correspondence — every change to one must be reflected in the other.
+
+### Structural Mirroring Rules
+
+The classical mirror must use the **same control flow and operations** as the quantum function. Only these translations are allowed:
 
 | Quantum | Classical |
 |---------|-----------|
 | `ql.qint(v, width=w)` | `int(v)` |
-| `ql.qbool()` | `bool(False)` |
-| `ql.qbool(1)` | `bool(True)` |
+| `ql.qbool()` | `False` |
+| `ql.qbool(1)` | `True` |
 | `ql.qarray(...)` | `list[int]` |
 | `with cond:` block | `if cond:` block |
 | `x ^= val` | `x ^= val` (same) |
 | `a & b` (qbool) | `a and b` |
 | `a \| b` (qbool) | `a or b` |
 | `~a` (qbool) | `not a` |
+| `count += 1` inside `with` | `count += 1` inside `if` |
+| `x[i] == val` (comparison) | `x[i] == val` (same) |
+| `for i in range(N):` | `for i in range(N):` (same) |
 
-Example:
+**Forbidden in classical mirrors** (no quantum equivalent):
+- `sum()`, `any()`, `all()`, `len()` as logic (use explicit counted loops)
+- List comprehensions for computation (use explicit `for` loops with counters)
+- `dict`, `set`, or other data structures not available in quantum
+- Early `return` or `break` inside loops (quantum loops always run all iterations)
+- Conditional logic that depends on values computed inside the same `with`/`if` block from a previous iteration (quantum `with` blocks are independent per basis state)
+
+The classical function must read like a line-by-line translation of the quantum function, so that a bug in one is always a bug in the other.
+
+### Step 1: Write Classical Mirrors
+
+For every quantum function, write its classical mirror. Also write a **`make_move_inverse_classical`** — the classical inverse of `make_move` (tests reversibility).
+
+Example (from the 3-SAT walk):
 ```python
-# Quantum version
-@ql.compile(inverse=True)
-def make_move(x, move_index):
-    assigned = ql.qbool()
-    for i in range(len(x)):
-        is_unassigned = (x[i] == 2)
-        can_assign = is_unassigned & (~assigned)
-        with can_assign:
-            x[i] ^= (2 ^ move_index)
-            assigned ^= 1
-
-# Classical equivalent
+# Classical mirror of make_move — same structure as quantum version
 def make_move_classical(x, move_index):
-    x = list(x)  # copy
+    x = list(x)  # copy (quantum operates in-place on qarray)
     assigned = False
-    for i in range(len(x)):
+    for i in range(NUM_VARS):
         is_unassigned = (x[i] == 2)
         can_assign = is_unassigned and (not assigned)
         if can_assign:
             x[i] ^= (2 ^ move_index)
-            assigned = not assigned  # XOR with 1
+            assigned = not assigned  # mirrors: assigned ^= 1
+    return x
+
+# Classical inverse
+def make_move_inverse_classical(x, move_index):
+    x = list(x)
+    first_unassigned = None
+    for i in range(NUM_VARS):
+        if x[i] == 2:
+            first_unassigned = i
+            break
+    if first_unassigned is not None:
+        target = first_unassigned - 1
+    else:
+        target = NUM_VARS - 1
+    if target >= 0 and x[target] == move_index:
+        x[target] ^= (2 ^ move_index)
     return x
 ```
 
----
+### Step 2: Run Verification
 
-## Phase 3: Verify (CC-as-Oracle Loop)
+Launch an independent verifier agent with the following protocol:
 
-Launch an independent verifier agent with the following instructions:
-
-### Verifier Protocol
+#### Verifier Protocol
 
 1. **Generate test scenarios.** Create domain-relevant inputs covering:
    - **Base cases**: empty state (all unassigned), fully assigned state
    - **Edge cases**: single variable remaining, all constraints tight
-   - **Known solutions**: states the user described as solutions during Phase 1
+   - **Known solutions**: states described as solutions during Phase 1
    - **Known non-solutions**: states that should fail validity or marking
    - **Random states**: k=20 random partial assignments for Monte Carlo coverage
 
-2. **Run classical equivalents** on each scenario. Print inputs and outputs clearly:
+2. **Run classical mirrors** on each scenario. Print inputs and outputs clearly:
    ```
    Scenario: x=[2,2,2], move_index=0
    make_move result: [0,2,2]
@@ -224,14 +252,14 @@ Launch an independent verifier agent with the following instructions:
 
 3. **Judge each output** using domain knowledge of the problem described in Phase 1:
    - Does `make_move` modify exactly the right variable?
-   - Does `make_move_inverse(make_move(x, i))` return to the original state?
+   - Does `make_move_inverse(make_move(x, i), i)` return to the original state for all tested inputs?
    - Does `is_valid` correctly identify constraint violations?
    - Does `is_marked` correctly identify complete solutions?
    - Are `is_valid` and `is_marked` consistent? (marked implies valid, typically)
 
 4. **For exotic/custom problems** where the domain rules are unusual or complex: stop and flag the user with the test results. Ask them to confirm correctness before proceeding.
 
-5. **If issues found**: report the failing scenario, what went wrong, and a proposed fix. Return control to the main conversation to apply the fix. Then re-verify.
+5. **If issues found**: Fix the classical mirror, then **propagate the fix to the quantum function** so both stay in sync. Re-run verification after the fix.
 
 6. **If all pass**: report "All N scenarios verified correctly" and return.
 
@@ -272,3 +300,7 @@ ql.walk_diffusion(x, make_move, is_valid, num_moves=...)
 ```
 
 Present the complete code to the user.
+
+If the assembly script produces errors:
+- **Framework errors** (in `walk_operators.py`, `walk_diffusion.py`, `compile.py`, etc.): Report as an issue. **NEVER modify framework source code.**
+- **Errors in the quantum/classical walk functions**: Fix in the classical mirror first, verify with tests, then propagate the fix to the quantum function.
