@@ -96,12 +96,12 @@ Claude Code skill (`/quantum-walk`) for guided development of walk functions.
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| R13.1 | Structured discussion phase: state, moves, validity, marking, parameters. | |
-| R13.2 | Quantum function generation following DSL rules (`with` vs `if`, `@ql.compile(inverse=True)`, XOR idioms). | |
-| R13.3 | Automatic classical equivalent generation (with→if, qint→int, qbool→bool). | |
-| R13.4 | CC-as-oracle verification loop: generate scenarios, run classical equivalents, CC judges correctness. Monte Carlo coverage with k≥20 random inputs. | |
-| R13.5 | Independent verifier agent; flags user only for exotic/custom problems. | |
-| R13.6 | Idiom library: ternary assignment, XOR-based modification, counting, compound validity, all-assigned check. Extensible over time. | |
+| R13.1 | Structured discussion phase: state, moves, validity, marking, parameters. | **Done** |
+| R13.2 | Quantum function generation following DSL rules (`with` vs `if`, `@ql.compile(inverse=True)`, XOR idioms). | **Done** |
+| R13.3 | Automatic classical equivalent generation (with→if, qint→int, qbool→bool). | **Done** |
+| R13.4 | CC-as-oracle verification loop: generate scenarios, run classical equivalents, CC judges correctness. Monte Carlo coverage with k≥20 random inputs. | **Done** |
+| R13.5 | Independent verifier agent; flags user only for exotic/custom problems. | **Done** |
+| R13.6 | Idiom library: ternary assignment, XOR-based modification, counting, compound validity, all-assigned check. Extensible over time. | **Done** |
 
 #### R14: DSL Purity & Simulate-Mode Cleanup
 
@@ -144,8 +144,9 @@ Rework `@ql.compile` pipeline to decouple sequence generation from execution, en
 | R16.8 | `opt=1` (DAG-only) mode respects the new pipeline and control context. | **Done** |
 | R16.9 | Compile replay path (cache hit) inside `with` blocks correctly executes controlled gates, producing non-zero results when conditions are True. | **Done** |
 | R16.10 | Stale tests updated to match current behavior: first-call trade-off test reflects that first call is now controlled; `qint` default width test matches auto-width semantics. | **Done** |
-| R16.11 | Call graph built once per compiled function — not duplicated on subsequent calls. Each instruction node stores both uncontrolled and controlled gate counts; display format `"gates: 24 / 18"` with `"-"` for unavailable variant. | |
-| R16.12 | `opt=1` uncontrolled replay injects gates when `simulate=True`. Gate injection skip only applies in tracking-only mode (`simulate=False`). | |
+| R16.11 | Call graph built once per compiled function — not duplicated on subsequent calls. Each instruction node stores both uncontrolled and controlled gate counts; display format `"gates: 24 / 18"` with `"-"` for unavailable variant. **Bug**: In Toffoli mode, `record_operation` populates `gate_count` but not `uncontrolled_gate_count`/`controlled_gate_count`, so `report()` shows `"- / -"` while `aggregate()` total is correct. | |
+| R16.12 | `opt=1` uncontrolled replay injects gates when `simulate=True`. Gate injection skip only applies in tracking-only mode (`simulate=False`). | **Done** |
+| R16.13 | Toffoli-mode gate count propagation: `record_operation` populates `uncontrolled_gate_count` when outside `with` block, `controlled_gate_count` when inside. Depth and T-count computed before sequence is freed. | |
 
 #### R17: History Graph Inverse Cancellation
 
@@ -159,6 +160,41 @@ Detect and cancel manual uncomputation in the history graph, avoiding redundant 
 | R17.4 | Blockers cleared on qubit deallocation (uncomputation) of the dependent qint, not on Python GC. Explicit notification mechanism. | |
 | R17.5 | No cancellation if active blockers exist after the last history entry. Operation added as normal entry instead. | |
 | R17.6 | `*= k` / `//= k` inverse cancellation deferred to future work. | |
+
+#### R18: Compile Module Refactoring
+
+Split the monolithic `compile.py` (2,293 lines) into a `compile/` subpackage with modules ≤ 500–600 lines.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R18.1 | `compile.py` replaced by `compile/` subpackage. Public API (`@ql.compile` decorator) unchanged. All existing imports continue to work. | |
+| R18.2 | Each module in the subpackage ≤ 600 lines. No circular imports. | |
+| R18.3 | Logical separation: block types, optimization helpers, virtual mapping, capture, replay, parametric lifecycle, inverse proxies each in their own module. | |
+| R18.4 | All existing tests pass without modification (pure refactor, no behavioral change). | |
+
+#### R19: Compiled Function Ancilla Model
+
+Fix the compile layer's ancilla tracking to distinguish transient ancillas (managed by the C layer) from result qubits (new qints returned to the caller).
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R19.1 | During capture, classify non-parameter qubits into two categories: **result qubits** (part of the return value, still allocated when capture completes) and **transient ancillas** (freed by the C layer during the operation). | |
+| R19.2 | IR replay path (`_execute_ir`): only allocate fresh qubits for parameter and result virtual indices. Do not allocate for transient ancilla virtual indices — the C layer's `run_instruction` manages its own ancillas internally. | |
+| R19.3 | Gate-level replay path (`inject_remapped_gates`): allocate all virtual qubits as before (gates reference them directly). Free transient ancillas after injection since the gates return them to \|0⟩. | |
+| R19.4 | Repeated calls to a compiled function do not grow the total qubit count when the function has no result qubits (e.g., in-place addition). | |
+| R19.5 | Compiled functions that return new qints (e.g., `c = a * b`) correctly allocate fresh result qubits on each replay. | |
+
+#### R20: Hierarchical Compiled Function References
+
+When a compiled function calls another compiled function during capture, store a reference instead of inlining the inner function's gates.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R20.1 | New IR entry type (`CallRecord`) stores a reference to the inner `CompiledFunc` and the argument mapping, rather than inlining the inner function's gate sequence. | |
+| R20.2 | Replay of an outer compiled function recursively delegates to the inner function's `_replay`, with transitive virtual-to-real qubit mapping. | |
+| R20.3 | Each compiled function's `CompiledBlock` contains only its own gates and call references — not the flattened gates of all nested functions. | |
+| R20.4 | Visualization: each compiled function produces its own sub-diagram. Top-level view shows the call graph with links to sub-diagrams. | |
+| R20.5 | Gate counts for hierarchical functions are computed recursively (sum of own gates + referenced function gate counts). | |
 
 ### P1 — Should Have
 
@@ -236,6 +272,7 @@ General improvements to the existing codebase.
 - Call graph is built once per compiled function on first call. Subsequent calls (controlled or uncontrolled) do NOT append additional nodes.
 - Each instruction node stores both `uncontrolled_seq` and `controlled_seq` pointers, with gate counts resolved from `sequence_t.total_gate_count`.
 - `to_dot()` and `report()` display both gate counts: `"gates: 24 / 18"` (uncontrolled / controlled). `"-"` shown when a variant's sequence pointer is 0 (unavailable).
+- In Toffoli mode, `record_operation` populates `uncontrolled_gate_count` (or `controlled_gate_count` when inside `with`) so the DAG report shows actual counts, not `"- / -"`.
 - With `simulate=True`, all compiled function replays inject gates into the circuit — including uncontrolled calls. Gate injection skip restricted to `simulate=False` (tracking-only mode).
 - Calling `foo(a, b)` three times with `simulate=True` produces gates in the circuit for all three calls.
 
@@ -247,6 +284,30 @@ General improvements to the existing codebase.
 - `a += 3; b += a; a -= 3` does NOT cancel (blocker from `b` is active).
 - `a += 3; b += a; del b; a -= 3` DOES cancel (blocker cleared on `b`'s deallocation).
 - No cancellation attempted for `*=` / `//=`.
+
+### 5.1a Compile Module Refactoring
+
+- `compile.py` no longer exists as a single file; replaced by `compile/` subpackage.
+- `from quantum_language.compile import CompiledFunc` and `@ql.compile` continue to work (backward-compatible public API).
+- Every module in `compile/` is ≤ 600 lines.
+- No circular imports between subpackage modules.
+- All existing compile-related tests pass without modification.
+
+### 5.1b Compiled Function Ancilla Model
+
+- Calling `foo(a, b)` three times (where `foo` does only in-place additions) does NOT increase total qubit count beyond the first call's allocation.
+- Calling `bar(a, b)` that returns `c = a * b` correctly allocates fresh result qubits on each replay.
+- IR replay path does not allocate qubits for transient ancillas (carry bits, temp registers) — only for parameters and result qubits.
+- Gate-level replay path allocates all virtual qubits and frees transients after injection.
+- `block.total_virtual_qubits` is split into `param_virtual_count`, `result_virtual_count`, and `transient_virtual_count`.
+
+### 5.1c Hierarchical Compiled Function References
+
+- Wrapping `walk_step` in a compiled function does not cause memory explosion.
+- Outer compiled function's `CompiledBlock` contains `CallRecord` entries for inner compiled functions, not their flattened gates.
+- Replay of outer function delegates to inner function's `_replay` recursively.
+- Each compiled function's gate count in the DAG is its own gates + sum of referenced function gate counts (recursive).
+- Visualization produces per-function sub-diagrams linked from the top-level call graph.
 
 ### 5.1 Quantum Walk Rework
 
@@ -276,6 +337,9 @@ General improvements to the existing codebase.
 - Graph immutability after capture for safe replay.
 - Function-based quantum walk API (`walk`, `walk_diffusion`) with user-provided move/validity/marking functions.
 - Claude Code skill for guided quantum walk development with CC-as-oracle verification.
+- Compile module refactoring: `compile.py` → `compile/` subpackage (≤ 600 LOC per module).
+- Compiled function ancilla model: distinguish transient ancillas from result qubits.
+- Hierarchical compiled functions: nested calls stored as references, not inlined.
 - Future: optimization flags and streaming gate application.
 
 ### Non-Goals
@@ -295,6 +359,8 @@ General improvements to the existing codebase.
 | Division/modulo requires classical divisor | Limits some encoding strategies |
 | Arithmetic backend assumes contiguous registers | Split-register operations (qint + qbool as MSB) implemented for in-place comparisons |
 | Gate sequences use variable control index | Standardization to index 0 required for compile pipeline rework (Phase 5) |
+| Compile layer conflates transient and result ancillas | IR replay double-allocates C-managed ancillas; each compiled function replay grows qubit count |
+| Nested compiled functions inline inner gates | Memory explosion when wrapping complex functions (e.g., walk_step) in a compiled function |
 
 ---
 
@@ -389,10 +455,11 @@ Fixes correctness bugs in the compile replay path and updates stale test asserti
 
 ### Milestone 4c: Call Graph Deduplication & Simulate Replay
 
-Fixes call graph duplication on repeated calls and incorrect gate injection skip with `simulate=True`:
+Fixes call graph duplication on repeated calls, incorrect gate injection skip with `simulate=True`, and Toffoli-mode gate count propagation:
 
 - **Call graph built once**: `_build_dag_from_ir` only runs on first call/capture. Each DAGNode stores both `uncontrolled_seq` and `controlled_seq` pointers. Gate counts resolved from `sequence_t.total_gate_count` via Cython helper.
 - **Dual gate count display**: `to_dot()` and `report()` show `"gates: 24 / 18"` (uncontrolled / controlled), `"-"` for unavailable variants.
+- **Toffoli-mode gate count fix**: `record_operation` populates `uncontrolled_gate_count` (or `controlled_gate_count` when inside `with`) so the DAG report shows actual counts instead of `"- / -"`. Depth and T-count computed from sequence before it is freed.
 - **Simulate=True replay fix**: Gate injection skip (`_skip_injection`) restricted to `simulate=False`. With `simulate=True`, all replays (including uncontrolled) inject gates into the circuit.
 
 ### Milestone 5: History Graph Inverse Cancellation
@@ -403,6 +470,32 @@ Detect and cancel manual uncomputation in the history graph:
 - Blockers cleared on qubit deallocation (explicit notification, not Python GC)
 - Tail-only cancellation for `+=`/`-=`, `^=` self-inverse, `f()`/`f.inverse()` pairs
 - `*=`/`//=` deferred to future work
+
+### Milestone 6: Compile Module Refactoring
+
+Split the monolithic `compile.py` (2,293 lines) into a `compile/` subpackage:
+
+- **Subpackage structure**: `compile/__init__.py` (public API), `_block.py` (CompiledBlock, InstructionRecord), `_func.py` (CompiledFunc core), `_capture.py` (capture logic), `_replay.py` (replay logic), `_optimize.py` (gate optimization, adjoint helpers), `_virtual.py` (virtual mapping, return value construction), `_parametric.py` (parametric topology and lifecycle), `_inverse.py` (InverseCompiledFunc, AncillaInverseProxy)
+- Every module ≤ 600 lines, no circular imports
+- Pure refactor — all existing tests pass without modification
+
+### Milestone 7: Compiled Function Ancilla Model
+
+Fix the compile layer's ancilla tracking to distinguish transient from result qubits:
+
+- **Transient ancilla identification**: After capture, qubits that are not parameters and not part of the return value and were freed by the C allocator are classified as transient
+- **IR replay fix**: Only allocate parameter + result virtual qubits; skip transient virtual indices since `run_instruction` manages its own ancillas
+- **Gate-level replay fix**: Allocate all virtual qubits (gates reference them), free transients after injection
+- Repeated calls no longer grow qubit count for in-place operations
+
+### Milestone 8: Hierarchical Compiled Function References
+
+Store references to inner compiled functions instead of inlining their gates:
+
+- **CallRecord IR entry**: New entry type storing reference to inner `CompiledFunc` and argument mapping
+- **Recursive replay**: Outer function delegates to inner function's `_replay` with transitive qubit mapping
+- **Visualization**: Per-function sub-diagrams linked from top-level call graph
+- **Gate counts**: Computed recursively (own gates + referenced function gate counts)
 
 ---
 

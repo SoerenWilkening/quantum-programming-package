@@ -1413,6 +1413,36 @@ do NOT append additional nodes.
 
 ---
 
+### Step 5c.5: Toffoli-Mode Gate Count Propagation
+
+**Goal**: In Toffoli mode, `record_operation` populates `uncontrolled_gate_count`
+(or `controlled_gate_count` when in controlled context) so the DAG report shows
+actual counts instead of `"- / -"`.
+
+**Root cause**: `record_operation()` passes `gate_count=gc_delta` to `add_node()`,
+but never passes `uncontrolled_gate_count` or `controlled_gate_count`. The
+`report()` method reads the dual fields (both default to 0), and
+`_format_dual_gates(0, 0)` renders as `"- / -"`. Meanwhile `aggregate()` uses
+`node.gate_count` which IS populated — so the total row is correct.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/call_graph.py` | [MOD] `record_operation()`: accept `controlled` bool parameter. When not controlled, pass `uncontrolled_gate_count=gate_count`. When controlled, pass `controlled_gate_count=gate_count`. Also accept and pass through `depth` and `t_count` parameters. | ~+10 |
+| `src/quantum_language/qint_arithmetic.pxi` | [MOD] In Toffoli dispatch path: compute depth and T-count from sequence BEFORE `toffoli_sequence_free`. Pass to `_record_operation`. | ~+15 |
+| `src/quantum_language/qint_comparison.pxi` | [MOD] Same pattern for comparison operations. | ~+10 |
+| `src/quantum_language/qint_bitwise.pxi` | [MOD] Same pattern for bitwise operations. | ~+10 |
+
+**Tests** (`tests/python/test_dag_gate_counts.py` [MOD]):
+- `test_toffoli_report_nonzero` — `report()` output shows non-zero gate counts (not `"- / -"`)
+- `test_toffoli_uncontrolled_gate_count` — uncontrolled call populates `uncontrolled_gate_count`
+- `test_toffoli_controlled_gate_count` — call inside `with` populates `controlled_gate_count`
+- `test_toffoli_depth_nonzero` — depth field is populated from sequence data
+- `test_toffoli_t_count_nonzero` — T-count field is populated
+
+**DEP**: Step 5c.2
+
+---
+
 ### Phase 5c Summary
 
 | Step | What | ~LOC delta | DEP |
@@ -1421,10 +1451,11 @@ do NOT append additional nodes.
 | 5c.2 | Dual gate counts on DAGNode | ~+30 | 5c.1 |
 | 5c.3 | Build DAG once per compiled function | ~+15 | 5c.2 |
 | 5c.4 | Fix simulate=True replay gate injection | ~+1 | Phase 5b |
+| 5c.5 | Toffoli-mode gate count propagation | ~+45 | 5c.2 |
 
-**Parallelizable**: Step 5c.4 is independent of 5c.1–5c.3.
+**Parallelizable**: Steps 5c.4 and 5c.5 are independent of each other and of 5c.3.
 
-**Net**: ~+56 LOC implementation. Call graph no longer duplicates on repeated calls. Both gate count variants visible. Simulate=True replays work correctly.
+**Net**: ~+101 LOC implementation. Call graph no longer duplicates on repeated calls. Both gate count variants visible in all arithmetic modes. Simulate=True replays work correctly.
 
 ---
 
@@ -1578,3 +1609,361 @@ inverses. `f(a)` records a history entry with the function's sequence pointer;
 **Net**: ~+155 LOC implementation, ~+570 LOC tests.
 
 **Future** (not in this phase): `*= k` / `//= k` inverse cancellation.
+
+---
+
+## Phase 7 — Compile Subpackage Refactor
+
+Splits the monolithic `compile.py` (2,293 lines) into a `compile/` subpackage.
+Pure refactor — no behavioral changes. All existing tests must pass without
+modification after each step.
+
+**Target structure** (each module ≤ 600 lines):
+
+```
+src/quantum_language/compile/
+├── __init__.py      ~110 LOC  Public compile() decorator, re-exports
+├── _block.py         ~80 LOC  CompiledBlock, AncillaRecord data classes
+├── _func.py         ~500 LOC  CompiledFunc (init, __call__, _call_inner, cache, properties)
+├── _capture.py      ~350 LOC  _capture, _capture_inner, _capture_and_cache_both, _derive_controlled_block
+├── _replay.py       ~250 LOC  _replay, _apply_merge, merge support
+├── _optimize.py     ~280 LOC  Gate optimization, adjoint helpers, controlled derivation, merge_and_optimize
+├── _virtual.py      ~200 LOC  _build_virtual_mapping, _remap_gates, return value builders, qubit index helpers
+├── _parametric.py   ~250 LOC  Parametric topology extraction and lifecycle (_parametric_call)
+├── _inverse.py      ~170 LOC  _InverseCompiledFunc, _AncillaInverseProxy
+└── _ir.py           ~120 LOC  _execute_ir, _build_dag_from_ir, IR execution helpers
+```
+
+**Design constraints**:
+- `_compile_state.py` stays as-is (dependency-free, avoids circular imports with Cython)
+- `call_graph.py` stays as-is (independent module, 749 lines — within tolerance)
+- Public API is `compile/__init__.py` which re-exports everything that `compile.py` exported
+- Internal cross-references use relative imports within the subpackage
+
+---
+
+### Step 7.1: Create Subpackage Skeleton and Move Types
+
+**Goal**: Create `compile/` directory, move `CompiledBlock`, `AncillaRecord`,
+constants, and mode flag helpers. Update internal imports. The old `compile.py`
+becomes a thin shim importing from the subpackage until all moves are complete.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/__init__.py` | [NEW] Public API: re-export `compile` decorator, `CompiledFunc`, `_clear_all_caches`. Backward-compatible with `from quantum_language.compile import ...`. | ~40 |
+| `src/quantum_language/compile/_block.py` | [NEW] Move `CompiledBlock`, `AncillaRecord`, gate type constants (`_X`, `_Y`, etc.), `_MAX_CAPTURE_DEPTH`, `_capture_depth` tracking. | ~100 |
+| `src/quantum_language/compile.py` | [MOD] Becomes thin shim: `from .compile import *` (temporary, removed in Step 7.5). | ~5 |
+
+**Tests**: All existing tests pass. `from quantum_language.compile import CompiledFunc` works.
+
+**DEP**: None
+
+---
+
+### Step 7.2: Extract Optimization and Virtual Mapping Helpers
+
+**Goal**: Move gate optimization functions and virtual qubit mapping into
+dedicated modules. These are pure functions with no dependency on `CompiledFunc`.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_optimize.py` | [NEW] Move `_optimize_gate_list`, `_gates_cancel`, `_gates_merge`, `_merged_gate`, `_adjoint_gate`, `_inverse_gate_list`, `_derive_controlled_gates`, `_strip_control_qubit`, `_merge_and_optimize`. | ~280 |
+| `src/quantum_language/compile/_virtual.py` | [NEW] Move `_build_virtual_mapping`, `_remap_gates`, `_get_qint_qubit_indices`, `_get_qarray_qubit_indices`, `_get_quantum_arg_qubit_indices`, `_build_return_qint`, `_build_return_qarray`, `_build_qubit_set_numpy`, `_input_qubit_key`. | ~200 |
+
+**Tests**: All existing tests pass.
+
+**DEP**: Step 7.1
+
+---
+
+### Step 7.3: Extract Capture and Replay Logic
+
+**Goal**: Move `CompiledFunc`'s capture and replay methods into separate modules.
+These become standalone functions that take `CompiledFunc` (or its data) as a
+parameter, or remain as methods imported via mixin pattern.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_capture.py` | [NEW] Move `_capture`, `_capture_inner`, `_capture_and_cache_both`, `_derive_controlled_block` and related helpers. | ~350 |
+| `src/quantum_language/compile/_replay.py` | [NEW] Move `_replay`, `_apply_merge`, merge-related helpers. | ~250 |
+| `src/quantum_language/compile/_ir.py` | [NEW] Move `_execute_ir`, `_build_dag_from_ir`, `_run_instruction_py` and IR execution helpers. | ~120 |
+
+**Tests**: All existing tests pass.
+
+**DEP**: Step 7.2
+
+---
+
+### Step 7.4: Extract Parametric and Inverse Modules
+
+**Goal**: Move the parametric lifecycle and inverse proxy classes into their own
+modules. These are the most self-contained pieces.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_parametric.py` | [NEW] Move `_extract_topology`, `_extract_angles`, `_apply_angles`, `_parametric_call` and the parametric state machine. | ~250 |
+| `src/quantum_language/compile/_inverse.py` | [NEW] Move `_InverseCompiledFunc`, `_AncillaInverseProxy`. | ~170 |
+
+**Tests**: All existing tests pass.
+
+**DEP**: Step 7.3
+
+---
+
+### Step 7.5: Consolidate CompiledFunc and Remove Shim
+
+**Goal**: The remaining `CompiledFunc` class (init, `__call__`, `_call_inner`,
+`_classify_args`, cache management, properties) moves to `_func.py`. Remove the
+old `compile.py` shim. Update all external imports.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_func.py` | [NEW] `CompiledFunc` class with core methods. Imports capture/replay/parametric/inverse from sibling modules. | ~500 |
+| `src/quantum_language/compile/__init__.py` | [MOD] Final public API: import from `_func`, `_block`, expose `compile` decorator. | ~110 |
+| `src/quantum_language/compile.py` | [DEL] Remove the old shim file. | -5 |
+| `src/quantum_language/__init__.py` | [MOD] Update import path if needed (should be transparent via subpackage `__init__`). | ~+2 |
+
+**Tests**: All existing tests pass. No `compile.py` file exists (only `compile/` directory).
+
+**DEP**: Step 7.4
+
+---
+
+### Phase 7 Summary
+
+| Step | What | ~LOC delta | DEP |
+|------|------|------------|-----|
+| 7.1 | Subpackage skeleton + types | ~+145 | — |
+| 7.2 | Optimization + virtual mapping modules | ~+480 | 7.1 |
+| 7.3 | Capture, replay, IR modules | ~+720 | 7.2 |
+| 7.4 | Parametric + inverse modules | ~+420 | 7.3 |
+| 7.5 | Consolidate CompiledFunc, remove shim | ~+612, -2293 | 7.4 |
+
+**Net**: ~+84 LOC (slight growth from module boilerplate/imports).
+9 modules, all ≤ 600 lines. compile.py eliminated.
+
+---
+
+## Phase 8 — Compiled Function Ancilla Model
+
+Fixes the compile layer's ancilla tracking so that repeated calls to a compiled
+function do not grow the total qubit count when the function has no persistent
+result qubits. The root cause: the compile layer allocates fresh qubits for
+transient ancillas (carry bits, temp registers) that the C layer already manages
+internally via `allocator_alloc`/`allocator_free` during `run_instruction`.
+
+### Design Overview
+
+**Three categories of non-parameter qubits in a CompiledBlock**:
+
+1. **Result qubits** — Part of the return value (e.g., `c = a * b` returns `c`).
+   Still allocated when capture completes. Must be freshly allocated on each replay.
+2. **Transient ancillas** — Freed by the C allocator during the operation (carry bits,
+   temp registers in CDKM adders). Appear in the captured gate list but are not alive
+   when capture completes. IR replay should NOT allocate them (C manages its own).
+3. **Persistent ancillas** — Allocated during capture and not freed, but also not part
+   of the return value. These exist if the function creates intermediate qints that
+   are neither returned nor uncomputed. Must be allocated on replay.
+
+**Detection approach (Option B)**: After capture, check which non-parameter qubits
+are still allocated (not freed by the C allocator). Those are result + persistent.
+Everything else is transient. The return value qubit range distinguishes result
+from persistent.
+
+---
+
+### Step 8.1: Track Qubit Liveness After Capture
+
+**Goal**: After the function body executes during capture, query the allocator to
+determine which captured qubits are still alive (not freed). Classify each
+non-parameter virtual qubit as result, persistent, or transient.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_block.py` | [MOD] Add `transient_virtual_indices: frozenset[int]` and `result_virtual_indices: frozenset[int]` to `CompiledBlock`. | ~+10 |
+| `src/quantum_language/compile/_capture.py` | [MOD] After capture, query allocator for qubit liveness. Classify virtual qubits. Store on block. | ~+40 |
+| `src/quantum_language/_core.pxd` / `_core.pyx` | [MOD] Expose `allocator_is_allocated(qubit_index) -> bool` from C allocator to Python. | ~+15 |
+| `c_backend/include/qubit_allocator.h` | [MOD] Add `bool allocator_is_allocated(allocator_t*, qubit_t)` query. | ~+5 |
+| `c_backend/src/qubit_allocator.c` | [MOD] Implement `allocator_is_allocated`: check if qubit is in an allocated block. | ~+20 |
+
+**Tests** (`tests/python/test_compile_ancilla_classify.py` [NEW], ~150 LOC):
+- `test_addition_no_persistent` — `a += 1` has zero result/persistent qubits, all internal are transient
+- `test_multiplication_has_result` — `c = a * b; return c` has result qubits matching `c`'s width
+- `test_transient_correctly_identified` — carry/temp qubits from addition are in `transient_virtual_indices`
+- `test_inplace_no_result` — `a += b; return a` has `return_is_param_index` set, no result qubits
+
+**DEP**: Phase 7 (compile subpackage exists)
+
+---
+
+### Step 8.2: IR Replay Skips Transient Allocation
+
+**Goal**: Modify `_replay` so the IR path only allocates result + persistent
+virtual qubits. Transient virtual indices are left unmapped — `run_instruction`
+handles its own internal ancillas.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_replay.py` | [MOD] In `_replay`: when using IR path, skip allocation for `block.transient_virtual_indices`. Only allocate for result + persistent indices. | ~+20 |
+
+**Tests** (`tests/python/test_compile_ancilla_replay.py` [NEW], ~200 LOC):
+- `test_three_calls_no_qubit_growth` — `foo(a, b)` called 3 times (in-place add), qubit count constant after first call
+- `test_multiplication_allocates_result` — `bar(a, b)` returning `a * b` allocates fresh result qubits each call
+- `test_ir_replay_qubit_mapping` — IR path maps only param + result qubits, transients unmapped
+- `test_gate_replay_still_allocates_all` — gate-level path allocates everything (backward compatibility)
+- `test_correctness_preserved` — simulation results identical before and after the fix
+
+**DEP**: Step 8.1
+
+---
+
+### Step 8.3: Gate-Level Replay Frees Transients
+
+**Goal**: For the gate-level replay path (`inject_remapped_gates`), allocate all
+virtual qubits as before, but free transient ancillas after injection since the
+gates return them to |0⟩.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_replay.py` | [MOD] After `inject_remapped_gates`, deallocate qubits corresponding to `block.transient_virtual_indices`. | ~+10 |
+
+**Tests** (`tests/python/test_compile_ancilla_replay.py` [MOD]):
+- `test_gate_replay_frees_transients` — after gate-level replay, transient qubits are back in the free pool
+- `test_gate_replay_three_calls_stable` — gate-level path also doesn't grow qubits on repeated calls
+
+**DEP**: Step 8.2
+
+---
+
+### Phase 8 Summary
+
+| Step | What | ~LOC delta | DEP |
+|------|------|------------|-----|
+| 8.1 | Track qubit liveness, classify ancillas | ~+90 | Phase 7 |
+| 8.2 | IR replay skips transient allocation | ~+20 | 8.1 |
+| 8.3 | Gate-level replay frees transients | ~+10 | 8.2 |
+
+**Net**: ~+120 LOC implementation, ~+350 LOC tests.
+
+---
+
+## Phase 9 — Hierarchical Compiled Function References ✅
+
+When a compiled function calls another compiled function during capture, store a
+reference (call record) instead of inlining the inner function's gates. This
+prevents memory explosion for complex nested compilations (e.g., wrapping
+`walk_step` in a compiled function).
+
+### Design Overview
+
+**Current behavior**: During capture of outer function `f`, if `f` calls inner
+compiled function `g`, then `g`'s gates are inlined into `f`'s `CompiledBlock.gates`.
+This means `f`'s block contains ALL gates from ALL nested calls — gate count and
+ancilla count grow combinatorially.
+
+**New behavior**: During capture of `f`, when `g` is called:
+1. `g` runs normally (capture or replay) — its own gates go to the circuit
+2. Instead of extracting `g`'s gates into `f`'s block, a `CallRecord` is stored in
+   `f`'s instruction IR referencing `g` and the argument qubit mapping
+3. On replay of `f`, the `CallRecord` triggers `g._replay()` with the appropriate
+   qubit mapping (transitive: f's virtual→real composed with g's virtual→real)
+4. `f`'s `CompiledBlock.gates` contains only `f`'s OWN gates (not g's)
+
+**Visualization**: Each compiled function is a node in the call graph. When
+rendering, each function's circuit can be shown separately, with call nodes
+linking to sub-diagrams.
+
+---
+
+### Step 9.1: CallRecord IR Entry Type ✅
+
+**Goal**: Define a new IR entry type that stores a reference to an inner
+`CompiledFunc`, the cache key used, and the argument qubit mapping.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_block.py` | [MOD] Add `CallRecord` dataclass: `compiled_func_ref`, `cache_key`, `quantum_arg_indices` (virtual qubit indices for each arg). Distinguish from `InstructionRecord` via a `kind` field or separate list. | ~+25 |
+| `src/quantum_language/_compile_state.py` | [MOD] Add `_record_call(compiled_func, cache_key, quantum_arg_indices)` to record a call during compile-mode. | ~+15 |
+
+**Tests** (`tests/python/test_compile_hierarchical.py` [NEW], ~80 LOC):
+- `test_call_record_fields` — `CallRecord` stores func ref, cache key, arg indices
+- `test_call_record_in_ir` — recording a call during compile mode appends `CallRecord` to block
+
+**DEP**: Phase 8
+
+---
+
+### Step 9.2: Capture Detects Nested Compiled Functions ✅
+
+**Goal**: During capture of an outer function, when an inner compiled function is
+called, record a `CallRecord` instead of letting the inner function's gates
+merge into the outer function's circuit gate range.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_capture.py` | [MOD] In `_capture_inner`: detect when a compiled function is called during compile-mode (via nesting depth or compile-mode flag). Instead of extracting inner gates from circuit, record `CallRecord`. | ~+40 |
+| `src/quantum_language/compile/_func.py` | [MOD] In `__call__`: when compile-mode is active (we're being called from inside another capture), record `CallRecord` to the parent's IR instead of adding gates to circuit. | ~+30 |
+
+**Tests** (`tests/python/test_compile_hierarchical.py` [MOD]):
+- `test_nested_compile_records_call` — outer function's IR contains `CallRecord`, not inner's gates
+- `test_nested_own_gates_only` — outer function's gate list excludes inner function's gates
+- `test_nested_gate_count` — outer's block.gates is smaller than the flattened total
+
+**DEP**: Step 9.1
+
+---
+
+### Step 9.3: Recursive Replay via CallRecord ✅
+
+**Goal**: During replay of an outer function, when a `CallRecord` is encountered
+in the IR, delegate to the inner function's `_replay` with transitive qubit mapping.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_replay.py` | [MOD] In `_replay`: iterate IR entries. For `CallRecord` entries, look up inner function's cached block, build qubit mapping (outer virtual→real composed with inner arg indices), call `inner._replay(block, quantum_args)`. | ~+50 |
+| `src/quantum_language/compile/_ir.py` | [MOD] `_execute_ir`: handle `CallRecord` entries by delegating to inner function. | ~+20 |
+
+**Tests** (`tests/python/test_compile_hierarchical.py` [MOD]):
+- `test_nested_replay_correct` — outer function replayed produces same simulation result as direct calls
+- `test_nested_replay_qubit_mapping` — inner function receives correctly mapped qubits
+- `test_nested_three_calls_stable` — repeated replay of outer function doesn't grow qubit count
+- `test_deeply_nested` — three levels of nesting (f calls g calls h) works correctly
+- `test_nested_controlled` — outer called inside `with` block propagates control to inner functions
+
+**DEP**: Step 9.2
+
+---
+
+### Step 9.4: Hierarchical Gate Count and Visualization ✅
+
+**Goal**: Gate counts for hierarchical functions are computed recursively. DAG
+visualization shows call relationships with links to per-function sub-diagrams.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_func.py` | [MOD] `gate_count` property: own gates + sum of referenced function gate counts (via `CallRecord` refs). | ~+15 |
+| `src/quantum_language/call_graph.py` | [MOD] `to_dot()`: render `CallRecord` nodes differently (dashed border or subgraph link). `report()`: show hierarchical breakdown. | ~+30 |
+
+**Tests** (`tests/python/test_compile_hierarchical.py` [MOD]):
+- `test_hierarchical_gate_count` — total matches sum of all functions' own gates
+- `test_report_shows_hierarchy` — report distinguishes own gates from referenced
+- `test_dot_shows_call_edges` — DOT output contains call relationship edges
+
+**DEP**: Step 9.3
+
+---
+
+### Phase 9 Summary
+
+| Step | What | ~LOC delta | DEP |
+|------|------|------------|-----|
+| 9.1 | CallRecord IR entry type | ~+40 | Phase 8 |
+| 9.2 | Capture detects nested compiled functions | ~+70 | 9.1 |
+| 9.3 | Recursive replay via CallRecord | ~+70 | 9.2 |
+| 9.4 | Hierarchical gate count and visualization | ~+45 | 9.3 |
+
+**Net**: ~+225 LOC implementation, ~+400 LOC tests.
+
+**Key property**: After this phase, wrapping `walk_step` (or any complex nested
+compilation) in a `@ql.compile` function no longer causes memory explosion. Each
+function manages its own gates and ancillas independently.
