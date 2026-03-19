@@ -70,6 +70,7 @@
 				+ tuple(quotient_qa[i] for i in range(n))
 				+ tuple(remainder_qa[i] for i in range(n)),
 				gate_count=gc_delta_div,
+				controlled=False,
 			)
 		elif type(divisor) == qint:
 			div_bits = (<qint>divisor).bits
@@ -89,6 +90,7 @@
 				+ tuple(quotient_qa[i] for i in range(n))
 				+ tuple(remainder_qa[i] for i in range(n)),
 				gate_count=gc_delta_div,
+				controlled=False,
 			)
 		else:
 			raise TypeError("Divisor must be int or qint")

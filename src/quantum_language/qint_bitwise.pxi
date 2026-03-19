@@ -186,6 +186,7 @@
 					"and",
 					tuple(qubit_array[i] for i in range(_total_and)),
 					gate_count=gc_delta_and,
+					controlled=bool(_controlled),
 				)
 				_qm = tuple(qubit_array[i] for i in range(_total_and))
 				result.history.append(0, _qm)
@@ -206,6 +207,7 @@
 			tuple(qubit_array[i] for i in range(3 * result_bits if type(other) != int else 2 * result_bits)),
 			sequence_ptr=<unsigned long long>seq,
 			gate_count=gc_delta_and,
+			controlled=bool(_controlled),
 		)
 
 		# Step 1.2: Record operation into result's per-variable history
@@ -401,6 +403,7 @@
 			tuple(qubit_array[i] for i in range(3 * result_bits if type(other) != int else 2 * result_bits)),
 			sequence_ptr=<unsigned long long>seq,
 			gate_count=gc_delta_or,
+			controlled=bool(_controlled),
 		)
 
 		# Step 1.2: Record operation into result's per-variable history
@@ -599,6 +602,7 @@
 			         for i in range((<qint>other).bits))
 			   if type(other) != int else ()),
 			gate_count=gc_delta_xor,
+			controlled=bool(_controlled),
 		)
 
 		# Step 1.2: Record operation into result's per-variable history
@@ -698,6 +702,7 @@
 				"ixor_cq",
 				tuple(self.qubits[self_offset + i] for i in range(self_bits)),
 				gate_count=gc_delta_ixor,
+				controlled=bool(_controlled),
 			)
 			return self
 
@@ -736,6 +741,7 @@
 			tuple(qubit_array[i] for i in range(2 * xor_bits)),
 			sequence_ptr=<unsigned long long>seq,
 			gate_count=gc_delta_ixor,
+			controlled=bool(_controlled),
 		)
 		return self
 
@@ -813,6 +819,7 @@
 			tuple(qubit_array[i] for i in range(self.bits + (1 if _controlled else 0))),
 			sequence_ptr=<unsigned long long>seq,
 			gate_count=gc_delta_not,
+			controlled=bool(_controlled),
 		)
 
 		return self

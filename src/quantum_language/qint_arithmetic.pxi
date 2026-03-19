@@ -68,6 +68,7 @@
 					+ ((control_qubit,) if _controlled else ()),
 					gate_count=gc_delta,
 					invert=bool(invert),
+					controlled=bool(_controlled),
 				)
 				return self
 
@@ -91,6 +92,7 @@
 				gate_count=seq.total_gate_count,
 				sequence_ptr=<unsigned long long>seq,
 				invert=bool(invert),
+				controlled=bool(_controlled),
 			)
 			return self
 
@@ -137,6 +139,7 @@
 				+ ((control_qubit,) if _controlled else ()),
 				gate_count=gc_delta,
 				invert=bool(invert),
+				controlled=bool(_controlled),
 			)
 			return self
 
@@ -162,6 +165,7 @@
 			gate_count=seq.total_gate_count,
 			sequence_ptr=<unsigned long long>seq,
 			invert=bool(invert),
+			controlled=bool(_controlled),
 		)
 		return self
 
@@ -693,6 +697,7 @@
 					+ tuple(self_qa[i] for i in range(self_bits))
 					+ ((control_qubit,) if _controlled else ()),
 					gate_count=gc_delta,
+					controlled=bool(_controlled),
 				)
 				return ret
 
@@ -718,6 +723,7 @@
 				tuple(qa[i] for i in range(pos)),
 				gate_count=seq.total_gate_count,
 				sequence_ptr=<unsigned long long>seq,
+				controlled=bool(_controlled),
 			)
 			return ret
 
@@ -766,6 +772,7 @@
 				+ tuple(other_qa[i] for i in range(other_bits))
 				+ ((control_qubit,) if _controlled else ()),
 				gate_count=gc_delta,
+				controlled=bool(_controlled),
 			)
 			return ret
 
@@ -794,6 +801,7 @@
 			tuple(qa[i] for i in range(pos)),
 			gate_count=seq.total_gate_count,
 			sequence_ptr=<unsigned long long>seq,
+			controlled=bool(_controlled),
 		)
 		return ret
 

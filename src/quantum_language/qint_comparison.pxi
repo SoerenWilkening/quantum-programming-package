@@ -185,6 +185,7 @@
 				tuple(qubit_array[i] for i in range(start)),
 				sequence_ptr=<unsigned long long>seq,
 				gate_count=gc_delta_eq,
+				controlled=bool(_controlled),
 			)
 
 			# Free AND-ancilla after use

@@ -764,6 +764,9 @@ def record_operation(
     gate_count: int = 0,
     sequence_ptr: int = 0,
     invert: bool = False,
+    controlled: bool = False,
+    depth: int = 0,
+    t_count: int = 0,
 ) -> int | None:
     """Record a primitive operation (arithmetic/bitwise/comparison) on the DAG.
 
@@ -788,6 +791,14 @@ def record_operation(
         ``<unsigned long long>``).  Default 0 means pointer not captured.
     invert : bool
         Whether this is an inverse (adjoint) operation.
+    controlled : bool
+        Whether this operation was executed inside a controlled context.
+        When True, ``gate_count`` populates ``controlled_gate_count``;
+        otherwise it populates ``uncontrolled_gate_count``.
+    depth : int
+        Circuit depth for this operation.
+    t_count : int
+        T-gate count for this operation.
 
     Returns
     -------
@@ -802,13 +813,26 @@ def record_operation(
     qubit_mapping = tuple(qubit_indices)
     qubit_set = frozenset(qubit_mapping)
 
+    # Populate the correct dual gate count field based on controlled context
+    if controlled:
+        uc_gc = 0
+        cc_gc = gate_count
+    else:
+        uc_gc = gate_count
+        cc_gc = 0
+
     return dag.add_node(
         operation_type,
         qubit_set,
         gate_count,
         (),  # cache_key -- not applicable for primitives
+        depth=depth,
+        t_count=t_count,
         sequence_ptr=sequence_ptr,
         qubit_mapping=qubit_mapping,
         operation_type=operation_type,
         invert=invert,
+        controlled=controlled,
+        uncontrolled_gate_count=uc_gc,
+        controlled_gate_count=cc_gc,
     )

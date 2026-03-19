@@ -1687,6 +1687,7 @@ cdef class qint(circuit):
 					+ ((control_qubit,) if _controlled else ()),
 					gate_count=gc_delta,
 					invert=bool(invert),
+					controlled=bool(_controlled),
 				)
 				return self
 
@@ -1710,6 +1711,7 @@ cdef class qint(circuit):
 				gate_count=seq.total_gate_count,
 				sequence_ptr=<unsigned long long>seq,
 				invert=bool(invert),
+				controlled=bool(_controlled),
 			)
 			return self
 
@@ -1756,6 +1758,7 @@ cdef class qint(circuit):
 				+ ((control_qubit,) if _controlled else ()),
 				gate_count=gc_delta,
 				invert=bool(invert),
+				controlled=bool(_controlled),
 			)
 			return self
 
@@ -1781,6 +1784,7 @@ cdef class qint(circuit):
 			gate_count=seq.total_gate_count,
 			sequence_ptr=<unsigned long long>seq,
 			invert=bool(invert),
+			controlled=bool(_controlled),
 		)
 		return self
 
@@ -2312,6 +2316,7 @@ cdef class qint(circuit):
 					+ tuple(self_qa[i] for i in range(self_bits))
 					+ ((control_qubit,) if _controlled else ()),
 					gate_count=gc_delta,
+					controlled=bool(_controlled),
 				)
 				return ret
 
@@ -2337,6 +2342,7 @@ cdef class qint(circuit):
 				tuple(qa[i] for i in range(pos)),
 				gate_count=seq.total_gate_count,
 				sequence_ptr=<unsigned long long>seq,
+				controlled=bool(_controlled),
 			)
 			return ret
 
@@ -2385,6 +2391,7 @@ cdef class qint(circuit):
 				+ tuple(other_qa[i] for i in range(other_bits))
 				+ ((control_qubit,) if _controlled else ()),
 				gate_count=gc_delta,
+				controlled=bool(_controlled),
 			)
 			return ret
 
@@ -2413,6 +2420,7 @@ cdef class qint(circuit):
 			tuple(qa[i] for i in range(pos)),
 			gate_count=seq.total_gate_count,
 			sequence_ptr=<unsigned long long>seq,
+			controlled=bool(_controlled),
 		)
 		return ret
 
@@ -2782,6 +2790,7 @@ cdef class qint(circuit):
 					"and",
 					tuple(qubit_array[i] for i in range(_total_and)),
 					gate_count=gc_delta_and,
+					controlled=bool(_controlled),
 				)
 				_qm = tuple(qubit_array[i] for i in range(_total_and))
 				result.history.append(0, _qm)
@@ -2802,6 +2811,7 @@ cdef class qint(circuit):
 			tuple(qubit_array[i] for i in range(3 * result_bits if type(other) != int else 2 * result_bits)),
 			sequence_ptr=<unsigned long long>seq,
 			gate_count=gc_delta_and,
+			controlled=bool(_controlled),
 		)
 
 		# Step 1.2: Record operation into result's per-variable history
@@ -2997,6 +3007,7 @@ cdef class qint(circuit):
 			tuple(qubit_array[i] for i in range(3 * result_bits if type(other) != int else 2 * result_bits)),
 			sequence_ptr=<unsigned long long>seq,
 			gate_count=gc_delta_or,
+			controlled=bool(_controlled),
 		)
 
 		# Step 1.2: Record operation into result's per-variable history
@@ -3195,6 +3206,7 @@ cdef class qint(circuit):
 			         for i in range((<qint>other).bits))
 			   if type(other) != int else ()),
 			gate_count=gc_delta_xor,
+			controlled=bool(_controlled),
 		)
 
 		# Step 1.2: Record operation into result's per-variable history
@@ -3294,6 +3306,7 @@ cdef class qint(circuit):
 				"ixor_cq",
 				tuple(self.qubits[self_offset + i] for i in range(self_bits)),
 				gate_count=gc_delta_ixor,
+				controlled=bool(_controlled),
 			)
 			return self
 
@@ -3332,6 +3345,7 @@ cdef class qint(circuit):
 			tuple(qubit_array[i] for i in range(2 * xor_bits)),
 			sequence_ptr=<unsigned long long>seq,
 			gate_count=gc_delta_ixor,
+			controlled=bool(_controlled),
 		)
 		return self
 
@@ -3409,6 +3423,7 @@ cdef class qint(circuit):
 			tuple(qubit_array[i] for i in range(self.bits + (1 if _controlled else 0))),
 			sequence_ptr=<unsigned long long>seq,
 			gate_count=gc_delta_not,
+			controlled=bool(_controlled),
 		)
 
 		return self
@@ -3758,6 +3773,7 @@ cdef class qint(circuit):
 				tuple(qubit_array[i] for i in range(start)),
 				sequence_ptr=<unsigned long long>seq,
 				gate_count=gc_delta_eq,
+				controlled=bool(_controlled),
 			)
 
 			# Free AND-ancilla after use
@@ -4450,6 +4466,7 @@ cdef class qint(circuit):
 				+ tuple(quotient_qa[i] for i in range(n))
 				+ tuple(remainder_qa[i] for i in range(n)),
 				gate_count=gc_delta_div,
+				controlled=False,
 			)
 		elif type(divisor) == qint:
 			div_bits = (<qint>divisor).bits
@@ -4469,6 +4486,7 @@ cdef class qint(circuit):
 				+ tuple(quotient_qa[i] for i in range(n))
 				+ tuple(remainder_qa[i] for i in range(n)),
 				gate_count=gc_delta_div,
+				controlled=False,
 			)
 		else:
 			raise TypeError("Divisor must be int or qint")
