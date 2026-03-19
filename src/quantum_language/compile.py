@@ -1662,6 +1662,7 @@ class CompiledFunc:
         # Share CallRecords so controlled replay also delegates to inner
         # functions (inner functions handle their own control propagation).
         controlled_block._call_records = uncontrolled_block._call_records
+        controlled_block.transient_virtual_indices = uncontrolled_block.transient_virtual_indices
         return controlled_block
 
     # ------------------------------------------------------------------
@@ -1956,7 +1957,7 @@ class CompiledFunc:
                         real_q = virtual_to_real.get(virt_idx)
                         if real_q is not None:
                             _deallocate_qubits(real_q, 1)
-                            # Remove from ancilla_qubits so inverse support
+                            # Remove from ancilla_qubits so inverse()
                             # does not try to deallocate again
                             if real_q in ancilla_qubits:
                                 ancilla_qubits.remove(real_q)
@@ -1987,8 +1988,11 @@ class CompiledFunc:
             if hasattr(target, "history"):
                 target.history.append(id(self), _qm, len(ancilla_qubits), kind=kind)
 
-        # Record forward call for inverse support (only when ancillas were allocated)
-        if track_forward and ancilla_qubits:
+        # Record forward call for inverse support.
+        # Always record when internal qubits exist, even if ancilla_qubits
+        # is empty after transient freeing -- inverse() still needs the
+        # virtual_to_real mapping to replay adjoint gates.
+        if track_forward and block.internal_qubit_count > 0:
             input_key = _input_qubit_key(quantum_args)
             if input_key in self._forward_calls:
                 raise ValueError(

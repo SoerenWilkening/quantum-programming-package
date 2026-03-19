@@ -37,7 +37,7 @@ class TestTransientClassification:
         assert hasattr(block, "transient_virtual_indices")
         assert isinstance(block.transient_virtual_indices, frozenset)
         # Toffoli addition uses carry/temp qubits that are transient
-        assert len(block.transient_virtual_indices) >= 0
+        assert len(block.transient_virtual_indices) > 0
 
     def test_inplace_add_no_result_qubits(self):
         """In-place add returns a param -- no result qubit allocation needed."""
@@ -224,20 +224,77 @@ class TestTransientFreeingCorrectness:
             block = blk
             break
         num_transients = len(block.transient_virtual_indices) if block else 0
+        assert num_transients > 0, "Expected transient ancillas from addition"
 
-        if num_transients > 0:
-            # Replay and check that peak allocated does not keep growing
-            peak_values = []
-            for i in range(3):
-                c = ql.qint(i, width=4)
-                d = ql.qint(i + 1, width=4)
-                add_fn(c, d)
-                stats = ql.circuit_stats()
-                peak_values.append(stats["peak_allocated"])
+        # Replay and check that peak allocated does not keep growing
+        peak_values = []
+        for i in range(3):
+            c = ql.qint(i, width=4)
+            d = ql.qint(i + 1, width=4)
+            add_fn(c, d)
+            stats = ql.circuit_stats()
+            peak_values.append(stats["peak_allocated"])
 
-            # Peak should stabilize (not grow indefinitely)
-            # After a few calls, the peak should not increase because
-            # freed transient qubits are being reused
-            assert peak_values[-1] <= peak_values[0] + 8 * 3, (
-                f"Peak allocated grew too much: {peak_values}"
-            )
+        # Peak should stabilize (not grow indefinitely)
+        # After a few calls, the peak should not increase because
+        # freed transient qubits are being reused
+        assert peak_values[-1] <= peak_values[0] + 8 * 3, (
+            f"Peak allocated grew too much: {peak_values}"
+        )
+
+
+class TestControlledReplayFreesTransients:
+    """Controlled replay path (compiled function inside `with` block) frees transients."""
+
+    def test_controlled_replay_frees_transients(self):
+        """Calling a compiled function inside a `with` block on replay frees transients."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+
+        @ql.compile
+        def add_fn(x, y):
+            x += y
+            return x
+
+        a = ql.qint(3, width=4)
+        b = ql.qint(2, width=4)
+
+        # First call: capture (uncontrolled)
+        add_fn(a, b)
+
+        # Verify transient_virtual_indices is propagated to controlled block
+        block = None
+        for blk in add_fn._cache.values():
+            block = blk
+            break
+        assert block is not None
+        assert block.controlled_block is not None
+        assert block.controlled_block.transient_virtual_indices == block.transient_virtual_indices
+        assert len(block.controlled_block.transient_virtual_indices) > 0
+
+        # Second call: controlled replay inside a `with` block
+        c = ql.qint(1, width=4)
+        d = ql.qint(4, width=4)
+        cond = ql.qbool()
+        with cond:
+            add_fn(c, d)
+
+        stats_after_controlled = ql.circuit_stats()
+
+        # Third call: another controlled replay
+        e = ql.qint(5, width=4)
+        f = ql.qint(6, width=4)
+        cond2 = ql.qbool()
+        with cond2:
+            add_fn(e, f)
+
+        stats_after_third = ql.circuit_stats()
+
+        # Growth between controlled calls should be param qubits (8) + 1 cond qbool
+        # Transient ancillas should be freed and not accumulate
+        growth = stats_after_third["current_in_use"] - stats_after_controlled["current_in_use"]
+        assert growth <= 9, (
+            f"Controlled replay grew qubits beyond expected: growth={growth}, "
+            f"after_second={stats_after_controlled['current_in_use']}, "
+            f"after_third={stats_after_third['current_in_use']}"
+        )
