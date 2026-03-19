@@ -1183,6 +1183,27 @@ def _deallocate_qubits(unsigned int start, unsigned int count):
 	allocator_free(alloc, start, count)
 
 
+def _is_qubit_allocated(unsigned int qubit):
+	"""Check if a qubit is currently allocated (not freed).
+
+	Parameters
+	----------
+	qubit : int
+		Qubit index to check.
+
+	Returns
+	-------
+	bool
+		True if the qubit is currently allocated, False if freed.
+	"""
+	cdef qubit_allocator_t *alloc
+	_validate_circuit()
+	alloc = circuit_get_allocator(<circuit_s*>_circuit)
+	if alloc == NULL:
+		raise RuntimeError("No allocator available")
+	return bool(allocator_is_allocated(alloc, qubit))
+
+
 # Module-level compile cache clear infrastructure
 _compile_cache_clear_hooks = []
 

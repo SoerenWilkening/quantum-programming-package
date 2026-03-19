@@ -257,6 +257,7 @@ cdef extern from "qubit_allocator.h":
 	unsigned int allocator_alloc(qubit_allocator_t *alloc, unsigned int count, bint is_ancilla)
 	int allocator_free(qubit_allocator_t *alloc, unsigned int start, unsigned int count)
 	allocator_stats_t allocator_get_stats(qubit_allocator_t *alloc)
+	bint allocator_is_allocated(qubit_allocator_t *alloc, unsigned int qubit)
 
 	# Accessor function to get allocator from opaque circuit_t
 	# Note: C signature uses struct circuit_s*, but circuit_t* works due to cast in C

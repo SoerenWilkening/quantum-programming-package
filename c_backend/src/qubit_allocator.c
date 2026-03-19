@@ -355,6 +355,28 @@ void allocator_reset_stats(qubit_allocator_t *alloc) {
     memset(&alloc->stats, 0, sizeof(allocator_stats_t));
 }
 
+bool allocator_is_allocated(qubit_allocator_t *alloc, qubit_t qubit) {
+    if (alloc == NULL) {
+        return false;
+    }
+
+    // Qubit must have been allocated at some point
+    if (qubit >= alloc->next_qubit) {
+        return false;
+    }
+
+    // Check if qubit is in any freed block
+    for (num_t i = 0; i < alloc->freed_block_count; i++) {
+        qubit_t block_start = alloc->freed_blocks[i].start;
+        num_t block_count = alloc->freed_blocks[i].count;
+        if (qubit >= block_start && qubit < block_start + block_count) {
+            return false; // Qubit is in a freed block
+        }
+    }
+
+    return true; // Qubit is allocated and not freed
+}
+
 qubit_allocator_t *circuit_get_allocator(struct circuit_s *circ) {
     if (circ == NULL) {
         return NULL;

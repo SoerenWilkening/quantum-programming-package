@@ -647,6 +647,7 @@ class CompiledBlock:
         "_instruction_ir",  # list[InstructionRecord] – compile-mode IR
         "_call_records",  # list[CallRecord] – nested compiled function calls
         "_dag_built",  # bool – DAG nodes already built from IR (no duplication on replay)
+        "transient_virtual_indices",  # frozenset[int] – virtual indices freed during capture (Phase 8)
     )
 
     def __init__(
@@ -679,6 +680,7 @@ class CompiledBlock:
         self._instruction_ir = []
         self._call_records = []
         self._dag_built = False
+        self.transient_virtual_indices = frozenset()
 
 
 # ---------------------------------------------------------------------------
@@ -1550,6 +1552,19 @@ class CompiledFunc:
         block.return_type = return_type
         block._return_qarray_element_widths = return_qarray_element_widths
 
+        # Classify ancilla qubits as transient vs result/persistent (Phase 8).
+        # After capture, query the allocator to determine which ancilla qubits
+        # were freed during the operation (transient: carry bits, temp registers)
+        # vs which are still allocated (result qubits, persistent intermediates).
+        from ._core import _is_qubit_allocated
+
+        transient_virtuals = set()
+        for real_q in capture_ancilla_qubits:
+            virt_idx = real_to_virtual.get(real_q)
+            if virt_idx is not None and not _is_qubit_allocated(real_q):
+                transient_virtuals.add(virt_idx)
+        block.transient_virtual_indices = frozenset(transient_virtuals)
+
         # Transfer IR entries from the compile-mode block to the cached block
         block._instruction_ir = ir_block._instruction_ir
 
@@ -1928,6 +1943,23 @@ class CompiledFunc:
             elif block.gates:
                 # Gate-level path: inject remapped gates into the circuit.
                 inject_remapped_gates(block.gates, virtual_to_real)
+
+                # Free transient ancillas after gate injection (Phase 8.3).
+                # The injected gates return transient qubits to |0>, so they
+                # can be deallocated and reused. This prevents qubit count
+                # growth on repeated gate-level replay calls.
+                _transients = getattr(block, "transient_virtual_indices", None)
+                if _transients:
+                    from ._core import _deallocate_qubits
+
+                    for virt_idx in _transients:
+                        real_q = virtual_to_real.get(virt_idx)
+                        if real_q is not None:
+                            _deallocate_qubits(real_q, 1)
+                            # Remove from ancilla_qubits so inverse support
+                            # does not try to deallocate again
+                            if real_q in ancilla_qubits:
+                                ancilla_qubits.remove(real_q)
 
         # Replay nested compiled function calls via CallRecords.
         # Each CallRecord stores virtual qubit indices per argument;

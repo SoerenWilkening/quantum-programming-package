@@ -132,6 +132,18 @@ allocator_stats_t allocator_get_stats(qubit_allocator_t *alloc);
 void allocator_reset_stats(qubit_allocator_t *alloc);
 
 /**
+ * @brief Check if a qubit is currently allocated (not freed).
+ *
+ * A qubit is considered allocated if its index is below next_qubit
+ * and it is not in any freed block.
+ *
+ * @param alloc Allocator to query
+ * @param qubit Qubit index to check
+ * @return true if the qubit is currently allocated, false otherwise
+ */
+bool allocator_is_allocated(qubit_allocator_t *alloc, qubit_t qubit);
+
+/**
  * @brief Get allocator from circuit (accessor for Python bindings).
  *
  * circuit_t is opaque in Cython, so this accessor is needed.
