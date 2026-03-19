@@ -414,6 +414,22 @@ class TestCaptureDetectsNestedCompiled:
 
     def test_nested_own_gates_only(self):
         """Outer function's gate list excludes inner function's gates."""
+        # Capture a flat function that does both ops inline (no nesting)
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def flat_both(x):
+            x += 10
+            x += 1
+            return x
+
+        s = ql.qint(0, width=4)
+        flat_both(s)
+        flat_key = list(flat_both._cache.keys())[0]
+        flat_gate_count = len(flat_both._cache[flat_key].gates)
+
+        # Now capture the nested version
         ql.circuit()
         ql.option("simulate", True)
 
@@ -431,28 +447,16 @@ class TestCaptureDetectsNestedCompiled:
         a = ql.qint(0, width=4)
         outer(a)
 
-        # Get inner and outer blocks
-        inner_key = list(inner._cache.keys())[0]
-        inner_block = inner._cache[inner_key]
         outer_key = list(outer._cache.keys())[0]
         outer_block = outer._cache[outer_key]
 
-        # Outer block's gates should be strictly FEWER than inner + outer combined.
-        # If inner gates were inlined, outer.gates would contain everything.
-        assert len(outer_block.gates) < len(outer_block.gates) + len(inner_block.gates), (
-            "Sanity: blocks have gates"
-        )
-        # More specifically: outer block should not contain inner's gates.
-        # The outer function only does `x += 10`, inner does `x += 1`.
-        # If gates are properly separated, outer.gates < total direct call gates.
-        inner_gate_count = len(inner_block.gates)
-        assert inner_gate_count > 0, "Inner function should have gates"
+        assert flat_gate_count > 0, "Flat function should have gates"
         assert len(outer_block.gates) > 0, "Outer function should have its own gates"
-        # The key assertion: outer gates should not include inner's gates
-        # (outer only does += 10, not += 10 and += 1)
-        total_would_be_if_inlined = len(outer_block.gates) + inner_gate_count
-        assert len(outer_block.gates) < total_would_be_if_inlined, (
-            "Outer block gates should exclude inner function's gates"
+        # Key assertion: outer's gates should be LESS than the flat version
+        # that does both ops, because inner's gates are excluded.
+        assert len(outer_block.gates) < flat_gate_count, (
+            f"Outer block gates ({len(outer_block.gates)}) should be less than "
+            f"flat combined ({flat_gate_count}) — inner gates not properly excluded"
         )
 
     def test_nested_gate_count(self):
@@ -536,6 +540,44 @@ class TestCaptureDetectsNestedCompiled:
             f"capture gates ({capture_gates}) — double emission suspected"
         )
         assert replay_gates > 0, "Replay should produce gates"
+
+    def test_no_double_gate_count_simulate_false(self):
+        """In simulate=False (tracking) mode, replay gate count matches capture."""
+        ql.circuit()
+        ql.option("simulate", False)
+
+        from quantum_language._core import get_gate_count
+
+        @ql.compile
+        def inner(x):
+            x += 1
+            return x
+
+        @ql.compile
+        def outer(x):
+            x += 10
+            x = inner(x)
+            return x
+
+        # Capture
+        a = ql.qint(0, width=4)
+        gc_before = get_gate_count()
+        outer(a)
+        capture_gates = get_gate_count() - gc_before
+
+        # Replay
+        b = ql.qint(0, width=4)
+        gc_before = get_gate_count()
+        outer(b)
+        replay_gates = get_gate_count() - gc_before
+
+        assert capture_gates > 0, "Capture should count gates"
+        assert replay_gates > 0, "Replay should count gates"
+        # Key: replay should not double-count inner function gates
+        assert replay_gates <= capture_gates * 1.2, (
+            f"Replay gates ({replay_gates}) should not be much larger than "
+            f"capture gates ({capture_gates}) — double counting suspected"
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -1415,9 +1415,19 @@ class CompiledFunc:
 
         # In tracking-only mode, compute gate count from circ->gate_count
         # difference (gates were counted but not stored in the circuit).
+        # Subtract inner call gate counts so original_gate_count reflects
+        # only this function's OWN gates (inner gates are replayed via
+        # _replay_call_records which credits them separately).
         _tracking_gate_count = 0
         if _use_tracking:
             _tracking_gate_count = get_gate_count() - _gate_count_before
+            if ir_block._call_records:
+                for cr in ir_block._call_records:
+                    inner_func = cr.compiled_func_ref
+                    if inner_func is not None and hasattr(inner_func, "_cache"):
+                        inner_block = inner_func._cache.get(cr.cache_key)
+                        if inner_block is not None:
+                            _tracking_gate_count -= inner_block.original_gate_count or 0
 
         # Extract captured gates (empty in tracking-only mode (simulate=False)
         # since gates are counted but not stored).
