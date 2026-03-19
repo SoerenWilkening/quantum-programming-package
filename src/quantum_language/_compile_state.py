@@ -64,6 +64,8 @@ class CallRecord:
     compiled_func_ref: object
     cache_key: tuple
     quantum_arg_indices: list
+    gate_layer_start: int = -1  # circuit layer before inner call (inclusive)
+    gate_layer_end: int = -1  # circuit layer after inner call (exclusive)
 
 
 # ---------------------------------------------------------------------------

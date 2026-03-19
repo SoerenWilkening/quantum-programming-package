@@ -593,6 +593,18 @@ def _replay_call_records(block, virtual_to_real):
         # Delegate to the inner function's _replay
         inner_func._replay(inner_block, inner_quantum_args, track_forward=False)
 
+        # Credit gate count for the inner call (inject_remapped_gates
+        # does not increment circ->gate_count, and we bypassed __call__).
+        _used_ir = getattr(inner_func, "_last_replay_used_ir", False)
+        if not _used_ir:
+            _inner_gc = (
+                inner_block.original_gate_count
+                if inner_block.original_gate_count
+                else len(inner_block.gates)
+            )
+            if _inner_gc:
+                add_gate_count(_inner_gc)
+
 
 # ---------------------------------------------------------------------------
 # CompiledBlock -- stores a captured and virtualised gate sequence
@@ -1017,9 +1029,12 @@ class CompiledFunc:
         # reference so the outer function can replay us recursively
         # without inlining our gates.
         parent_block = _get_active_compile_block()
+        _nested_call_record = None
         if parent_block is not None:
             arg_indices = [_get_quantum_arg_qubit_indices(qa) for qa in quantum_args]
             _record_call(self, cache_key, arg_indices)
+            _nested_call_record = parent_block._call_records[-1]
+            _nested_call_record.gate_layer_start = get_current_layer()
 
         # DAG building (opt != 3)
         _building_dag = self._opt != 3
@@ -1059,6 +1074,11 @@ class CompiledFunc:
                     # freeze immediately (graph is rebuilt each call).
                     if self._opt != 1:
                         self._call_graph.freeze()
+
+        # Record the layer range of the inner call so the outer capture
+        # can exclude these gates from its own block.
+        if _nested_call_record is not None:
+            _nested_call_record.gate_layer_end = get_current_layer()
 
         return result
 
@@ -1400,8 +1420,28 @@ class CompiledFunc:
             _tracking_gate_count = get_gate_count() - _gate_count_before
 
         # Extract captured gates (empty in tracking-only mode (simulate=False)
-        # since gates are counted but not stored)
-        raw_gates = extract_gate_range(start_layer, end_layer)
+        # since gates are counted but not stored).
+        # When nested compiled functions were called, exclude their gate
+        # ranges so the outer block stores only its OWN gates.
+        _inner_ranges = []
+        if ir_block._call_records:
+            for cr in ir_block._call_records:
+                if cr.gate_layer_start >= 0 and cr.gate_layer_end > cr.gate_layer_start:
+                    _inner_ranges.append((cr.gate_layer_start, cr.gate_layer_end))
+            _inner_ranges.sort()
+
+        if _inner_ranges:
+            raw_gates = []
+            # Extract gaps between inner call ranges
+            cursor = start_layer
+            for inner_start, inner_end in _inner_ranges:
+                if cursor < inner_start:
+                    raw_gates.extend(extract_gate_range(cursor, inner_start))
+                cursor = max(cursor, inner_end)
+            if cursor < end_layer:
+                raw_gates.extend(extract_gate_range(cursor, end_layer))
+        else:
+            raw_gates = extract_gate_range(start_layer, end_layer)
 
         # If the capture ran in a controlled context, the extracted gates
         # include the control qubit.  Strip it to get uncontrolled gates
@@ -1593,6 +1633,9 @@ class CompiledFunc:
         controlled_block._return_qarray_element_widths = (
             uncontrolled_block._return_qarray_element_widths
         )
+        # Share CallRecords so controlled replay also delegates to inner
+        # functions (inner functions handle their own control propagation).
+        controlled_block._call_records = uncontrolled_block._call_records
         return controlled_block
 
     # ------------------------------------------------------------------

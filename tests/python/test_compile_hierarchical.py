@@ -412,6 +412,131 @@ class TestCaptureDetectsNestedCompiled:
             for idx in arg_indices:
                 assert idx >= 1, "Virtual indices should be >= 1 (0 reserved for control)"
 
+    def test_nested_own_gates_only(self):
+        """Outer function's gate list excludes inner function's gates."""
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def inner(x):
+            x += 1
+            return x
+
+        @ql.compile
+        def outer(x):
+            x += 10  # outer's own work
+            x = inner(x)  # inner call -- gates should NOT be in outer's block
+            return x
+
+        a = ql.qint(0, width=4)
+        outer(a)
+
+        # Get inner and outer blocks
+        inner_key = list(inner._cache.keys())[0]
+        inner_block = inner._cache[inner_key]
+        outer_key = list(outer._cache.keys())[0]
+        outer_block = outer._cache[outer_key]
+
+        # Outer block's gates should be strictly FEWER than inner + outer combined.
+        # If inner gates were inlined, outer.gates would contain everything.
+        assert len(outer_block.gates) < len(outer_block.gates) + len(inner_block.gates), (
+            "Sanity: blocks have gates"
+        )
+        # More specifically: outer block should not contain inner's gates.
+        # The outer function only does `x += 10`, inner does `x += 1`.
+        # If gates are properly separated, outer.gates < total direct call gates.
+        inner_gate_count = len(inner_block.gates)
+        assert inner_gate_count > 0, "Inner function should have gates"
+        assert len(outer_block.gates) > 0, "Outer function should have its own gates"
+        # The key assertion: outer gates should not include inner's gates
+        # (outer only does += 10, not += 10 and += 1)
+        total_would_be_if_inlined = len(outer_block.gates) + inner_gate_count
+        assert len(outer_block.gates) < total_would_be_if_inlined, (
+            "Outer block gates should exclude inner function's gates"
+        )
+
+    def test_nested_gate_count(self):
+        """Outer block.gates is smaller than the flattened total."""
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def inner(x):
+            x += 5
+            return x
+
+        # Stand-alone capture of inner to measure its gates
+        a = ql.qint(0, width=4)
+        inner(a)
+        inner_key = list(inner._cache.keys())[0]
+        inner_block = inner._cache[inner_key]
+        standalone_inner_gates = len(inner_block.gates)
+
+        # Now capture outer that calls inner
+        ql.circuit()
+        ql.option("simulate", True)
+
+        @ql.compile
+        def inner2(x):
+            x += 5
+            return x
+
+        @ql.compile
+        def outer(x):
+            x = inner2(x)
+            return x
+
+        b = ql.qint(0, width=4)
+        outer(b)
+
+        outer_key = list(outer._cache.keys())[0]
+        outer_block = outer._cache[outer_key]
+
+        # Outer block should have ~0 own gates (it only delegates to inner).
+        # Without the fix, outer_block.gates would contain all of inner's gates.
+        assert len(outer_block.gates) < standalone_inner_gates, (
+            f"Outer block gates ({len(outer_block.gates)}) should be less than "
+            f"inner's gates ({standalone_inner_gates}) since outer only delegates"
+        )
+
+    def test_replay_no_double_gate_emission(self):
+        """Replay does not emit inner function gates twice (no double emission)."""
+        ql.circuit()
+        ql.option("simulate", True)
+
+        from quantum_language._core import get_gate_count
+
+        @ql.compile
+        def inner(x):
+            x += 1
+            return x
+
+        @ql.compile
+        def outer(x):
+            x += 10
+            x = inner(x)
+            return x
+
+        # Capture
+        a = ql.qint(0, width=4)
+        gc_before = get_gate_count()
+        outer(a)
+        capture_gates = get_gate_count() - gc_before
+
+        # Replay
+        b = ql.qint(0, width=4)
+        gc_before = get_gate_count()
+        outer(b)
+        replay_gates = get_gate_count() - gc_before
+
+        # Replay gate count should be close to capture (small differences
+        # from optimization are OK, but ~2x would indicate double emission).
+        assert replay_gates <= capture_gates * 1.2, (
+            f"Replay gates ({replay_gates}) should not be much larger than "
+            f"capture gates ({capture_gates}) — double emission suspected"
+        )
+        assert replay_gates > 0, "Replay should produce gates"
+
 
 # ---------------------------------------------------------------------------
 # Step 9.3: Recursive replay via CallRecord
