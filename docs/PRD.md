@@ -122,23 +122,30 @@ Replace copy-based `<`, `>`, `<=`, `>=` with in-place borrow-ancilla pattern. El
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| R15.1 | `__lt__` and `__gt__` use borrow-ancilla pattern: allocate single ancilla as (n+1)th bit, perform (n+1)-bit subtraction across `[a, ancilla]`, extract borrow into result qbool, restore via addition, deallocate ancilla. No operand copies. | |
-| R15.2 | `__le__` and `__ge__` automatically benefit (implemented as `~(a > b)` / `~(a < b)`). | |
-| R15.3 | Arithmetic backend supports subtraction/addition across a qint + separate qbool as a split register (qbool acts as MSB). | |
-| R15.4 | No history graph children for comparison temporaries — borrow ancilla is deallocated immediately. | |
-| R15.5 | Both operands unchanged after comparison (operand preservation). | |
+| R15.1 | `__lt__` and `__gt__` use borrow-ancilla pattern: allocate single ancilla as (n+1)th bit, perform (n+1)-bit subtraction across `[a, ancilla]`, extract borrow into result qbool, restore via addition, deallocate ancilla. No operand copies. | **Done** |
+| R15.2 | `__le__` and `__ge__` automatically benefit (implemented as `~(a > b)` / `~(a < b)`). | **Done** |
+| R15.3 | Arithmetic backend supports subtraction/addition across a qint + separate qbool as a split register (qbool acts as MSB). | **Done** |
+| R15.4 | No history graph children for comparison temporaries — borrow ancilla is deallocated immediately. | **Done** |
+| R15.5 | Both operands unchanged after comparison (operand preservation). | **Done** |
 
 #### R16: Compiled Function Control Propagation
 
-Fix `@ql.compile` to correctly propagate control context from `with` blocks.
+Rework `@ql.compile` pipeline to decouple sequence generation from execution, ensuring correct control propagation from `with` blocks on every call (including the first).
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| R16.1 | Single cache entry stores both uncontrolled (canonical) and derived controlled gate sequences. | |
-| R16.2 | Capture always produces uncontrolled gates (control stack cleared). Controlled variant derived mechanically via `_derive_controlled_block`. | |
-| R16.3 | `run_instruction` selects controlled vs uncontrolled sequence at runtime based on control stack. Control qubit index mapped dynamically. | |
-| R16.4 | Nested `with` blocks collapse to single control via AND-ancilla. Single-control derivation suffices for all nesting depths. | |
-| R16.5 | `opt=1` (DAG-only) mode respects control context. | |
+| R16.1 | Standardized gate sequences: virtual index 0 reserved for control qubit in all sequences. Uncontrolled sequences do not reference index 0. Controlled sequences add index 0 as control to each gate. | **Done** |
+| R16.2 | Both controlled and uncontrolled gate sequences stored per instruction for correct execution in either context. | **Done** |
+| R16.3 | Compile phase: function body executes, DSL operators trigger sequence generation (`CQ_add` etc.) but `run_instruction` is NOT called. Instructions stored as IR: `(name, registers, uncontrolled_seq, controlled_seq)`. | **Done** |
+| R16.4 | Execute phase: walk instruction IR, call `run_instruction` with qubit mapping. If inside `with` block, map index 0 to control qubit to select controlled sequence. | **Done** |
+| R16.5 | Nested `with` blocks collapse to single control via AND-ancilla (Toffoli). Single control slot (index 0) suffices for all nesting depths. | **Done** |
+| R16.6 | Compiled flag prevents recompilation on subsequent calls. | **Done** |
+| R16.7 | `param_qubit_ranges` uses `(start, end)` format (not `(start, width)`). | **Done** |
+| R16.8 | `opt=1` (DAG-only) mode respects the new pipeline and control context. | **Done** |
+| R16.9 | Compile replay path (cache hit) inside `with` blocks correctly executes controlled gates, producing non-zero results when conditions are True. | **Done** |
+| R16.10 | Stale tests updated to match current behavior: first-call trade-off test reflects that first call is now controlled; `qint` default width test matches auto-width semantics. | **Done** |
+| R16.11 | Call graph built once per compiled function — not duplicated on subsequent calls. Each instruction node stores both uncontrolled and controlled gate counts; display format `"gates: 24 / 18"` with `"-"` for unavailable variant. | |
+| R16.12 | `opt=1` uncontrolled replay injects gates when `simulate=True`. Gate injection skip only applies in tracking-only mode (`simulate=False`). | |
 
 #### R17: History Graph Inverse Cancellation
 
@@ -207,10 +214,30 @@ General improvements to the existing codebase.
 
 ### 5.0c Compiled Function Control Propagation
 
-- Calling a compiled function inside `with ctrl:` produces a different gate sequence than calling it uncontrolled.
-- A single cache entry contains both variants; replay does not re-capture.
-- Nested `with c1: with c2: f(x)` produces correct combined-controlled gates.
-- `opt=1` mode correctly handles controlled context.
+- All gate sequences reserve virtual index 0 for the control qubit. Uncontrolled sequences never reference index 0.
+- Calling a compiled function inside `with ctrl:` produces a different gate sequence than calling it uncontrolled — including on the first call (no "first call emits uncontrolled" trade-off).
+- Compile phase records instruction-level IR without calling `run_instruction`. Execute phase walks the IR and calls `run_instruction` with the correct control context.
+- Both controlled and uncontrolled sequences stored per instruction.
+- Nested `with c1: with c2: f(x)` produces correct combined-controlled gates via AND-ancilla; single control slot suffices.
+- `opt=1` mode correctly handles the new pipeline and control context.
+
+### 5.0c-fix Compile Replay Bug Fixes
+
+- Compiled function replayed (cache hit) inside single `with c(True):` block produces correct result (result=1, not 0).
+- Compiled function replayed inside nested `with c1(True): with c2(True):` produces correct result (result=1).
+- Compiled function replayed inside 3-level nesting with all conditions True produces correct result.
+- Replay produces non-zero gate count for all function sizes (small, medium, large).
+- `test_first_call_trade_off` updated: with c2=False on first call, result=0 (controlled execution, trade-off resolved).
+- `test_qint_default_width` updated: `ql.qint(5).width == 3` (auto-width).
+- All 6 previously failing tests pass.
+
+### 5.0c-fix2 Call Graph Deduplication & Simulate Replay
+
+- Call graph is built once per compiled function on first call. Subsequent calls (controlled or uncontrolled) do NOT append additional nodes.
+- Each instruction node stores both `uncontrolled_seq` and `controlled_seq` pointers, with gate counts resolved from `sequence_t.total_gate_count`.
+- `to_dot()` and `report()` display both gate counts: `"gates: 24 / 18"` (uncontrolled / controlled). `"-"` shown when a variant's sequence pointer is 0 (unavailable).
+- With `simulate=True`, all compiled function replays inject gates into the circuit — including uncontrolled calls. Gate injection skip restricted to `simulate=False` (tracking-only mode).
+- Calling `foo(a, b)` three times with `simulate=True` produces gates in the circuit for all three calls.
 
 ### 5.0d History Graph Inverse Cancellation
 
@@ -266,7 +293,8 @@ General improvements to the existing codebase.
 |------------|--------|
 | 21-qubit simulation ceiling | Cannot verify algorithms at scale via quantum simulation |
 | Division/modulo requires classical divisor | Limits some encoding strategies |
-| Arithmetic backend assumes contiguous registers | Split-register operations (qint + qbool as MSB) require backend extension for in-place comparisons |
+| Arithmetic backend assumes contiguous registers | Split-register operations (qint + qbool as MSB) implemented for in-place comparisons |
+| Gate sequences use variable control index | Standardization to index 0 required for compile pipeline rework (Phase 5) |
 
 ---
 
@@ -334,23 +362,38 @@ Simplifies the walk implementation by removing the fixed-branching diffusion pat
 - Replaced recursive nested `with` patterns with flat `&`-chain + single `with combined:` block
 - Raised test qubit budget from 17 to 21
 
-### Milestone 3: In-Place Comparison Operators
+### Milestone 3: In-Place Comparison Operators *(completed)*
 
-Replace copy-based `<`/`>`/`<=`/`>=` with borrow-ancilla pattern:
+- Extended arithmetic backend with split-register subtraction/addition (qint + separate qbool as MSB)
+- Rewrote `__lt__` and `__gt__` in `qint_comparison.pxi` to use borrow-ancilla pattern
+- Removed widened temporary copy logic and history graph child tracking for comparisons
+- Verified operand preservation and result correctness via statevector simulation
 
-- Extend arithmetic backend to support split-register subtraction/addition (qint + separate qbool as MSB)
-- Rewrite `__lt__` and `__gt__` in `qint_comparison.pxi` to use borrow-ancilla
-- Remove widened temporary copy logic and history graph child tracking for comparisons
-- Verify operand preservation and result correctness via statevector simulation
+### Milestone 4: Compiled Function Control Propagation *(completed)*
 
-### Milestone 4: Compiled Function Control Propagation
+Rework `@ql.compile` pipeline to decouple sequence generation from execution:
 
-Fix `@ql.compile` to correctly handle `with` block control context:
+- **Step 1 — Standardize gate sequences**: Reserve virtual index 0 for control qubit. All sequences use a standardized layout where index 0 is the control slot. Uncontrolled sequences don't reference it; controlled sequences add it as control on each gate. `param_qubit_ranges` switched to `(start, end)` format.
+- **Step 2 — Decouple compile from execute**: Compile phase runs the function body — DSL operators trigger sequence generation (`CQ_add` etc.) but do NOT call `run_instruction`. Instructions stored as IR: `(name, registers, uncontrolled_seq, controlled_seq)`. Execute phase walks the IR, calls `run_instruction` with qubit mapping, injecting control via index 0 when inside `with` block. Compiled flag prevents recompilation.
+- First call inside `with` block now produces controlled gates (no uncontrolled-first-call trade-off)
+- Nested `with` blocks work via AND-ancilla with single control slot
+- `opt=1` DAG integration builds DAG nodes from instruction IR with control metadata
 
-- Single cache entry stores both uncontrolled and derived controlled gate sequences
-- `run_instruction` selects sequence at runtime based on control stack
-- Control qubit index mapped dynamically (gate sequences themselves are fixed)
-- Verify controlled vs uncontrolled produce different gate sequences with `simulate=True`
+### Milestone 4b: Compile Replay Bug Fixes *(completed)*
+
+Fixes correctness bugs in the compile replay path and updates stale test assertions after Phase 5:
+
+- **Replay inside `with` blocks**: Fixed `_replay` to route through `_execute_ir` when IR entries exist, correctly handling controlled sequences. Gate count double-counting fixed via `_last_replay_used_ir` flag. opt=1 DAG-only replay skip restored for uncontrolled contexts while preserving gate injection for controlled contexts.
+- **Stale first-call trade-off test**: Updated to expect `result=0` (first call now correctly controlled after Phase 5).
+- **Stale qint default width test**: Updated to expect `width=3` (auto-width for value 5).
+
+### Milestone 4c: Call Graph Deduplication & Simulate Replay
+
+Fixes call graph duplication on repeated calls and incorrect gate injection skip with `simulate=True`:
+
+- **Call graph built once**: `_build_dag_from_ir` only runs on first call/capture. Each DAGNode stores both `uncontrolled_seq` and `controlled_seq` pointers. Gate counts resolved from `sequence_t.total_gate_count` via Cython helper.
+- **Dual gate count display**: `to_dot()` and `report()` show `"gates: 24 / 18"` (uncontrolled / controlled), `"-"` for unavailable variants.
+- **Simulate=True replay fix**: Gate injection skip (`_skip_injection`) restricted to `simulate=False`. With `simulate=True`, all replays (including uncontrolled) inject gates into the circuit.
 
 ### Milestone 5: History Graph Inverse Cancellation
 

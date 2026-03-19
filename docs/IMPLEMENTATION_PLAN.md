@@ -956,7 +956,7 @@ loops with internal AND-reduction.
 
 ---
 
-## Phase 4 — In-Place Comparison Operators
+## Phase 4 — In-Place Comparison Operators ✅
 
 Replaces the copy-based `<`/`>` comparisons with an in-place borrow-ancilla pattern.
 Currently, `<` and `>` create (n+1)-bit temporary copies of both operands, perform
@@ -990,7 +990,7 @@ extending the arithmetic backend.
 
 ---
 
-### Step 4.1: Split-Register Arithmetic Backend
+### Step 4.1: Split-Register Arithmetic Backend ✅
 
 **Goal**: Extend the C-level subtraction and addition to operate across a qint
 register plus an external qbool acting as the MSB. The subtractor/adder treats
@@ -1013,7 +1013,7 @@ register plus an external qbool acting as the MSB. The subtractor/adder treats
 
 ---
 
-### Step 4.2: Rewrite `__lt__` and `__gt__`
+### Step 4.2: Rewrite `__lt__` and `__gt__` ✅
 
 **Goal**: Replace copy-based comparison with borrow-ancilla pattern using the
 split-register arithmetic from Step 4.1.
@@ -1036,7 +1036,7 @@ split-register arithmetic from Step 4.1.
 
 ---
 
-### Step 4.3: Remove Widened Temporary Logic
+### Step 4.3: Remove Widened Temporary Logic ✅
 
 **Goal**: Clean up the old copy-based comparison code paths. Remove CNOT copy
 helpers if they were only used by comparisons.
@@ -1053,108 +1053,378 @@ helpers if they were only used by comparisons.
 
 ### Phase 4 Summary
 
-| Step | What | ~LOC delta | DEP |
-|------|------|------------|-----|
-| 4.1 | Split-register arithmetic backend | ~+80 | — |
-| 4.2 | Rewrite `__lt__` and `__gt__` | ~-30 | 4.1 |
-| 4.3 | Remove widened temporary logic | ~-60 | 4.2 |
+| Step | What | ~LOC delta | DEP | Status |
+|------|------|------------|-----|--------|
+| 4.1 | Split-register arithmetic backend | ~+80 | — | ✅ |
+| 4.2 | Rewrite `__lt__` and `__gt__` | ~-30 | 4.1 | ✅ |
+| 4.3 | Remove widened temporary logic | ~-60 | 4.2 | ✅ |
 
 **Net**: ~-10 LOC implementation, significant qubit reduction per comparison.
 
 ---
 
-## Phase 5 — Compiled Function Control Propagation
+## Phase 5 — Compiled Function Control Propagation ✅
 
-Fixes the bug where `@ql.compile`-decorated functions don't correctly switch
-between controlled and uncontrolled gate sequences when called inside `with`
-blocks.
+Reworks the `@ql.compile` pipeline to decouple sequence generation from execution,
+ensuring correct control propagation from `with` blocks on every call (including
+the first). The previous approach (capture-then-derive) emitted uncontrolled gates
+on the first call inside a `with` block. The new approach separates compilation
+(sequence generation) from execution (`run_instruction`), storing both controlled
+and uncontrolled sequences per instruction.
 
 ### Design Overview
 
-**Current behavior** (broken):
-- Capture clears control stack → uncontrolled gates captured. ✓
-- `_derive_controlled_block` creates controlled variant. ✓
-- `run_instruction` does not select the correct variant at runtime. ✗
-- `opt=1` skips gate injection entirely, ignoring control context. ✗
+**Previous behavior** (broken — steps 5.1–5.3 old were partially implemented):
+- Capture cleared control stack → uncontrolled gates emitted to circuit on first call.
+- `_derive_controlled_block` created controlled variant post-hoc.
+- First call inside `with` always emitted uncontrolled gates (accepted trade-off).
+- Replay correctly selected controlled/uncontrolled, but first call was wrong.
 
-**Fixed behavior**:
-- Single cache entry stores both uncontrolled and derived controlled sequences.
-- `run_instruction` checks control stack at runtime → picks controlled or
-  uncontrolled sequence.
-- Control qubit index mapped dynamically to the actual control qubit (or
-  AND-ancilla for nested `with` blocks).
-- Gate sequences are fixed; only the qubit index mapping varies.
+**New behavior** (two-step rework):
+- **Standardized sequences**: Virtual index 0 is always reserved for the control
+  qubit. Uncontrolled sequences don't reference index 0; controlled sequences add
+  index 0 as control to each gate. This uniform layout makes control injection a
+  simple qubit mapping operation.
+- **Compile phase**: Function body executes — DSL operators (`+=`, `<`, etc.)
+  trigger sequence generation (`CQ_add`, `CQ_sub`, etc.) but `run_instruction`
+  is NOT called. Each instruction is stored as IR:
+  `(name, registers, uncontrolled_seq, controlled_seq)`.
+- **Execute phase**: Walk the instruction IR, call `run_instruction` with the
+  qubit mapping. If inside a `with` block, map index 0 → control qubit to select
+  the controlled sequence. If uncontrolled, index 0 is unmapped (never referenced).
+- **Nested `with`**: Collapses to single control via AND-ancilla (Toffoli).
+  Single control slot (index 0) suffices for all nesting depths.
+- **Compiled flag**: Prevents recompilation on subsequent calls.
 
 ---
 
-### Step 5.1: Unify Cache Entry with Both Sequences
+### Step 5.1: Standardize Virtual Qubit Layout *(control at index 0)* ✅
 
-**Goal**: Modify the compiled function cache to store both uncontrolled and
-controlled gate sequences in a single entry. Remove `control_count` from the
-cache key (both variants live in the same entry).
+**Goal**: Reserve virtual index 0 for the control qubit in all gate sequences.
+Rework the virtual qubit mapping, `param_qubit_ranges` format, and controlled
+block derivation. After this step, all `CompiledBlock` instances use the same
+virtual qubit layout regardless of whether they are controlled or not.
+
+**Layout change**:
+```
+Before: [param_a(0..2) | param_b(3..5) | ancillas(6..7)] → control appended at 8
+After:  [control(0) | param_a(1..3) | param_b(4..6) | ancillas(7..8)]
+```
 
 | File | Action | ~LOC |
 |------|--------|------|
-| `src/quantum_language/compile.py` | [MOD] `CompiledBlock` stores `controlled_block` alongside uncontrolled. Cache key drops `control_count`. After capture, always derive controlled variant and attach to the same block. | ~+20, -10 |
+| `src/quantum_language/compile.py` | [MOD] `_build_virtual_mapping`: start `virtual_idx = 1` (reserve 0). | ~+1 |
+| `src/quantum_language/compile.py` | [MOD] `_capture_inner`: build `param_ranges` with `(start, end)` format, `vidx` starts at 1. | ~+5, -3 |
+| `src/quantum_language/compile.py` | [MOD] `CompiledBlock` docstring: update `param_qubit_ranges` to `(start_virtual_idx, end_virtual_idx)`. | ~+2 |
+| `src/quantum_language/compile.py` | [MOD] `_derive_controlled_block`: use `control_virt_idx = 0`, do NOT increment `total_virtual_qubits` (slot already reserved). | ~+3, -5 |
+| `src/quantum_language/compile.py` | [MOD] `_derive_controlled_gates`: hardcode control index to 0. | ~+1, -1 |
+| `src/quantum_language/compile.py` | [MOD] `_replay`: map index 0 → control qubit when controlled (before param loop); params start at index 1; `expected_param_qubits` uses `(end - start)` sum. | ~+10, -8 |
+| `src/quantum_language/compile.py` | [MOD] All consumers of `param_qubit_ranges`: update from `(start, width)` to `(start, end)` format. Affected: `_replay` validation, inverse block construction, merged block construction. | ~+5, -5 |
 
-**Tests** (`tests/python/test_compile_control.py` [NEW], ~150 LOC):
-- `test_single_cache_entry` — calling f(x) then `with ctrl: f(x)` produces only one cache entry
-- `test_both_sequences_stored` — cache entry has both `.block` and `.controlled_block`
-- `test_cache_key_no_control_count` — cache key is the same for controlled and uncontrolled calls
+**Tests** (`tests/python/test_compile_standardized.py` [NEW], ~150 LOC):
+- `test_virtual_index_zero_reserved` — captured block's gates never reference virtual index 0 in target or controls
+- `test_controlled_block_uses_index_zero` — controlled variant's gates all have 0 in their controls list
+- `test_total_virtual_qubits_same` — uncontrolled and controlled blocks have same `total_virtual_qubits`
+- `test_param_ranges_start_end_format` — `param_qubit_ranges` uses `(start, end)` tuples
+- `test_param_ranges_start_at_one` — first param range starts at virtual index 1
+- `test_replay_controlled_vs_uncontrolled` — replay inside `with` produces different gates than replay outside
+- `test_replay_ancilla_allocation` — ancilla loop skips index 0, allocates correctly
 
 **DEP**: None
 
 ---
 
-### Step 5.2: Runtime Sequence Selection in `run_instruction`
+### Step 5.2a: Compile-Mode Infrastructure ✅
 
-**Goal**: `run_instruction` checks the control stack and selects the appropriate
-gate sequence (controlled or uncontrolled). Maps the control virtual index to
-the actual control qubit at runtime.
+**Goal**: Add the foundational data structures for instruction-level IR recording.
+Compile-mode flag on `CompiledFunc`, `InstructionRecord` dataclass, and
+`_instruction_ir` list on `CompiledBlock`. No behavioral change yet — just the
+infrastructure that subsequent steps wire into.
 
 | File | Action | ~LOC |
 |------|--------|------|
-| `src/quantum_language/compile.py` | [MOD] In `inject_remapped_gates` (replay path): check `_get_control_bool()`. If control active, use controlled block and map control virtual index → actual control qubit. Otherwise use uncontrolled block. | ~+25 |
+| `src/quantum_language/compile.py` | [MOD] Add `InstructionRecord` dataclass: `(name, registers, uncontrolled_seq, controlled_seq)`. | ~+15 |
+| `src/quantum_language/compile.py` | [MOD] Add `_instruction_ir` list to `CompiledBlock.__slots__` and `__init__`. | ~+3 |
+| `src/quantum_language/compile.py` | [MOD] Add compile-mode flag (`_compile_mode`) to `CompiledFunc` with context manager or setter to activate/deactivate. | ~+15 |
 
-**Tests** (`tests/python/test_compile_control.py` [MOD]):
-- `test_controlled_different_gates` — `with ctrl: f(x)` produces more gates than `f(x)` (control adds gates)
-- `test_uncontrolled_replay` — replaying without control uses uncontrolled sequence
-- `test_controlled_replay` — replaying with control uses controlled sequence
-- `test_nested_with_compiled` — `with c1: with c2: f(x)` uses AND-ancilla as control qubit
-- `test_simulate_true_controlled` — with `simulate=True`, controlled call produces different circuit state
+**Tests** (`tests/python/test_compile_ir_infra.py` [NEW], ~60 LOC):
+- `test_instruction_record_fields` — `InstructionRecord` stores name, registers, both sequences
+- `test_compiled_block_has_ir_list` — `CompiledBlock._instruction_ir` is an empty list by default
+- `test_compile_mode_flag` — flag can be set/unset on `CompiledFunc`
 
 **DEP**: Step 5.1
 
 ---
 
-### Step 5.3: `opt=1` Control Context
+### Step 5.2b: Record Instructions in DSL Operators ✅
 
-**Goal**: Ensure `opt=1` (DAG-only) mode respects control context. Even though
-`opt=1` skips `inject_remapped_gates` on replay, the DAG node should record
-whether the call was controlled, and the first (capture) call must handle
-control correctly.
+**Goal**: Modify DSL operators (`+=`, `-=`, `<`, `&`, etc.) to check the
+compile-mode flag. When set, generate the sequence (`CQ_add` etc.) but do NOT
+call `run_instruction`. Instead, record an `InstructionRecord` into the active
+`CompiledBlock._instruction_ir` list.
+
+**Key change**: Each DSL operator already calls a C function to generate a
+`sequence_t` (e.g., `CQ_add(self_bits, classical_value)`), then calls
+`run_instruction(seq, ...)`. In compile mode, the second call is skipped and
+the sequence is stored as IR instead.
 
 | File | Action | ~LOC |
 |------|--------|------|
-| `src/quantum_language/compile.py` | [MOD] In `opt=1` replay path: record control context in DAG node metadata. In capture path: ensure `simulate=True` calls inject the correct (controlled/uncontrolled) gates. | ~+15 |
+| `src/quantum_language/qint_arithmetic.pxi` | [MOD] In `__iadd__`, `__isub__`, `__imul__`, etc.: check compile-mode flag, record `InstructionRecord` instead of calling `run_instruction`. | ~+15 |
+| `src/quantum_language/qint_comparison.pxi` | [MOD] Same compile-mode check in `__eq__`, `__lt__`, `__gt__`. | ~+10 |
+| `src/quantum_language/qint_bitwise.pxi` | [MOD] Same compile-mode check in `__and__`, `__or__`, `__xor__`, `__ixor__`. | ~+10 |
+
+**Tests** (`tests/python/test_compile_ir_recording.py` [NEW], ~120 LOC):
+- `test_compile_records_ir` — compiled function produces `InstructionRecord` entries
+- `test_ir_entry_per_instruction` — `a += 1; a += 2` produces 2 IR entries
+- `test_run_instruction_not_called` — no gates emitted to circuit during compile phase
+- `test_ir_stores_sequence` — each IR entry has a valid `sequence_t` (uncontrolled)
+- `test_compile_mode_only_during_capture` — compile-mode flag is unset after compilation completes
+
+**DEP**: Step 5.2a
+
+---
+
+### Step 5.2c: Execute Phase *(uncontrolled)* ✅
+
+**Goal**: Add the execute phase that walks the instruction IR and calls
+`run_instruction` for each entry. This step handles uncontrolled execution only
+— the compiled function works correctly outside `with` blocks.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile.py` | [MOD] Add `_execute_ir(block, qubit_mapping)`: iterate `block._instruction_ir`, call `run_instruction(entry.uncontrolled_seq, qubit_mapping)` for each entry. | ~+25 |
+| `src/quantum_language/compile.py` | [MOD] Wire `_execute_ir` into `_capture_and_cache_both` and `_replay` so that after compilation, the IR is executed. Compiled flag prevents recompilation on subsequent calls. | ~+15 |
+
+**Tests** (`tests/python/test_compile_ir_execute.py` [NEW], ~100 LOC):
+- `test_execute_emits_gates` — execute phase produces gates in circuit
+- `test_execute_matches_direct` — compiled function produces same result as uncompiled equivalent
+- `test_compiled_flag_prevents_recompile` — second call skips compilation, replays from IR
+- `test_execute_gate_count` — gate count matches expected value
+
+**DEP**: Step 5.2b
+
+---
+
+### Step 5.2d: Controlled Execution *(control injection via index 0)* ✅
+
+**Goal**: Extend the execute phase to handle controlled context. Derive
+controlled sequences (add index 0 as control to each gate) and store both
+variants per instruction. During execution inside a `with` block, select the
+controlled sequence and map index 0 → control qubit.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile.py` | [MOD] In `_execute_ir`: check `_get_controlled()`. If controlled, use `entry.controlled_seq` and map index 0 → `_get_control_bool().qubits[63]`. If uncontrolled, use `entry.uncontrolled_seq`. | ~+15 |
+| `src/quantum_language/compile.py` | [MOD] During IR recording (step 5.2b): derive `controlled_seq` from `uncontrolled_seq` by adding index 0 as control to each gate. Store both on `InstructionRecord`. | ~+10 |
+
+**Tests** (`tests/python/test_compile_ir_controlled.py` [NEW], ~150 LOC):
+- `test_ir_has_both_sequences` — each IR entry has both controlled and uncontrolled sequences
+- `test_execute_controlled` — execute inside `with` block uses controlled sequences
+- `test_execute_uncontrolled` — execute outside `with` block uses uncontrolled sequences
+- `test_first_call_in_with_correct` — first call of compiled function inside `with` produces controlled gates (the original bug fix)
+- `test_nested_with_compiled` — `with c1: with c2: f(x)` produces correct combined-controlled gates
+- `test_controlled_vs_uncontrolled_different_gates` — controlled call produces more gates than uncontrolled
+
+**DEP**: Step 5.2c
+
+---
+
+### Step 5.3: `opt=1` and DAG Integration ✅
+
+**Goal**: Ensure `opt=1` (DAG-only) mode works with the new pipeline. DAG nodes
+record control context. The instruction IR is compatible with DAG building.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile.py` | [MOD] In `opt=1` path: build DAG nodes from instruction IR. Record control context in DAG node metadata. | ~+15 |
+| `src/quantum_language/call_graph.py` | [MOD] `DAGNode` stores `controlled` flag from IR execution context. | ~+5 |
 
 **Tests** (`tests/python/test_compile_dag_control.py` [NEW], ~100 LOC):
 - `test_opt1_dag_records_control` — DAG node metadata indicates controlled call
-- `test_opt1_capture_respects_control` — first call with `simulate=True` inside `with` block produces controlled gates
+- `test_opt1_ir_compatible` — instruction IR integrates with DAG building
+- `test_opt1_no_gate_emission` — `opt=1` with `simulate=False` still records IR without emitting
 
-**DEP**: Step 5.2
+**DEP**: Step 5.2d
 
 ---
 
 ### Phase 5 Summary
 
+| Step | What | ~LOC delta | DEP | Status |
+|------|------|------------|-----|--------|
+| 5.1 | Standardize virtual qubit layout (control at index 0) | ~+10 | — | ✅ |
+| 5.2a | Compile-mode infrastructure (flag, `InstructionRecord`, IR list) | ~+33 | 5.1 | ✅ |
+| 5.2b | Record instructions in DSL operators (no `run_instruction` in compile mode) | ~+35 | 5.2a | ✅ |
+| 5.2c | Execute phase — uncontrolled IR execution | ~+40 | 5.2b | ✅ |
+| 5.2d | Controlled execution — control injection via index 0 | ~+25 | 5.2c | ✅ |
+| 5.3 | `opt=1` and DAG integration | ~+20 | 5.2d | ✅ |
+
+**Parallelizable**: None — steps are sequential (each builds on the previous).
+
+**Net**: ~+163 LOC implementation, ~+530 LOC tests.
+
+**Key property**: After this phase, calling a compiled function inside a `with`
+block produces controlled gates on every call — including the first. No
+"uncontrolled first call" trade-off.
+
+---
+
+## Phase 5b — Compile Replay Bug Fixes ✅
+
+Fixes correctness bugs in the compile replay path (cache-hit execution inside
+`with` blocks) and updates stale test assertions that no longer match current
+behavior after Phase 5 changes.
+
+### Step 5b.1: Fix Compile Replay Inside `with` Blocks ✅
+
+Fixed `_replay` to route through `_execute_ir` when IR entries exist, correctly
+handling controlled sequences. Added `_last_replay_used_ir` flag to prevent gate
+count double-counting (IR path via `run_instruction` already increments
+`circ->gate_count`). Restored opt=1 uncontrolled replay skip while preserving
+gate injection for controlled contexts.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile.py` | [MOD] `_replay`: IR path routes through `_execute_ir` with capture→replay qubit mapping. Gate count credit conditional on `_last_replay_used_ir`. opt=1 skips injection only when uncontrolled. | ~+40 |
+| `tests/python/test_compile_dag_only.py` | [MOD] Restored strong assertions, fixed simulate mode handling. | ~+20 |
+| `tests/python/test_tracking_only.py` | [MOD] Updated to expect `simulate=True` default, explicit `simulate=False` where needed. | ~+15 |
+
+**DEP**: Phase 5 (all steps completed)
+
+---
+
+### Step 5b.2: Update Stale Test Assertions ✅
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `tests/python/test_compile_nested_with.py` | [MOD] `test_first_call_trade_off`: expected result 1→0, updated docstring. | ~+5, -5 |
+| `tests/python/test_api_coverage.py` | [MOD] `test_qint_default_width`: expected width 8→3. | ~+1, -1 |
+
+**DEP**: None
+
+---
+
+### Phase 5b Summary
+
+| Step | What | ~LOC delta | DEP | Status |
+|------|------|------------|-----|--------|
+| 5b.1 | Fix compile replay inside `with` blocks | ~+40 | Phase 5 | ✅ |
+| 5b.2 | Update stale test assertions | ~0 | — | ✅ |
+
+**Net**: ~+75 LOC, 6 previously failing tests now pass.
+
+---
+
+## Phase 5c — Call Graph Deduplication & Simulate Replay
+
+Fixes two issues: (1) the call graph duplicates instruction nodes on each call
+to a compiled function, and (2) `opt=1` incorrectly skips gate injection on
+uncontrolled replays even when `simulate=True`.
+
+### Problem A — Call graph duplicates nodes on each call
+
+When a compiled function is called multiple times (e.g., first uncontrolled, then
+inside a `with` block), `_build_dag_from_ir` runs on every replay and appends new
+instruction nodes each time. The call graph should capture the instructions within
+the function **once** — subsequent calls should not add more nodes.
+
+Each instruction's `InstructionRecord` already has both `uncontrolled_seq` and
+`controlled_seq` pointers. The DAGNode should store both and display both gate
+counts: `"gates: 24 / 18"` (uncontrolled / controlled), with `"-"` when a
+variant's pointer is 0.
+
+### Problem B — Uncontrolled replay skips gate injection with simulate=True
+
+`_skip_injection = self._opt == 1 and not is_controlled` skips gate injection
+for all opt=1 uncontrolled replays, regardless of simulate mode. This is correct
+for tracking-only mode (`simulate=False`) but wrong when `simulate=True` — the
+user expects gates in the circuit for every call.
+
+---
+
+### Step 5c.1: Cython helper for sequence gate count
+
+**Goal**: Add a Python-callable function to read `total_gate_count` from a
+`sequence_t` pointer, so DAGNode can resolve gate counts from both sequence
+pointers.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/_core.pyx` | [MOD] Add `def _sequence_gate_count(seq_ptr: int) -> int` that casts to `sequence_t*` and returns `total_gate_count`. Returns 0 for null pointer. | ~+10 |
+
+**Tests**: Unit test calling `_sequence_gate_count` on a known sequence pointer.
+
+**DEP**: None
+
+---
+
+### Step 5c.2: Dual gate counts on DAGNode
+
+**Goal**: Each DAGNode stores both `uncontrolled_seq` and `controlled_seq`
+pointers plus resolved gate counts for each. `to_dot()` and `report()` display
+both: `"gates: 24 / 18"`, `"-"` for unavailable.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/call_graph.py` | [MOD] Add `uncontrolled_gate_count` and `controlled_gate_count` fields to `DAGNode`. Update `_node_label()` in `to_dot()` and column in `report()` to show `"X / Y"` format with `"-"` for 0. | ~+30 |
+
+**Tests**:
+- `test_dag_node_dual_gate_counts` — node with both pointers shows both counts
+- `test_dag_node_single_variant` — node with only uncontrolled shows `"24 / -"`
+- `test_to_dot_dual_format` — `to_dot()` output contains `"gates: X / Y"`
+
+**DEP**: Step 5c.1
+
+---
+
+### Step 5c.3: Build DAG once per compiled function
+
+**Goal**: `_build_dag_from_ir` only runs on the first call (capture). Store both
+sequence pointers per node. Subsequent calls (controlled or uncontrolled replays)
+do NOT append additional nodes.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile.py` | [MOD] In `_call_inner`, skip `_build_dag_from_ir` on replay when DAG already has nodes for this function. In `_build_dag_from_ir`, store both `uncontrolled_seq` and `controlled_seq` from `InstructionRecord` (instead of selecting one based on `is_controlled`). | ~+15 |
+
+**Tests**:
+- `test_dag_no_duplicate_nodes` — call foo() uncontrolled then controlled; DAG has N instruction nodes (not 2N)
+- `test_dag_both_seq_stored` — each node has both sequence pointers from IR
+
+**DEP**: Step 5c.2
+
+---
+
+### Step 5c.4: Fix simulate=True replay gate injection
+
+**Goal**: Gate injection skip only applies when `simulate=False`. With
+`simulate=True`, all replays inject gates.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile.py` | [MOD] Change `_skip_injection = self._opt == 1 and not is_controlled` to `_skip_injection = self._opt == 1 and not is_controlled and not option("simulate")`. | ~+1 |
+
+**Tests**:
+- `test_simulate_true_uncontrolled_replay_injects` — with simulate=True, calling foo() 3 times produces gates for all 3 calls
+- `test_simulate_false_uncontrolled_replay_skips` — with simulate=False, replay still skips (DAG-only mode preserved)
+
+**DEP**: Phase 5b
+
+---
+
+### Phase 5c Summary
+
 | Step | What | ~LOC delta | DEP |
 |------|------|------------|-----|
-| 5.1 | Unify cache entry with both sequences | ~+10 | — |
-| 5.2 | Runtime sequence selection | ~+25 | 5.1 |
-| 5.3 | `opt=1` control context | ~+15 | 5.2 |
+| 5c.1 | Cython helper for sequence gate count | ~+10 | — |
+| 5c.2 | Dual gate counts on DAGNode | ~+30 | 5c.1 |
+| 5c.3 | Build DAG once per compiled function | ~+15 | 5c.2 |
+| 5c.4 | Fix simulate=True replay gate injection | ~+1 | Phase 5b |
 
-**Net**: ~+50 LOC implementation.
+**Parallelizable**: Step 5c.4 is independent of 5c.1–5c.3.
+
+**Net**: ~+56 LOC implementation. Call graph no longer duplicates on repeated calls. Both gate count variants visible. Simulate=True replays work correctly.
 
 ---
 
