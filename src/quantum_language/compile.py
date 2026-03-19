@@ -1871,10 +1871,44 @@ class CompiledFunc:
                 f"expected {expected_param_qubits} qubits, got {vidx - 1}"
             )
 
+        # Determine replay path before allocation: prefer IR path
+        # (handles controlled context via controlled_seq), fall back to
+        # gate-level injection.
+        #
+        # Find the base (uncontrolled) block that has IR entries.
+        # The derived controlled_block does not store IR — _execute_ir
+        # handles control selection internally using the control stack.
+        _ir_source = None
+        if block._instruction_ir:
+            _ir_source = block
+        elif hasattr(self, "_cache"):
+            for _cb in self._cache.values():
+                if _cb.controlled_block is block and _cb._instruction_ir:
+                    _ir_source = _cb
+                    break
+
+        # Determine which virtual indices are transient.  For the IR path,
+        # run_instruction allocates its own internal ancillas, so we skip
+        # allocation for transient virtual indices (Step 8.2).  For the
+        # gate-level path, all internal qubits must be allocated (the
+        # injected gate tuples reference them directly).
+        _will_use_ir = (
+            _ir_source is not None
+            and _ir_source._instruction_ir
+            and option("simulate")
+            and not (self._opt == 1 and not is_controlled and not option("simulate"))
+        )
+        _transient_set = block.transient_virtual_indices if _will_use_ir else frozenset()
+
         # Allocate fresh ancillas for internal qubits (skip index 0
-        # which is the control slot, already mapped or unused)
+        # which is the control slot, already mapped or unused).
+        # On the IR path, transient virtual indices are skipped — they
+        # are not referenced by IR register tuples and run_instruction
+        # handles its own ancillas for them.
         ancilla_qubits = []
         for v in range(vidx, block.total_virtual_qubits):
+            if v in _transient_set:
+                continue
             real_q = _allocate_qubit()
             virtual_to_real[v] = real_q
             ancilla_qubits.append(real_q)
@@ -1889,21 +1923,6 @@ class CompiledFunc:
         saved_floor = _get_layer_floor()
         start_layer = get_current_layer()
         _set_layer_floor(start_layer)
-
-        # Execute replay: prefer IR path (handles controlled context via
-        # controlled_seq), fall back to gate-level injection.
-        #
-        # Find the base (uncontrolled) block that has IR entries.
-        # The derived controlled_block does not store IR — _execute_ir
-        # handles control selection internally using the control stack.
-        _ir_source = None
-        if block._instruction_ir:
-            _ir_source = block
-        elif hasattr(self, "_cache"):
-            for _cb in self._cache.values():
-                if _cb.controlled_block is block and _cb._instruction_ir:
-                    _ir_source = _cb
-                    break
 
         # Inject gates into the circuit when simulate is True.
         # When simulate is False (tracking-only / DAG-only mode),
