@@ -35,7 +35,7 @@ from ..call_graph import (
 from ..qint import qint
 from . import _block as _block  # noqa: F401 – re-exported
 from ._block import _H as _H  # noqa: F401 – re-exported
-from ._block import _M, _NON_REVERSIBLE, _ROTATION_GATES, _SELF_ADJOINT
+from ._block import _M, _ROTATION_GATES, _SELF_ADJOINT
 from ._block import _MAX_CAPTURE_DEPTH as _MAX_CAPTURE_DEPTH  # noqa: F401
 from ._block import _P as _P  # noqa: F401 – re-exported
 from ._block import _R as _R  # noqa: F401 – re-exported
@@ -67,93 +67,13 @@ def _get_mode_flags():
 
 
 # ---------------------------------------------------------------------------
-# Parametric topology helpers
+# Parametric and inverse helpers (delegated to _parametric / _inverse modules)
 # ---------------------------------------------------------------------------
-def _extract_topology(gates):
-    """Extract the structural topology of a gate sequence.
-
-    Returns a tuple of (gate_type, target, controls_tuple, num_controls)
-    for each gate, which captures the circuit structure without angle
-    values. Two gate sequences with identical topology differ only in
-    rotation angles -- safe for parametric replay.
-
-    Parameters
-    ----------
-    gates : list[dict]
-        Virtual gate dicts from a CompiledBlock.
-
-    Returns
-    -------
-    tuple[tuple]
-        Hashable topology signature.
-    """
-    return tuple((g["type"], g["target"], tuple(g["controls"]), g["num_controls"]) for g in gates)
-
-
-def _extract_angles(gates):
-    """Extract rotation angles from a gate sequence.
-
-    Returns a list of angles (float or None for non-rotation gates)
-    preserving gate order. Used to build the parametric replay template.
-
-    Parameters
-    ----------
-    gates : list[dict]
-        Virtual gate dicts from a CompiledBlock.
-
-    Returns
-    -------
-    list[float | None]
-        Angle per gate (None for non-rotation gates).
-    """
-    return [g.get("angle") for g in gates]
-
-
-def _apply_angles(template_gates, new_angles):
-    """Create fresh gate list by applying new angles to a topology template.
-
-    Parameters
-    ----------
-    template_gates : list[dict]
-        Gate dicts from the cached parametric block (used as template).
-    new_angles : list[float | None]
-        New angle values from a fresh capture.
-
-    Returns
-    -------
-    list[dict]
-        New gate dicts with updated angles. Non-rotation gates are
-        unchanged. Each gate dict is a fresh copy (no mutation).
-    """
-    result = []
-    for g, angle in zip(template_gates, new_angles, strict=False):
-        ng = dict(g)
-        if angle is not None:
-            ng["angle"] = angle
-        result.append(ng)
-    return result
-
-
-# ---------------------------------------------------------------------------
-# Inverse (adjoint) helpers
-# ---------------------------------------------------------------------------
-def _adjoint_gate(gate):
-    """Return the adjoint of *gate*.
-
-    Self-adjoint gates (X, Y, Z, H) are unchanged.  Rotation gates have
-    their angle negated.  Measurement gates cannot be inverted.
-    """
-    if gate["type"] in _NON_REVERSIBLE:
-        raise ValueError("Cannot invert compiled function containing measurement gates")
-    adj = dict(gate)
-    if gate["type"] in _ROTATION_GATES:
-        adj["angle"] = -gate["angle"]
-    return adj
-
-
-def _inverse_gate_list(gates):
-    """Return the adjoint of a gate list (reversed order, adjoint gates)."""
-    return [_adjoint_gate(g) for g in reversed(gates)]
+from ._inverse import _adjoint_gate as _adjoint_gate  # noqa: E402, F401
+from ._inverse import _inverse_gate_list as _inverse_gate_list  # noqa: E402, F401
+from ._parametric import _apply_angles as _apply_angles  # noqa: E402, F401
+from ._parametric import _extract_angles as _extract_angles  # noqa: E402, F401
+from ._parametric import _extract_topology as _extract_topology  # noqa: E402, F401
 
 
 # ---------------------------------------------------------------------------
@@ -735,11 +655,11 @@ def _build_return_qarray(block, virtual_to_real):
 
 
 # ---------------------------------------------------------------------------
-# CompiledFunc, _InverseCompiledFunc, _AncillaInverseProxy, compile
+# CompiledFunc, compile decorator, inverse classes
 # ---------------------------------------------------------------------------
 from ._func import CompiledFunc as CompiledFunc  # noqa: E402
-from ._func import _AncillaInverseProxy as _AncillaInverseProxy  # noqa: E402
 from ._func import _clear_all_caches as _clear_all_caches  # noqa: E402
 from ._func import _compiled_funcs as _compiled_funcs  # noqa: E402
-from ._func import _InverseCompiledFunc as _InverseCompiledFunc  # noqa: E402
 from ._func import compile as compile  # noqa: E402
+from ._inverse import _AncillaInverseProxy as _AncillaInverseProxy  # noqa: E402
+from ._inverse import _InverseCompiledFunc as _InverseCompiledFunc  # noqa: E402
