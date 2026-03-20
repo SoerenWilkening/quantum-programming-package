@@ -19,15 +19,12 @@ Usage
 >>> result2 = add_one(b)  # Replay (optimised sequence)
 """
 
-import numpy as np
-
 from .._core import (
     option,
 )
-from ..qint import qint
 from . import _block as _block  # noqa: F401 – re-exported
 from ._block import _H as _H  # noqa: F401 – re-exported
-from ._block import _M, _ROTATION_GATES, _SELF_ADJOINT
+from ._block import _M as _M  # noqa: F401 – re-exported
 from ._block import _MAX_CAPTURE_DEPTH as _MAX_CAPTURE_DEPTH  # noqa: F401
 from ._block import _P as _P  # noqa: F401 – re-exported
 from ._block import _R as _R  # noqa: F401 – re-exported
@@ -61,202 +58,6 @@ def _get_mode_flags():
 # ---------------------------------------------------------------------------
 # Parametric and inverse helpers (delegated to _parametric / _inverse modules)
 # ---------------------------------------------------------------------------
-from ._inverse import _adjoint_gate as _adjoint_gate  # noqa: E402, F401
-from ._inverse import _inverse_gate_list as _inverse_gate_list  # noqa: E402, F401
-from ._parametric import _apply_angles as _apply_angles  # noqa: E402, F401
-from ._parametric import _extract_angles as _extract_angles  # noqa: E402, F401
-from ._parametric import _extract_topology as _extract_topology  # noqa: E402, F401
-
-
-# ---------------------------------------------------------------------------
-# Gate list optimisation helpers
-# ---------------------------------------------------------------------------
-def _gates_cancel(g1, g2):
-    """Return True if *g1* followed by *g2* is identity (they cancel).
-
-    Rules
-    -----
-    * Must have identical target, num_controls, controls and type.
-    * Self-adjoint gates (X, Y, Z, H) always cancel with themselves.
-    * Rotation gates (P, Rx, Ry, Rz, R) cancel when their angles sum to
-      zero within floating-point tolerance.
-    * Measurement gates never cancel.
-    """
-    if g1["type"] != g2["type"]:
-        return False
-    if g1["target"] != g2["target"]:
-        return False
-    if g1["num_controls"] != g2["num_controls"]:
-        return False
-    if g1["controls"] != g2["controls"]:
-        return False
-
-    gt = g1["type"]
-    if gt == _M:
-        return False
-    if gt in _SELF_ADJOINT:
-        return True
-    if gt in _ROTATION_GATES:
-        return abs(g1["angle"] + g2["angle"]) < 1e-12
-    return False
-
-
-def _gates_merge(g1, g2):
-    """Return True if *g1* and *g2* can be merged into a single gate.
-
-    Only rotation gates on the same qubit (same target, controls, type) are
-    mergeable.  Self-adjoint and measurement gates cannot merge (they would
-    cancel, not merge).
-    """
-    if g1["type"] != g2["type"]:
-        return False
-    if g1["target"] != g2["target"]:
-        return False
-    if g1["num_controls"] != g2["num_controls"]:
-        return False
-    if g1["controls"] != g2["controls"]:
-        return False
-
-    gt = g1["type"]
-    if gt in _ROTATION_GATES:
-        # Cancellation is handled by _gates_cancel; here we only say
-        # "yes these can be combined".  The caller uses _merged_gate
-        # which may still return None when the sum is zero.
-        return True
-    return False
-
-
-def _merged_gate(g1, g2):
-    """Return a new gate dict with merged angle, or *None* if result is zero.
-
-    Copies all fields from *g1* and replaces the angle with the sum.
-    """
-    new_angle = g1["angle"] + g2["angle"]
-    if abs(new_angle) < 1e-12:
-        return None  # gate disappears
-    merged = dict(g1)
-    merged["angle"] = new_angle
-    return merged
-
-
-def _optimize_gate_list(gates):
-    """Optimise a gate list with multi-pass adjacent cancellation / merge.
-
-    Each pass scans left-to-right, cancelling adjacent inverse pairs and
-    merging consecutive rotations on the same qubit.  Passes repeat until
-    the list stops shrinking or *max_passes* is reached.
-    """
-    prev_count = len(gates) + 1
-    optimized = list(gates)
-    max_passes = 10  # safety limit
-    passes = 0
-    while len(optimized) < prev_count and passes < max_passes:
-        prev_count = len(optimized)
-        passes += 1
-        result = []
-        for gate in optimized:
-            if result and _gates_cancel(result[-1], gate):
-                result.pop()  # Adjacent inverse cancellation
-            elif result and _gates_merge(result[-1], gate):
-                merged = _merged_gate(result[-1], gate)
-                if merged is None:
-                    result.pop()  # Merged to zero
-                else:
-                    result[-1] = merged
-            else:
-                result.append(gate)
-        optimized = result
-    return optimized
-
-
-# ---------------------------------------------------------------------------
-# Merge-and-optimize (selective sequence merging helper)
-# ---------------------------------------------------------------------------
-
-
-def _merge_and_optimize(blocks_with_mappings, optimize=True):
-    """Concatenate gate lists from multiple blocks in physical qubit space and optimize.
-
-    Parameters
-    ----------
-    blocks_with_mappings : list of (CompiledBlock, dict)
-        Each tuple is (block, virtual_to_real_mapping) in temporal call order.
-    optimize : bool
-        Whether to run _optimize_gate_list on the concatenated result.
-
-    Returns
-    -------
-    tuple of (list[dict], int)
-        (optimized_gates, original_gate_count)
-    """
-    merged_gates = []
-    for block, v2r in blocks_with_mappings:
-        for g in block.gates:
-            pg = dict(g)
-            pg["target"] = v2r[g["target"]]
-            if g.get("num_controls", 0) > 0 and "controls" in g:
-                pg["controls"] = [v2r[c] for c in g["controls"]]
-            merged_gates.append(pg)
-    original_count = len(merged_gates)
-    if optimize and merged_gates:
-        try:
-            merged_gates = _optimize_gate_list(merged_gates)
-        except Exception:
-            pass
-    return merged_gates, original_count
-
-
-# ---------------------------------------------------------------------------
-# Controlled variant derivation
-# ---------------------------------------------------------------------------
-def _derive_controlled_gates(gates):
-    """Add virtual index 0 as a control qubit to every gate.
-
-    Each gate's ``num_controls`` is incremented by 1 and index 0
-    (the reserved control slot) is prepended to the ``controls`` list.
-    """
-    controlled = []
-    for g in gates:
-        cg = dict(g)
-        cg["num_controls"] = g["num_controls"] + 1
-        cg["controls"] = [0] + list(g["controls"])
-        controlled.append(cg)
-    return controlled
-
-
-def _strip_control_qubit(gates, control_qubit):
-    """Remove a physical control qubit from each gate's controls list.
-
-    Used to normalise controlled gates back to uncontrolled form for
-    the gate-level cache.  Each gate's ``num_controls`` is decremented
-    by 1 and *control_qubit* is removed from ``controls``.  Gates that
-    do not reference *control_qubit* in their controls are left unchanged.
-
-    Parameters
-    ----------
-    gates : list[dict]
-        Raw gate dicts from ``extract_gate_range`` (physical qubit indices).
-    control_qubit : int
-        Physical qubit index of the control to strip.
-
-    Returns
-    -------
-    list[dict]
-        Gate dicts with the control qubit removed.
-    """
-    stripped = []
-    for g in gates:
-        if control_qubit in g.get("controls", []):
-            sg = dict(g)
-            new_controls = [c for c in g["controls"] if c != control_qubit]
-            sg["controls"] = new_controls
-            sg["num_controls"] = len(new_controls)
-            stripped.append(sg)
-        else:
-            stripped.append(g)
-    return stripped
-
-
 # ---------------------------------------------------------------------------
 # InstructionRecord & compile-mode global state (from _compile_state)
 # ---------------------------------------------------------------------------
@@ -267,212 +68,50 @@ from .._compile_state import (  # noqa: E402 – after qint import is fine
 )
 
 # ---------------------------------------------------------------------------
-# IR execution, DAG building, and call record replay (delegated to _ir module)
-# ---------------------------------------------------------------------------
-from ._ir import _build_dag_from_ir as _build_dag_from_ir  # noqa: E402, F401
-from ._ir import _execute_ir as _execute_ir  # noqa: E402, F401
-from ._ir import _replay_call_records as _replay_call_records  # noqa: E402, F401
-
-
-# ---------------------------------------------------------------------------
-# Virtual qubit mapping helpers
-# ---------------------------------------------------------------------------
-def _build_virtual_mapping(gates, param_qubit_indices):
-    """Map real qubit indices to a virtual namespace.
-
-    Virtual index 0 is reserved for the control qubit (used by
-    ``_derive_controlled_block``).  Parameter qubits are mapped starting
-    at index 1, then any ancilla/temporary qubits encountered in the
-    gate list.
-
-    Parameters
-    ----------
-    gates : list[dict]
-        Raw gate dicts from extract_gate_range (real qubit indices).
-    param_qubit_indices : list[list[int]]
-        Real qubit indices per quantum argument.
-
-    Returns
-    -------
-    tuple
-        (virtual_gates, real_to_virtual, total_virtual_count)
-    """
-    real_to_virtual = {}
-    virtual_idx = 1  # Reserve index 0 for control qubit
-
-    # Map parameter qubits first (in argument order)
-    for qubit_list in param_qubit_indices:
-        for real_q in qubit_list:
-            if real_q not in real_to_virtual:
-                real_to_virtual[real_q] = virtual_idx
-                virtual_idx += 1
-
-    # Map remaining qubits (ancillas/temporaries) encountered in gates
-    for gate in gates:
-        for real_q in [gate["target"]] + gate["controls"]:
-            if real_q not in real_to_virtual:
-                real_to_virtual[real_q] = virtual_idx
-                virtual_idx += 1
-
-    # Remap gates to virtual indices
-    virtual_gates = _remap_gates(gates, real_to_virtual)
-    return virtual_gates, real_to_virtual, virtual_idx
-
-
-def _remap_gates(gates, mapping):
-    """Remap qubit indices in gate dicts through a mapping."""
-    remapped = []
-    for g in gates:
-        ng = dict(g)
-        ng["target"] = mapping[g["target"]]
-        ng["controls"] = [mapping[c] for c in g["controls"]]
-        remapped.append(ng)
-    return remapped
-
-
-def _get_qint_qubit_indices(q):
-    """Extract real qubit indices from a qint, ordered LSB to MSB."""
-    return [int(q.qubits[64 - q.width + i]) for i in range(q.width)]
-
-
-def _get_qarray_qubit_indices(arr):
-    """Extract all real qubit indices from a qarray, ordered by element then bit position."""
-    indices = []
-    for elem in arr:  # Use iteration protocol (qarray supports __iter__)
-        indices.extend(_get_qint_qubit_indices(elem))
-    return indices
-
-
-def _get_quantum_arg_qubit_indices(qa):
-    """Get qubit indices from a qint or qarray argument."""
-    from ..qarray import qarray
-
-    if isinstance(qa, qarray):
-        return _get_qarray_qubit_indices(qa)
-    else:
-        return _get_qint_qubit_indices(qa)
-
-
-def _get_quantum_arg_width(qa):
-    """Get total qubit count from a qint or qarray argument."""
-    from ..qarray import qarray
-
-    if isinstance(qa, qarray):
-        return sum(elem.width if hasattr(elem, "width") else 1 for elem in qa)
-    else:
-        return qa.width
-
-
-def _input_qubit_key(quantum_args):
-    """Build a hashable key from physical qubits of all quantum arguments."""
-    key_parts = []
-    for qa in quantum_args:
-        key_parts.extend(_get_quantum_arg_qubit_indices(qa))
-    return tuple(key_parts)
-
-
-def _build_qubit_set_numpy(quantum_args, extra_values=None):
-    """Build qubit set using numpy operations (np.unique/np.concatenate).
-
-    Returns (frozenset, np.ndarray) for dual storage compatibility with DAGNode.
-    """
-    arrays = []
-    for qa in quantum_args:
-        indices = _get_quantum_arg_qubit_indices(qa)
-        if indices:
-            arrays.append(np.array(indices, dtype=np.intp))
-    if extra_values is not None:
-        vals = list(extra_values)
-        if vals:
-            arrays.append(np.array(vals, dtype=np.intp))
-    if not arrays:
-        arr = np.empty(0, dtype=np.intp)
-    else:
-        arr = np.unique(np.concatenate(arrays))
-    return frozenset(arr.tolist()), arr
-
-
-# ---------------------------------------------------------------------------
-# Return value construction for replay
-# ---------------------------------------------------------------------------
-def _build_return_qint(block, virtual_to_real):
-    """Construct a usable qint from replay-mapped qubits.
-
-    Uses the qint(create_new=False, bit_list=...) pattern from qbool.copy().
-    Sets ownership metadata so the result is fully usable in subsequent
-    quantum operations.
-    """
-    ret_start, ret_width = block.return_qubit_range
-
-    # Build qubit array for return qint (right-aligned in 64-element array)
-    ret_qubits = np.zeros(64, dtype=np.uint32)
-    first_real_qubit = None
-    for i in range(ret_width):
-        virt_q = ret_start + i
-        real_q = virtual_to_real[virt_q]
-        ret_qubits[64 - ret_width + i] = real_q
-        if first_real_qubit is None:
-            first_real_qubit = real_q
-
-    # Create qint with existing qubits (no allocation)
-    result = qint(create_new=False, bit_list=ret_qubits, width=ret_width)
-
-    # Transfer ownership metadata
-    result.allocated_start = first_real_qubit
-    result.allocated_qubits = True
-    result.operation_type = "COMPILED"
-
-    return result
-
-
-def _build_return_qarray(block, virtual_to_real):
-    """Construct a qarray return value from replay-mapped qubits.
-
-    Creates new qint elements with qubits mapped from virtual space,
-    preserving the original element widths stored in the CompiledBlock.
-    """
-    from ..qarray import qarray
-
-    ret_start, ret_qubit_count = block.return_qubit_range
-    element_widths = block._return_qarray_element_widths
-
-    if element_widths is None:
-        raise ValueError("CompiledBlock missing element widths for qarray return")
-
-    new_elements = []
-    virt_offset = ret_start
-
-    for elem_width in element_widths:
-        # Build qubit array for this element (right-aligned in 64-element array)
-        ret_qubits = np.zeros(64, dtype=np.uint32)
-        first_real_qubit = None
-
-        for i in range(elem_width):
-            virt_q = virt_offset + i
-            real_q = virtual_to_real[virt_q]
-            ret_qubits[64 - elem_width + i] = real_q
-            if first_real_qubit is None:
-                first_real_qubit = real_q
-
-        virt_offset += elem_width
-
-        # Create qint element with existing qubits (no allocation)
-        new_elem = qint(create_new=False, bit_list=ret_qubits, width=elem_width)
-        new_elem.allocated_start = first_real_qubit
-        new_elem.allocated_qubits = True
-        new_elem.operation_type = "COMPILED"
-        new_elements.append(new_elem)
-
-    # Create qarray view with the new elements
-    return qarray._create_view(new_elements, (len(new_elements),))
-
-
-# ---------------------------------------------------------------------------
 # CompiledFunc, compile decorator, inverse classes
 # ---------------------------------------------------------------------------
 from ._func import CompiledFunc as CompiledFunc  # noqa: E402
 from ._func import _clear_all_caches as _clear_all_caches  # noqa: E402
 from ._func import _compiled_funcs as _compiled_funcs  # noqa: E402
 from ._func import compile as compile  # noqa: E402
+from ._inverse import _adjoint_gate as _adjoint_gate  # noqa: E402, F401
 from ._inverse import _AncillaInverseProxy as _AncillaInverseProxy  # noqa: E402
+from ._inverse import _inverse_gate_list as _inverse_gate_list  # noqa: E402, F401
 from ._inverse import _InverseCompiledFunc as _InverseCompiledFunc  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# IR execution, DAG building, and call record replay (delegated to _ir module)
+# ---------------------------------------------------------------------------
+from ._ir import _build_dag_from_ir as _build_dag_from_ir  # noqa: E402, F401
+from ._ir import _execute_ir as _execute_ir  # noqa: E402, F401
+from ._ir import _replay_call_records as _replay_call_records  # noqa: E402, F401
+
+# ---------------------------------------------------------------------------
+# Gate list optimisation helpers (delegated to _optimize module)
+# ---------------------------------------------------------------------------
+from ._optimize import _derive_controlled_gates as _derive_controlled_gates  # noqa: E402, F401
+from ._optimize import _gates_cancel as _gates_cancel  # noqa: E402, F401
+from ._optimize import _gates_merge as _gates_merge  # noqa: E402, F401
+from ._optimize import _merge_and_optimize as _merge_and_optimize  # noqa: E402, F401
+from ._optimize import _merged_gate as _merged_gate  # noqa: E402, F401
+from ._optimize import _optimize_gate_list as _optimize_gate_list  # noqa: E402, F401
+from ._optimize import _strip_control_qubit as _strip_control_qubit  # noqa: E402, F401
+from ._parametric import _apply_angles as _apply_angles  # noqa: E402, F401
+from ._parametric import _extract_angles as _extract_angles  # noqa: E402, F401
+from ._parametric import _extract_topology as _extract_topology  # noqa: E402, F401
+
+# ---------------------------------------------------------------------------
+# Virtual qubit mapping helpers (delegated to _virtual module)
+# ---------------------------------------------------------------------------
+from ._virtual import _build_qubit_set_numpy as _build_qubit_set_numpy  # noqa: E402, F401
+from ._virtual import _build_return_qarray as _build_return_qarray  # noqa: E402, F401
+from ._virtual import _build_return_qint as _build_return_qint  # noqa: E402, F401
+from ._virtual import _build_virtual_mapping as _build_virtual_mapping  # noqa: E402, F401
+from ._virtual import _get_qarray_qubit_indices as _get_qarray_qubit_indices  # noqa: E402, F401
+from ._virtual import _get_qint_qubit_indices as _get_qint_qubit_indices  # noqa: E402, F401
+from ._virtual import (  # noqa: E402
+    _get_quantum_arg_qubit_indices as _get_quantum_arg_qubit_indices,  # noqa: F401
+)
+from ._virtual import _get_quantum_arg_width as _get_quantum_arg_width  # noqa: E402, F401
+from ._virtual import _input_qubit_key as _input_qubit_key  # noqa: E402, F401
+from ._virtual import _remap_gates as _remap_gates  # noqa: E402, F401
