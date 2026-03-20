@@ -1316,7 +1316,7 @@ gate injection for controlled contexts.
 
 ---
 
-## Phase 5c — Call Graph Deduplication & Simulate Replay
+## Phase 5c — Call Graph Deduplication & Simulate Replay *(mostly complete)*
 
 Fixes two issues: (1) the call graph duplicates instruction nodes on each call
 to a compiled function, and (2) `opt=1` incorrectly skips gate injection on
@@ -1447,11 +1447,11 @@ but never passes `uncontrolled_gate_count` or `controlled_gate_count`. The
 
 | Step | What | ~LOC delta | DEP |
 |------|------|------------|-----|
-| 5c.1 | Cython helper for sequence gate count | ~+10 | — |
-| 5c.2 | Dual gate counts on DAGNode | ~+30 | 5c.1 |
-| 5c.3 | Build DAG once per compiled function | ~+15 | 5c.2 |
-| 5c.4 | Fix simulate=True replay gate injection | ~+1 | Phase 5b |
-| 5c.5 | Toffoli-mode gate count propagation | ~+45 | 5c.2 |
+| 5c.1 | Cython helper for sequence gate count | ~+10 | — | ✅ |
+| 5c.2 | Dual gate counts on DAGNode | ~+30 | 5c.1 | ✅ |
+| 5c.3 | Build DAG once per compiled function | ~+15 | 5c.2 | ✅ |
+| 5c.4 | Fix simulate=True replay gate injection | ~+1 | Phase 5b | ✅ |
+| 5c.5 | Toffoli-mode gate count propagation | ~+45 | 5c.2 | **Partial** — gate counts done; depth/T-count not wired from `.pxi` |
 
 **Parallelizable**: Steps 5c.4 and 5c.5 are independent of each other and of 5c.3.
 
@@ -1459,7 +1459,7 @@ but never passes `uncontrolled_gate_count` or `controlled_gate_count`. The
 
 ---
 
-## Phase 6 — History Graph Inverse Cancellation
+## Phase 6 — History Graph Inverse Cancellation *(partially complete)*
 
 Adds automatic detection and cancellation of manual uncomputation in the
 history graph, reducing unnecessary gate overhead when users explicitly reverse
@@ -1598,11 +1598,11 @@ inverses. `f(a)` records a history entry with the function's sequence pointer;
 
 | Step | What | ~LOC delta | DEP |
 |------|------|------------|-----|
-| 6.1 | Blocker data structure | ~+40 | — |
-| 6.2 | Blocker insertion on source operand usage | ~+45 | 6.1 |
-| 6.3 | Qubit deallocation notification | ~+10 | 6.1 |
-| 6.4 | Tail-only inverse cancellation | ~+35 | 6.2, 6.3 |
-| 6.5 | Compiled function inverse cancellation | ~+25 | 6.4 |
+| 6.1 | Blocker data structure | ~+40 | — | ✅ |
+| 6.2 | Blocker insertion on source operand usage | ~+45 | 6.1 | ✅ |
+| 6.3 | Qubit deallocation notification | ~+10 | 6.1 | ✅ |
+| 6.4 | Tail-only inverse cancellation | ~+35 | 6.2, 6.3 | **Partial** — data structure done; `kind=` not wired from `__iadd__`/`__isub__`/`__ixor__` in `.pxi` |
+| 6.5 | Compiled function inverse cancellation | ~+25 | 6.4 | ✅ (wired via `compile/_replay.py`) |
 
 **Parallelizable**: Steps 6.2 and 6.3 are independent (both depend only on 6.1).
 
@@ -1612,7 +1612,7 @@ inverses. `f(a)` records a history entry with the function's sequence pointer;
 
 ---
 
-## Phase 7 — Compile Subpackage Refactor
+## Phase 7 — Compile Subpackage Refactor *(mostly complete)*
 
 Splits the monolithic `compile.py` (2,293 lines) into a `compile/` subpackage.
 Pure refactor — no behavioral changes. All existing tests must pass without
@@ -1733,18 +1733,18 @@ old `compile.py` shim. Update all external imports.
 
 | Step | What | ~LOC delta | DEP |
 |------|------|------------|-----|
-| 7.1 | Subpackage skeleton + types | ~+145 | — |
-| 7.2 | Optimization + virtual mapping modules | ~+480 | 7.1 |
-| 7.3 | Capture, replay, IR modules | ~+720 | 7.2 |
-| 7.4 | Parametric + inverse modules | ~+420 | 7.3 |
-| 7.5 | Consolidate CompiledFunc, remove shim | ~+612, -2293 | 7.4 |
+| 7.1 | Subpackage skeleton + types | ~+145 | — | ✅ |
+| 7.2 | Optimization + virtual mapping modules | ~+480 | 7.1 | ✅ |
+| 7.3 | Capture, replay, IR modules | ~+720 | 7.2 | ✅ |
+| 7.4 | Parametric + inverse modules | ~+420 | 7.3 | ✅ |
+| 7.5 | Consolidate CompiledFunc, remove shim | ~+612, -2293 | 7.4 | **Partial** — `_func.py` is 1023 lines (target: ≤500). Stale `compile.py` staged in working tree. |
 
 **Net**: ~+84 LOC (slight growth from module boilerplate/imports).
-9 modules, all ≤ 600 lines. compile.py eliminated.
+9 modules, 8 within limit. `_func.py` needs further decomposition.
 
 ---
 
-## Phase 8 — Compiled Function Ancilla Model
+## Phase 8 — Compiled Function Ancilla Model ✅
 
 Fixes the compile layer's ancilla tracking so that repeated calls to a compiled
 function do not grow the total qubit count when the function has no persistent
@@ -1839,15 +1839,15 @@ gates return them to |0⟩.
 
 | Step | What | ~LOC delta | DEP |
 |------|------|------------|-----|
-| 8.1 | Track qubit liveness, classify ancillas | ~+90 | Phase 7 |
-| 8.2 | IR replay skips transient allocation | ~+20 | 8.1 |
-| 8.3 | Gate-level replay frees transients | ~+10 | 8.2 |
+| 8.1 | Track qubit liveness, classify ancillas | ~+90 | Phase 7 | ✅ |
+| 8.2 | IR replay skips transient allocation | ~+20 | 8.1 | ✅ |
+| 8.3 | Gate-level replay frees transients | ~+10 | 8.2 | ✅ |
 
 **Net**: ~+120 LOC implementation, ~+350 LOC tests.
 
 ---
 
-## Phase 9 — Hierarchical Compiled Function References ✅
+## Phase 9 — Hierarchical Compiled Function References *(mostly complete)*
 
 When a compiled function calls another compiled function during capture, store a
 reference (call record) instead of inlining the inner function's gates. This
@@ -1957,10 +1957,10 @@ visualization shows call relationships with links to per-function sub-diagrams.
 
 | Step | What | ~LOC delta | DEP |
 |------|------|------------|-----|
-| 9.1 | CallRecord IR entry type | ~+40 | Phase 8 |
-| 9.2 | Capture detects nested compiled functions | ~+70 | 9.1 |
-| 9.3 | Recursive replay via CallRecord | ~+70 | 9.2 |
-| 9.4 | Hierarchical gate count and visualization | ~+45 | 9.3 |
+| 9.1 | CallRecord IR entry type | ~+40 | Phase 8 | ✅ |
+| 9.2 | Capture detects nested compiled functions | ~+70 | 9.1 | ✅ |
+| 9.3 | Recursive replay via CallRecord | ~+70 | 9.2 | ✅ |
+| 9.4 | Hierarchical gate count and visualization | ~+45 | 9.3 | ✅ |
 
 **Net**: ~+225 LOC implementation, ~+400 LOC tests.
 

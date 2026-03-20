@@ -96,6 +96,65 @@ class CompiledBlock:
         self._dag_built = False
         self.transient_virtual_indices = frozenset()
 
+    def draw_data(self):
+        """Convert this block's gates into a draw_data dict for rendering.
+
+        Computes layer assignments via ASAP qubit occupancy scheduling
+        (same as call_graph._compute_depth) and compacts virtual qubit
+        indices to dense sequential rows.
+
+        Returns
+        -------
+        dict
+            Keys: num_layers, num_qubits, gates, qubit_map.
+        """
+        gates = self.gates
+        if not gates:
+            return {"num_layers": 0, "num_qubits": 0, "gates": [], "qubit_map": []}
+
+        # ASAP layer assignment
+        occupancy = {}
+        max_layer = 0
+        layered_gates = []
+        for g in gates:
+            qubits = [g["target"]] + list(g.get("controls", []))
+            current_max = max((occupancy.get(q, 0) for q in qubits), default=0)
+            layer = current_max
+            for q in qubits:
+                occupancy[q] = layer + 1
+            if layer > max_layer:
+                max_layer = layer
+            layered_gates.append(layer)
+
+        # Collect all qubit indices and build dense mapping
+        all_qubits = set()
+        for g in gates:
+            all_qubits.add(g["target"])
+            for c in g.get("controls", []):
+                all_qubits.add(c)
+        sorted_qubits = sorted(all_qubits)
+        qubit_to_dense = {q: i for i, q in enumerate(sorted_qubits)}
+
+        # Build draw_data gates
+        draw_gates = []
+        for i, g in enumerate(gates):
+            draw_gates.append(
+                {
+                    "layer": layered_gates[i],
+                    "target": qubit_to_dense[g["target"]],
+                    "type": g.get("type", 0),
+                    "angle": g.get("angle", 0.0),
+                    "controls": [qubit_to_dense[c] for c in g.get("controls", [])],
+                }
+            )
+
+        return {
+            "num_layers": max_layer + 1,
+            "num_qubits": len(sorted_qubits),
+            "gates": draw_gates,
+            "qubit_map": sorted_qubits,
+        }
+
 
 # ---------------------------------------------------------------------------
 # Ancilla tracking record

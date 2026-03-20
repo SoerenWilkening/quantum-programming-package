@@ -515,7 +515,7 @@ class CallGraphDAG:
 
     # -- DOT export ---------------------------------------------------------
 
-    def to_dot(self) -> str:
+    def to_dot(self, *, file_prefix: str | None = None) -> str:
         """Return a DOT-language string representing the call graph.
 
         Nodes are rendered as boxes with multi-line labels showing function
@@ -523,6 +523,13 @@ class CallGraphDAG:
         edges are solid arrows labeled "exec". When multiple parallel
         groups exist, each group is wrapped in a ``subgraph cluster_N``
         with dotted border.
+
+        Parameters
+        ----------
+        file_prefix : str or None
+            When provided, each node includes a ``URL`` attribute pointing
+            to ``{file_prefix}_{func_name}.png``, enabling hyperlinked
+            navigation to per-function sub-diagrams in rendered SVGs/PDFs.
 
         Returns
         -------
@@ -555,11 +562,19 @@ class CallGraphDAG:
                 f"T-count: {nd.t_count}"
             )
 
+        def _node_url(idx: int) -> str:
+            nd = self._nodes[idx]
+            name = nd.func_name.replace(" ", "_")
+            return f"{file_prefix}_{name}.png"
+
         def _emit_node(idx: int) -> str:
             nd = self._nodes[idx]
+            url_attr = ""
+            if file_prefix is not None:
+                url_attr = f', URL="{_node_url(idx)}"'
             if nd.is_call_node:
-                return f'  n{idx} [label="{_node_label(idx)}", style=dashed];'
-            return f'  n{idx} [label="{_node_label(idx)}"];'
+                return f'  n{idx} [label="{_node_label(idx)}", style=dashed{url_attr}];'
+            return f'  n{idx} [label="{_node_label(idx)}"{url_attr}];'
 
         if use_clusters:
             for gi, group in enumerate(groups):

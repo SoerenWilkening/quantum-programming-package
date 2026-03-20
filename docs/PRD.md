@@ -114,7 +114,7 @@ Eliminate all local `simulate` toggles and raw gate patterns from walk modules. 
 | R14.3 | Replace `_flip_all` single-register calls with `^= 1` or `~reg` directly. Keep `_flip_all` only as multi-register convenience (without simulate toggle). | **Done** |
 | R14.4 | Replace `_nested_phase_flip` and `_apply_nested_with` (recursive nested `with` loops) with flat `&`-chain pattern. Depends on R14.2. | **Done** |
 | R14.5 | Raise test qubit budget from 17 to 21. Statevector simulation at 21 qubits takes ~0.2s (2M amplitudes), well within acceptable limits. | **Done** |
-| R14.6 | `qarray.all()` primitive for multi-controlled operations (future optimization): replace manual `&`-chain loops with internal AND-reduction. Fewer allocations, potential gate-level optimization. | |
+| R14.6 | `qarray.all()` primitive for multi-controlled operations (future optimization): replace manual `&`-chain loops with internal AND-reduction. Fewer allocations, potential gate-level optimization. | **Done** |
 
 #### R15: In-Place Comparison Operators
 
@@ -144,9 +144,9 @@ Rework `@ql.compile` pipeline to decouple sequence generation from execution, en
 | R16.8 | `opt=1` (DAG-only) mode respects the new pipeline and control context. | **Done** |
 | R16.9 | Compile replay path (cache hit) inside `with` blocks correctly executes controlled gates, producing non-zero results when conditions are True. | **Done** |
 | R16.10 | Stale tests updated to match current behavior: first-call trade-off test reflects that first call is now controlled; `qint` default width test matches auto-width semantics. | **Done** |
-| R16.11 | Call graph built once per compiled function — not duplicated on subsequent calls. Each instruction node stores both uncontrolled and controlled gate counts; display format `"gates: 24 / 18"` with `"-"` for unavailable variant. **Bug**: In Toffoli mode, `record_operation` populates `gate_count` but not `uncontrolled_gate_count`/`controlled_gate_count`, so `report()` shows `"- / -"` while `aggregate()` total is correct. | |
+| R16.11 | Call graph built once per compiled function — not duplicated on subsequent calls. Each instruction node stores both uncontrolled and controlled gate counts; display format `"gates: 24 / 18"` with `"-"` for unavailable variant. | **Done** |
 | R16.12 | `opt=1` uncontrolled replay injects gates when `simulate=True`. Gate injection skip only applies in tracking-only mode (`simulate=False`). | **Done** |
-| R16.13 | Toffoli-mode gate count propagation: `record_operation` populates `uncontrolled_gate_count` when outside `with` block, `controlled_gate_count` when inside. Depth and T-count computed before sequence is freed. | |
+| R16.13 | Toffoli-mode gate count propagation: `record_operation` populates `uncontrolled_gate_count` when outside `with` block, `controlled_gate_count` when inside. Depth and T-count computed before sequence is freed. | **Partial** — gate counts propagated; depth and T-count not yet wired from `.pxi` files |
 
 #### R17: History Graph Inverse Cancellation
 
@@ -154,12 +154,12 @@ Detect and cancel manual uncomputation in the history graph, avoiding redundant 
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| R17.1 | Tail-only matching: when an operation is the exact inverse of the last history entry and no active blockers exist, cancel both entries. | |
-| R17.2 | Supported inverse pairs: `+= k` / `-= k`, `^= x` / `^= x` (self-inverse), `f()` / `f.inverse()` (matched by sequence pointer). | |
-| R17.3 | Blocker mechanism: when a qint is used as a source operand (RHS), a blocker is added to its history referencing the dependent qint. | |
-| R17.4 | Blockers cleared on qubit deallocation (uncomputation) of the dependent qint, not on Python GC. Explicit notification mechanism. | |
-| R17.5 | No cancellation if active blockers exist after the last history entry. Operation added as normal entry instead. | |
-| R17.6 | `*= k` / `//= k` inverse cancellation deferred to future work. | |
+| R17.1 | Tail-only matching: when an operation is the exact inverse of the last history entry and no active blockers exist, cancel both entries. | **Partial** — data structure implemented; `kind=` not wired from in-place Cython ops |
+| R17.2 | Supported inverse pairs: `+= k` / `-= k`, `^= x` / `^= x` (self-inverse), `f()` / `f.inverse()` (matched by sequence pointer). | **Partial** — `f()`/`f.inverse()` wired; `+=`/`-=`/`^=` not wired |
+| R17.3 | Blocker mechanism: when a qint is used as a source operand (RHS), a blocker is added to its history referencing the dependent qint. | **Done** |
+| R17.4 | Blockers cleared on qubit deallocation (uncomputation) of the dependent qint, not on Python GC. Explicit notification mechanism. | **Done** |
+| R17.5 | No cancellation if active blockers exist after the last history entry. Operation added as normal entry instead. | **Done** |
+| R17.6 | `*= k` / `//= k` inverse cancellation deferred to future work. | N/A |
 
 #### R18: Compile Module Refactoring
 
@@ -167,10 +167,10 @@ Split the monolithic `compile.py` (2,293 lines) into a `compile/` subpackage wit
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| R18.1 | `compile.py` replaced by `compile/` subpackage. Public API (`@ql.compile` decorator) unchanged. All existing imports continue to work. | |
-| R18.2 | Each module in the subpackage ≤ 600 lines. No circular imports. | |
-| R18.3 | Logical separation: block types, optimization helpers, virtual mapping, capture, replay, parametric lifecycle, inverse proxies each in their own module. | |
-| R18.4 | All existing tests pass without modification (pure refactor, no behavioral change). | |
+| R18.1 | `compile.py` replaced by `compile/` subpackage. Public API (`@ql.compile` decorator) unchanged. All existing imports continue to work. | **Done** |
+| R18.2 | Each module in the subpackage ≤ 600 lines. No circular imports. | **Partial** — `_func.py` is 1023 lines (limit: 600) |
+| R18.3 | Logical separation: block types, optimization helpers, virtual mapping, capture, replay, parametric lifecycle, inverse proxies each in their own module. | **Done** |
+| R18.4 | All existing tests pass without modification (pure refactor, no behavioral change). | **Done** |
 
 #### R19: Compiled Function Ancilla Model
 
@@ -178,11 +178,11 @@ Fix the compile layer's ancilla tracking to distinguish transient ancillas (mana
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| R19.1 | During capture, classify non-parameter qubits into two categories: **result qubits** (part of the return value, still allocated when capture completes) and **transient ancillas** (freed by the C layer during the operation). | |
-| R19.2 | IR replay path (`_execute_ir`): only allocate fresh qubits for parameter and result virtual indices. Do not allocate for transient ancilla virtual indices — the C layer's `run_instruction` manages its own ancillas internally. | |
-| R19.3 | Gate-level replay path (`inject_remapped_gates`): allocate all virtual qubits as before (gates reference them directly). Free transient ancillas after injection since the gates return them to \|0⟩. | |
-| R19.4 | Repeated calls to a compiled function do not grow the total qubit count when the function has no result qubits (e.g., in-place addition). | |
-| R19.5 | Compiled functions that return new qints (e.g., `c = a * b`) correctly allocate fresh result qubits on each replay. | |
+| R19.1 | During capture, classify non-parameter qubits into two categories: **result qubits** (part of the return value, still allocated when capture completes) and **transient ancillas** (freed by the C layer during the operation). | **Done** |
+| R19.2 | IR replay path (`_execute_ir`): only allocate fresh qubits for parameter and result virtual indices. Do not allocate for transient ancilla virtual indices — the C layer's `run_instruction` manages its own ancillas internally. | **Done** |
+| R19.3 | Gate-level replay path (`inject_remapped_gates`): allocate all virtual qubits as before (gates reference them directly). Free transient ancillas after injection since the gates return them to \|0⟩. | **Done** |
+| R19.4 | Repeated calls to a compiled function do not grow the total qubit count when the function has no result qubits (e.g., in-place addition). | **Done** |
+| R19.5 | Compiled functions that return new qints (e.g., `c = a * b`) correctly allocate fresh result qubits on each replay. | **Done** |
 
 #### R20: Hierarchical Compiled Function References
 
@@ -190,11 +190,11 @@ When a compiled function calls another compiled function during capture, store a
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| R20.1 | New IR entry type (`CallRecord`) stores a reference to the inner `CompiledFunc` and the argument mapping, rather than inlining the inner function's gate sequence. | |
-| R20.2 | Replay of an outer compiled function recursively delegates to the inner function's `_replay`, with transitive virtual-to-real qubit mapping. | |
-| R20.3 | Each compiled function's `CompiledBlock` contains only its own gates and call references — not the flattened gates of all nested functions. | |
-| R20.4 | Visualization: each compiled function produces its own sub-diagram. Top-level view shows the call graph with links to sub-diagrams. | |
-| R20.5 | Gate counts for hierarchical functions are computed recursively (sum of own gates + referenced function gate counts). | |
+| R20.1 | New IR entry type (`CallRecord`) stores a reference to the inner `CompiledFunc` and the argument mapping, rather than inlining the inner function's gate sequence. | **Done** |
+| R20.2 | Replay of an outer compiled function recursively delegates to the inner function's `_replay`, with transitive virtual-to-real qubit mapping. | **Done** |
+| R20.3 | Each compiled function's `CompiledBlock` contains only its own gates and call references — not the flattened gates of all nested functions. | **Done** |
+| R20.4 | Visualization: each compiled function produces its own sub-diagram. Top-level view shows the call graph with links to sub-diagrams. | **Done** |
+| R20.5 | Gate counts for hierarchical functions are computed recursively (sum of own gates + referenced function gate counts). | **Done** |
 
 ### P1 — Should Have
 

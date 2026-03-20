@@ -453,3 +453,263 @@ def draw_circuit(circuit, *, mode=None, save=None, overlap=True):
         img.save(save)
 
     return img
+
+
+# ---------------------------------------------------------------------------
+# Hierarchical per-function sub-diagram visualization
+# ---------------------------------------------------------------------------
+
+
+def _render_block_draw_data(draw_data, *, mode=None, overlap=True):
+    """Render a draw_data dict using auto-zoom or explicit mode selection.
+
+    Parameters
+    ----------
+    draw_data : dict
+        Dictionary with keys: num_layers, num_qubits, gates, qubit_map.
+    mode : str or None
+        ``"overview"``, ``"detail"``, or ``None`` for auto-selection.
+    overlap : bool
+        If True, overlapping gates may share visual columns.
+
+    Returns
+    -------
+    PIL.Image.Image
+        Rendered circuit image.
+    """
+    num_qubits = draw_data.get("num_qubits", 0)
+    num_layers = draw_data.get("num_layers", 0)
+
+    if mode == "overview":
+        return render(draw_data, overlap=overlap)
+    elif mode == "detail":
+        return render_detail(draw_data, overlap=overlap)
+    else:
+        # Auto-zoom: overview only when BOTH thresholds exceeded
+        if num_qubits <= AUTO_DETAIL_MAX_QUBITS or num_layers <= AUTO_DETAIL_MAX_LAYERS:
+            return render_detail(draw_data, overlap=overlap)
+        return render(draw_data, overlap=overlap)
+
+
+def render_function_diagrams(compiled_func, *, mode=None, overlap=True):
+    """Generate per-function sub-diagram images for a compiled function.
+
+    Traverses the compiled function's cache and any nested CallRecord
+    references to produce a dict mapping function names to PIL images.
+    Each function's own gates (from its CompiledBlock) are rendered as
+    a separate circuit diagram.
+
+    Parameters
+    ----------
+    compiled_func : CompiledFunc
+        A compiled function with populated cache.
+    mode : str or None
+        Rendering mode: ``"overview"``, ``"detail"``, or ``None`` for auto.
+    overlap : bool
+        If True, overlapping gates may share visual columns.
+
+    Returns
+    -------
+    dict[str, PIL.Image.Image]
+        Mapping from function name to rendered circuit image.
+    """
+    diagrams = {}
+    _collect_function_diagrams(compiled_func, diagrams, mode=mode, overlap=overlap, visited=None)
+    return diagrams
+
+
+def _collect_function_diagrams(compiled_func, diagrams, *, mode, overlap, visited):
+    """Recursively collect per-function diagrams from cache and CallRecords."""
+    if visited is None:
+        visited = set()
+
+    func_id = id(compiled_func)
+    if func_id in visited:
+        return
+    visited.add(func_id)
+
+    func_name = getattr(compiled_func, "__name__", None)
+    if func_name is None:
+        func_name = getattr(getattr(compiled_func, "_func", None), "__name__", "unknown")
+
+    # Render each cached block (use the first entry for the diagram)
+    for cache_key, block in getattr(compiled_func, "_cache", {}).items():
+        dd = block.draw_data()
+        if dd["num_layers"] == 0 and dd["num_qubits"] == 0:
+            continue
+
+        # Use func_name as key; append cache_key hash if multiple entries
+        diagram_key = func_name
+        if len(compiled_func._cache) > 1:
+            diagram_key = f"{func_name}_{hash(cache_key) & 0xFFFF:04x}"
+
+        if diagram_key not in diagrams:
+            diagrams[diagram_key] = _render_block_draw_data(dd, mode=mode, overlap=overlap)
+
+        # Recurse into CallRecord references
+        for cr in block._call_records:
+            inner = cr.compiled_func_ref
+            if inner is not None and hasattr(inner, "_cache"):
+                _collect_function_diagrams(
+                    inner, diagrams, mode=mode, overlap=overlap, visited=visited
+                )
+
+
+def hierarchical_dot(compiled_func, *, file_prefix="func"):
+    """Generate a DOT string for the call graph with links to per-function sub-diagrams.
+
+    Each call node in the DOT output includes a ``URL`` attribute pointing to
+    ``{file_prefix}_{func_name}.png``, enabling hyperlinked navigation in
+    rendered SVGs or PDFs.
+
+    Parameters
+    ----------
+    compiled_func : CompiledFunc
+        A compiled function with a populated call graph.
+    file_prefix : str
+        Prefix for sub-diagram filenames in URL attributes.
+
+    Returns
+    -------
+    str
+        DOT-language string with URL links on call nodes and function nodes.
+    """
+    dag = getattr(compiled_func, "_call_graph", None)
+    if dag is None:
+        return "digraph CallGraph { }"
+
+    return _hierarchical_dot_from_dag(dag, file_prefix=file_prefix)
+
+
+def _hierarchical_dot_from_dag(dag, *, file_prefix="func"):
+    """Build a DOT string from a CallGraphDAG with sub-diagram URL links.
+
+    Parameters
+    ----------
+    dag : CallGraphDAG
+        The call graph DAG.
+    file_prefix : str
+        Prefix for sub-diagram filenames.
+
+    Returns
+    -------
+    str
+        DOT-language string.
+    """
+    from .call_graph import _format_dual_gates
+
+    nodes = dag.nodes
+    if not nodes:
+        return "digraph CallGraph { }"
+
+    lines = []
+    lines.append("digraph CallGraph {")
+    lines.append("  rankdir=TB;")
+    lines.append('  node [shape=box, fontname="Courier"];')
+
+    groups = dag.parallel_groups()
+    node_to_group = {}
+    for gi, group in enumerate(groups):
+        for idx in group:
+            node_to_group[idx] = gi
+
+    use_clusters = len(groups) > 1
+
+    def _node_label(idx):
+        nd = nodes[idx]
+        name = nd.func_name.replace('"', '\\"')
+        dual = _format_dual_gates(nd.uncontrolled_gate_count, nd.controlled_gate_count)
+        return (
+            f"{name}\\n"
+            f"gates: {dual}\\n"
+            f"depth: {nd.depth}\\n"
+            f"qubits: {len(nd.qubit_set)}\\n"
+            f"T-count: {nd.t_count}"
+        )
+
+    def _node_url(idx):
+        nd = nodes[idx]
+        name = nd.func_name.replace(" ", "_")
+        return f"{file_prefix}_{name}.png"
+
+    def _emit_node(idx):
+        nd = nodes[idx]
+        url = _node_url(idx)
+        if nd.is_call_node:
+            return f'  n{idx} [label="{_node_label(idx)}", style=dashed, URL="{url}"];'
+        return f'  n{idx} [label="{_node_label(idx)}", URL="{url}"];'
+
+    if use_clusters:
+        for gi, group in enumerate(groups):
+            lines.append(f"  subgraph cluster_{gi} {{")
+            lines.append("    style=dotted;")
+            lines.append(f'    label="Group {gi}";')
+            for idx in sorted(group):
+                lines.append(f"  {_emit_node(idx)}")
+            lines.append("  }")
+    else:
+        for idx in range(len(nodes)):
+            lines.append(_emit_node(idx))
+
+    # Edges
+    for eidx in dag.dag.edge_indices():
+        src, tgt = dag.dag.get_edge_endpoints_by_index(eidx)
+        edge_data = dag.dag.get_edge_data_by_index(eidx)
+        if isinstance(edge_data, dict):
+            etype = edge_data.get("type")
+            if etype == "execution_order":
+                lines.append(f'  n{src} -> n{tgt} [label="exec"];')
+            elif etype == "call":
+                lines.append(f'  n{src} -> n{tgt} [label="call", style=dashed, color=blue];')
+
+    lines.append("}")
+    return "\n".join(lines)
+
+
+def draw_hierarchical(compiled_func, *, mode=None, overlap=True, save_dir=None, file_prefix="func"):
+    """Generate per-function sub-diagrams and a top-level call graph DOT.
+
+    This is the main entry point for hierarchical visualization. It produces:
+
+    1. A PIL image for each compiled function's own gates (sub-diagrams).
+    2. A DOT string for the call graph with URL links to the sub-diagrams.
+
+    When *save_dir* is provided, images are saved as
+    ``{save_dir}/{file_prefix}_{name}.png`` and the DOT is saved as
+    ``{save_dir}/{file_prefix}_call_graph.dot``.
+
+    Parameters
+    ----------
+    compiled_func : CompiledFunc
+        A compiled function with populated cache and call graph.
+    mode : str or None
+        Rendering mode for sub-diagrams.
+    overlap : bool
+        Overlap parameter for sub-diagram rendering.
+    save_dir : str or None
+        If provided, save all outputs to this directory.
+    file_prefix : str
+        Prefix for output filenames.
+
+    Returns
+    -------
+    dict
+        Keys:
+        - ``"diagrams"`` : dict[str, PIL.Image.Image] — per-function images
+        - ``"dot"`` : str — DOT-language call graph with URL links
+    """
+    import os
+
+    diagrams = render_function_diagrams(compiled_func, mode=mode, overlap=overlap)
+    dot = hierarchical_dot(compiled_func, file_prefix=file_prefix)
+
+    if save_dir is not None:
+        os.makedirs(save_dir, exist_ok=True)
+        for name, img in diagrams.items():
+            path = os.path.join(save_dir, f"{file_prefix}_{name}.png")
+            img.save(path)
+        dot_path = os.path.join(save_dir, f"{file_prefix}_call_graph.dot")
+        with open(dot_path, "w") as f:
+            f.write(dot)
+
+    return {"diagrams": diagrams, "dot": dot}
