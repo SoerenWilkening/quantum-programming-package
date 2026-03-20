@@ -1,8 +1,9 @@
 """CompiledFunc class and public compile decorator.
 
 Contains the ``CompiledFunc`` wrapper returned by ``@ql.compile`` and
-the ``compile`` decorator factory.  Inverse classes
-(``_InverseCompiledFunc``, ``_AncillaInverseProxy``) are in ``_inverse``.
+the ``compile`` decorator factory.  Capture logic is in ``_capture``,
+replay logic in ``_replay``, IR execution in ``_ir``, inverse classes
+(``_InverseCompiledFunc``, ``_AncillaInverseProxy``) in ``_inverse``.
 """
 
 import collections
@@ -17,20 +18,12 @@ from .._compile_state import (
     _set_active_compile_block,
 )
 from .._core import (
-    _allocate_qubit,
-    _get_control_bool,
-    _get_control_stack,
     _get_controlled,
-    _get_layer_floor,
     _get_qubit_saving_mode,
     _register_cache_clear_hook,
-    _set_control_stack,
-    _set_layer_floor,
     add_gate_count,
-    extract_gate_range,
     get_current_layer,
     get_gate_count,
-    inject_remapped_gates,
     option,
 )
 from ..call_graph import (
@@ -45,9 +38,22 @@ from ..call_graph import (
 from ..qint import qint
 from . import _block
 from ._block import (
-    _MAX_CAPTURE_DEPTH,
-    AncillaRecord,
     CompiledBlock,
+)
+from ._capture import (
+    _capture as _capture_impl,
+)
+from ._capture import (
+    _capture_and_cache_both as _capture_and_cache_both_impl,
+)
+from ._capture import (
+    _derive_controlled_block as _derive_controlled_block_impl,
+)
+from ._replay import (
+    _apply_merge as _apply_merge_impl,
+)
+from ._replay import (
+    _replay as _replay_impl,
 )
 
 # ---------------------------------------------------------------------------
@@ -525,274 +531,13 @@ class CompiledFunc:
 
     def _capture(self, args, kwargs, quantum_args):
         """Capture gate sequence during first call."""
-        if _block._capture_depth >= _MAX_CAPTURE_DEPTH:
-            raise RecursionError(
-                f"Compiled function nesting depth exceeded {_MAX_CAPTURE_DEPTH}. "
-                "Possible circular compiled function calls."
-            )
-        _block._capture_depth += 1
-        try:
-            return self._capture_inner(args, kwargs, quantum_args)
-        finally:
-            _block._capture_depth -= 1
+        return _capture_impl(self, args, kwargs, quantum_args)
 
     def _capture_inner(self, args, kwargs, quantum_args):
-        """Inner capture logic (separated for nesting depth tracking).
+        """Inner capture logic (delegates to _capture module)."""
+        from ._capture import _capture_inner as _ci
 
-        Execution proceeds in compile mode: the body runs with IR recording
-        active (no gates emitted), then ``_execute_ir`` replays the recorded
-        entries to produce actual gates.  The resulting gates are extracted
-        and virtualised for the gate-level cache as before.
-
-        The compile-mode (IR recording) phase always runs with the control
-        stack cleared so that IR entries record uncontrolled registers.
-        The execute phase (``_execute_ir``) runs with the original control
-        stack intact so it can select controlled sequences and inject
-        the control qubit when inside a ``with`` block.  This ensures the
-        first call inside a ``with`` block produces correctly controlled
-        gates in the circuit.
-
-        The extracted gates are then normalised to uncontrolled form (any
-        injected control qubit is stripped) before building the gate-level
-        cache, so ``_derive_controlled_block`` can re-add control correctly.
-        """
-        from . import (
-            _build_virtual_mapping,
-            _execute_ir,
-            _get_qarray_qubit_indices,
-            _get_qint_qubit_indices,
-            _get_quantum_arg_qubit_indices,
-            _get_quantum_arg_width,
-            _optimize_gate_list,
-            _strip_control_qubit,
-        )
-
-        # Record start layer
-        start_layer = get_current_layer()
-
-        # Detect controlled context BEFORE clearing the control stack
-        is_controlled = _get_controlled()
-        control_physical_qubit = None
-        if is_controlled:
-            control_bool = _get_control_bool()
-            control_physical_qubit = int(control_bool.qubits[63])
-
-        # Check if circuit is in tracking-only mode (simulate=False).
-        # Gate count is used to compute per-block cost when gates aren't stored.
-        _use_tracking = not option("simulate")
-        _gate_count_before = get_gate_count() if _use_tracking else 0
-
-        # Collect parameter qubit indices BEFORE execution
-        param_qubit_indices = []
-        for qa in quantum_args:
-            param_qubit_indices.append(_get_quantum_arg_qubit_indices(qa))
-
-        # Compile-mode capture: run the body with IR recording active,
-        # then execute the recorded IR to produce gates in the circuit.
-        #
-        # Mode-dependent control stack handling:
-        # - QFT mode: control stack is cleared during compile_mode so IR
-        #   entries record uncontrolled registers.  After compile_mode, the
-        #   stack is restored and _execute_ir selects controlled sequences.
-        # - Toffoli mode: control stack is NOT cleared.  Toffoli dispatch
-        #   handles control natively (passes _controlled + control_qubit).
-        #   No IR entries are recorded, so _execute_ir is a no-op.
-        ir_block = CompiledBlock(
-            gates=[],
-            total_virtual_qubits=0,
-            param_qubit_ranges=[],
-            internal_qubit_count=0,
-            return_qubit_range=None,
-        )
-        _is_toffoli = option("fault_tolerant")
-        if _is_toffoli:
-            # Toffoli mode: keep control stack intact.  Toffoli dispatch
-            # emits gates directly with the correct control context.
-            with self.compile_mode(ir_block):
-                result = self._func(*args, **kwargs)
-        else:
-            # QFT mode: clear control stack during IR recording, restore
-            # it before IR execution so _execute_ir can inject control.
-            saved_stack = list(_get_control_stack())
-            _set_control_stack([])
-            try:
-                with self.compile_mode(ir_block):
-                    result = self._func(*args, **kwargs)
-            finally:
-                _set_control_stack(saved_stack)
-
-        # Execute the recorded IR to produce gates in the circuit.
-        # In QFT mode, _execute_ir checks the (now-restored) control
-        # stack and uses controlled sequences when inside a with block.
-        # In Toffoli mode, _instruction_ir is empty (Toffoli dispatch
-        # emitted gates directly), so this is a no-op.
-        _execute_ir(ir_block)
-
-        # Record end layer
-        end_layer = get_current_layer()
-
-        # In tracking-only mode, compute gate count from circ->gate_count
-        # difference (gates were counted but not stored in the circuit).
-        # Subtract inner call gate count deltas so original_gate_count
-        # reflects only this function's OWN gates (inner gates are replayed
-        # via _replay_call_records which credits them separately).
-        # gate_count_delta is the total recursive delta (including
-        # grandchildren), not just the inner function's own gates.
-        _tracking_gate_count = 0
-        if _use_tracking:
-            _tracking_gate_count = get_gate_count() - _gate_count_before
-            if ir_block._call_records:
-                for cr in ir_block._call_records:
-                    _tracking_gate_count -= cr.gate_count_delta
-
-        # Extract captured gates (empty in tracking-only mode (simulate=False)
-        # since gates are counted but not stored).
-        # When nested compiled functions were called, exclude their gate
-        # ranges so the outer block stores only its OWN gates.
-        _inner_ranges = []
-        if ir_block._call_records:
-            for cr in ir_block._call_records:
-                if cr.gate_layer_start >= 0 and cr.gate_layer_end > cr.gate_layer_start:
-                    _inner_ranges.append((cr.gate_layer_start, cr.gate_layer_end))
-            _inner_ranges.sort()
-
-        if _inner_ranges:
-            raw_gates = []
-            # Extract gaps between inner call ranges
-            cursor = start_layer
-            for inner_start, inner_end in _inner_ranges:
-                if cursor < inner_start:
-                    raw_gates.extend(extract_gate_range(cursor, inner_start))
-                cursor = max(cursor, inner_end)
-            if cursor < end_layer:
-                raw_gates.extend(extract_gate_range(cursor, end_layer))
-        else:
-            raw_gates = extract_gate_range(start_layer, end_layer)
-
-        # If the capture ran in a controlled context, the extracted gates
-        # include the control qubit.  Strip it to get uncontrolled gates
-        # for the gate-level cache (controlled variant is derived later
-        # by _derive_controlled_block).
-        if is_controlled and control_physical_qubit is not None and raw_gates:
-            raw_gates = _strip_control_qubit(raw_gates, control_physical_qubit)
-
-        # Build virtual mapping
-        virtual_gates, real_to_virtual, total_virtual = _build_virtual_mapping(
-            raw_gates, param_qubit_indices
-        )
-
-        # Determine return value qubit range (if result is qint or qarray)
-        from ..qarray import qarray
-
-        return_range = None
-        return_is_param_index = None
-        return_type = None
-        return_qarray_element_widths = None
-
-        if isinstance(result, qarray):
-            return_type = "qarray"
-            # Get all qubit indices from the returned qarray
-            ret_indices = _get_qarray_qubit_indices(result)
-
-            # Store element widths for replay reconstruction
-            return_qarray_element_widths = [
-                elem.width if hasattr(elem, "width") else 1 for elem in result
-            ]
-
-            # Check if return qarray IS one of the input parameters
-            for param_idx, param_indices in enumerate(param_qubit_indices):
-                if ret_indices == param_indices:
-                    return_is_param_index = param_idx
-                    break
-
-            # Map return qubits to virtual namespace
-            if ret_indices:
-                virt_ret = [real_to_virtual[r] for r in ret_indices]
-                return_range = (min(virt_ret), len(ret_indices))
-        elif isinstance(result, qint):
-            return_type = "qint"
-            ret_indices = _get_qint_qubit_indices(result)
-
-            # Check if return value IS one of the input parameters (in-place)
-            for param_idx, param_indices in enumerate(param_qubit_indices):
-                if ret_indices == param_indices:
-                    return_is_param_index = param_idx
-                    break
-
-            # Map return qubits to virtual namespace
-            virt_ret = [real_to_virtual[r] for r in ret_indices]
-            return_range = (min(virt_ret), result.width)
-
-        # Build param ranges in virtual space (start, end) starting at 1
-        param_ranges = []
-        vidx = 1  # params start at virtual index 1 (0 reserved for control)
-        for qa in quantum_args:
-            qa_width = _get_quantum_arg_width(qa)
-            param_ranges.append((vidx, vidx + qa_width))
-            vidx += qa_width
-        internal_count = total_virtual - vidx
-
-        # Optimise the virtual gate list (cancel adjacent inverses, merge
-        # consecutive rotations) before caching so every replay benefits.
-        original_count = _tracking_gate_count if _use_tracking else len(virtual_gates)
-        if self._optimize:
-            try:
-                virtual_gates = _optimize_gate_list(virtual_gates)
-            except Exception:
-                pass  # Fall back to unoptimised on any error
-
-        # Identify ancilla physical qubits (those not in param sets)
-        param_real_set = set()
-        for qubit_list in param_qubit_indices:
-            param_real_set.update(qubit_list)
-        capture_ancilla_qubits = [r for r in real_to_virtual if r not in param_real_set]
-
-        # Build virtual-to-real mapping for capture (inverse of real_to_virtual)
-        capture_vtr = {v: r for r, v in real_to_virtual.items()}
-
-        block = CompiledBlock(
-            gates=virtual_gates,
-            total_virtual_qubits=total_virtual,
-            param_qubit_ranges=param_ranges,
-            internal_qubit_count=internal_count,
-            return_qubit_range=return_range,
-            return_is_param_index=return_is_param_index,
-            original_gate_count=original_count,
-        )
-        block._first_call_result = result
-        block._capture_ancilla_qubits = capture_ancilla_qubits
-        block._capture_virtual_to_real = capture_vtr
-        block.return_type = return_type
-        block._return_qarray_element_widths = return_qarray_element_widths
-
-        # Classify ancilla qubits as transient vs result/persistent (Phase 8).
-        # After capture, query the allocator to determine which ancilla qubits
-        # were freed during the operation (transient: carry bits, temp registers)
-        # vs which are still allocated (result qubits, persistent intermediates).
-        from .._core import _is_qubit_allocated
-
-        transient_virtuals = set()
-        for real_q in capture_ancilla_qubits:
-            virt_idx = real_to_virtual.get(real_q)
-            if virt_idx is not None and not _is_qubit_allocated(real_q):
-                transient_virtuals.add(virt_idx)
-        block.transient_virtual_indices = frozenset(transient_virtuals)
-
-        # Transfer IR entries from the compile-mode block to the cached block
-        block._instruction_ir = ir_block._instruction_ir
-
-        # Transfer CallRecords from the compile-mode block, converting
-        # capture-time physical qubit indices to virtual qubit indices
-        # so that _replay can map them through virtual_to_real.
-        if ir_block._call_records:
-            for cr in ir_block._call_records:
-                cr.quantum_arg_indices = [
-                    [real_to_virtual.get(phys, phys) for phys in arg_indices]
-                    for arg_indices in cr.quantum_arg_indices
-                ]
-            block._call_records = ir_block._call_records
-
-        return block
+        return _ci(self, args, kwargs, quantum_args)
 
     def _capture_and_cache_both(
         self,
@@ -804,83 +549,21 @@ class CompiledFunc:
         is_controlled,
         cache_key,
     ):
-        """Handle cache miss: capture uncontrolled, derive controlled, cache both.
-
-        IR recording always happens with the control stack cleared (inside
-        ``_capture_inner``).  IR execution (``_execute_ir``) runs with
-        the original control stack intact, so the first call inside a
-        ``with`` block produces correctly controlled gates.
-        """
-        from . import _input_qubit_key
-
-        # _capture_inner handles control stack save/clear/restore internally:
-        # IR recording runs uncontrolled, IR execution sees the real stack.
-        block = self._capture(args, kwargs, quantum_args)
-
-        # Derive controlled variant and attach to the same block
-        try:
-            controlled_block = self._derive_controlled_block(block)
-        except Exception:
-            # Fallback: re-capture in controlled mode (not expected with
-            # current gate set, but guards against future gate types)
-            controlled_block = self._capture(args, kwargs, quantum_args)
-        block.controlled_block = controlled_block
-
-        # Cache single entry (both variants stored on the block)
-        self._cache[cache_key] = block
-
-        # Evict oldest if over capacity
-        while len(self._cache) > self._max_cache:
-            self._cache.popitem(last=False)
-
-        # Record forward call for inverse support (first call / capture path)
-        result = block._first_call_result
-        capture_ancillas = block._capture_ancilla_qubits or []
-        if capture_ancillas:
-            input_key = _input_qubit_key(quantum_args)
-            self._forward_calls[input_key] = AncillaRecord(
-                ancilla_qubits=capture_ancillas,
-                virtual_to_real=block._capture_virtual_to_real or {},
-                block=block,
-                return_qint=result
-                if (block.return_qubit_range is not None and block.return_is_param_index is None)
-                else None,
-            )
-
-        return result
+        """Handle cache miss: capture uncontrolled, derive controlled, cache both."""
+        return _capture_and_cache_both_impl(
+            self,
+            args,
+            kwargs,
+            quantum_args,
+            classical_args,
+            widths,
+            is_controlled,
+            cache_key,
+        )
 
     def _derive_controlled_block(self, uncontrolled_block):
-        """Create a controlled ``CompiledBlock`` from an uncontrolled one.
-
-        The control qubit uses virtual index 0 (reserved by
-        ``_build_virtual_mapping``).  ``total_virtual_qubits`` is the
-        same as the uncontrolled block since index 0 is already counted.
-        """
-        from . import _derive_controlled_gates
-
-        controlled_gates = _derive_controlled_gates(
-            uncontrolled_block.gates,
-        )
-
-        controlled_block = CompiledBlock(
-            gates=controlled_gates,
-            total_virtual_qubits=uncontrolled_block.total_virtual_qubits,
-            param_qubit_ranges=list(uncontrolled_block.param_qubit_ranges),
-            internal_qubit_count=uncontrolled_block.internal_qubit_count,
-            return_qubit_range=uncontrolled_block.return_qubit_range,
-            return_is_param_index=uncontrolled_block.return_is_param_index,
-            original_gate_count=uncontrolled_block.original_gate_count,
-        )
-        controlled_block.control_virtual_idx = 0
-        controlled_block.return_type = uncontrolled_block.return_type
-        controlled_block._return_qarray_element_widths = (
-            uncontrolled_block._return_qarray_element_widths
-        )
-        # Share CallRecords so controlled replay also delegates to inner
-        # functions (inner functions handle their own control propagation).
-        controlled_block._call_records = uncontrolled_block._call_records
-        controlled_block.transient_virtual_indices = uncontrolled_block.transient_virtual_indices
-        return controlled_block
+        """Create a controlled CompiledBlock from an uncontrolled one."""
+        return _derive_controlled_block_impl(self, uncontrolled_block)
 
     # ------------------------------------------------------------------
     # Parametric compilation lifecycle (PAR-02 / PAR-03)
@@ -1040,293 +723,15 @@ class CompiledFunc:
         return result
 
     def _replay(self, block, quantum_args, track_forward=True, kind=None):
-        """Replay cached gates with qubit remapping.
-
-        Checks the control stack at runtime and selects the appropriate gate
-        sequence.  If the block has a ``controlled_block`` and we are inside
-        a controlled context (``with qbool:``), the controlled variant is
-        used and its control virtual index is mapped to the actual control
-        qubit.  Otherwise the uncontrolled variant is used directly.
-
-        Parameters
-        ----------
-        block : CompiledBlock
-            The *base* (uncontrolled) block.  ``block.controlled_block`` is
-            used automatically when the control stack is active.
-        quantum_args : list
-            Caller's quantum arguments (qint / qarray).
-        track_forward : bool
-            Whether to record ancilla allocations for inverse support.
-        kind : str or None
-            History kind tag (e.g. ``"compiled_fn"``).
-        """
-        from . import (
-            _build_return_qarray,
-            _build_return_qint,
-            _execute_ir,
-            _get_quantum_arg_qubit_indices,
-            _input_qubit_key,
-            _replay_call_records,
-        )
-
-        # --- Runtime sequence selection (Phase 5, Step 5.2) ---
-        is_controlled = _get_controlled()
-        if is_controlled and block.controlled_block is not None:
-            block = block.controlled_block
-
-        # Build virtual-to-real mapping from caller's qints/qarrays.
-        # Virtual index 0 is reserved for the control qubit; params
-        # start at index 1.
-        virtual_to_real = {}
-
-        # Map control qubit at index 0 when in controlled context
-        if is_controlled and block.control_virtual_idx is not None:
-            control_bool = _get_control_bool()
-            virtual_to_real[0] = int(control_bool.qubits[63])
-
-        vidx = 1  # params start at virtual index 1
-        for qa in quantum_args:
-            indices = _get_quantum_arg_qubit_indices(qa)
-            for real_q in indices:
-                virtual_to_real[vidx] = real_q
-                vidx += 1
-
-        # Validate total qubit count matches cached block's param ranges
-        expected_param_qubits = sum(end - start for start, end in block.param_qubit_ranges)
-        if vidx - 1 != expected_param_qubits:
-            raise ValueError(
-                f"qarray element widths don't match captured widths: "
-                f"expected {expected_param_qubits} qubits, got {vidx - 1}"
-            )
-
-        # Determine replay path before allocation: prefer IR path
-        # (handles controlled context via controlled_seq), fall back to
-        # gate-level injection.
-        #
-        # Find the base (uncontrolled) block that has IR entries.
-        # The derived controlled_block does not store IR — _execute_ir
-        # handles control selection internally using the control stack.
-        _ir_source = None
-        if block._instruction_ir:
-            _ir_source = block
-        elif hasattr(self, "_cache"):
-            for _cb in self._cache.values():
-                if _cb.controlled_block is block and _cb._instruction_ir:
-                    _ir_source = _cb
-                    break
-
-        # Determine which virtual indices are transient.  For the IR path,
-        # run_instruction allocates its own internal ancillas, so we skip
-        # allocation for transient virtual indices (Step 8.2).  For the
-        # gate-level path, all internal qubits must be allocated (the
-        # injected gate tuples reference them directly).
-        _will_use_ir = (
-            _ir_source is not None
-            and _ir_source._instruction_ir
-            and option("simulate")
-            and not (self._opt == 1 and not is_controlled and not option("simulate"))
-        )
-        _transient_set = block.transient_virtual_indices if _will_use_ir else frozenset()
-
-        # Allocate fresh ancillas for internal qubits (skip index 0
-        # which is the control slot, already mapped or unused).
-        # On the IR path, transient virtual indices are skipped — they
-        # are not referenced by IR register tuples and run_instruction
-        # handles its own ancillas for them.
-        ancilla_qubits = []
-        for v in range(vidx, block.total_virtual_qubits):
-            if v in _transient_set:
-                continue
-            real_q = _allocate_qubit()
-            virtual_to_real[v] = real_q
-            ancilla_qubits.append(real_q)
-
-        # Save layer_floor, set to current layer to prevent gate reordering
-        # into earlier circuit layers. This ensures consistent depth behavior:
-        # - Forward replay f(x) and adjoint replay f.adjoint(x) produce EQUAL
-        #   circuit depth because both use this same replay path with the same
-        #   layer_floor constraint (verified Phase 56 FIX-02).
-        # - Capture vs replay may differ if capture occurs after operations on
-        #   non-overlapping qubits (capture can pack into earlier layers).
-        saved_floor = _get_layer_floor()
-        start_layer = get_current_layer()
-        _set_layer_floor(start_layer)
-
-        # Inject gates into the circuit when simulate is True.
-        # When simulate is False (tracking-only / DAG-only mode),
-        # gates are not stored — gate counts are credited separately
-        # in _call_inner.
-        #
-        # opt=1 DAG-only replay: skip gate injection only in uncontrolled
-        # context AND when simulate=False (the DAG node in _call_inner
-        # records the cost).  When simulate=True the user expects gates
-        # in the circuit for every call.  Gate injection is also always
-        # required in controlled contexts (inside ``with`` blocks) for
-        # correct quantum state evolution.
-        #
-        # Track which path was used so _call_inner can decide whether to
-        # credit gate_count manually:
-        # - IR path: run_instruction already increments circ->gate_count
-        # - Gate-level path: inject_remapped_gates does NOT increment it
-        # - No path (simulate=False or opt=1 skip): nothing increments it
-        self._last_replay_used_ir = False
-        _skip_injection = self._opt == 1 and not is_controlled and not option("simulate")
-        if option("simulate") and not _skip_injection:
-            if _ir_source is not None and _ir_source._instruction_ir:
-                # IR path: _execute_ir handles controlled sequences and
-                # control qubit injection internally.
-                # Build capture-physical -> replay-physical mapping from
-                # the block's virtual-to-real data. IR entries store
-                # capture-time physical qubit indices, so we need to map
-                # them to the replay-time physical indices.
-                ir_qubit_mapping = None
-                v2r_capture = _ir_source._capture_virtual_to_real
-                if v2r_capture and virtual_to_real:
-                    ir_qubit_mapping = {}
-                    for virt_idx, capture_phys in v2r_capture.items():
-                        if virt_idx in virtual_to_real:
-                            ir_qubit_mapping[capture_phys] = virtual_to_real[virt_idx]
-                _execute_ir(_ir_source, qubit_mapping=ir_qubit_mapping)
-                self._last_replay_used_ir = True
-            elif block.gates:
-                # Gate-level path: inject remapped gates into the circuit.
-                inject_remapped_gates(block.gates, virtual_to_real)
-
-                # Free transient ancillas after gate injection (Phase 8.3).
-                # The injected gates return transient qubits to |0>, so they
-                # can be deallocated and reused. This prevents qubit count
-                # growth on repeated gate-level replay calls.
-                _transients = getattr(block, "transient_virtual_indices", None)
-                if _transients:
-                    from .._core import _deallocate_qubits
-
-                    for virt_idx in _transients:
-                        real_q = virtual_to_real.get(virt_idx)
-                        if real_q is not None:
-                            _deallocate_qubits(real_q, 1)
-                            # Remove from ancilla_qubits so inverse()
-                            # does not try to deallocate again
-                            if real_q in ancilla_qubits:
-                                ancilla_qubits.remove(real_q)
-
-        # Replay nested compiled function calls via CallRecords.
-        # Each CallRecord stores virtual qubit indices per argument;
-        # compose with virtual_to_real to get replay-time physical qubits.
-        _replay_call_records(block, virtual_to_real)
-
-        # Restore layer_floor
-        _set_layer_floor(saved_floor)
-
-        # Build return value
-        result = None
-        if block.return_qubit_range is not None:
-            if block.return_is_param_index is not None:
-                # Return value IS one of the input params -- return caller's qint/qarray
-                result = quantum_args[block.return_is_param_index]
-            elif block.return_type == "qarray":
-                result = _build_return_qarray(block, virtual_to_real)
-            else:
-                result = _build_return_qint(block, virtual_to_real)
-
-        # Record compiled-function history entry for inverse cancellation
-        if kind is not None and quantum_args:
-            _qm = tuple(q for qa in quantum_args for q in _get_quantum_arg_qubit_indices(qa))
-            target = quantum_args[0]
-            if hasattr(target, "history"):
-                target.history.append(id(self), _qm, len(ancilla_qubits), kind=kind)
-
-        # Record forward call for inverse support.
-        # Always record when internal qubits exist, even if ancilla_qubits
-        # is empty after transient freeing -- inverse() still needs the
-        # virtual_to_real mapping to replay adjoint gates.
-        if track_forward and block.internal_qubit_count > 0:
-            input_key = _input_qubit_key(quantum_args)
-            if input_key in self._forward_calls:
-                raise ValueError(
-                    f"Compiled function '{self._func.__name__}' already has an uninverted "
-                    f"forward call with these input qubits. Call {self._func.__name__}.inverse() first."
-                )
-            self._forward_calls[input_key] = AncillaRecord(
-                ancilla_qubits=ancilla_qubits,
-                virtual_to_real=dict(virtual_to_real),
-                block=block,
-                return_qint=result
-                if (block.return_qubit_range is not None and block.return_is_param_index is None)
-                else None,
-            )
-
-        return result
+        """Replay cached gates with qubit remapping."""
+        return _replay_impl(self, block, quantum_args, track_forward=track_forward, kind=kind)
 
     # ------------------------------------------------------------------
     # Selective sequence merging (opt=2)
     # ------------------------------------------------------------------
     def _apply_merge(self):
-        """Merge overlapping sequences after first call (opt=2).
-
-        Gets merge groups from the call graph, collects CompiledBlocks and
-        their virtual-to-real mappings, runs _merge_and_optimize, and stores
-        merged CompiledBlocks keyed by frozenset of node indices.
-        """
-        from . import _merge_and_optimize
-
-        if self._call_graph is None:
-            return
-        groups = self._call_graph.merge_groups(self._merge_threshold)
-        if not groups:
-            return
-
-        merged_blocks = {}
-        for group in groups:
-            blocks_with_mappings = []
-            for node_idx in group:
-                node = self._call_graph._nodes[node_idx]
-                block = node._block_ref
-                v2r = node._v2r_ref
-                if block is None or v2r is None:
-                    # Block not available for this node; skip this group
-                    break
-                blocks_with_mappings.append((block, v2r))
-            else:
-                # All blocks found -- merge them
-                merged_gates, original_count = _merge_and_optimize(
-                    blocks_with_mappings, optimize=self._optimize
-                )
-                # Determine max physical qubit used
-                max_phys = 0
-                for g in merged_gates:
-                    if g["target"] > max_phys:
-                        max_phys = g["target"]
-                    for c in g.get("controls", []):
-                        if c > max_phys:
-                            max_phys = c
-                total_vqubits = max_phys + 1 if merged_gates else 0
-                merged_block = CompiledBlock(
-                    gates=merged_gates,
-                    total_virtual_qubits=total_vqubits,
-                    param_qubit_ranges=[],
-                    internal_qubit_count=0,
-                    return_qubit_range=None,
-                    original_gate_count=original_count,
-                )
-                # Identity mapping: physical qubits are already correct
-                merged_block._capture_virtual_to_real = {i: i for i in range(total_vqubits)}
-                group_key = frozenset(group)
-                merged_blocks[group_key] = merged_block
-
-        if merged_blocks:
-            self._merged_blocks = merged_blocks
-
-        if self._debug and merged_blocks:
-            merge_stats = {
-                "merge_groups": len(groups),
-                "merged_blocks": len(merged_blocks),
-            }
-            for gk, mb in merged_blocks.items():
-                merge_stats[f"group_{sorted(gk)}_gates"] = len(mb.gates)
-                merge_stats[f"group_{sorted(gk)}_original"] = mb.original_gate_count
-            if self._stats is None:
-                self._stats = {}
-            self._stats["merge"] = merge_stats
+        """Merge overlapping sequences after first call (opt=2)."""
+        return _apply_merge_impl(self)
 
     # ------------------------------------------------------------------
     # Parametric introspection
