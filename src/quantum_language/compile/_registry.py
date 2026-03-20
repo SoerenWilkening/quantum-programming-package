@@ -151,7 +151,10 @@ def hierarchical_gate_count(cf, visited=None):
     breakdown = []
 
     for _cache_key, block in cf._cache.items():
-        own_gates = len(block.gates)
+        # Use original_gate_count which reflects circ->gate_count delta
+        # (more accurate than len(block.gates) when Toffoli dispatch
+        # counts differ from stored gate dicts).
+        own_gates = block.original_gate_count if block.original_gate_count else len(block.gates)
         total_own += own_gates
 
         call_records = getattr(block, "_call_records", None) or []

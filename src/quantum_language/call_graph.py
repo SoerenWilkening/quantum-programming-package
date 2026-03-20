@@ -836,7 +836,7 @@ def record_operation(
         uc_gc = gate_count
         cc_gc = 0
 
-    return dag.add_node(
+    node_idx = dag.add_node(
         operation_type,
         qubit_set,
         gate_count,
@@ -851,3 +851,13 @@ def record_operation(
         uncontrolled_gate_count=uc_gc,
         controlled_gate_count=cc_gc,
     )
+
+    # Track node index on the active compile block so that _dispatch
+    # can update missing variant counts on replay in a different context.
+    from ._compile_state import _get_active_compile_block
+
+    active_block = _get_active_compile_block()
+    if active_block is not None and hasattr(active_block, "_dag_node_indices"):
+        active_block._dag_node_indices.append(node_idx)
+
+    return node_idx

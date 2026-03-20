@@ -146,7 +146,7 @@ Rework `@ql.compile` pipeline to decouple sequence generation from execution, en
 | R16.10 | Stale tests updated to match current behavior: first-call trade-off test reflects that first call is now controlled; `qint` default width test matches auto-width semantics. | **Done** |
 | R16.11 | Call graph built once per compiled function — not duplicated on subsequent calls. Each instruction node stores both uncontrolled and controlled gate counts; display format `"gates: 24 / 18"` with `"-"` for unavailable variant. | **Done** |
 | R16.12 | `opt=1` uncontrolled replay injects gates when `simulate=True`. Gate injection skip only applies in tracking-only mode (`simulate=False`). | **Done** |
-| R16.13 | Toffoli-mode gate count propagation: `record_operation` populates `uncontrolled_gate_count` when outside `with` block, `controlled_gate_count` when inside. Depth and T-count computed before sequence is freed. | **Partial** — gate counts propagated; depth and T-count not yet wired from `.pxi` files |
+| R16.13 | Toffoli-mode gate count propagation: `record_operation` populates `uncontrolled_gate_count` when outside `with` block, `controlled_gate_count` when inside. Depth and T-count computed before sequence is freed. | **Done** |
 
 #### R17: History Graph Inverse Cancellation
 
@@ -154,8 +154,8 @@ Detect and cancel manual uncomputation in the history graph, avoiding redundant 
 
 | ID | Requirement | Status |
 |----|-------------|--------|
-| R17.1 | Tail-only matching: when an operation is the exact inverse of the last history entry and no active blockers exist, cancel both entries. | **Partial** — data structure implemented; `kind=` not wired from in-place Cython ops |
-| R17.2 | Supported inverse pairs: `+= k` / `-= k`, `^= x` / `^= x` (self-inverse), `f()` / `f.inverse()` (matched by sequence pointer). | **Partial** — `f()`/`f.inverse()` wired; `+=`/`-=`/`^=` not wired |
+| R17.1 | Tail-only matching: when an operation is the exact inverse of the last history entry and no active blockers exist, cancel both entries. | **Done** |
+| R17.2 | Supported inverse pairs: `+= k` / `-= k`, `^= x` / `^= x` (self-inverse), `f()` / `f.inverse()` (matched by sequence pointer). | **Done** |
 | R17.3 | Blocker mechanism: when a qint is used as a source operand (RHS), a blocker is added to its history referencing the dependent qint. | **Done** |
 | R17.4 | Blockers cleared on qubit deallocation (uncomputation) of the dependent qint, not on Python GC. Explicit notification mechanism. | **Done** |
 | R17.5 | No cancellation if active blockers exist after the last history entry. Operation added as normal entry instead. | **Done** |
@@ -168,7 +168,7 @@ Split the monolithic `compile.py` (2,293 lines) into a `compile/` subpackage wit
 | ID | Requirement | Status |
 |----|-------------|--------|
 | R18.1 | `compile.py` replaced by `compile/` subpackage. Public API (`@ql.compile` decorator) unchanged. All existing imports continue to work. | **Done** |
-| R18.2 | Each module in the subpackage ≤ 600 lines. No circular imports. | **Partial** — `_func.py` is 1023 lines (limit: 600) |
+| R18.2 | Each module in the subpackage ≤ 600 lines. No circular imports. | **Done** |
 | R18.3 | Logical separation: block types, optimization helpers, virtual mapping, capture, replay, parametric lifecycle, inverse proxies each in their own module. | **Done** |
 | R18.4 | All existing tests pass without modification (pure refactor, no behavioral change). | **Done** |
 

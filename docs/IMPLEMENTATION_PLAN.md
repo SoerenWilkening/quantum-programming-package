@@ -1316,7 +1316,7 @@ gate injection for controlled contexts.
 
 ---
 
-## Phase 5c — Call Graph Deduplication & Simulate Replay *(mostly complete)*
+## Phase 5c — Call Graph Deduplication & Simulate Replay ✅
 
 Fixes two issues: (1) the call graph duplicates instruction nodes on each call
 to a compiled function, and (2) `opt=1` incorrectly skips gate injection on
@@ -1451,7 +1451,7 @@ but never passes `uncontrolled_gate_count` or `controlled_gate_count`. The
 | 5c.2 | Dual gate counts on DAGNode | ~+30 | 5c.1 | ✅ |
 | 5c.3 | Build DAG once per compiled function | ~+15 | 5c.2 | ✅ |
 | 5c.4 | Fix simulate=True replay gate injection | ~+1 | Phase 5b | ✅ |
-| 5c.5 | Toffoli-mode gate count propagation | ~+45 | 5c.2 | **Partial** — gate counts done; depth/T-count not wired from `.pxi` |
+| 5c.5 | Toffoli-mode gate count propagation | ~+45 | 5c.2 | ✅ |
 
 **Parallelizable**: Steps 5c.4 and 5c.5 are independent of each other and of 5c.3.
 
@@ -1459,7 +1459,7 @@ but never passes `uncontrolled_gate_count` or `controlled_gate_count`. The
 
 ---
 
-## Phase 6 — History Graph Inverse Cancellation *(partially complete)*
+## Phase 6 — History Graph Inverse Cancellation ✅
 
 Adds automatic detection and cancellation of manual uncomputation in the
 history graph, reducing unnecessary gate overhead when users explicitly reverse
@@ -1601,7 +1601,7 @@ inverses. `f(a)` records a history entry with the function's sequence pointer;
 | 6.1 | Blocker data structure | ~+40 | — | ✅ |
 | 6.2 | Blocker insertion on source operand usage | ~+45 | 6.1 | ✅ |
 | 6.3 | Qubit deallocation notification | ~+10 | 6.1 | ✅ |
-| 6.4 | Tail-only inverse cancellation | ~+35 | 6.2, 6.3 | **Partial** — data structure done; `kind=` not wired from `__iadd__`/`__isub__`/`__ixor__` in `.pxi` |
+| 6.4 | Tail-only inverse cancellation | ~+35 | 6.2, 6.3 | ✅ |
 | 6.5 | Compiled function inverse cancellation | ~+25 | 6.4 | ✅ (wired via `compile/_replay.py`) |
 
 **Parallelizable**: Steps 6.2 and 6.3 are independent (both depend only on 6.1).
@@ -1612,7 +1612,7 @@ inverses. `f(a)` records a history entry with the function's sequence pointer;
 
 ---
 
-## Phase 7 — Compile Subpackage Refactor *(mostly complete)*
+## Phase 7 — Compile Subpackage Refactor ✅
 
 Splits the monolithic `compile.py` (2,293 lines) into a `compile/` subpackage.
 Pure refactor — no behavioral changes. All existing tests must pass without
@@ -1737,10 +1737,10 @@ old `compile.py` shim. Update all external imports.
 | 7.2 | Optimization + virtual mapping modules | ~+480 | 7.1 | ✅ |
 | 7.3 | Capture, replay, IR modules | ~+720 | 7.2 | ✅ |
 | 7.4 | Parametric + inverse modules | ~+420 | 7.3 | ✅ |
-| 7.5 | Consolidate CompiledFunc, remove shim | ~+612, -2293 | 7.4 | **Partial** — `_func.py` is 1023 lines (target: ≤500). Stale `compile.py` staged in working tree. |
+| 7.5 | Consolidate CompiledFunc, remove shim | ~+612, -2293 | 7.4 | ✅ |
 
 **Net**: ~+84 LOC (slight growth from module boilerplate/imports).
-9 modules, 8 within limit. `_func.py` needs further decomposition.
+All modules within 600-line limit. `_func.py` split into `_func.py`, `_dispatch.py`, and `_registry.py`. Stale `compile.py` removed.
 
 ---
 

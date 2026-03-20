@@ -60,7 +60,9 @@ class CompiledBlock:
         "_captured_controlled",  # Whether capture was inside control context
         "_instruction_ir",  # list[InstructionRecord] – compile-mode IR
         "_call_records",  # list[CallRecord] – nested compiled function calls
-        "_dag_built",  # bool – DAG nodes already built from IR (no duplication on replay)
+        "_dag_built",  # bool – backward compat property; True when any context built
+        "_dag_built_contexts",  # set – control contexts for which DAG was built ({True, False})
+        "_dag_node_indices",  # list[int] – DAG node indices created from IR
         "transient_virtual_indices",  # frozenset[int] – virtual indices freed during capture (Phase 8)
     )
 
@@ -94,6 +96,8 @@ class CompiledBlock:
         self._instruction_ir = []
         self._call_records = []
         self._dag_built = False
+        self._dag_built_contexts = set()
+        self._dag_node_indices = []
         self.transient_virtual_indices = frozenset()
 
     def draw_data(self):
