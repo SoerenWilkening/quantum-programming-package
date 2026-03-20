@@ -38,6 +38,8 @@
 		cdef int div_bits = 0
 		cdef int d_offset = 0
 		cdef size_t gc_before_div, gc_delta_div
+		cdef unsigned int layer_before_div
+		cdef gate_counts_t range_counts_div
 
 		# Extract dividend qubits (LSB-first for C convention)
 		# Python qint right-aligned layout: qubits[64-bits] = LSB (bit 0), qubits[63] = MSB
@@ -60,10 +62,15 @@
 
 		if type(divisor) == int:
 			gc_before_div = (<circuit_s*>_circ).gate_count
+			layer_before_div = (<circuit_s*>_circ).used_layer
 			toffoli_divmod_cq(_circ, dividend_qa, n,
 			                  <int64_t>divisor,
 			                  quotient_qa, remainder_qa)
 			gc_delta_div = (<circuit_s*>_circ).gate_count - gc_before_div
+			if (<circuit_s*>_circ).simulate and (<circuit_s*>_circ).used_layer > layer_before_div:
+				range_counts_div = circuit_gate_counts_range(<circuit_s*>_circ, layer_before_div, (<circuit_s*>_circ).used_layer)
+			else:
+				range_counts_div.t_count = 0
 			_record_operation(
 				"divmod_cq",
 				tuple(dividend_qa[i] for i in range(n))
@@ -71,6 +78,8 @@
 				+ tuple(remainder_qa[i] for i in range(n)),
 				gate_count=gc_delta_div,
 				controlled=False,
+				depth=(<circuit_s*>_circ).used_layer - layer_before_div,
+				t_count=range_counts_div.t_count,
 			)
 		elif type(divisor) == qint:
 			div_bits = (<qint>divisor).bits
@@ -79,10 +88,15 @@
 				divisor_qa[i] = (<qint>divisor).qubits[d_offset + i]
 
 			gc_before_div = (<circuit_s*>_circ).gate_count
+			layer_before_div = (<circuit_s*>_circ).used_layer
 			toffoli_divmod_qq(_circ, dividend_qa, n,
 			                  divisor_qa, div_bits,
 			                  quotient_qa, remainder_qa)
 			gc_delta_div = (<circuit_s*>_circ).gate_count - gc_before_div
+			if (<circuit_s*>_circ).simulate and (<circuit_s*>_circ).used_layer > layer_before_div:
+				range_counts_div = circuit_gate_counts_range(<circuit_s*>_circ, layer_before_div, (<circuit_s*>_circ).used_layer)
+			else:
+				range_counts_div.t_count = 0
 			_record_operation(
 				"divmod_qq",
 				tuple(dividend_qa[i] for i in range(n))
@@ -91,6 +105,8 @@
 				+ tuple(remainder_qa[i] for i in range(n)),
 				gate_count=gc_delta_div,
 				controlled=False,
+				depth=(<circuit_s*>_circ).used_layer - layer_before_div,
+				t_count=range_counts_div.t_count,
 			)
 		else:
 			raise TypeError("Divisor must be int or qint")

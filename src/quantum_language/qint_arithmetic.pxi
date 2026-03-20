@@ -25,6 +25,8 @@
 		cdef int result_bits
 		cdef int pos
 		cdef size_t gc_before, gc_delta
+		cdef unsigned int layer_before
+		cdef gate_counts_t range_counts
 
 		# Extract self qubits (right-aligned in 64-element array)
 		for i in range(self_bits):
@@ -58,10 +60,15 @@
 			# Toffoli dispatch for CQ
 			if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
 				gc_before = _circ.gate_count
+				layer_before = _circ.used_layer
 				_toffoli_dispatch_cq(_circ, self_qa, self_bits,
 				                     classical_value, invert,
 				                     _controlled, control_qubit)
 				gc_delta = _circ.gate_count - gc_before
+				if _circ.simulate and _circ.used_layer > layer_before:
+					range_counts = circuit_gate_counts_range(_circ, layer_before, _circ.used_layer)
+				else:
+					range_counts.t_count = 0
 				_record_operation(
 					"add_cq",
 					tuple(self_qa[i] for i in range(self_bits))
@@ -69,6 +76,8 @@
 					gate_count=gc_delta,
 					invert=bool(invert),
 					controlled=bool(_controlled),
+					depth=_circ.used_layer - layer_before,
+					t_count=range_counts.t_count,
 				)
 				return self
 
@@ -85,7 +94,12 @@
 				seq = CQ_add(self_bits, classical_value)
 			if seq == NULL:
 				return self
+			layer_before = _circ.used_layer
 			run_instruction(seq, qa, invert, <circuit_t*>_circ)
+			if _circ.simulate and _circ.used_layer > layer_before:
+				range_counts = circuit_gate_counts_range(_circ, layer_before, _circ.used_layer)
+			else:
+				range_counts.t_count = 0
 			_record_operation(
 				"add_cq",
 				tuple(qa[i] for i in range(pos)),
@@ -93,6 +107,8 @@
 				sequence_ptr=<unsigned long long>seq,
 				invert=bool(invert),
 				controlled=bool(_controlled),
+				depth=_circ.used_layer - layer_before,
+				t_count=range_counts.t_count,
 			)
 			return self
 
@@ -128,10 +144,15 @@
 		# Toffoli dispatch for QQ
 		if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
 			gc_before = _circ.gate_count
+			layer_before = _circ.used_layer
 			_toffoli_dispatch_qq(_circ, self_qa, self_bits,
 			                     other_qa, other_bits, invert,
 			                     _controlled, control_qubit, result_bits)
 			gc_delta = _circ.gate_count - gc_before
+			if _circ.simulate and _circ.used_layer > layer_before:
+				range_counts = circuit_gate_counts_range(_circ, layer_before, _circ.used_layer)
+			else:
+				range_counts.t_count = 0
 			_record_operation(
 				"add_qq",
 				tuple(self_qa[i] for i in range(self_bits))
@@ -140,6 +161,8 @@
 				gate_count=gc_delta,
 				invert=bool(invert),
 				controlled=bool(_controlled),
+				depth=_circ.used_layer - layer_before,
+				t_count=range_counts.t_count,
 			)
 			return self
 
@@ -158,7 +181,12 @@
 			seq = QQ_add(result_bits)
 		if seq == NULL:
 			return self
+		layer_before = _circ.used_layer
 		run_instruction(seq, qa, invert, <circuit_t*>_circ)
+		if _circ.simulate and _circ.used_layer > layer_before:
+			range_counts = circuit_gate_counts_range(_circ, layer_before, _circ.used_layer)
+		else:
+			range_counts.t_count = 0
 		_record_operation(
 			"add_qq",
 			tuple(qa[i] for i in range(pos + (1 if _controlled else 0))),
@@ -166,6 +194,8 @@
 			sequence_ptr=<unsigned long long>seq,
 			invert=bool(invert),
 			controlled=bool(_controlled),
+			depth=_circ.used_layer - layer_before,
+			t_count=range_counts.t_count,
 		)
 		return self
 
@@ -681,6 +711,8 @@
 		cdef sequence_t *seq
 		cdef int pos
 		cdef size_t gc_before, gc_delta
+		cdef unsigned int layer_before_mul
+		cdef gate_counts_t range_counts_mul
 
 		# Extract ret qubits (right-aligned in 64-element array)
 		for i in range(result_bits):
@@ -717,6 +749,7 @@
 			# Toffoli dispatch for CQ
 			if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
 				gc_before = _circ.gate_count
+				layer_before_mul = _circ.used_layer
 				if _controlled:
 					toffoli_cmul_cq(<circuit_t*>_circ, ret_qa, result_bits,
 					                self_qa, self_bits, classical_value,
@@ -725,6 +758,10 @@
 					toffoli_mul_cq(<circuit_t*>_circ, ret_qa, result_bits,
 					               self_qa, self_bits, classical_value)
 				gc_delta = _circ.gate_count - gc_before
+				if _circ.simulate and _circ.used_layer > layer_before_mul:
+					range_counts_mul = circuit_gate_counts_range(_circ, layer_before_mul, _circ.used_layer)
+				else:
+					range_counts_mul.t_count = 0
 				_record_operation(
 					"mul_cq",
 					tuple(ret_qa[i] for i in range(result_bits))
@@ -732,6 +769,8 @@
 					+ ((control_qubit,) if _controlled else ()),
 					gate_count=gc_delta,
 					controlled=bool(_controlled),
+					depth=_circ.used_layer - layer_before_mul,
+					t_count=range_counts_mul.t_count,
 				)
 				return ret
 
@@ -751,13 +790,20 @@
 				seq = CQ_mul(result_bits, classical_value)
 			if seq == NULL:
 				return ret
+			layer_before_mul = _circ.used_layer
 			run_instruction(seq, qa, 0, <circuit_t*>_circ)
+			if _circ.simulate and _circ.used_layer > layer_before_mul:
+				range_counts_mul = circuit_gate_counts_range(_circ, layer_before_mul, _circ.used_layer)
+			else:
+				range_counts_mul.t_count = 0
 			_record_operation(
 				"mul_cq",
 				tuple(qa[i] for i in range(pos)),
 				gate_count=seq.total_gate_count,
 				sequence_ptr=<unsigned long long>seq,
 				controlled=bool(_controlled),
+				depth=_circ.used_layer - layer_before_mul,
+				t_count=range_counts_mul.t_count,
 			)
 			return ret
 
@@ -791,6 +837,7 @@
 		# Toffoli dispatch for QQ
 		if _circ.arithmetic_mode == 1:  # ARITH_TOFFOLI
 			gc_before = _circ.gate_count
+			layer_before_mul = _circ.used_layer
 			if _controlled:
 				toffoli_cmul_qq(<circuit_t*>_circ, ret_qa, result_bits,
 				                self_qa, self_bits, other_qa, other_bits,
@@ -799,6 +846,10 @@
 				toffoli_mul_qq(<circuit_t*>_circ, ret_qa, result_bits,
 				               self_qa, self_bits, other_qa, other_bits)
 			gc_delta = _circ.gate_count - gc_before
+			if _circ.simulate and _circ.used_layer > layer_before_mul:
+				range_counts_mul = circuit_gate_counts_range(_circ, layer_before_mul, _circ.used_layer)
+			else:
+				range_counts_mul.t_count = 0
 			_record_operation(
 				"mul_qq",
 				tuple(ret_qa[i] for i in range(result_bits))
@@ -807,6 +858,8 @@
 				+ ((control_qubit,) if _controlled else ()),
 				gate_count=gc_delta,
 				controlled=bool(_controlled),
+				depth=_circ.used_layer - layer_before_mul,
+				t_count=range_counts_mul.t_count,
 			)
 			return ret
 
@@ -829,13 +882,20 @@
 			seq = QQ_mul(result_bits)
 		if seq == NULL:
 			return ret
+		layer_before_mul = _circ.used_layer
 		run_instruction(seq, qa, 0, <circuit_t*>_circ)
+		if _circ.simulate and _circ.used_layer > layer_before_mul:
+			range_counts_mul = circuit_gate_counts_range(_circ, layer_before_mul, _circ.used_layer)
+		else:
+			range_counts_mul.t_count = 0
 		_record_operation(
 			"mul_qq",
 			tuple(qa[i] for i in range(pos)),
 			gate_count=seq.total_gate_count,
 			sequence_ptr=<unsigned long long>seq,
 			controlled=bool(_controlled),
+			depth=_circ.used_layer - layer_before_mul,
+			t_count=range_counts_mul.t_count,
 		)
 		return ret
 

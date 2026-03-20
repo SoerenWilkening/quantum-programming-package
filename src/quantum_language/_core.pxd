@@ -281,6 +281,7 @@ cdef extern from "circuit_stats.h":
 	unsigned int circuit_depth(circuit_s *circ)
 	unsigned int circuit_qubit_count(circuit_s *circ)
 	gate_counts_t circuit_gate_counts(circuit_s *circ)
+	gate_counts_t circuit_gate_counts_range(circuit_s *circ, unsigned int start_layer, unsigned int end_layer)
 
 cdef extern from "optimizer.h":
 	# Gate injection for capture-replay

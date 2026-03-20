@@ -40,6 +40,8 @@
 		cdef unsigned int[:] other_qubits
 		cdef unsigned int[:] pad_qubits
 		cdef size_t gc_before_and, gc_delta_and
+		cdef unsigned int layer_before_and
+		cdef gate_counts_t range_counts_and
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
@@ -166,6 +168,7 @@
 				from quantum_language._gates import emit_ccx as _emit_ccx
 				from quantum_language.qbool import qbool as _qbool_cls
 				gc_before_and = (<circuit_s*>_circuit).gate_count
+				layer_before_and = (<circuit_s*>_circuit).used_layer
 				_and_ancilla = _qbool_cls()
 				_anc_qubit = _and_ancilla.qubits[63]
 				for i in range(result_bits):
@@ -181,12 +184,18 @@
 				from ._core import _deallocate_qubits
 				_deallocate_qubits(_and_ancilla.allocated_start, 1)
 				gc_delta_and = (<circuit_s*>_circuit).gate_count - gc_before_and
+				if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_and:
+					range_counts_and = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_and, (<circuit_s*>_circuit).used_layer)
+				else:
+					range_counts_and.t_count = 0
 				_total_and = 3 * result_bits
 				_record_operation(
 					"and",
 					tuple(qubit_array[i] for i in range(_total_and)),
 					gate_count=gc_delta_and,
 					controlled=bool(_controlled),
+					depth=(<circuit_s*>_circuit).used_layer - layer_before_and,
+					t_count=range_counts_and.t_count,
 				)
 				_qm = tuple(qubit_array[i] for i in range(_total_and))
 				result.history.append(0, _qm)
@@ -200,14 +209,21 @@
 
 		arr = qubit_array
 		gc_before_and = (<circuit_s*>_circuit).gate_count
+		layer_before_and = (<circuit_s*>_circuit).used_layer
 		run_instruction(seq, &arr[0], False, _circuit)
 		gc_delta_and = (<circuit_s*>_circuit).gate_count - gc_before_and
+		if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_and:
+			range_counts_and = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_and, (<circuit_s*>_circuit).used_layer)
+		else:
+			range_counts_and.t_count = 0
 		_record_operation(
 			"and",
 			tuple(qubit_array[i] for i in range(3 * result_bits if type(other) != int else 2 * result_bits)),
 			sequence_ptr=<unsigned long long>seq,
 			gate_count=gc_delta_and,
 			controlled=bool(_controlled),
+			depth=(<circuit_s*>_circuit).used_layer - layer_before_and,
+			t_count=range_counts_and.t_count,
 		)
 
 		# Step 1.2: Record operation into result's per-variable history
@@ -287,6 +303,8 @@
 		cdef bint _circuit_initialized = _get_circuit_initialized()
 		cdef bint _controlled = _get_controlled()
 		cdef size_t gc_before_or, gc_delta_or
+		cdef unsigned int layer_before_or
+		cdef gate_counts_t range_counts_or
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
@@ -396,14 +414,21 @@
 
 		arr = qubit_array
 		gc_before_or = (<circuit_s*>_circuit).gate_count
+		layer_before_or = (<circuit_s*>_circuit).used_layer
 		run_instruction(seq, &arr[0], False, _circuit)
 		gc_delta_or = (<circuit_s*>_circuit).gate_count - gc_before_or
+		if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_or:
+			range_counts_or = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_or, (<circuit_s*>_circuit).used_layer)
+		else:
+			range_counts_or.t_count = 0
 		_record_operation(
 			"or",
 			tuple(qubit_array[i] for i in range(3 * result_bits if type(other) != int else 2 * result_bits)),
 			sequence_ptr=<unsigned long long>seq,
 			gate_count=gc_delta_or,
 			controlled=bool(_controlled),
+			depth=(<circuit_s*>_circuit).used_layer - layer_before_or,
+			t_count=range_counts_or.t_count,
 		)
 
 		# Step 1.2: Record operation into result's per-variable history
@@ -488,6 +513,8 @@
 		cdef unsigned int[:] result_qubits
 		cdef unsigned int[:] other_qubits
 		cdef size_t gc_before_xor, gc_delta_xor
+		cdef unsigned int layer_before_xor
+		cdef gate_counts_t range_counts_xor
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
@@ -553,6 +580,7 @@
 
 		# Capture gate_count before multi-step XOR
 		gc_before_xor = (<circuit_s*>_circuit).gate_count
+		layer_before_xor = (<circuit_s*>_circuit).used_layer
 
 		# First, copy self to result by XORing self into result (result starts at 0)
 		# CYT-03: Replace slice with explicit loop for memory view optimization
@@ -594,6 +622,10 @@
 
 		# Record XOR operation on the DAG
 		gc_delta_xor = (<circuit_s*>_circuit).gate_count - gc_before_xor
+		if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_xor:
+			range_counts_xor = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_xor, (<circuit_s*>_circuit).used_layer)
+		else:
+			range_counts_xor.t_count = 0
 		_record_operation(
 			"xor",
 			tuple(result_qubits[result_offset + i] for i in range(result_bits))
@@ -603,6 +635,8 @@
 			   if type(other) != int else ()),
 			gate_count=gc_delta_xor,
 			controlled=bool(_controlled),
+			depth=(<circuit_s*>_circuit).used_layer - layer_before_xor,
+			t_count=range_counts_xor.t_count,
 		)
 
 		# Step 1.2: Record operation into result's per-variable history
@@ -653,6 +687,8 @@
 		cdef int i
 		cdef int xor_bits
 		cdef size_t gc_before_ixor, gc_delta_ixor
+		cdef unsigned int layer_before_ixor
+		cdef gate_counts_t range_counts_ixor
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
@@ -691,6 +727,7 @@
 
 			# CQ path: for each set bit in classical value, apply Q_not(1)
 			gc_before_ixor = (<circuit_s*>_circuit).gate_count
+			layer_before_ixor = (<circuit_s*>_circuit).used_layer
 			for i in range(self_bits):
 				if ((<int64_t>other) >> i) & 1:
 					qubit_array[0] = self.qubits[self_offset + i]
@@ -698,11 +735,17 @@
 					seq = Q_not(1)
 					run_instruction(seq, &arr[0], False, _circuit)
 			gc_delta_ixor = (<circuit_s*>_circuit).gate_count - gc_before_ixor
+			if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_ixor:
+				range_counts_ixor = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_ixor, (<circuit_s*>_circuit).used_layer)
+			else:
+				range_counts_ixor.t_count = 0
 			_record_operation(
 				"ixor_cq",
 				tuple(self.qubits[self_offset + i] for i in range(self_bits)),
 				gate_count=gc_delta_ixor,
 				controlled=bool(_controlled),
+				depth=(<circuit_s*>_circuit).used_layer - layer_before_ixor,
+				t_count=range_counts_ixor.t_count,
 			)
 			# Step 6.4: Record history with kind for inverse cancellation
 			_ixor_qm = tuple(self.qubits[self_offset + i] for i in range(self_bits)) + (int(other),)
@@ -737,14 +780,21 @@
 		arr = qubit_array
 		seq = Q_xor(xor_bits)
 		gc_before_ixor = (<circuit_s*>_circuit).gate_count
+		layer_before_ixor = (<circuit_s*>_circuit).used_layer
 		run_instruction(seq, &arr[0], False, _circuit)
 		gc_delta_ixor = (<circuit_s*>_circuit).gate_count - gc_before_ixor
+		if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_ixor:
+			range_counts_ixor = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_ixor, (<circuit_s*>_circuit).used_layer)
+		else:
+			range_counts_ixor.t_count = 0
 		_record_operation(
 			"ixor_qq",
 			tuple(qubit_array[i] for i in range(2 * xor_bits)),
 			sequence_ptr=<unsigned long long>seq,
 			gate_count=gc_delta_ixor,
 			controlled=bool(_controlled),
+			depth=(<circuit_s*>_circuit).used_layer - layer_before_ixor,
+			t_count=range_counts_ixor.t_count,
 		)
 		# Step 6.4: Record history with kind for inverse cancellation
 		_ixor_qm = tuple(self.qubits[self_offset + i] for i in range(xor_bits)) \
@@ -783,6 +833,8 @@
 		cdef bint _controlled = _get_controlled()
 		cdef object _control_bool = _get_control_bool()
 		cdef size_t gc_before_not, gc_delta_not
+		cdef unsigned int layer_before_not
+		cdef gate_counts_t range_counts_not
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
@@ -819,14 +871,21 @@
 
 		arr = qubit_array
 		gc_before_not = (<circuit_s*>_circuit).gate_count
+		layer_before_not = (<circuit_s*>_circuit).used_layer
 		run_instruction(seq, &arr[0], False, _circuit)
 		gc_delta_not = (<circuit_s*>_circuit).gate_count - gc_before_not
+		if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_not:
+			range_counts_not = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_not, (<circuit_s*>_circuit).used_layer)
+		else:
+			range_counts_not.t_count = 0
 		_record_operation(
 			"not",
 			tuple(qubit_array[i] for i in range(self.bits + (1 if _controlled else 0))),
 			sequence_ptr=<unsigned long long>seq,
 			gate_count=gc_delta_not,
 			controlled=bool(_controlled),
+			depth=(<circuit_s*>_circuit).used_layer - layer_before_not,
+			t_count=range_counts_not.t_count,
 		)
 
 		return self

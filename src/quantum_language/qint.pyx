@@ -15,6 +15,7 @@ import numpy as np
 # C-level imports for type declarations
 from ._core cimport (
     circuit, circuit_t, circuit_s, sequence_t, gate_t,
+    gate_counts_t, circuit_gate_counts_range,
     INTEGERSIZE, NUMANCILLY,
     init_circuit, Q_not, run_instruction,
     circuit_get_allocator, allocator_alloc, allocator_free,

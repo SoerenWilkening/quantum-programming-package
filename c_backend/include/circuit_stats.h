@@ -80,4 +80,17 @@ typedef struct {
  */
 gate_counts_t circuit_gate_counts(const circuit_t *circ);
 
+/**
+ * @brief Get breakdown of gate types in a range of circuit layers.
+ *
+ * Like circuit_gate_counts but only considers layers in [start_layer, end_layer).
+ * Useful for computing delta gate counts after an operation.
+ *
+ * @param circ Circuit to query
+ * @param start_layer First layer (inclusive)
+ * @param end_layer Last layer (exclusive)
+ * @return Gate counts structure (all zeros if circ is NULL or range is empty)
+ */
+gate_counts_t circuit_gate_counts_range(const circuit_t *circ, num_t start_layer, num_t end_layer);
+
 #endif // QUANTUM_CIRCUIT_STATS_H
