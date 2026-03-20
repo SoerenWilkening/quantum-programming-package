@@ -284,21 +284,22 @@ class TestInputVariablesNoHistory:
         a = ql.qint(0, width=8)
         assert len(a.history) == 0
 
-    def test_iadd_does_not_add_history(self):
-        """In-place += does not record to history (modifies existing var)."""
+    def test_iadd_records_kind_add(self):
+        """In-place += records history with kind='add' for cancellation."""
         ql.circuit()
         a = ql.qint(3, width=4)
         a += 2
-        # In-place operations modify `a` but do not create a new result
-        # that needs history. The history is for tracking how a *new*
-        # variable was produced, not modifications to existing ones.
-        assert len(a.history) == 0
+        # Step 6.4: In-place ops now record with kind for inverse cancellation
+        assert len(a.history) == 1
+        assert a.history.entries[0][3] == "add"
 
-    def test_isub_does_not_add_history(self):
+    def test_isub_records_kind_sub(self):
+        """In-place -= records history with kind='sub' for cancellation."""
         ql.circuit()
         a = ql.qint(5, width=4)
         a -= 2
-        assert len(a.history) == 0
+        assert len(a.history) == 1
+        assert a.history.entries[0][3] == "sub"
 
     def test_operands_unchanged_after_add(self):
         """a + b should not modify a.history or b.history."""

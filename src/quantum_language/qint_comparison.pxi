@@ -58,6 +58,8 @@
 				return qbool(True)
 
 			# Subtract-add-back pattern: (a - b) == 0, then restore a
+			# Save history length so we can trim entries added by internal -= / +=
+			_eq_hist_len = len(self.history)
 			# 1. In-place subtraction: self -= other
 			self -= other
 
@@ -66,6 +68,8 @@
 
 			# 3. Restore operand: self += other
 			self += other
+			# Trim internal in-place history entries (Step 6.4 transparency)
+			del self.history.entries[_eq_hist_len:]
 
 			# Track dependencies on compared qints
 			# Clear dependencies from recursive (self == 0) call, replace with actual operands
@@ -316,6 +320,8 @@
 			other_offset = 64 - other_bits
 			comp_width = (self_bits if self_bits > other_bits else other_bits) + 1
 
+			# Save history length so we can trim entries added by internal -= / +=
+			_lt_hist_len = len(self.history)
 			# 1. In-place mod-n subtraction: self -= other
 			self -= other
 
@@ -393,6 +399,8 @@
 
 			# 6. Restore self: self += other
 			self += other
+			# Trim internal in-place history entries (Step 6.4 transparency)
+			del self.history.entries[_lt_hist_len:]
 
 			# 7. Deallocate ancilla
 			if _circ.arithmetic_mode == 1 and comp_width > 1:
@@ -593,6 +601,8 @@
 			other_offset = 64 - other_bits
 			comp_width = (self_bits if self_bits > other_bits else other_bits) + 1
 
+			# Save history length so we can trim entries added by internal -= / +=
+			_gt_hist_len = len((<qint>other).history)
 			# 1. In-place mod-n subtraction: other -= self
 			(<qint>other).__isub__(self)
 
@@ -664,6 +674,8 @@
 
 			# 6. Restore other: other += self
 			(<qint>other).__iadd__(self)
+			# Trim internal in-place history entries (Step 6.4 transparency)
+			del (<qint>other).history.entries[_gt_hist_len:]
 
 			# 7. Deallocate ancilla
 			if _circ.arithmetic_mode == 1 and comp_width > 1:

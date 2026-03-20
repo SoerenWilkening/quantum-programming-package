@@ -5,10 +5,15 @@ Step 6.4: Tail-only inverse cancellation [Quantum_Assembly-4q7.4].
 Validates that append() cancels inverse pairs at the tail when no active
 blockers exist, and refuses to cancel when blockers are present or entries
 are not at the tail.
+
+Step 6.4 wiring [Quantum_Assembly-bd9]: Integration tests verify that
+real qint in-place ops (__iadd__, __isub__, __ixor__) pass kind= to
+history.append(), enabling the cancellation paths.
 """
 
 import gc
 
+import quantum_language as ql
 from quantum_language.history_graph import HistoryGraph
 
 # ---------------------------------------------------------------------------
@@ -457,3 +462,124 @@ class TestCompiledFnBlocker:
         # Blocker GC'd — cancellation should proceed
         hg.append(500, (0, 1, 2), kind="compiled_fn_inv")
         assert len(hg) == 0
+
+
+# ---------------------------------------------------------------------------
+# Integration: real qint in-place ops wire kind= to history.append
+# [Quantum_Assembly-bd9]
+# ---------------------------------------------------------------------------
+
+
+class TestIaddIsubCancelReal:
+    """a += N; a -= N on a real qint produces empty history."""
+
+    def test_iadd_isub_cancel_classical(self):
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=4)
+        a += 5
+        a -= 5
+        assert len(a.history) == 0
+
+    def test_isub_iadd_cancel_classical(self):
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=4)
+        a -= 3
+        a += 3
+        assert len(a.history) == 0
+
+    def test_iadd_isub_no_cancel_different_values(self):
+        """a += 5; a -= 3 must NOT cancel (different classical values)."""
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=4)
+        a += 5
+        a -= 3
+        assert len(a.history) == 2
+
+    def test_iadd_records_kind_add(self):
+        """__iadd__ records an entry with kind='add'."""
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=4)
+        a += 7
+        assert len(a.history) == 1
+        assert a.history.entries[0][3] == "add"
+
+    def test_isub_records_kind_sub(self):
+        """__isub__ records an entry with kind='sub'."""
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=4)
+        a -= 2
+        assert len(a.history) == 1
+        assert a.history.entries[0][3] == "sub"
+
+
+class TestIxorCancelReal:
+    """a ^= N; a ^= N on a real qint produces empty history (XOR is self-inverse)."""
+
+    def test_ixor_self_cancel_classical(self):
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=4)
+        a ^= 5
+        a ^= 5
+        assert len(a.history) == 0
+
+    def test_ixor_no_cancel_different_values(self):
+        """a ^= 5; a ^= 3 must NOT cancel (different classical values)."""
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=4)
+        a ^= 5
+        a ^= 3
+        assert len(a.history) == 2
+
+    def test_ixor_records_kind_xor(self):
+        """__ixor__ records an entry with kind='xor'."""
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=4)
+        a ^= 9
+        assert len(a.history) == 1
+        assert a.history.entries[0][3] == "xor"
+
+    def test_ixor_qq_self_cancel(self):
+        """a ^= b; a ^= b on quantum operands produces empty history."""
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=4)
+        b = ql.qint(3, width=4)
+        a ^= b
+        a ^= b
+        assert len(a.history) == 0
+
+
+class TestChainCancelReal:
+    """Multiple in-place ops can chain-cancel on real qints."""
+
+    def test_add_xor_cancel_chain(self):
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=4)
+        a += 5
+        a ^= 3
+        assert len(a.history) == 2
+        # Cancel xor first (tail)
+        a ^= 3
+        assert len(a.history) == 1
+        # Cancel add (now tail)
+        a -= 5
+        assert len(a.history) == 0
+
+    def test_triple_add_sub_partial_cancel(self):
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=4)
+        a += 1
+        a += 2
+        a -= 2  # cancels the += 2
+        assert len(a.history) == 1
+        assert a.history.entries[0][3] == "add"

@@ -704,6 +704,9 @@
 				gate_count=gc_delta_ixor,
 				controlled=bool(_controlled),
 			)
+			# Step 6.4: Record history with kind for inverse cancellation
+			_ixor_qm = tuple(self.qubits[self_offset + i] for i in range(self_bits)) + (int(other),)
+			self.history.append(0, _ixor_qm, kind='xor')
 			return self
 
 		if not isinstance(other, qint):
@@ -743,6 +746,10 @@
 			gate_count=gc_delta_ixor,
 			controlled=bool(_controlled),
 		)
+		# Step 6.4: Record history with kind for inverse cancellation
+		_ixor_qm = tuple(self.qubits[self_offset + i] for i in range(xor_bits)) \
+			+ tuple(other_qubits[other_offset + i] for i in range(xor_bits))
+		self.history.append(0, _ixor_qm, kind='xor')
 		return self
 
 	def __rxor__(self, other):

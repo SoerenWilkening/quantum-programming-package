@@ -217,6 +217,8 @@
 			a.add_dependency(other)
 
 		# Step 1.2: Record operation into result's per-variable history
+		# Clear internal in-place entries from ^= and += (Step 6.4 transparency)
+		del (<qint>a).history.entries[:]
 		_self_offset_h = 64 - self.bits
 		_a_offset_h = 64 - (<qint>a).bits
 		_qm = tuple((<qint>a).qubits[_a_offset_h + i] for i in range((<qint>a).bits)) \
@@ -280,6 +282,8 @@
 			a.add_dependency(other)
 
 		# Step 1.2: Record operation into result's per-variable history
+		# Clear internal in-place entries from ^= and += (Step 6.4 transparency)
+		del (<qint>a).history.entries[:]
 		_self_offset_h = 64 - self.bits
 		_a_offset_h = 64 - (<qint>a).bits
 		_qm = tuple((<qint>a).qubits[_a_offset_h + i] for i in range((<qint>a).bits)) \
@@ -321,7 +325,17 @@
 		if type(other) == qint and other is not self:
 			(<qint>other).history.add_blocker(self)
 		# in place addition
-		return self.addition_inplace(other)
+		self.addition_inplace(other)
+		# Step 6.4: Record history with kind for inverse cancellation
+		_ia_offset = 64 - self.bits
+		if type(other) == int:
+			_ia_qm = tuple(self.qubits[_ia_offset + i] for i in range(self.bits)) + (int(other),)
+		else:
+			_ia_other_offset = 64 - (<qint>other).bits
+			_ia_qm = tuple(self.qubits[_ia_offset + i] for i in range(self.bits)) \
+				+ tuple((<qint>other).qubits[_ia_other_offset + i] for i in range((<qint>other).bits))
+		self.history.append(0, _ia_qm, kind='add')
+		return self
 
 	def __sub__(self, other: qint | int):
 		"""Subtract quantum integers: self - other
@@ -371,6 +385,8 @@
 			a.add_dependency(other)
 
 		# Step 1.2: Record operation into result's per-variable history
+		# Clear internal in-place entries from ^= and -= (Step 6.4 transparency)
+		del (<qint>a).history.entries[:]
 		_self_offset_h = 64 - self.bits
 		_a_offset_h = 64 - (<qint>a).bits
 		_qm = tuple((<qint>a).qubits[_a_offset_h + i] for i in range((<qint>a).bits)) \
@@ -411,8 +427,18 @@
 		# Step 6.2: Blocker insertion — source operand references dest
 		if type(other) == qint and other is not self:
 			(<qint>other).history.add_blocker(self)
-		# in place addition
-		return self.addition_inplace(other, invert = True)
+		# in place subtraction (addition with invert)
+		self.addition_inplace(other, invert = True)
+		# Step 6.4: Record history with kind for inverse cancellation
+		_is_offset = 64 - self.bits
+		if type(other) == int:
+			_is_qm = tuple(self.qubits[_is_offset + i] for i in range(self.bits)) + (int(other),)
+		else:
+			_is_other_offset = 64 - (<qint>other).bits
+			_is_qm = tuple(self.qubits[_is_offset + i] for i in range(self.bits)) \
+				+ tuple((<qint>other).qubits[_is_other_offset + i] for i in range((<qint>other).bits))
+		self.history.append(0, _is_qm, kind='sub')
+		return self
 
 	def __neg__(self):
 		"""Two's complement negation: -self
@@ -439,6 +465,8 @@
 		result.add_dependency(self)
 
 		# Step 1.2: Record operation into result's per-variable history
+		# Clear internal in-place entries from -= (Step 6.4 transparency)
+		del (<qint>result).history.entries[:]
 		_self_offset_h = 64 - self.bits
 		_r_offset_h = 64 - (<qint>result).bits
 		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
@@ -486,6 +514,8 @@
 			result.add_dependency(other)
 
 		# Step 1.2: Record operation into result's per-variable history
+		# Clear internal in-place entries from +=, ^=, -= (Step 6.4 transparency)
+		del (<qint>result).history.entries[:]
 		_self_offset_h = 64 - self.bits
 		_r_offset_h = 64 - (<qint>result).bits
 		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
@@ -541,6 +571,8 @@
 		result.add_dependency(self)
 
 		# Step 1.2: Record operation into result's per-variable history
+		# Clear internal in-place entries from ^= (Step 6.4 transparency)
+		del (<qint>result).history.entries[:]
 		_self_offset_h = 64 - self.bits
 		_r_offset_h = 64 - (<qint>result).bits
 		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
@@ -600,6 +632,8 @@
 		result.add_dependency(self)
 
 		# Step 1.2: Record operation into result's per-variable history
+		# Clear internal in-place entries from ^= (Step 6.4 transparency)
+		del (<qint>result).history.entries[:]
 		_self_offset_h = 64 - self.bits
 		_r_offset_h = 64 - (<qint>result).bits
 		_qm = tuple((<qint>result).qubits[_r_offset_h + i] for i in range((<qint>result).bits)) \
