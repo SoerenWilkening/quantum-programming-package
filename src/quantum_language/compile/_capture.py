@@ -101,7 +101,11 @@ def _capture_inner(cf, args, kwargs, quantum_args):
     # Check if circuit is in tracking-only mode (simulate=False).
     # Gate count is used to compute per-block cost when gates aren't stored.
     _use_tracking = not option("simulate")
-    _gate_count_before = get_gate_count() if _use_tracking else 0
+    # Always record gate_count before body execution so we can compute
+    # the accurate gate_count delta.  circ->gate_count (from run_instruction)
+    # may differ from len(extracted_gates) due to Toffoli dispatch internals,
+    # and the delta is what get_gate_count() observes during replay.
+    _gate_count_before = get_gate_count()
 
     # Collect parameter qubit indices BEFORE execution
     param_qubit_indices = []
@@ -152,19 +156,21 @@ def _capture_inner(cf, args, kwargs, quantum_args):
     # Record end layer
     end_layer = get_current_layer()
 
-    # In tracking-only mode, compute gate count from circ->gate_count
-    # difference (gates were counted but not stored in the circuit).
+    # Compute gate count from circ->gate_count difference.
+    # This is always needed (not just tracking-only mode) because
+    # circ->gate_count (incremented by run_instruction) may differ
+    # from the number of stored gate dicts (Toffoli dispatch internals).
+    # The delta is what get_gate_count() reflects and what replay must
+    # credit via add_gate_count to stay consistent.
     # Subtract inner call gate count deltas so original_gate_count
     # reflects only this function's OWN gates (inner gates are replayed
     # via _replay_call_records which credits them separately).
     # gate_count_delta is the total recursive delta (including
     # grandchildren), not just the inner function's own gates.
-    _tracking_gate_count = 0
-    if _use_tracking:
-        _tracking_gate_count = get_gate_count() - _gate_count_before
-        if ir_block._call_records:
-            for cr in ir_block._call_records:
-                _tracking_gate_count -= cr.gate_count_delta
+    _gate_count_delta = get_gate_count() - _gate_count_before
+    if ir_block._call_records:
+        for cr in ir_block._call_records:
+            _gate_count_delta -= cr.gate_count_delta
 
     # Extract captured gates (empty in tracking-only mode (simulate=False)
     # since gates are counted but not stored).
@@ -256,7 +262,13 @@ def _capture_inner(cf, args, kwargs, quantum_args):
 
     # Optimise the virtual gate list (cancel adjacent inverses, merge
     # consecutive rotations) before caching so every replay benefits.
-    original_count = _tracking_gate_count if _use_tracking else len(virtual_gates)
+    # Use the circ->gate_count delta as original_gate_count.  This is
+    # more accurate than len(virtual_gates) because run_instruction may
+    # count more gates than are stored as gate dicts (Toffoli dispatch).
+    # In tracking-only mode (simulate=False), len(virtual_gates) is 0,
+    # so the delta is the only source.  In simulate mode, use the max
+    # to ensure replay credits at least what get_gate_count() observed.
+    original_count = max(_gate_count_delta, len(virtual_gates))
     if cf._optimize:
         try:
             virtual_gates = _optimize_gate_list(virtual_gates)
@@ -302,6 +314,10 @@ def _capture_inner(cf, args, kwargs, quantum_args):
 
     # Transfer IR entries from the compile-mode block to the cached block
     block._instruction_ir = ir_block._instruction_ir
+
+    # Transfer DAG node indices recorded by record_operation during capture
+    if ir_block._dag_node_indices:
+        block._dag_node_indices = ir_block._dag_node_indices
 
     # Transfer CallRecords from the compile-mode block, converting
     # capture-time physical qubit indices to virtual qubit indices

@@ -116,7 +116,7 @@ def _build_dag_from_ir(block, func_name, is_controlled=False, qubit_mapping=None
         uc_gc = _resolve_gate_count(entry.uncontrolled_seq)
         ct_gc = _resolve_gate_count(entry.controlled_seq)
 
-        dag.add_node(
+        node_idx = dag.add_node(
             entry.name,
             qubit_set,
             0,  # gate_count -- not available from IR alone
@@ -131,6 +131,7 @@ def _build_dag_from_ir(block, func_name, is_controlled=False, qubit_mapping=None
             invert=entry.invert,
             controlled=is_controlled,
         )
+        block._dag_node_indices.append(node_idx)
         count += 1
     return count
 
