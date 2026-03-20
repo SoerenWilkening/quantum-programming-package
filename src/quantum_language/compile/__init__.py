@@ -71,8 +71,6 @@ from .._compile_state import (  # noqa: E402 – after qint import is fine
 # CompiledFunc, compile decorator, inverse classes
 # ---------------------------------------------------------------------------
 from ._func import CompiledFunc as CompiledFunc  # noqa: E402
-from ._func import _clear_all_caches as _clear_all_caches  # noqa: E402
-from ._func import _compiled_funcs as _compiled_funcs  # noqa: E402
 from ._func import compile as compile  # noqa: E402
 from ._inverse import _adjoint_gate as _adjoint_gate  # noqa: E402, F401
 from ._inverse import _AncillaInverseProxy as _AncillaInverseProxy  # noqa: E402
@@ -99,6 +97,12 @@ from ._optimize import _strip_control_qubit as _strip_control_qubit  # noqa: E40
 from ._parametric import _apply_angles as _apply_angles  # noqa: E402, F401
 from ._parametric import _extract_angles as _extract_angles  # noqa: E402, F401
 from ._parametric import _extract_topology as _extract_topology  # noqa: E402, F401
+
+# ---------------------------------------------------------------------------
+# Cache registry (global weak-ref registry and clear hook)
+# ---------------------------------------------------------------------------
+from ._registry import _clear_all_caches as _clear_all_caches  # noqa: E402
+from ._registry import _compiled_funcs as _compiled_funcs  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Virtual qubit mapping helpers (delegated to _virtual module)
