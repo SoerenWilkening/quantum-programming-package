@@ -1,0 +1,299 @@
+"""Tests for per-context compiled function cache key (Quantum_Assembly-1yb).
+
+Verifies that control_count is included in the compiled function cache key
+so controlled and uncontrolled calls produce separate cache entries with
+independent, correct original_gate_count values from actual Toffoli dispatch.
+
+Tests:
+- test_separate_cache_entries — both contexts present after mixed calls
+- test_uncontrolled_gate_count — uncontrolled call credits correct cost
+- test_controlled_gate_count — controlled call credits correct cost
+- test_order_independent — call order does not affect per-call gate counts
+- test_nested_controlled_gate_count — outer calling inner inside with:
+  total matches uncompiled equivalent
+"""
+
+import gc
+import warnings
+
+import quantum_language as ql
+from quantum_language._core import get_gate_count
+
+warnings.filterwarnings("ignore", message="Value .* exceeds")
+
+
+class TestSeparateCacheEntries:
+    """Controlled and uncontrolled calls create separate cache entries."""
+
+    def test_separate_cache_entries(self):
+        """After calling foo both uncontrolled and controlled, _cache has 2 entries."""
+
+        @ql.compile
+        def foo(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=3)
+        _ = foo(a)
+        assert len(foo._cache) == 1
+
+        c = ql.qbool(True)
+        b = ql.qint(0, width=3)
+        with c:
+            _ = foo(b)
+        assert len(foo._cache) == 2
+
+    def test_controlled_only_one_entry(self):
+        """Calling only in controlled context creates exactly one entry."""
+
+        @ql.compile
+        def bar(x):
+            x += 2
+            return x
+
+        gc.collect()
+        ql.circuit()
+        c = ql.qbool(True)
+        a = ql.qint(0, width=3)
+        with c:
+            _ = bar(a)
+        assert len(bar._cache) == 1
+
+    def test_two_uncontrolled_calls_one_entry(self):
+        """Two uncontrolled calls with same widths share one cache entry."""
+
+        @ql.compile
+        def baz(x):
+            x += 3
+            return x
+
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=3)
+        _ = baz(a)
+        b = ql.qint(0, width=3)
+        _ = baz(b)
+        assert len(baz._cache) == 1
+
+    def test_two_controlled_calls_one_entry(self):
+        """Two controlled calls with same widths share one cache entry."""
+
+        @ql.compile
+        def qux(x):
+            x += 4
+            return x
+
+        gc.collect()
+        ql.circuit()
+        c1 = ql.qbool(True)
+        a = ql.qint(0, width=3)
+        with c1:
+            _ = qux(a)
+
+        c2 = ql.qbool(True)
+        b = ql.qint(0, width=3)
+        with c2:
+            _ = qux(b)
+        assert len(qux._cache) == 1
+
+
+class TestUncontrolledGateCount:
+    """Uncontrolled call credits correct uncontrolled cost."""
+
+    def test_uncontrolled_gate_count(self):
+        """Uncontrolled call's original_gate_count reflects uncontrolled Toffoli dispatch."""
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+
+        # Measure standalone uncontrolled cost
+        gc_before = get_gate_count()
+        a_raw = ql.qint(0, width=3)
+        a_raw += 1
+        standalone_cost = get_gate_count() - gc_before
+
+        # Now use compiled version
+        ql.circuit()
+        a = ql.qint(0, width=3)
+        _ = inc(a)
+
+        # Find the uncontrolled cache entry (control_count=0)
+        uc_block = None
+        for _key, block in inc._cache.items():
+            # control_count is in the key; find the uncontrolled one
+            if block.original_gate_count > 0:
+                # Check if this is the uncontrolled entry by looking at key
+                uc_block = block
+                break
+
+        assert uc_block is not None
+        assert uc_block.original_gate_count == standalone_cost
+
+
+class TestControlledGateCount:
+    """Controlled call credits correct controlled cost."""
+
+    def test_controlled_gate_count(self):
+        """Controlled call's original_gate_count reflects controlled Toffoli dispatch."""
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+
+        # Measure standalone controlled cost
+        ctrl = ql.qbool(True)
+        gc_before = get_gate_count()
+        a_raw = ql.qint(0, width=3)
+        with ctrl:
+            a_raw += 1
+        standalone_ctrl_cost = get_gate_count() - gc_before
+
+        # Now use compiled version in controlled context
+        ql.circuit()
+        c = ql.qbool(True)
+        a = ql.qint(0, width=3)
+        with c:
+            _ = inc(a)
+
+        # Find the controlled cache entry
+        blocks = list(inc._cache.values())
+        assert len(blocks) == 1  # Only controlled call was made
+        ctrl_block = blocks[0]
+        assert ctrl_block.original_gate_count == standalone_ctrl_cost
+
+
+class TestOrderIndependent:
+    """Call order does not affect per-call gate counts."""
+
+    def test_order_independent(self):
+        """Uncontrolled-first and controlled-first produce same per-call gate counts."""
+
+        # --- Order 1: uncontrolled first ---
+        @ql.compile
+        def inc_a(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+
+        a = ql.qint(0, width=3)
+        gc_before = get_gate_count()
+        _ = inc_a(a)
+        uc_cost_order1 = get_gate_count() - gc_before
+
+        c = ql.qbool(True)
+        b = ql.qint(0, width=3)
+        gc_before = get_gate_count()
+        with c:
+            _ = inc_a(b)
+        ctrl_cost_order1 = get_gate_count() - gc_before
+
+        # --- Order 2: controlled first ---
+        @ql.compile
+        def inc_b(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+
+        c2 = ql.qbool(True)
+        d = ql.qint(0, width=3)
+        gc_before = get_gate_count()
+        with c2:
+            _ = inc_b(d)
+        ctrl_cost_order2 = get_gate_count() - gc_before
+
+        e = ql.qint(0, width=3)
+        gc_before = get_gate_count()
+        _ = inc_b(e)
+        uc_cost_order2 = get_gate_count() - gc_before
+
+        # Gate counts should match regardless of order
+        assert uc_cost_order1 == uc_cost_order2
+        assert ctrl_cost_order1 == ctrl_cost_order2
+
+        # Controlled should cost more than uncontrolled
+        assert ctrl_cost_order1 > uc_cost_order1
+
+
+class TestNestedControlledGateCount:
+    """Outer calling inner inside with: inner gets a controlled cache entry."""
+
+    def test_nested_controlled_gate_count(self):
+        """Inner function called inside with: from outer gets a controlled cache entry
+        whose original_gate_count matches standalone controlled cost."""
+
+        @ql.compile
+        def inner(x):
+            x += 1
+            return x
+
+        @ql.compile
+        def outer(x):
+            c = x > 2
+            with c:
+                x = inner(x)
+            return x
+
+        gc.collect()
+        ql.circuit()
+
+        # Measure standalone controlled cost for inner's operation
+        ctrl = ql.qbool(True)
+        gc_before = get_gate_count()
+        a_raw = ql.qint(0, width=4)
+        with ctrl:
+            a_raw += 1
+        standalone_ctrl_cost = get_gate_count() - gc_before
+
+        # Run compiled outer (which calls inner inside with:)
+        ql.circuit()
+        a = ql.qint(0, width=4)
+        _ = outer(a)
+
+        # Inner should have exactly one cache entry (controlled, since
+        # outer calls it inside a with: block)
+        assert len(inner._cache) == 1
+        inner_block = list(inner._cache.values())[0]
+        assert inner_block.original_gate_count == standalone_ctrl_cost
+
+    def test_nested_both_contexts(self):
+        """Inner called both controlled (from outer) and uncontrolled produces 2 entries."""
+
+        @ql.compile
+        def inner2(x):
+            x += 1
+            return x
+
+        @ql.compile
+        def outer2(x):
+            c = x > 2
+            with c:
+                x = inner2(x)
+            return x
+
+        gc.collect()
+        ql.circuit()
+
+        # Call inner uncontrolled first
+        a = ql.qint(0, width=4)
+        _ = inner2(a)
+        assert len(inner2._cache) == 1
+
+        # Call outer which calls inner controlled
+        b = ql.qint(0, width=4)
+        _ = outer2(b)
+        assert len(inner2._cache) == 2

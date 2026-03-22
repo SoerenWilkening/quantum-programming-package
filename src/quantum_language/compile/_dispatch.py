@@ -233,6 +233,8 @@ def _capture_miss(
     _build_dag_from_ir,
 ):
     """Handle a cache miss: capture, cache, and optionally build DAG."""
+    from . import _build_qubit_set_numpy
+
     result = cf._capture_and_cache_both(
         args,
         kwargs,
@@ -242,13 +244,13 @@ def _capture_miss(
         is_controlled,
         cache_key,
     )
+    block = cf._cache.get(cache_key)
     # For opt=1 capture, record control state on the cached block
     # so DAG consumers can query it without adding a wrapper node.
     # Also build DAG nodes from the instruction IR so the DAG is
     # populated even with simulate=False or QFT mode (where
     # record_operation does not fire during compile-mode capture).
     if cf._opt == 1:
-        block = cf._cache.get(cache_key)
         if block is not None:
             block._captured_controlled = is_controlled
             _ctx = bool(is_controlled)
@@ -266,6 +268,35 @@ def _capture_miss(
                 # during capture.  Mark the capture context as built.
                 block._dag_built_contexts.add(_ctx)
                 block._dag_built = True
+    elif _building_dag and block is not None:
+        # Non-opt=1: add a coarse call-level DAG node on capture miss
+        # so that per-context cache entries (controlled vs uncontrolled)
+        # each produce a DAG node.
+        dag = current_dag_context()
+        if dag is not None:
+            extra = block._capture_virtual_to_real if block._capture_virtual_to_real else None
+            qubit_set, _ = _build_qubit_set_numpy(quantum_args, extra)
+            _gates = block.gates if block else []
+            _node_gate_count = (
+                block.original_gate_count
+                if not _gates and block.original_gate_count
+                else len(_gates)
+            )
+            _uc_gc, _cc_gc = _block_dual_gate_counts(block)
+            node_idx = dag.add_node(
+                cf._func.__name__,
+                qubit_set,
+                _node_gate_count,
+                cache_key,
+                depth=_compute_depth(_gates),
+                t_count=_compute_t_count(_gates),
+                controlled=is_controlled,
+                uncontrolled_gate_count=_uc_gc,
+                controlled_gate_count=_cc_gc,
+            )
+            if block is not None:
+                dag._nodes[node_idx]._block_ref = block
+                dag._nodes[node_idx]._v2r_ref = block._capture_virtual_to_real
     return result
 
 

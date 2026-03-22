@@ -1,9 +1,9 @@
 """Tests for compiled function control propagation.
 
-Phase 5, Step 5.1: Verify that @ql.compile stores a single cache entry
-containing both uncontrolled and controlled gate sequences, with no
-control_count in the cache key. The controlled variant is derived via
-_derive_controlled_block and attached to the same CompiledBlock.
+Phase 5, Step 5.1: Verify that @ql.compile stores separate cache entries
+for controlled and uncontrolled calls (control_count is part of the cache
+key). Each entry's CompiledBlock has both an uncontrolled and controlled
+variant derived via _derive_controlled_block.
 
 Phase 5, Step 5.2: Verify that _replay() checks the control stack at
 runtime and selects the appropriate gate sequence (controlled or
@@ -22,8 +22,8 @@ from quantum_language.compile import CompiledBlock
 warnings.filterwarnings("ignore", message="Value .* exceeds")
 
 
-class TestSingleCacheEntry:
-    """Verify that one cache entry is created regardless of controlled context."""
+class TestPerContextCacheEntry:
+    """Verify per-context cache entries for controlled vs uncontrolled calls."""
 
     def test_single_cache_entry_uncontrolled(self):
         """Calling outside a with-block creates exactly one cache entry."""
@@ -40,8 +40,8 @@ class TestSingleCacheEntry:
 
         assert len(inc._cache) == 1
 
-    def test_single_cache_entry_controlled(self):
-        """Calling inside a with-block still creates exactly one cache entry."""
+    def test_separate_cache_entry_controlled(self):
+        """Calling inside a with-block creates a second cache entry."""
 
         @ql.compile
         def inc(x):
@@ -57,10 +57,10 @@ class TestSingleCacheEntry:
         c = ql.qbool(True)
         b = ql.qint(0, width=2)
         with c:
-            _ = inc(b)  # Replay path (controlled)
+            _ = inc(b)  # Controlled call creates separate entry
 
-        # Still only one cache entry (not two)
-        assert len(inc._cache) == 1
+        # Per-context cache: controlled and uncontrolled are separate entries
+        assert len(inc._cache) == 2
 
     def test_single_cache_entry_first_call_in_with(self):
         """First call inside a with-block creates exactly one cache entry."""
@@ -166,11 +166,11 @@ class TestBothSequencesStored:
         assert ctrl_block.total_virtual_qubits == block.total_virtual_qubits
 
 
-class TestCacheKeyNoControlCount:
-    """Verify that control_count is not part of the cache key."""
+class TestCacheKeyWithControlCount:
+    """Verify that control_count IS part of the cache key."""
 
-    def test_same_key_controlled_and_uncontrolled(self):
-        """Uncontrolled and controlled calls hit the same cache entry."""
+    def test_separate_keys_controlled_and_uncontrolled(self):
+        """Uncontrolled and controlled calls create separate cache entries."""
 
         @ql.compile
         def inc(x):
@@ -184,15 +184,15 @@ class TestCacheKeyNoControlCount:
         _ = inc(a)
         assert len(inc._cache) == 1
 
-        # Second call: controlled (should hit same cache entry, not create new)
+        # Second call: controlled (creates separate cache entry)
         c = ql.qbool(True)
         b = ql.qint(0, width=2)
         with c:
             _ = inc(b)
-        assert len(inc._cache) == 1
+        assert len(inc._cache) == 2
 
-    def test_cache_key_tuple_has_no_control_count(self):
-        """Cache key does not contain a 0 or 1 for control_count."""
+    def test_cache_key_tuple_has_control_count(self):
+        """Cache key contains control_count after qubit_saving."""
 
         @ql.compile
         def inc(x):
@@ -204,20 +204,18 @@ class TestCacheKeyNoControlCount:
         a = ql.qint(0, width=2)
         _ = inc(a)
 
-        # The cache key is a tuple. In the old code it was:
-        #   (classical_args, widths, control_count, qubit_saving, *mode_flags)
-        # In the new code it should be:
-        #   (classical_args, widths, qubit_saving, *mode_flags)
-        # So key[2] should NOT be 0 or 1 (control_count).
+        # The cache key is a tuple:
+        #   (classical_args, widths, qubit_saving, control_count, *mode_flags)
         key = list(inc._cache.keys())[0]
         # key[0] = classical_args tuple (empty for this case)
         # key[1] = widths tuple
-        # key[2] = qubit_saving (bool), NOT control_count (int 0 or 1)
-        # The old control_count would be at index 2 with value 0 or 1 (int).
-        # qubit_saving is a bool (True/False).
+        # key[2] = qubit_saving (bool)
+        # key[3] = control_count (int 0 for uncontrolled)
         assert isinstance(key[2], bool), (
-            f"Expected key[2] to be bool (qubit_saving), "
-            f"got {type(key[2]).__name__} = {key[2]!r} (likely control_count)"
+            f"Expected key[2] to be bool (qubit_saving), got {type(key[2]).__name__} = {key[2]!r}"
+        )
+        assert key[3] == 0, (
+            f"Expected key[3] to be 0 (control_count for uncontrolled), got {key[3]!r}"
         )
 
     def test_different_widths_different_entries(self):
@@ -335,8 +333,8 @@ class TestControlledReplay:
         with c:
             _ = inc(b)
 
-        # Still only one cache entry (selection happens at runtime)
-        assert len(inc._cache) == 1
+        # Per-context cache: uncontrolled and controlled are separate entries
+        assert len(inc._cache) == 2
 
     def test_controlled_replay_first_call_in_with(self):
         """First call inside with-block, second inside another with-block."""
@@ -394,9 +392,8 @@ class TestNestedWithCompiled:
             with c2:
                 _ = inc(b)
 
-        # Still one cache entry — both controlled and uncontrolled replay
-        # from the same entry
-        assert len(inc._cache) == 1
+        # Per-context cache: uncontrolled and controlled are separate entries
+        assert len(inc._cache) == 2
 
 
 class TestSimulateTrueControlled:

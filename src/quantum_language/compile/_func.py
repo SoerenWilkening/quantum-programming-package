@@ -180,17 +180,19 @@ class CompiledFunc:
         is_controlled = _get_controlled()
         control_count = 1 if is_controlled else 0
 
-        # Build cache key (no control_count -- single entry stores both
-        # uncontrolled and controlled variants, selected at replay time)
+        # Build cache key (includes control_count so controlled and
+        # uncontrolled calls produce separate cache entries with
+        # independent, correct original_gate_count values)
         qubit_saving = _get_qubit_saving_mode()
         mode_flags = _get_mode_flags()
         if self._key_func:
-            cache_key = (self._key_func(*args, **kwargs), qubit_saving) + mode_flags
+            cache_key = (self._key_func(*args, **kwargs), qubit_saving, control_count) + mode_flags
         else:
             cache_key = (
                 tuple(classical_args),
                 tuple(widths),
                 qubit_saving,
+                control_count,
             ) + mode_flags
 
         # Record CallRecord when called from inside another compiled

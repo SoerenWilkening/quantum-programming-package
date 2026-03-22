@@ -10,9 +10,11 @@ import functools
 
 from .._core import (
     _get_control_bool,
+    _get_control_stack,
     _get_controlled,
     _get_layer_floor,
     _get_qubit_saving_mode,
+    _set_control_stack,
     _set_layer_floor,
     get_current_layer,
     inject_remapped_gates,
@@ -72,33 +74,48 @@ class _InverseCompiledFunc:
 
         quantum_args, classical_args, widths = self._original._classify_args(args, kwargs)
 
-        # Build cache key (no control_count -- matches CompiledFunc.__call__)
+        # Build cache key for the inverse cache.  The inverse always
+        # inverts the uncontrolled block and derives a controlled variant,
+        # so we use control_count=0 for looking up the original's cache
+        # but include the current control_count in the inv_cache key so
+        # replay selects the correct variant.
         qubit_saving = _get_qubit_saving_mode()
         mode_flags = _get_mode_flags()
         if self._original._key_func:
-            cache_key = (
+            base_key = (
                 self._original._key_func(*args, **kwargs),
                 qubit_saving,
-            ) + mode_flags
+            )
         else:
-            cache_key = (
+            base_key = (
                 tuple(classical_args),
                 tuple(widths),
                 qubit_saving,
-            ) + mode_flags
+            )
+        # Key for the original's uncontrolled cache entry
+        original_key = base_key + (0,) + mode_flags
+        # Key for the inverse cache (includes current control state)
+        cache_key = base_key + (0,) + mode_flags
 
         # Check inverse cache
         if cache_key not in self._inv_cache:
-            # Ensure original has the block cached
-            if cache_key not in self._original._cache:
-                # Trigger capture by calling the original (side-effect: may
-                # record a forward call -- clean it up since adjoint is stateless)
-                self._original(*args, **kwargs)
+            # Ensure original has the uncontrolled block cached
+            if original_key not in self._original._cache:
+                # Trigger uncontrolled capture by calling the original.
+                # Temporarily clear the control stack so the capture
+                # produces an uncontrolled entry (control_count=0),
+                # matching original_key.
+                saved_stack = list(_get_control_stack())
+                _set_control_stack([])
+                try:
+                    self._original(*args, **kwargs)
+                finally:
+                    _set_control_stack(saved_stack)
                 # Remove any forward call record created as side-effect
                 input_key = _input_qubit_key(quantum_args)
                 self._original._forward_calls.pop(input_key, None)
 
-            block = self._original._cache[cache_key]
+            block = self._original._cache[original_key]
             # Invert uncontrolled gates
             inverted_gates = _inverse_gate_list(block.gates)
             inverted_block = CompiledBlock(

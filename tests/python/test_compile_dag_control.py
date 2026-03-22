@@ -151,8 +151,8 @@ class TestOpt1CaptureRespectsControl:
         with c:
             _ = inc(b)
 
-        # Still one cache entry
-        assert len(inc._cache) == 1
+        # Per-context cache: uncontrolled and controlled are separate entries
+        assert len(inc._cache) == 2
 
     def test_opt1_capture_in_with_strips_control(self):
         """opt=1 first call inside with-block captures uncontrolled body."""
