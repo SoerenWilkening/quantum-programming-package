@@ -1967,3 +1967,158 @@ visualization shows call relationships with links to per-function sub-diagrams.
 **Key property**: After this phase, wrapping `walk_step` (or any complex nested
 compilation) in a `@ql.compile` function no longer causes memory explosion. Each
 function manages its own gates and ancillas independently.
+
+---
+
+## Phase 10 — Per-Context Caching & Zero-Arg Function Fix
+
+**Fixes**: Compiled function gate count accuracy across controlled/uncontrolled
+contexts (issues 1, 3, 4) and `KeyError` crash for zero-arg compiled functions
+(issue 2).
+
+**Root cause (issues 1, 3, 4)**: A single cache entry stores both controlled and
+uncontrolled variants.  `_derive_controlled_block` creates the controlled variant
+by adding a control qubit to each virtual gate, but this does not reflect the
+actual controlled dispatch cost (different adder selection, different ancilla
+counts).  `_replay_hit` always credits the base block's `original_gate_count`,
+which reflects whichever context was captured first.  Nested compiled function
+`CallRecord.gate_count_delta` inherits this mismatch, causing the outer
+function's gate total to diverge from the uncompiled equivalent.
+
+**Root cause (issue 2)**: Zero-arg compiled functions have no parameter qubits.
+`real_to_virtual` is built from `raw_gates`, which excludes inner call gate
+ranges.  Physical qubits only touched by nested compiled functions are missing
+from the mapping.  The fallback `real_to_virtual.get(phys, phys)` maps them to
+raw physical indices that collide with reserved virtual slots (e.g., index 0
+for the control qubit).  During replay, `virtual_to_real[0]` is never populated
+→ `KeyError: 0`.
+
+---
+
+### Step 10.1: Per-Context Cache Key
+
+**Goal**: Include `is_controlled` in the cache key so controlled and uncontrolled
+calls produce separate cache entries.  Each context captures independently with
+its own correct `original_gate_count`.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_func.py` | [MOD] In `__call__`: add `control_count` (0 or 1) to `cache_key` tuple. | ~+3 |
+
+**Tests** (`tests/python/test_compile_per_context.py` [NEW], ~150 LOC):
+- `test_separate_cache_entries` — after calling `foo` both uncontrolled and controlled, `foo._cache` has 2 entries
+- `test_uncontrolled_gate_count` — uncontrolled call credits correct uncontrolled cost
+- `test_controlled_gate_count` — controlled call credits correct controlled cost
+- `test_order_independent` — uncontrolled-first and controlled-first produce same per-call gate counts
+- `test_nested_controlled_gate_count` — outer calling inner inside `with`: total matches uncompiled equivalent
+
+**DEP**: None (modifies existing cache key construction).
+
+---
+
+### Step 10.2: Remove Derived Controlled Block
+
+**Goal**: Remove `_derive_controlled_block`, `_capture_and_cache_both`, and all
+proportional estimation code.  Capture stores a single block per cache entry
+(no `controlled_block` attribute).
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_capture.py` | [MOD] Remove `_capture_and_cache_both` and `_derive_controlled_block`. Replace with `_capture_and_cache` that captures, caches the block, records forward call, and returns. No controlled variant derivation. | ~-80 |
+| `src/quantum_language/compile/_func.py` | [MOD] Replace `_capture_and_cache_both` calls with `_capture_and_cache`. Remove `_derive_controlled_block` method. | ~-10 |
+| `src/quantum_language/compile/_dispatch.py` | [MOD] Remove `_block_dual_gate_counts`, `_update_dag_variant_counts`, `_update_dag_variant_counts_proportional`. Simplify `_replay_hit` and `_capture_miss` — no dual-variant logic. | ~-80 |
+| `src/quantum_language/compile/_block.py` | [MOD] Remove `controlled_block` attribute from `CompiledBlock`. Remove `control_virtual_idx`. | ~-5 |
+| `src/quantum_language/compile/_replay.py` | [MOD] Remove controlled variant selection from `_replay` (no more `block.controlled_block`). The block IS the correct variant for the current context. | ~-10 |
+| `src/quantum_language/compile/__init__.py` | [MOD] Remove re-exports of deleted functions. | ~-5 |
+
+**Tests** (`tests/python/test_compile_per_context.py` [MOD]):
+- `test_no_controlled_block_attr` — cached blocks have no `controlled_block`
+- `test_cache_miss_controlled` — controlled call after uncontrolled is a cache miss (separate key)
+- Existing compile tests updated for new behavior (controlled calls produce separate cache entries)
+
+**DEP**: Step 10.1
+
+---
+
+### Step 10.3: Replay Gate Credit Fix
+
+**Goal**: Ensure `_replay_hit` credits gate count from the block that was actually
+replayed (now always the correct context since each context has its own entry).
+Clean up the credit logic.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_dispatch.py` | [MOD] In `_replay_hit`: simplify gate credit — always use `block.original_gate_count` from the cache entry (which is context-correct after Step 10.1). Remove `_used_ir` conditional branching for gate credit. | ~-15 |
+
+**Tests** (`tests/python/test_compile_per_context.py` [MOD]):
+- `test_replay_credits_correct_context` — controlled replay credits controlled cost, uncontrolled replay credits uncontrolled cost
+- `test_nested_replay_total_matches_uncompiled` — outer(inner_uc + eq + inner_ctrl) total equals manual equivalent
+
+**DEP**: Step 10.2
+
+---
+
+### Step 10.4: Zero-Arg Function Virtual Mapping Fix
+
+**Goal**: After building `real_to_virtual` from `raw_gates`, scan `CallRecord`
+`quantum_arg_indices` and add any unmapped physical qubits as new virtual
+indices.  This ensures zero-arg compiled functions correctly map all qubits
+referenced by nested compiled function calls.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/compile/_capture.py` | [MOD] In `_capture_inner`, after `_build_virtual_mapping`, iterate `ir_block._call_records` and for each `quantum_arg_indices` entry, add unmapped physical qubits to `real_to_virtual` with new virtual indices.  Update `total_virtual` and `internal_count`. | ~+15 |
+
+**Tests** (`tests/python/test_compile_zero_arg.py` [NEW], ~120 LOC):
+- `test_zero_arg_no_keyerror` — `@ql.compile def main(): walk_step(...)` called twice without crash
+- `test_zero_arg_gate_count` — gate count matches uncompiled equivalent
+- `test_zero_arg_call_record_qubits_mapped` — all CallRecord qubit indices present in `real_to_virtual`
+- `test_zero_arg_replay_allocates_ancillas` — replay allocates correct number of internal qubits
+
+**DEP**: Step 10.2 (CallRecord structure unchanged, but capture flow simplified)
+
+---
+
+### Step 10.5: DAG Report Dual-Context Display
+
+**Goal**: Update DAG report to show dual `U/C` values for gates, depth, and
+T-count.  Values populated only from actually-compiled contexts.  Each operation
+appears once; both columns filled as captures occur.  Separate per-context totals.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/call_graph.py` | [MOD] `DAGNode`: add `uncontrolled_depth`, `controlled_depth`, `uncontrolled_t_count`, `controlled_t_count` fields (alongside existing `uncontrolled_gate_count`, `controlled_gate_count`). Update `record_operation` to populate the correct variant's fields based on `controlled` flag. | ~+20 |
+| `src/quantum_language/call_graph.py` | [MOD] `report()`: expand dual format to depth and T-count columns. `aggregate()` returns dual totals. `_format_dual_gates` generalized to `_format_dual`. | ~+30 |
+| `src/quantum_language/call_graph.py` | [MOD] `_build_dag_from_ir`: when building DAG nodes for the second context, update existing nodes (match by `operation_type` + position) instead of appending duplicates. | ~+25 |
+| `src/quantum_language/compile/_dispatch.py` | [MOD] In `_replay_hit` / `_capture_miss`: when building DAG, populate the current context's counts on the node. On second-context replay, locate existing node and fill the other variant's counts. | ~+20 |
+
+**Tests** (`tests/python/test_dag_dual_context.py` [NEW], ~150 LOC):
+- `test_report_uc_only` — only uncontrolled compiled: shows `"16 / -"` format
+- `test_report_both_contexts` — both compiled: shows `"16 / 28"` with correct values
+- `test_report_dual_totals` — totals row shows separate U and C sums
+- `test_report_dual_depth` — depth column shows dual values
+- `test_report_three_ops_three_rows` — `foo` with 3 add_cq ops displays 3 rows, not 6
+- `test_aggregate_dual` — `aggregate()` returns dict with `gates_uc`, `gates_cc`, `depth_uc`, `depth_cc`
+
+**DEP**: Steps 10.1–10.3
+
+---
+
+### Phase 10 Summary
+
+| Step | What | ~LOC delta | DEP |
+|------|------|------------|-----|
+| 10.1 | Per-context cache key | ~+3 | None |
+| 10.2 | Remove derived controlled block | ~-190 | 10.1 |
+| 10.3 | Replay gate credit fix | ~-15 | 10.2 |
+| 10.4 | Zero-arg function virtual mapping fix | ~+15 | 10.2 |
+| 10.5 | DAG report dual-context display | ~+95 | 10.1–10.3 |
+
+**Net**: ~-90 LOC implementation (net reduction from removing derivation/estimation
+code), ~+420 LOC tests.
+
+**Key properties**:
+- Controlled and uncontrolled calls to the same function produce correct, independent gate counts regardless of call order.
+- Compiled function wrapping nested compiled functions (including zero-arg pattern) produces gate counts equal to the uncompiled equivalent.
+- `@ql.compile def main(): walk_step(config, registers)` works without crashing.
+- DAG report shows accurate per-context metrics without estimation or derivation.

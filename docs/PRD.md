@@ -196,6 +196,30 @@ When a compiled function calls another compiled function during capture, store a
 | R20.4 | Visualization: each compiled function produces its own sub-diagram. Top-level view shows the call graph with links to sub-diagrams. | **Done** |
 | R20.5 | Gate counts for hierarchical functions are computed recursively (sum of own gates + referenced function gate counts). | **Done** |
 
+#### R21: Per-Context Compiled Function Caching
+
+Separate cache entries for controlled and uncontrolled contexts, fixing gate count accuracy for nested and controlled compiled functions.
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R21.1 | Cache key includes `is_controlled` flag. Controlled and uncontrolled calls are separate cache entries, each captured independently with correct gate counts from actual dispatch. | |
+| R21.2 | `_derive_controlled_block` removed. No derived controlled variant — each context captures its own block with correct `original_gate_count`. | |
+| R21.3 | Replay gate crediting uses the replayed block's `original_gate_count` (always matches the actual context). Nested compiled function `CallRecord.gate_count_delta` reflects the true context-specific cost. | |
+| R21.4 | Compiled function called once uncontrolled and once controlled produces total gate count equal to the uncompiled equivalent. No gate count gap from context mismatch. | |
+| R21.5 | DAG report shows dual `U/C` columns for gates, depth, and T-count. Values populated only from actually-compiled contexts; `-` for uncompiled variants. Separate totals per context. Each operation appears once in the report with both U and C values filled from their respective captures. | |
+| R21.6 | `_block_dual_gate_counts` and `_update_dag_variant_counts_proportional` removed (no longer needed — each context has its own accurate counts). | |
+| R21.7 | Order of calls (controlled first vs uncontrolled first) does not affect gate counts. Each context captures independently when first needed. | |
+
+#### R22: Zero-Arg Compiled Function Virtual Mapping
+
+Fix virtual qubit mapping for compiled functions with no quantum arguments, enabling zero-arg wrapper patterns (e.g., `main()` wrapping `walk_step`).
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| R22.1 | After building `real_to_virtual` from `raw_gates`, scan `CallRecord.quantum_arg_indices` and add any unmapped physical qubits as new virtual indices. | |
+| R22.2 | Zero-arg compiled functions can be called multiple times without `KeyError`. Fresh ancillas are correctly allocated for all internal qubits (including those only referenced by nested compiled function calls). | |
+| R22.3 | The CallRecord qubit scan cost is O(CallRecord qubits), not O(all gates). Scales to 1000+ variable problems. | |
+
 ### P1 — Should Have
 
 #### R8: Future Compilation Improvements
@@ -285,6 +309,21 @@ General improvements to the existing codebase.
 - `a += 3; b += a; del b; a -= 3` DOES cancel (blocker cleared on `b`'s deallocation).
 - No cancellation attempted for `*=` / `//=`.
 
+### 5.0e Per-Context Compiled Function Caching
+
+- Calling `foo(a, b)` uncontrolled then `with c: foo(a, b)` controlled produces total gate count equal to the sum of standalone uncontrolled + standalone controlled costs.
+- Calling in the reverse order (controlled first, uncontrolled second) produces the same total.
+- Nested compiled function: `outer` calls `inner` both uncontrolled and inside `with`: total gate count equals uncompiled equivalent (no gate count gap).
+- DAG report shows `Gates (U/C)` with separate values per context; `-` for uncompiled variants. Three `add_cq` operations display as three rows, each with both U and C columns populated from respective captures.
+- DAG totals are dual: separate uncontrolled total and controlled total.
+- `_derive_controlled_block`, `_block_dual_gate_counts`, and `_update_dag_variant_counts_proportional` are removed.
+
+### 5.0f Zero-Arg Compiled Function Virtual Mapping
+
+- `@ql.compile def main(): walk_step(config, registers)` called twice does not raise `KeyError`.
+- Zero-arg compiled function wrapping nested compiled functions replays correctly with freshly allocated ancillas.
+- Gate count of zero-arg compiled function matches uncompiled equivalent.
+
 ### 5.1a Compile Module Refactoring
 
 - `compile.py` no longer exists as a single file; replaced by `compile/` subpackage.
@@ -361,6 +400,8 @@ General improvements to the existing codebase.
 | Gate sequences use variable control index | Standardization to index 0 required for compile pipeline rework (Phase 5) |
 | Compile layer conflates transient and result ancillas | IR replay double-allocates C-managed ancillas; each compiled function replay grows qubit count |
 | Nested compiled functions inline inner gates | Memory explosion when wrapping complex functions (e.g., walk_step) in a compiled function |
+| Single cache entry for both control variants | Derived controlled block has wrong gate count; replay credits base block's cost regardless of context. Causes gate count gaps for nested compiled functions in controlled contexts. Fix: per-context cache key (Phase 10). |
+| Zero-arg compiled functions miss CallRecord qubits in virtual mapping | Physical qubits only referenced by nested compiled functions are absent from `real_to_virtual`, causing `KeyError` on replay. Fix: scan CallRecord qubit indices (Phase 10). |
 
 ---
 
@@ -496,6 +537,15 @@ Store references to inner compiled functions instead of inlining their gates:
 - **Recursive replay**: Outer function delegates to inner function's `_replay` with transitive qubit mapping
 - **Visualization**: Per-function sub-diagrams linked from top-level call graph
 - **Gate counts**: Computed recursively (own gates + referenced function gate counts)
+
+### Milestone 9: Per-Context Caching & Zero-Arg Function Fix
+
+Fix compiled function gate count accuracy across controlled/uncontrolled contexts and enable zero-arg compiled function patterns:
+
+- **Per-context caching**: Include `is_controlled` in cache key. Each control context captures independently with correct `original_gate_count` from actual Toffoli dispatch. Remove `_derive_controlled_block` and all proportional estimation code.
+- **Replay gate credit fix**: Replay always credits the replayed block's own `original_gate_count`, which now matches the actual context (no cross-context mismatch).
+- **Zero-arg virtual mapping fix**: After building `real_to_virtual` from `raw_gates`, scan `CallRecord.quantum_arg_indices` to add unmapped physical qubits. Cost: O(CallRecord qubits).
+- **DAG report update**: Dual `U/C` columns for gates, depth, T-count. Values populated only from actually-compiled contexts. Separate per-context totals. Each operation appears once with both values filled from respective captures.
 
 ---
 

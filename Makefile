@@ -30,6 +30,16 @@ test:
 	@echo "Running Python characterization tests..."
 	. $(VENV) && $(PYTEST) tests/python -v --tb=short
 
+.PHONY: test-docker
+test-docker:
+	@echo "Running tests with process isolation (for memory-limited environments)..."
+	. $(VENV) && MALLOC_TRIM_THRESHOLD_=0 $(PYTEST) tests/python -v --tb=short --forked -m "not slow"
+
+.PHONY: test-memray
+test-memray:
+	@echo "Running tests with memray memory limits (512 MB per test)..."
+	. $(VENV) && $(PYTEST) tests/python -v --tb=short --memray
+
 # === Coverage ===
 
 .PHONY: coverage
@@ -276,6 +286,7 @@ verify-optimization:
 help:
 	@echo "Available targets:"
 	@echo "  test             - Run pytest characterization tests"
+	@echo "  test-docker      - Run tests with process isolation (for memory-limited containers)"
 	@echo "  memtest          - Run tests under Valgrind (requires valgrind)"
 	@echo "  asan-test        - Build and run C backend with AddressSanitizer"
 	@echo "  check            - Run pre-commit hooks on all files"

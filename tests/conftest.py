@@ -21,6 +21,20 @@ import quantum_language as ql
 _compile_mod = sys.modules["quantum_language.compile"]
 
 
+DEFAULT_MEMORY_LIMIT = "2 GB"
+
+
+def pytest_collection_modifyitems(items):
+    """Apply a default memory limit to every test when running with --memray.
+
+    Tests can override this by adding their own @pytest.mark.limit_memory("1 GB").
+    The limit is only enforced when pytest is invoked with --memray.
+    """
+    for item in items:
+        if not item.get_closest_marker("limit_memory"):
+            item.add_marker(pytest.mark.limit_memory(DEFAULT_MEMORY_LIMIT))
+
+
 @pytest.fixture
 def verify_circuit():
     """Fixture providing full verification pipeline for quantum circuits.
