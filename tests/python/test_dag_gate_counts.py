@@ -459,7 +459,7 @@ class TestToffoliUncontrolledGateCount:
     """Tests that uncontrolled Toffoli calls populate uncontrolled_gate_count."""
 
     def test_toffoli_uncontrolled_gate_count(self):
-        """Uncontrolled Toffoli addition populates uncontrolled_gate_count > 0."""
+        """Uncontrolled Toffoli addition populates both uncontrolled and controlled gate counts."""
         ql.circuit()
         ql.option("fault_tolerant", True)
         dag = CallGraphDAG()
@@ -475,8 +475,8 @@ class TestToffoliUncontrolledGateCount:
             assert node.uncontrolled_gate_count > 0, (
                 f"uncontrolled_gate_count should be > 0, got {node.uncontrolled_gate_count}"
             )
-            assert node.controlled_gate_count == 0, (
-                f"controlled_gate_count should be 0 for uncontrolled op, got {node.controlled_gate_count}"
+            assert node.controlled_gate_count > 0, (
+                f"controlled_gate_count should be > 0 (calling context), got {node.controlled_gate_count}"
             )
 
     def test_toffoli_uncontrolled_mul(self):

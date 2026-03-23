@@ -898,6 +898,8 @@ def record_operation(
     controlled: bool = False,
     depth: int = 0,
     t_count: int = 0,
+    uncontrolled_gate_count: int = 0,
+    controlled_gate_count: int = 0,
 ) -> int | None:
     """Record a primitive operation (arithmetic/bitwise/comparison) on the DAG.
 
@@ -924,12 +926,20 @@ def record_operation(
         Whether this is an inverse (adjoint) operation.
     controlled : bool
         Whether this operation was executed inside a controlled context.
-        When True, ``gate_count`` populates ``controlled_gate_count``;
-        otherwise it populates ``uncontrolled_gate_count``.
+        Used for the ``controlled`` flag on the DAGNode and as fallback
+        for populating dual gate counts when explicit counts are not
+        provided.
     depth : int
         Circuit depth for this operation.
     t_count : int
         T-gate count for this operation.
+    uncontrolled_gate_count : int
+        Gate count for the uncontrolled calling context.  When both this
+        and *controlled_gate_count* are provided (non-zero), they are used
+        directly.  When both are 0, *gate_count* is assigned to the
+        appropriate side based on *controlled*.
+    controlled_gate_count : int
+        Gate count for the controlled calling context.
 
     Returns
     -------
@@ -944,13 +954,22 @@ def record_operation(
     qubit_mapping = tuple(qubit_indices)
     qubit_set = frozenset(qubit_mapping)
 
-    # Populate the correct dual fields based on controlled context
+    # When explicit dual counts are provided, use them directly.
+    # Otherwise fall back to single-sided assignment from gate_count.
+    uc_gc = uncontrolled_gate_count
+    cc_gc = controlled_gate_count
+    if uc_gc == 0 and cc_gc == 0:
+        if controlled:
+            cc_gc = gate_count
+        else:
+            uc_gc = gate_count
+
+    # Depth and T-count remain single-sided (reflecting the actual
+    # execution context) until a future issue adds dual resolution.
     if controlled:
-        uc_gc, cc_gc = 0, gate_count
         uc_depth, cc_depth = 0, depth
         uc_tc, cc_tc = 0, t_count
     else:
-        uc_gc, cc_gc = gate_count, 0
         uc_depth, cc_depth = depth, 0
         uc_tc, cc_tc = t_count, 0
 
