@@ -10,6 +10,7 @@ import sys
 
 from .._core import (
     add_gate_count,
+    option,
 )
 from ..call_graph import (
     _compute_depth,
@@ -132,17 +133,19 @@ def _replay_hit(
     _track_fwd = cf._inverse_func is not None
     block = cf._cache[cache_key]
     result = cf._replay(block, quantum_args, track_forward=_track_fwd, kind="compiled_fn")
-    # Manually credit gate count when run_instruction did NOT
-    # already increment it.  run_instruction (IR path) always
-    # increments circ->gate_count, so skip the manual credit
-    # when the IR path was used.  inject_remapped_gates (gate-
-    # level path) does NOT increment gate_count, and when
-    # simulate=False neither path runs — both need manual credit.
-    _used_ir = getattr(cf, "_last_replay_used_ir", False)
-    if not _used_ir and block is not None:
-        _replay_count = block.original_gate_count if block.original_gate_count else len(block.gates)
-        if _replay_count:
-            add_gate_count(_replay_count)
+    # Credit gate count from the replayed block.  Per-context caching
+    # ensures block.original_gate_count is always the correct cost.
+    # When the block has executable IR (non-zero sequence pointers)
+    # and simulation is active, run_instruction already credited
+    # gate_count during _replay — skip to avoid double-counting.
+    if block is not None and block.original_gate_count:
+        _ir_credited = (
+            option("simulate")
+            and block._instruction_ir
+            and any(e.uncontrolled_seq or e.controlled_seq for e in block._instruction_ir)
+        )
+        if not _ir_credited:
+            add_gate_count(block.original_gate_count)
     # Record DAG node for replay path (no nesting -- body not
     # re-executed).
     if _building_dag:

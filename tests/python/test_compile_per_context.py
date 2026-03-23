@@ -1,4 +1,4 @@
-"""Tests for per-context compiled function cache key (Quantum_Assembly-1yb, Quantum_Assembly-czb).
+"""Tests for per-context compiled function cache key (Quantum_Assembly-1yb, Quantum_Assembly-czb, Quantum_Assembly-e80).
 
 Verifies that control_count is included in the compiled function cache key
 so controlled and uncontrolled calls produce separate cache entries with
@@ -13,6 +13,10 @@ Tests:
   total matches uncompiled equivalent
 - test_no_controlled_block_attr — cached blocks have no controlled_block
 - test_cache_miss_controlled — controlled call after uncontrolled is a cache miss
+- test_replay_credits_correct_context — controlled replay credits controlled cost,
+  uncontrolled replay credits uncontrolled cost
+- test_nested_replay_total_matches_uncompiled — outer(inner_uc + own_ops + inner_ctrl)
+  total equals manual equivalent
 """
 
 import gc
@@ -362,3 +366,121 @@ class TestCacheMissControlled:
         # The two cache entries should be different blocks
         blocks = list(inc._cache.values())
         assert blocks[0] is not blocks[1]
+
+
+class TestReplayCreditsCorrectContext:
+    """Replay credits the correct per-context gate cost (Quantum_Assembly-e80)."""
+
+    def test_replay_credits_correct_context(self):
+        """Controlled replay credits controlled cost, uncontrolled replay
+        credits uncontrolled cost."""
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+
+        # Measure standalone costs
+        x_raw = ql.qint(0, width=3)
+        gc_before = get_gate_count()
+        x_raw += 1
+        uc_standalone = get_gate_count() - gc_before
+
+        ql.circuit()
+        ctrl = ql.qbool(True)
+        x_raw2 = ql.qint(0, width=3)
+        gc_before = get_gate_count()
+        with ctrl:
+            x_raw2 += 1
+        ctrl_standalone = get_gate_count() - gc_before
+
+        # Capture both contexts
+        gc.collect()
+        ql.circuit()
+        a = ql.qint(0, width=3)
+        _ = inc(a)
+
+        c = ql.qbool(True)
+        b = ql.qint(0, width=3)
+        with c:
+            _ = inc(b)
+
+        # Replay uncontrolled
+        d = ql.qint(0, width=3)
+        gc_before = get_gate_count()
+        _ = inc(d)
+        uc_replay = get_gate_count() - gc_before
+
+        # Replay controlled
+        c2 = ql.qbool(True)
+        e = ql.qint(0, width=3)
+        gc_before = get_gate_count()
+        with c2:
+            _ = inc(e)
+        ctrl_replay = get_gate_count() - gc_before
+
+        assert uc_replay == uc_standalone, (
+            f"Uncontrolled replay {uc_replay} != standalone {uc_standalone}"
+        )
+        assert ctrl_replay == ctrl_standalone, (
+            f"Controlled replay {ctrl_replay} != standalone {ctrl_standalone}"
+        )
+
+
+class TestNestedReplayTotalMatchesUncompiled:
+    """Nested replay total matches uncompiled equivalent (Quantum_Assembly-e80)."""
+
+    def test_nested_replay_total_matches_uncompiled(self):
+        """outer(inner_uc + own_ops + inner_ctrl) total equals manual
+        equivalent on both capture and replay."""
+
+        @ql.compile
+        def inner(x):
+            x += 1
+            return x
+
+        @ql.compile
+        def outer(x):
+            x = inner(x)  # uncontrolled inner call
+            x += 2  # outer's own operation
+            c = ql.qbool(True)
+            with c:
+                x = inner(x)  # controlled inner call
+            return x
+
+        gc.collect()
+        ql.circuit()
+
+        # Uncompiled baseline
+        x = ql.qint(0, width=4)
+        gc_before = get_gate_count()
+        x += 1
+        x += 2
+        c = ql.qbool(True)
+        with c:
+            x += 1
+        uncompiled_total = get_gate_count() - gc_before
+
+        # Compiled capture
+        gc.collect()
+        ql.circuit()
+        y = ql.qint(0, width=4)
+        gc_before = get_gate_count()
+        _ = outer(y)
+        capture_total = get_gate_count() - gc_before
+
+        # Compiled replay
+        z = ql.qint(0, width=4)
+        gc_before = get_gate_count()
+        _ = outer(z)
+        replay_total = get_gate_count() - gc_before
+
+        assert capture_total == uncompiled_total, (
+            f"Capture {capture_total} != uncompiled {uncompiled_total}"
+        )
+        assert replay_total == uncompiled_total, (
+            f"Replay {replay_total} != uncompiled {uncompiled_total}"
+        )
