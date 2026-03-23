@@ -8,6 +8,7 @@ delegate to them with ``self`` as the first argument.
 
 from .._core import (
     _allocate_qubit,
+    _get_control_bool,
     _get_controlled,
     _get_layer_floor,
     _set_layer_floor,
@@ -56,6 +57,15 @@ def _replay(cf, block, quantum_args, track_forward=True, kind=None):
     # Virtual index 0 is reserved for the control qubit; params
     # start at index 1.
     virtual_to_real = {}
+
+    # Map control qubit at index 0 when in controlled context.
+    # The gate-level path needs this to remap virtual index 0
+    # (the control slot) to the actual control qubit.  The IR
+    # path handles control injection internally via the control
+    # stack, so this mapping is only consumed by gate-level replay.
+    if is_controlled:
+        control_bool = _get_control_bool()
+        virtual_to_real[0] = int(control_bool.qubits[63])
 
     vidx = 1  # params start at virtual index 1
     for qa in quantum_args:
@@ -154,7 +164,49 @@ def _replay(cf, block, quantum_args, track_forward=True, kind=None):
             cf._last_replay_used_ir = True
         elif block.gates:
             # Gate-level path: inject remapped gates into the circuit.
-            inject_remapped_gates(block.gates, virtual_to_real)
+            # When replaying in a controlled context, derive controlled
+            # gates.  The approach depends on how the block was captured:
+            #
+            # - Block NOT captured in controlled context (including
+            #   inverted blocks from _InverseCompiledFunc): the gates
+            #   represent the uncontrolled operation.  Apply
+            #   _derive_controlled_gates directly to add virtual index 0
+            #   as a control to every gate.
+            #
+            # - Block captured in controlled context (_captured_controlled
+            #   is True): the gates were produced by Toffoli dispatch with
+            #   control, then the control qubit was stripped.  The gate
+            #   topology differs from the uncontrolled version so we
+            #   cannot derive from it.  Instead, find the uncontrolled
+            #   block from the cache and derive from that.
+            replay_gates = block.gates
+            if is_controlled:
+                from . import _derive_controlled_gates
+
+                _was_controlled_capture = getattr(block, "_captured_controlled", False)
+                if _was_controlled_capture:
+                    # Find the uncontrolled block from the cache
+                    _unctrl_block = None
+                    if hasattr(cf, "_cache"):
+                        for _cb in cf._cache.values():
+                            if (
+                                _cb is not block
+                                and not getattr(_cb, "_captured_controlled", False)
+                                and _cb.param_qubit_ranges == block.param_qubit_ranges
+                                and _cb.gates
+                            ):
+                                _unctrl_block = _cb
+                                break
+                    if _unctrl_block is not None:
+                        replay_gates = _derive_controlled_gates(_unctrl_block.gates)
+                    else:
+                        # No uncontrolled block available; fall back to
+                        # deriving from the current block's gates.
+                        replay_gates = _derive_controlled_gates(replay_gates)
+                else:
+                    # Block gates are uncontrolled -- derive directly.
+                    replay_gates = _derive_controlled_gates(replay_gates)
+            inject_remapped_gates(replay_gates, virtual_to_real)
 
             # Free transient ancillas after gate injection (Phase 8.3).
             # The injected gates return transient qubits to |0>, so they

@@ -130,7 +130,9 @@ class _InverseCompiledFunc:
             self._inv_cache[cache_key] = inverted_block
 
         inv_block = self._inv_cache[cache_key]
-        # _replay selects controlled/uncontrolled variant at runtime
+        # _replay handles control injection for the gate-level path:
+        # it derives controlled gates and maps virtual index 0 to the
+        # current control qubit when inside a controlled context.
         return self._original._replay(
             inv_block, quantum_args, track_forward=False, kind="compiled_fn_inv"
         )
