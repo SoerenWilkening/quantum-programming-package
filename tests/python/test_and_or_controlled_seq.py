@@ -244,3 +244,56 @@ class TestDagAndOrGateCounts:
         cc_gc = _resolve_gate_count(entry.controlled_seq)
         assert uc_gc > 0, f"OR CQ uncontrolled gate count should be > 0, got {uc_gc}"
         assert cc_gc > 0, f"OR CQ controlled gate count should be > 0, got {cc_gc}"
+
+
+# ---------------------------------------------------------------------------
+# Zero-value edge cases
+# ---------------------------------------------------------------------------
+
+
+class TestZeroValueEdgeCases:
+    """AND/OR with classical zero produce valid (non-garbage) gate counts."""
+
+    def test_and_cq_zero_has_valid_gate_count(self):
+        """a & 0 in compile mode: gate counts are 0, not garbage."""
+        from quantum_language.call_graph import _resolve_gate_count
+
+        ql.circuit()
+        a = ql.qint(3, width=3)
+
+        @ql.compile
+        def dummy(x):
+            return x
+
+        block = _make_block()
+        with dummy.compile_mode(block):
+            _ = a & 0
+
+        entries = [r for r in block._instruction_ir if r.name == "and_cq"]
+        assert len(entries) == 1
+        uc_gc = _resolve_gate_count(entries[0].uncontrolled_seq)
+        cc_gc = _resolve_gate_count(entries[0].controlled_seq)
+        assert uc_gc == 0, f"AND CQ zero uncontrolled gate count should be 0, got {uc_gc}"
+        assert cc_gc == 0, f"AND CQ zero controlled gate count should be 0, got {cc_gc}"
+
+    def test_or_cq_zero_has_valid_gate_count(self):
+        """a | 0 in compile mode: gate counts are valid."""
+        from quantum_language.call_graph import _resolve_gate_count
+
+        ql.circuit()
+        a = ql.qint(3, width=3)
+
+        @ql.compile
+        def dummy(x):
+            return x
+
+        block = _make_block()
+        with dummy.compile_mode(block):
+            _ = a | 0
+
+        entries = [r for r in block._instruction_ir if r.name == "or_cq"]
+        assert len(entries) == 1
+        uc_gc = _resolve_gate_count(entries[0].uncontrolled_seq)
+        cc_gc = _resolve_gate_count(entries[0].controlled_seq)
+        assert uc_gc >= 0, f"OR CQ zero uncontrolled gate count should be >= 0, got {uc_gc}"
+        assert cc_gc >= 0, f"OR CQ zero controlled gate count should be >= 0, got {cc_gc}"

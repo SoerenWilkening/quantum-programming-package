@@ -1448,6 +1448,7 @@ sequence_t *cCQ_and(int bits, int64_t value) {
             return NULL;
         }
         seq->gates_per_layer[0] = 0;
+        seq->total_gate_count = 0;
         return seq;
     }
 
