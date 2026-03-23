@@ -321,6 +321,15 @@ class CompiledFunc:
             _gc = block.original_gate_count if block.original_gate_count else len(block.gates)
             _depth = _compute_depth(block.gates)
             _t_count = _compute_t_count(block.gates)
+        # Wrapper functions (those that only call other compiled functions
+        # with no direct operations) have empty block.gates and
+        # original_gate_count == 0.  Fall back to the inner call_graph
+        # aggregate which correctly accounts for all nested calls.
+        if _gc == 0 and self._call_graph is not None and self._call_graph.node_count > 0:
+            agg = self._call_graph.aggregate()
+            _gc = agg["gates"]
+            _depth = agg["depth"]
+            _t_count = agg["t_count"]
 
         extra = None
         if block and block._capture_virtual_to_real:

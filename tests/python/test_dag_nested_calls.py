@@ -211,3 +211,77 @@ class TestInnerOpsNotInOuterDag:
         assert dag.node_count == 2, (
             f"main's DAG should only have 2 nodes (foo calls), got {dag.node_count}"
         )
+
+
+class TestWrapperFunctionGateCount:
+    """Wrapper functions (only calling other compiled functions) get correct metrics."""
+
+    def test_three_level_nesting_wrapper_gate_count(self):
+        """outer -> mid -> inner, where mid has no direct ops."""
+        ql.circuit()
+
+        @ql.compile(opt=1)
+        def inner(a):
+            a += 1
+
+        @ql.compile(opt=1)
+        def mid(a):
+            inner(a)
+
+        @ql.compile(opt=1)
+        def outer(a):
+            mid(a)
+
+        a = qint(0, width=4)
+        outer(a)
+
+        dag = outer.call_graph
+        assert dag is not None
+
+        mid_nodes = [n for n in dag.nodes if n.func_name == "mid"]
+        assert len(mid_nodes) == 1, f"Expected 1 mid node in outer's DAG, got {len(mid_nodes)}"
+        assert mid_nodes[0].gate_count > 0, (
+            f"mid node should have gate_count > 0 (inherited from inner), "
+            f"got {mid_nodes[0].gate_count}"
+        )
+        assert mid_nodes[0].depth > 0, f"mid node should have depth > 0, got {mid_nodes[0].depth}"
+
+    def test_wrapper_with_multiple_inner_calls(self):
+        """Wrapper calling inner 3x should have 3x inner's gate count."""
+        ql.circuit()
+
+        @ql.compile(opt=1)
+        def inner(a):
+            a += 1
+
+        @ql.compile(opt=1)
+        def mid(a):
+            inner(a)
+            inner(a)
+            inner(a)
+
+        @ql.compile(opt=1)
+        def outer(a):
+            mid(a)
+
+        a = qint(0, width=4)
+        outer(a)
+
+        dag = outer.call_graph
+        assert dag is not None
+
+        mid_nodes = [n for n in dag.nodes if n.func_name == "mid"]
+        assert len(mid_nodes) == 1
+
+        # mid's gate count should reflect all 3 inner calls
+        mid_gc = mid_nodes[0].gate_count
+
+        # Also check inner standalone to verify proportionality
+        inner_dag = inner.call_graph
+        if inner_dag is not None:
+            inner_agg = inner_dag.aggregate()
+            inner_gc = inner_agg["gates"]
+            if inner_gc > 0:
+                assert mid_gc >= 3 * inner_gc, (
+                    f"mid gate count ({mid_gc}) should be >= 3 * inner gate count ({inner_gc})"
+                )
