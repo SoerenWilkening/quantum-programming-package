@@ -207,6 +207,21 @@ def _capture_inner(cf, args, kwargs, quantum_args):
         raw_gates, param_qubit_indices
     )
 
+    # Scan CallRecord quantum_arg_indices for physical qubits missing from
+    # real_to_virtual.  Zero-arg compiled functions have no parameter qubits,
+    # and raw_gates excludes inner call gate ranges, so physical qubits only
+    # touched by nested compiled functions may be absent.  Without this,
+    # the fallback real_to_virtual.get(phys, phys) maps them to raw physical
+    # indices that can collide with reserved virtual slots (e.g. index 0 for
+    # control), causing KeyError during replay.
+    if ir_block._call_records:
+        for cr in ir_block._call_records:
+            for arg_indices in cr.quantum_arg_indices:
+                for phys in arg_indices:
+                    if phys not in real_to_virtual:
+                        real_to_virtual[phys] = total_virtual
+                        total_virtual += 1
+
     # Determine return value qubit range (if result is qint or qarray)
     from ..qarray import qarray
     from ..qint import qint
