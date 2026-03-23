@@ -127,10 +127,14 @@ def _build_dag_from_ir(block, func_name, is_controlled=False, qubit_mapping=None
         uc_gc = _resolve_gate_count(entry.uncontrolled_seq)
         ct_gc = _resolve_gate_count(entry.controlled_seq)
 
+        # Use uncontrolled count as the canonical gate_count; fall back
+        # to controlled count when only that variant is available.
+        gc = uc_gc if uc_gc else ct_gc
+
         node_idx = dag.add_node(
             entry.name,
             qubit_set,
-            0,  # gate_count -- not available from IR alone
+            gc,
             (),  # cache_key
             sequence_ptr=seq_ptr,
             uncontrolled_seq=entry.uncontrolled_seq,
