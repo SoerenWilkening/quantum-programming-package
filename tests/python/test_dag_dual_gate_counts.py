@@ -180,7 +180,7 @@ class TestToDotDualFormat:
         assert "gates: - / -" in dot
 
     def test_dot_still_has_depth_and_tcount(self):
-        """to_dot() still includes depth and T-count lines."""
+        """to_dot() still includes depth and T-count lines in dual format."""
         dag = CallGraphDAG()
         dag.add_node(
             "my_fn",
@@ -191,10 +191,14 @@ class TestToDotDualFormat:
             t_count=14,
             uncontrolled_gate_count=24,
             controlled_gate_count=18,
+            uncontrolled_depth=5,
+            controlled_depth=8,
+            uncontrolled_t_count=14,
+            controlled_t_count=21,
         )
         dot = dag.to_dot()
-        assert "depth: 5" in dot
-        assert "T-count: 14" in dot
+        assert "depth: 5 / 8" in dot
+        assert "T-count: 14 / 21" in dot
 
 
 # ---------------------------------------------------------------------------

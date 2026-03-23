@@ -73,6 +73,10 @@ def _build_dag_from_ir(block, func_name, is_controlled=False, qubit_mapping=None
     to populate the DAG from IR entries even when ``simulate=False``
     (no gates are emitted to the circuit).
 
+    When ``block._dag_node_indices`` is already populated (second context),
+    existing nodes are updated with the new context's counts instead of
+    appending duplicates.
+
     Parameters
     ----------
     block : CompiledBlock
@@ -90,11 +94,18 @@ def _build_dag_from_ir(block, func_name, is_controlled=False, qubit_mapping=None
     Returns
     -------
     int
-        Number of DAG nodes added.
+        Number of DAG nodes added (or updated).
     """
     dag = current_dag_context()
     if dag is None:
         return 0
+
+    # If DAG nodes already exist for this block, the first build already
+    # resolved both variants' gate counts from the sequence pointers.
+    # Just return the count without creating duplicates.
+    existing_indices = block._dag_node_indices
+    if existing_indices and len(existing_indices) == len(block._instruction_ir):
+        return len(existing_indices)
 
     count = 0
     for entry in block._instruction_ir:

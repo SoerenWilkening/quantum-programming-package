@@ -19,6 +19,46 @@ from ..call_graph import (
 )
 
 
+def _merge_dual_context_nodes(dag, old_indices, new_indices, new_controlled):
+    """Merge second-context DAG nodes into first-context nodes.
+
+    For each matching position, copies the new context's gate count, depth,
+    and T-count onto the existing node.  The new (duplicate) nodes are
+    marked ``_merged=True`` so they are skipped in ``report()`` and
+    ``aggregate()``.
+
+    Parameters
+    ----------
+    dag : CallGraphDAG
+        The DAG containing both sets of nodes.
+    old_indices : list[int]
+        Node indices from the first context.
+    new_indices : list[int]
+        Node indices from the second context.
+    new_controlled : bool
+        Whether the second context is the controlled context.
+    """
+    n = min(len(old_indices), len(new_indices))
+    for i in range(n):
+        old_node = dag._nodes[old_indices[i]]
+        new_node = dag._nodes[new_indices[i]]
+        if new_controlled:
+            if new_node.controlled_gate_count and not old_node.controlled_gate_count:
+                old_node.controlled_gate_count = new_node.controlled_gate_count
+            if new_node.controlled_depth and not old_node.controlled_depth:
+                old_node.controlled_depth = new_node.controlled_depth
+            if new_node.controlled_t_count and not old_node.controlled_t_count:
+                old_node.controlled_t_count = new_node.controlled_t_count
+        else:
+            if new_node.uncontrolled_gate_count and not old_node.uncontrolled_gate_count:
+                old_node.uncontrolled_gate_count = new_node.uncontrolled_gate_count
+            if new_node.uncontrolled_depth and not old_node.uncontrolled_depth:
+                old_node.uncontrolled_depth = new_node.uncontrolled_depth
+            if new_node.uncontrolled_t_count and not old_node.uncontrolled_t_count:
+                old_node.uncontrolled_t_count = new_node.uncontrolled_t_count
+        new_node._merged = True
+
+
 def _call_inner_impl(
     cf,
     args,
@@ -168,6 +208,21 @@ def _replay_hit(
             _ctx = bool(is_controlled)
             if _ctx not in block._dag_built_contexts and block._dag_node_indices:
                 block._dag_built_contexts.add(_ctx)
+                # On replay in a different context, merge with sibling
+                # block's nodes to fill in the other variant's counts.
+                dag = current_dag_context()
+                if dag is not None:
+                    for other_key, other_block in cf._cache.items():
+                        if other_key == cache_key:
+                            continue
+                        if other_block._dag_node_indices:
+                            _merge_dual_context_nodes(
+                                dag,
+                                other_block._dag_node_indices,
+                                block._dag_node_indices,
+                                new_controlled=is_controlled,
+                            )
+                            break
         if cf._opt != 1:
             # Non-opt=1: add a coarse call-level DAG node per call.
             dag = current_dag_context()
@@ -248,6 +303,20 @@ def _capture_miss(
                 # during capture.  Mark the capture context as built.
                 block._dag_built_contexts.add(_ctx)
                 block._dag_built = True
+                # Merge with sibling block's nodes from the other context
+                dag = current_dag_context()
+                if dag is not None:
+                    for other_key, other_block in cf._cache.items():
+                        if other_key == cache_key:
+                            continue
+                        if other_block._dag_node_indices:
+                            _merge_dual_context_nodes(
+                                dag,
+                                other_block._dag_node_indices,
+                                block._dag_node_indices,
+                                new_controlled=is_controlled,
+                            )
+                            break
     elif _building_dag and block is not None:
         # Non-opt=1: add a coarse call-level DAG node on capture miss
         # so that per-context cache entries (controlled vs uncontrolled)

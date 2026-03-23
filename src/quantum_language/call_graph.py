@@ -66,15 +66,15 @@ def _compute_t_count(gates: list) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _format_dual_gates(uncontrolled: int, controlled: int) -> str:
-    """Format dual gate counts as ``'X / Y'`` with ``'-'`` for unavailable.
+def _format_dual(uncontrolled: int, controlled: int) -> str:
+    """Format dual U/C values as ``'X / Y'`` with ``'-'`` for unavailable.
 
     Parameters
     ----------
     uncontrolled : int
-        Gate count for the uncontrolled variant.  0 means unavailable.
+        Value for the uncontrolled variant.  0 means unavailable.
     controlled : int
-        Gate count for the controlled variant.  0 means unavailable.
+        Value for the controlled variant.  0 means unavailable.
 
     Returns
     -------
@@ -84,6 +84,10 @@ def _format_dual_gates(uncontrolled: int, controlled: int) -> str:
     uc = str(uncontrolled) if uncontrolled else "-"
     ct = str(controlled) if controlled else "-"
     return f"{uc} / {ct}"
+
+
+# Backward-compatible alias
+_format_dual_gates = _format_dual
 
 
 # ---------------------------------------------------------------------------
@@ -137,6 +141,14 @@ class DAGNode:
         Circuit depth for this node.
     t_count : int
         T-gate count for this node.
+    uncontrolled_depth : int
+        Circuit depth for the uncontrolled variant.  0 when unavailable.
+    controlled_depth : int
+        Circuit depth for the controlled variant.  0 when unavailable.
+    uncontrolled_t_count : int
+        T-gate count for the uncontrolled variant.  0 when unavailable.
+    controlled_t_count : int
+        T-gate count for the controlled variant.  0 when unavailable.
     sequence_ptr : int
         C pointer to ``sequence_t`` (cast to Python int). Used for call-graph
         replay without re-executing the function body.
@@ -162,6 +174,10 @@ class DAGNode:
         "bitmask",
         "depth",
         "t_count",
+        "uncontrolled_depth",
+        "controlled_depth",
+        "uncontrolled_t_count",
+        "controlled_t_count",
         "sequence_ptr",
         "uncontrolled_seq",
         "controlled_seq",
@@ -170,6 +186,7 @@ class DAGNode:
         "invert",
         "controlled",
         "is_call_node",
+        "_merged",
         "_block_ref",
         "_v2r_ref",
         "_qubit_array",
@@ -184,6 +201,10 @@ class DAGNode:
         *,
         depth: int = 0,
         t_count: int = 0,
+        uncontrolled_depth: int = 0,
+        controlled_depth: int = 0,
+        uncontrolled_t_count: int = 0,
+        controlled_t_count: int = 0,
         sequence_ptr: int = 0,
         uncontrolled_seq: int = 0,
         controlled_seq: int = 0,
@@ -204,6 +225,10 @@ class DAGNode:
         self.cache_key = cache_key
         self.depth = depth
         self.t_count = t_count
+        self.uncontrolled_depth = uncontrolled_depth
+        self.controlled_depth = controlled_depth
+        self.uncontrolled_t_count = uncontrolled_t_count
+        self.controlled_t_count = controlled_t_count
         self.sequence_ptr = sequence_ptr
         self.uncontrolled_seq = uncontrolled_seq
         self.controlled_seq = controlled_seq
@@ -212,6 +237,7 @@ class DAGNode:
         self.invert = invert
         self.controlled = controlled
         self.is_call_node = is_call_node
+        self._merged = False  # True when this node was merged into another
         self._block_ref = None  # CompiledBlock ref for merge (opt=2)
         self._v2r_ref = None  # virtual-to-real mapping for merge (opt=2)
         # Pre-compute bitmask from qubit_set (Python int for >64 qubit support)
@@ -264,6 +290,10 @@ class CallGraphDAG:
         *,
         depth: int = 0,
         t_count: int = 0,
+        uncontrolled_depth: int = 0,
+        controlled_depth: int = 0,
+        uncontrolled_t_count: int = 0,
+        controlled_t_count: int = 0,
         sequence_ptr: int = 0,
         uncontrolled_seq: int = 0,
         controlled_seq: int = 0,
@@ -291,6 +321,14 @@ class CallGraphDAG:
             Circuit depth for this node.
         t_count : int
             T-gate count for this node.
+        uncontrolled_depth : int
+            Circuit depth for the uncontrolled variant.
+        controlled_depth : int
+            Circuit depth for the controlled variant.
+        uncontrolled_t_count : int
+            T-gate count for the uncontrolled variant.
+        controlled_t_count : int
+            T-gate count for the controlled variant.
         sequence_ptr : int
             C pointer to ``sequence_t`` (cast to Python int).
         uncontrolled_seq : int
@@ -334,6 +372,10 @@ class CallGraphDAG:
             cache_key,
             depth=depth,
             t_count=t_count,
+            uncontrolled_depth=uncontrolled_depth,
+            controlled_depth=controlled_depth,
+            uncontrolled_t_count=uncontrolled_t_count,
+            controlled_t_count=controlled_t_count,
             sequence_ptr=sequence_ptr,
             uncontrolled_seq=uncontrolled_seq,
             controlled_seq=controlled_seq,
@@ -490,27 +532,79 @@ class CallGraphDAG:
         -------
         dict
             Keys: gates (total gate count), depth (critical-path depth),
-            qubits (number of unique physical qubits), t_count (total T-gates).
-            Critical-path depth = sum of per-group max depths, where groups
-            are determined by parallel_groups() (qubit-disjoint components).
+            qubits (number of unique physical qubits), t_count (total T-gates),
+            gates_uc, gates_cc (per-context gate totals),
+            depth_uc, depth_cc (per-context critical-path depth),
+            t_count_uc, t_count_cc (per-context T-gate totals).
         """
         if not self._nodes:
-            return {"gates": 0, "depth": 0, "qubits": 0, "t_count": 0}
+            return {
+                "gates": 0,
+                "depth": 0,
+                "qubits": 0,
+                "t_count": 0,
+                "gates_uc": 0,
+                "gates_cc": 0,
+                "depth_uc": 0,
+                "depth_cc": 0,
+                "t_count_uc": 0,
+                "t_count_cc": 0,
+            }
 
-        total_gates = sum(n.gate_count for n in self._nodes)
-        total_t = sum(n.t_count for n in self._nodes)
+        active = [n for n in self._nodes if not n._merged]
+        total_gates = sum(n.gate_count for n in active)
+        total_t = sum(n.t_count for n in active)
         all_qubits: set[int] = set()
-        for n in self._nodes:
+        for n in active:
             all_qubits.update(n.qubit_set)
 
         groups = self.parallel_groups()
-        total_depth = sum(max(self._nodes[idx].depth for idx in group) for group in groups)
+        total_depth = sum(
+            max(
+                (self._nodes[idx].depth for idx in group if not self._nodes[idx]._merged), default=0
+            )
+            for group in groups
+        )
+
+        # Per-context totals
+        gates_uc = sum(n.uncontrolled_gate_count for n in active)
+        gates_cc = sum(n.controlled_gate_count for n in active)
+        depth_uc = sum(
+            max(
+                (
+                    self._nodes[idx].uncontrolled_depth
+                    for idx in group
+                    if not self._nodes[idx]._merged
+                ),
+                default=0,
+            )
+            for group in groups
+        )
+        depth_cc = sum(
+            max(
+                (
+                    self._nodes[idx].controlled_depth
+                    for idx in group
+                    if not self._nodes[idx]._merged
+                ),
+                default=0,
+            )
+            for group in groups
+        )
+        t_count_uc = sum(n.uncontrolled_t_count for n in active)
+        t_count_cc = sum(n.controlled_t_count for n in active)
 
         return {
             "gates": total_gates,
             "depth": total_depth,
             "qubits": len(all_qubits),
             "t_count": total_t,
+            "gates_uc": gates_uc,
+            "gates_cc": gates_cc,
+            "depth_uc": depth_uc,
+            "depth_cc": depth_cc,
+            "t_count_uc": t_count_uc,
+            "t_count_cc": t_count_cc,
         }
 
     # -- DOT export ---------------------------------------------------------
@@ -553,13 +647,15 @@ class CallGraphDAG:
         def _node_label(idx: int) -> str:
             nd = self._nodes[idx]
             name = nd.func_name.replace('"', '\\"')
-            dual = _format_dual_gates(nd.uncontrolled_gate_count, nd.controlled_gate_count)
+            dual_gates = _format_dual(nd.uncontrolled_gate_count, nd.controlled_gate_count)
+            dual_depth = _format_dual(nd.uncontrolled_depth, nd.controlled_depth)
+            dual_t = _format_dual(nd.uncontrolled_t_count, nd.controlled_t_count)
             return (
                 f"{name}\\n"
-                f"gates: {dual}\\n"
-                f"depth: {nd.depth}\\n"
+                f"gates: {dual_gates}\\n"
+                f"depth: {dual_depth}\\n"
                 f"qubits: {len(nd.qubit_set)}\\n"
-                f"T-count: {nd.t_count}"
+                f"T-count: {dual_t}"
             )
 
         def _node_url(idx: int) -> str:
@@ -582,11 +678,13 @@ class CallGraphDAG:
                 lines.append("    style=dotted;")
                 lines.append(f'    label="Group {gi}";')
                 for idx in sorted(group):
-                    lines.append(f"  {_emit_node(idx)}")
+                    if not self._nodes[idx]._merged:
+                        lines.append(f"  {_emit_node(idx)}")
                 lines.append("  }")
         else:
             for idx in range(len(self._nodes)):
-                lines.append(_emit_node(idx))
+                if not self._nodes[idx]._merged:
+                    lines.append(_emit_node(idx))
 
         # Edges (iterate by index to handle multi-edges correctly)
         for eidx in self._dag.edge_indices():
@@ -632,34 +730,43 @@ class CallGraphDAG:
         lines.append(f"Compilation Report: {top_name}")
         lines.append("")
 
-        # Column widths: Name=20, Gates(U/C)=15, Depth=8, Qubits=8, T-count=8, Group=8
+        # Column widths: Name=20, Gates(U/C)=15, Depth(U/C)=15, Qubits=8, T-count(U/C)=15, Group=8
         header = (
-            f"{'Name':<20s} | {'Gates (U/C)':>15s} | {'Depth':>8s} | "
-            f"{'Qubits':>8s} | {'T-count':>8s} | {'Group':>8s}"
+            f"{'Name':<20s} | {'Gates (U/C)':>15s} | {'Depth (U/C)':>15s} | "
+            f"{'Qubits':>8s} | {'T-count (U/C)':>15s} | {'Group':>8s}"
         )
         sep = "-" * len(header)
         lines.append(header)
         lines.append(sep)
 
         for idx, nd in enumerate(self._nodes):
+            if nd._merged:
+                continue
             grp = node_to_group.get(idx, 0)
-            dual = _format_dual_gates(nd.uncontrolled_gate_count, nd.controlled_gate_count)
+            dual_gates = _format_dual(nd.uncontrolled_gate_count, nd.controlled_gate_count)
+            dual_depth = _format_dual(nd.uncontrolled_depth, nd.controlled_depth)
+            dual_t = _format_dual(nd.uncontrolled_t_count, nd.controlled_t_count)
             row = (
-                f"{nd.func_name:<20s} | {dual:>15s} | {nd.depth:>8d} | "
-                f"{len(nd.qubit_set):>8d} | {nd.t_count:>8d} | {grp:>8d}"
+                f"{nd.func_name:<20s} | {dual_gates:>15s} | {dual_depth:>15s} | "
+                f"{len(nd.qubit_set):>8d} | {dual_t:>15s} | {grp:>8d}"
             )
             lines.append(row)
 
         lines.append(sep)
+        dual_gates_total = _format_dual(agg["gates_uc"], agg["gates_cc"])
+        dual_depth_total = _format_dual(agg["depth_uc"], agg["depth_cc"])
+        dual_t_total = _format_dual(agg["t_count_uc"], agg["t_count_cc"])
         totals = (
-            f"{'TOTAL':<20s} | {str(agg['gates']):>15s} | {agg['depth']:>8d} | "
-            f"{agg['qubits']:>8d} | {agg['t_count']:>8d} | {'-':>8s}"
+            f"{'TOTAL':<20s} | {dual_gates_total:>15s} | {dual_depth_total:>15s} | "
+            f"{agg['qubits']:>8d} | {dual_t_total:>15s} | {'-':>8s}"
         )
         lines.append(totals)
 
         # Hierarchical breakdown: show own vs referenced gates when call
         # nodes or call edges are present.
-        call_node_indices = [i for i, nd in enumerate(self._nodes) if nd.is_call_node]
+        call_node_indices = [
+            i for i, nd in enumerate(self._nodes) if nd.is_call_node and not nd._merged
+        ]
         cedges = self.call_edges()
         if call_node_indices or cedges:
             lines.append("")
@@ -667,9 +774,15 @@ class CallGraphDAG:
 
             # Identify own-gate nodes vs call-reference nodes
             own_gates = sum(
-                nd.gate_count for i, nd in enumerate(self._nodes) if not nd.is_call_node
+                nd.gate_count
+                for i, nd in enumerate(self._nodes)
+                if not nd.is_call_node and not nd._merged
             )
-            ref_gates = sum(nd.gate_count for i, nd in enumerate(self._nodes) if nd.is_call_node)
+            ref_gates = sum(
+                nd.gate_count
+                for i, nd in enumerate(self._nodes)
+                if nd.is_call_node and not nd._merged
+            )
             lines.append(f"  Own gates:        {own_gates}")
             lines.append(f"  Referenced gates:  {ref_gates}")
             lines.append(f"  Total:            {own_gates + ref_gates}")
@@ -828,13 +941,15 @@ def record_operation(
     qubit_mapping = tuple(qubit_indices)
     qubit_set = frozenset(qubit_mapping)
 
-    # Populate the correct dual gate count field based on controlled context
+    # Populate the correct dual fields based on controlled context
     if controlled:
-        uc_gc = 0
-        cc_gc = gate_count
+        uc_gc, cc_gc = 0, gate_count
+        uc_depth, cc_depth = 0, depth
+        uc_tc, cc_tc = 0, t_count
     else:
-        uc_gc = gate_count
-        cc_gc = 0
+        uc_gc, cc_gc = gate_count, 0
+        uc_depth, cc_depth = depth, 0
+        uc_tc, cc_tc = t_count, 0
 
     node_idx = dag.add_node(
         operation_type,
@@ -843,6 +958,10 @@ def record_operation(
         (),  # cache_key -- not applicable for primitives
         depth=depth,
         t_count=t_count,
+        uncontrolled_depth=uc_depth,
+        controlled_depth=cc_depth,
+        uncontrolled_t_count=uc_tc,
+        controlled_t_count=cc_tc,
         sequence_ptr=sequence_ptr,
         qubit_mapping=qubit_mapping,
         operation_type=operation_type,
