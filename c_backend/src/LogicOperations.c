@@ -203,6 +203,7 @@ sequence_t *Q_not(int bits) {
         x(&seq->seq[0][i], i);
     }
 
+    sequence_compute_total_gate_count(seq);
     return seq;
 }
 
@@ -255,6 +256,7 @@ sequence_t *cQ_not(int bits) {
         cx(&seq->seq[i][0], i, bits);
     }
 
+    sequence_compute_total_gate_count(seq);
     return seq;
 }
 
@@ -305,6 +307,7 @@ sequence_t *Q_xor(int bits) {
         cx(&seq->seq[0][i], i, bits + i);
     }
 
+    sequence_compute_total_gate_count(seq);
     return seq;
 }
 
@@ -360,6 +363,7 @@ sequence_t *cQ_xor(int bits) {
         ccx(&seq->seq[i][0], i, bits + i, 2 * bits);
     }
 
+    sequence_compute_total_gate_count(seq);
     return seq;
 }
 

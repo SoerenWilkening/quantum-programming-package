@@ -556,9 +556,11 @@
 					for i in range((<qint>other).bits)
 				)
 			_uc_seq = Q_xor(self.bits)
+			_cc_seq = cQ_xor(self.bits)
 			_record_instruction(
 				"xor", regs,
 				uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+				controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 			)
 			self.history.add_blocker(result)
 			if type(other) != int and isinstance(other, qint):
@@ -708,9 +710,11 @@
 			regs = tuple(self.qubits[self_offset + i] for i in range(self_bits))
 			if type(other) == int:
 				_uc_seq = Q_not(1)
+				_cc_seq = cQ_not(1)
 				_record_instruction(
 					"ixor_cq", regs,
 					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 				)
 			elif isinstance(other, qint):
 				if other is not self:
@@ -723,9 +727,11 @@
 					for i in range(_cm_xor_bits)
 				)
 				_uc_seq = Q_xor(_cm_xor_bits)
+				_cc_seq = cQ_xor(_cm_xor_bits)
 				_record_instruction(
 					"ixor_qq", regs,
 					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 				)
 			return self
 
