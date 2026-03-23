@@ -3,10 +3,9 @@
 Verifies that compiled functions (captured gate sequences) work correctly
 when replayed inside nested quantum conditionals (multi-level with-blocks).
 
-Key mechanism: During replay, compile.py maps block.control_virtual_idx to
-_get_control_bool().qubits[63], which is the AND-ancilla qubit in nested
-contexts. This means replayed gates are automatically controlled on the
-combined condition (outer AND inner).
+Key mechanism: Each control context captures its own block independently.
+The controlled block is captured with the correct control qubit mapping,
+and replay uses the appropriate cache entry for each context.
 
 After Phase 5 step 5.2d, the first call to a compiled function inside a
 with-block is now correctly controlled (capture mode respects the control

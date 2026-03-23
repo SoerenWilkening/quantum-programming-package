@@ -1,4 +1,4 @@
-"""Tests for per-context compiled function cache key (Quantum_Assembly-1yb).
+"""Tests for per-context compiled function cache key (Quantum_Assembly-1yb, Quantum_Assembly-czb).
 
 Verifies that control_count is included in the compiled function cache key
 so controlled and uncontrolled calls produce separate cache entries with
@@ -11,6 +11,8 @@ Tests:
 - test_order_independent — call order does not affect per-call gate counts
 - test_nested_controlled_gate_count — outer calling inner inside with:
   total matches uncompiled equivalent
+- test_no_controlled_block_attr — cached blocks have no controlled_block
+- test_cache_miss_controlled — controlled call after uncontrolled is a cache miss
 """
 
 import gc
@@ -297,3 +299,66 @@ class TestNestedControlledGateCount:
         b = ql.qint(0, width=4)
         _ = outer2(b)
         assert len(inner2._cache) == 2
+
+
+class TestNoControlledBlockAttr:
+    """Cached blocks have no controlled_block attribute (Quantum_Assembly-czb)."""
+
+    def test_no_controlled_block_attr(self):
+        """After capture, cached blocks do not have a controlled_block attribute."""
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+
+        # Uncontrolled call
+        a = ql.qint(0, width=3)
+        _ = inc(a)
+
+        # Controlled call
+        c = ql.qbool(True)
+        b = ql.qint(0, width=3)
+        with c:
+            _ = inc(b)
+
+        # Both cache entries should not have controlled_block
+        for _key, block in inc._cache.items():
+            assert not hasattr(block, "controlled_block")
+
+
+class TestCacheMissControlled:
+    """Controlled call after uncontrolled is a cache miss (separate key)."""
+
+    def test_cache_miss_controlled(self):
+        """A controlled call after an uncontrolled call is a cache miss,
+        not a replay of the uncontrolled block's controlled variant."""
+
+        @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        gc.collect()
+        ql.circuit()
+
+        # Uncontrolled call (cache miss -> capture)
+        a = ql.qint(0, width=3)
+        _ = inc(a)
+        assert len(inc._cache) == 1
+
+        # Controlled call should be a separate cache miss
+        c = ql.qbool(True)
+        b = ql.qint(0, width=3)
+        with c:
+            _ = inc(b)
+
+        # Should now have 2 entries (separate keys)
+        assert len(inc._cache) == 2
+
+        # The two cache entries should be different blocks
+        blocks = list(inc._cache.values())
+        assert blocks[0] is not blocks[1]

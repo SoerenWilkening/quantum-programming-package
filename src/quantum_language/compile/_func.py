@@ -34,10 +34,7 @@ from ._capture import (
     _capture as _capture_impl,
 )
 from ._capture import (
-    _capture_and_cache_both as _capture_and_cache_both_impl,
-)
-from ._capture import (
-    _derive_controlled_block as _derive_controlled_block_impl,
+    _capture_and_cache as _capture_and_cache_impl,
 )
 from ._dispatch import (
     _call_inner_impl,
@@ -300,7 +297,7 @@ class CompiledFunc:
 
         return _ci(self, args, kwargs, quantum_args)
 
-    def _capture_and_cache_both(
+    def _capture_and_cache(
         self,
         args,
         kwargs,
@@ -310,8 +307,8 @@ class CompiledFunc:
         is_controlled,
         cache_key,
     ):
-        """Handle cache miss: capture uncontrolled, derive controlled, cache both."""
-        return _capture_and_cache_both_impl(
+        """Handle cache miss: capture and cache a single block."""
+        return _capture_and_cache_impl(
             self,
             args,
             kwargs,
@@ -321,10 +318,6 @@ class CompiledFunc:
             is_controlled,
             cache_key,
         )
-
-    def _derive_controlled_block(self, uncontrolled_block):
-        """Create a controlled CompiledBlock from an uncontrolled one."""
-        return _derive_controlled_block_impl(self, uncontrolled_block)
 
     # ------------------------------------------------------------------
     # Parametric compilation lifecycle (PAR-02 / PAR-03)

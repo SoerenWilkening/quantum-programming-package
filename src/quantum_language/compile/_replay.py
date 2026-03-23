@@ -8,7 +8,6 @@ delegate to them with ``self`` as the first argument.
 
 from .._core import (
     _allocate_qubit,
-    _get_control_bool,
     _get_controlled,
     _get_layer_floor,
     _set_layer_floor,
@@ -25,19 +24,16 @@ from ._block import (
 def _replay(cf, block, quantum_args, track_forward=True, kind=None):
     """Replay cached gates with qubit remapping.
 
-    Checks the control stack at runtime and selects the appropriate gate
-    sequence.  If the block has a ``controlled_block`` and we are inside
-    a controlled context (``with qbool:``), the controlled variant is
-    used and its control virtual index is mapped to the actual control
-    qubit.  Otherwise the uncontrolled variant is used directly.
+    Each control context (controlled vs uncontrolled) has its own
+    independently captured block stored under a separate cache key.
+    The block is replayed directly with no variant selection.
 
     Parameters
     ----------
     cf : CompiledFunc
         The compiled function instance.
     block : CompiledBlock
-        The *base* (uncontrolled) block.  ``block.controlled_block`` is
-        used automatically when the control stack is active.
+        The cached block for this context.
     quantum_args : list
         Caller's quantum arguments (qint / qarray).
     track_forward : bool
@@ -54,20 +50,12 @@ def _replay(cf, block, quantum_args, track_forward=True, kind=None):
         _replay_call_records,
     )
 
-    # --- Runtime sequence selection (Phase 5, Step 5.2) ---
     is_controlled = _get_controlled()
-    if is_controlled and block.controlled_block is not None:
-        block = block.controlled_block
 
     # Build virtual-to-real mapping from caller's qints/qarrays.
     # Virtual index 0 is reserved for the control qubit; params
     # start at index 1.
     virtual_to_real = {}
-
-    # Map control qubit at index 0 when in controlled context
-    if is_controlled and block.control_virtual_idx is not None:
-        control_bool = _get_control_bool()
-        virtual_to_real[0] = int(control_bool.qubits[63])
 
     vidx = 1  # params start at virtual index 1
     for qa in quantum_args:
@@ -87,18 +75,9 @@ def _replay(cf, block, quantum_args, track_forward=True, kind=None):
     # Determine replay path before allocation: prefer IR path
     # (handles controlled context via controlled_seq), fall back to
     # gate-level injection.
-    #
-    # Find the base (uncontrolled) block that has IR entries.
-    # The derived controlled_block does not store IR — _execute_ir
-    # handles control selection internally using the control stack.
     _ir_source = None
     if block._instruction_ir:
         _ir_source = block
-    elif hasattr(cf, "_cache"):
-        for _cb in cf._cache.values():
-            if _cb.controlled_block is block and _cb._instruction_ir:
-                _ir_source = _cb
-                break
 
     # Determine which virtual indices are transient.  For the IR path,
     # run_instruction allocates its own internal ancillas, so we skip

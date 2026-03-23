@@ -1,10 +1,10 @@
-"""Tests for DAG dual variant gate count fix.
+"""Tests for DAG variant gate counts with per-context cache.
 
-Issue: Quantum_Assembly-yyj
-Spec: R16.11
+Issue: Quantum_Assembly-yyj (updated by Quantum_Assembly-czb)
 
-Tests that DAG nodes show BOTH uncontrolled and controlled gate counts
-when a compiled function is called in both contexts.
+Tests that DAG nodes correctly record gate counts for the context in
+which they were captured. With per-context caching, each control context
+produces its own cache entry and its own DAG nodes.
 """
 
 import quantum_language as ql
@@ -12,10 +12,10 @@ from quantum_language import qint
 
 
 class TestDualVariantQFTMode:
-    """opt=1 QFT mode (IR path): DAG nodes have both counts after both contexts."""
+    """opt=1 QFT mode (IR path): separate DAG nodes per context."""
 
-    def test_uncontrolled_then_controlled_has_both_counts(self):
-        """After calling uncontrolled then controlled, DAG nodes have both gate counts."""
+    def test_uncontrolled_then_controlled_creates_nodes(self):
+        """Calling uncontrolled then controlled creates DAG nodes for both."""
         ql.circuit()
         ql.option("fault_tolerant", False)  # QFT mode produces IR
 
@@ -39,19 +39,12 @@ class TestDualVariantQFTMode:
         nodes = dag.nodes
         assert len(nodes) > 0
 
-        # At least some nodes should have BOTH counts non-zero
+        # Nodes should exist from the capture(s)
         add_nodes = [n for n in nodes if n.operation_type and "add" in n.operation_type]
         assert len(add_nodes) > 0
-        for node in add_nodes:
-            assert node.uncontrolled_gate_count > 0, (
-                f"uncontrolled_gate_count should be > 0, got {node.uncontrolled_gate_count}"
-            )
-            assert node.controlled_gate_count > 0, (
-                f"controlled_gate_count should be > 0, got {node.controlled_gate_count}"
-            )
 
-    def test_controlled_then_uncontrolled_has_both_counts(self):
-        """After calling controlled then uncontrolled, DAG nodes have both gate counts."""
+    def test_controlled_then_uncontrolled_creates_nodes(self):
+        """Calling controlled then uncontrolled creates DAG nodes for both."""
         ql.circuit()
         ql.option("fault_tolerant", False)
 
@@ -74,39 +67,13 @@ class TestDualVariantQFTMode:
         assert dag is not None
         add_nodes = [n for n in dag.nodes if n.operation_type and "add" in n.operation_type]
         assert len(add_nodes) > 0
-        for node in add_nodes:
-            assert node.uncontrolled_gate_count > 0
-            assert node.controlled_gate_count > 0
-
-    def test_no_duplicate_nodes_with_dual_context(self):
-        """Calling in both contexts does NOT create duplicate nodes."""
-        ql.circuit()
-        ql.option("fault_tolerant", False)
-
-        @ql.compile(opt=1)
-        def add_two(x):
-            x += 2
-            return x
-
-        a = qint(0, width=4)
-        b = qint(0, width=4)
-        cond = a == 0
-
-        add_two(b)
-        n_after_first = add_two.call_graph.node_count
-
-        with cond:
-            add_two(b)
-
-        # Should still have the same number of nodes (updated, not duplicated)
-        assert add_two.call_graph.node_count == n_after_first
 
 
 class TestDualVariantToffoliMode:
-    """Toffoli mode (record_operation path): proportional dual counts."""
+    """Toffoli mode (record_operation path): per-context DAG nodes."""
 
     def test_toffoli_uncontrolled_then_controlled(self):
-        """After calling in both contexts, Toffoli nodes have both counts."""
+        """Calling in both contexts creates DAG nodes for both."""
         ql.circuit()
         ql.option("fault_tolerant", True)
 
@@ -130,16 +97,15 @@ class TestDualVariantToffoliMode:
         add_nodes = [n for n in dag.nodes if n.operation_type and "add" in n.operation_type]
         if add_nodes:
             for node in add_nodes:
-                assert node.uncontrolled_gate_count > 0
-                # Controlled count should be populated (proportional estimate)
-                assert node.controlled_gate_count > 0
+                # At least one variant's count should be populated
+                assert node.uncontrolled_gate_count > 0 or node.controlled_gate_count > 0
 
 
-class TestDualVariantCoarseNode:
-    """Non-opt=1 (coarse node path): dual counts from block/controlled_block on replay."""
+class TestCoarseNode:
+    """Non-opt=1 (coarse node path): gate counts on replay."""
 
-    def test_coarse_node_has_dual_counts_on_replay(self):
-        """Non-opt=1 replay DAG node has both uncontrolled and controlled counts."""
+    def test_coarse_node_has_gate_count_on_replay(self):
+        """Non-opt=1 replay DAG node has gate count."""
         ql.circuit()
 
         @ql.compile(opt=0)
@@ -149,9 +115,9 @@ class TestDualVariantCoarseNode:
 
         a = qint(3, width=4)
         b = qint(2, width=4)
-        # First call: capture (builds DAG from record_operation, single variant)
+        # First call: capture (builds DAG from record_operation)
         add_fn(a, b)
-        # Second call: replay (builds coarse node with dual counts)
+        # Second call: replay (builds coarse node)
         add_fn(a, b)
 
         dag = add_fn.call_graph
@@ -159,18 +125,12 @@ class TestDualVariantCoarseNode:
         nodes = dag.nodes
         assert len(nodes) > 0
 
-        # The coarse node should have the uncontrolled count
+        # The coarse node should have a gate count
         node = nodes[0]
-        assert node.uncontrolled_gate_count > 0, (
-            f"coarse node uncontrolled_gate_count should be > 0, got {node.uncontrolled_gate_count}"
-        )
-        # Controlled count should also be populated from controlled_block
-        assert node.controlled_gate_count > 0, (
-            f"coarse node controlled_gate_count should be > 0, got {node.controlled_gate_count}"
-        )
+        assert node.gate_count > 0, f"coarse node gate_count should be > 0, got {node.gate_count}"
 
-    def test_report_no_dash_dash_for_coarse_replay(self):
-        """report() should not show '- / -' for non-opt=1 coarse nodes on replay."""
+    def test_coarse_node_report_renders(self):
+        """report() renders without errors for non-opt=1 coarse nodes on replay."""
         ql.circuit()
 
         @ql.compile(opt=0)
@@ -185,10 +145,5 @@ class TestDualVariantCoarseNode:
         dag = inc_fn.call_graph
         assert dag is not None
         report = dag.report()
-        lines = report.split("\n")
-        for line in lines:
-            # Skip header and total lines
-            if "TOTAL" in line or "Gates" in line or "---" in line or not line.strip():
-                continue
-            if "- / -" in line:
-                raise AssertionError(f"report() shows '- / -' for coarse node: {line}")
+        # Report should contain the function name
+        assert "inc_fn" in report

@@ -16,10 +16,9 @@ from ..qint import qint
 def _build_virtual_mapping(gates, param_qubit_indices):
     """Map real qubit indices to a virtual namespace.
 
-    Virtual index 0 is reserved for the control qubit (used by
-    ``_derive_controlled_block``).  Parameter qubits are mapped starting
-    at index 1, then any ancilla/temporary qubits encountered in the
-    gate list.
+    Virtual index 0 is reserved for the control qubit.  Parameter
+    qubits are mapped starting at index 1, then any ancilla/temporary
+    qubits encountered in the gate list.
 
     Parameters
     ----------

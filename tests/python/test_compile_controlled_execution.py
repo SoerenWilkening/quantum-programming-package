@@ -495,8 +495,8 @@ class TestCacheUncontrolledAfterControlledCapture:
                 f"Uncontrolled cache gate should not reference control qubit {ctrl_qubit}"
             )
 
-    def test_controlled_block_derived(self):
-        """Controlled block is correctly derived from uncontrolled cache."""
+    def test_no_controlled_block_attribute(self):
+        """Blocks no longer have a controlled_block attribute."""
 
         @ql.compile
         def inc(x):
@@ -513,12 +513,7 @@ class TestCacheUncontrolledAfterControlledCapture:
             _ = inc(a)
 
         block = list(inc._cache.values())[0]
-        assert block.controlled_block is not None
-        assert block.controlled_block.control_virtual_idx is not None
-
-        # Controlled block should have extra control on each gate
-        for ug, cg in zip(block.gates, block.controlled_block.gates, strict=False):
-            assert cg["num_controls"] == ug["num_controls"] + 1
+        assert not hasattr(block, "controlled_block")
 
     def test_replay_after_controlled_capture_works(self):
         """Second call (replay) works after first call was inside with."""

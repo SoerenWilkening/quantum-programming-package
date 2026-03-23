@@ -50,13 +50,11 @@ class CompiledBlock:
         "return_qubit_range",
         "return_is_param_index",
         "original_gate_count",
-        "control_virtual_idx",
         "_first_call_result",
         "_capture_ancilla_qubits",
         "_capture_virtual_to_real",
         "return_type",  # 'qint', 'qarray', or None
         "_return_qarray_element_widths",  # List of element widths for qarray return
-        "controlled_block",  # Derived controlled CompiledBlock (Phase 5)
         "_captured_controlled",  # Whether capture was inside control context
         "_instruction_ir",  # list[InstructionRecord] – compile-mode IR
         "_call_records",  # list[CallRecord] – nested compiled function calls
@@ -85,13 +83,11 @@ class CompiledBlock:
         self.original_gate_count = (
             original_gate_count if original_gate_count is not None else len(gates)
         )
-        self.control_virtual_idx = None
         self._first_call_result = None
         self._capture_ancilla_qubits = None
         self._capture_virtual_to_real = None
         self.return_type = None
         self._return_qarray_element_widths = None
-        self.controlled_block = None
         self._captured_controlled = False
         self._instruction_ir = []
         self._call_records = []

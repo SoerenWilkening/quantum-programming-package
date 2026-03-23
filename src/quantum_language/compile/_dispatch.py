@@ -131,7 +131,6 @@ def _replay_hit(
     cf._cache.move_to_end(cache_key)
     _track_fwd = cf._inverse_func is not None
     block = cf._cache[cache_key]
-    # _replay selects controlled/uncontrolled variant at runtime
     result = cf._replay(block, quantum_args, track_forward=_track_fwd, kind="compiled_fn")
     # Manually credit gate count when run_instruction did NOT
     # already increment it.  run_instruction (IR path) always
@@ -149,43 +148,25 @@ def _replay_hit(
     if _building_dag:
         if cf._opt == 1 and block and block._instruction_ir:
             # opt=1 with IR (QFT mode): build DAG nodes from
-            # instruction IR.  Context-aware: build once per control
-            # context (uncontrolled / controlled) so both variants'
-            # gate counts are populated on the DAG nodes.
+            # instruction IR.
             _ctx = bool(is_controlled)
             if _ctx not in block._dag_built_contexts:
-                if not block._dag_built_contexts:
-                    # First context: build new DAG nodes from IR.
-                    _ir_added = _build_dag_from_ir(
-                        block,
-                        cf._func.__name__,
-                        is_controlled=is_controlled,
-                    )
-                    if _ir_added > 0:
-                        block._dag_built_contexts.add(_ctx)
-                        block._dag_built = True
-                else:
-                    # Second context: update existing DAG nodes with
-                    # the missing variant's gate counts.
-                    _update_dag_variant_counts(block, is_controlled)
+                _ir_added = _build_dag_from_ir(
+                    block,
+                    cf._func.__name__,
+                    is_controlled=is_controlled,
+                )
+                if _ir_added > 0:
                     block._dag_built_contexts.add(_ctx)
+                    block._dag_built = True
         elif cf._opt == 1 and block and not block._instruction_ir:
             # opt=1 Toffoli mode (no IR): DAG nodes were created by
             # record_operation during capture with only one variant.
-            # On replay in a new context, update existing nodes with
-            # the other variant's gate counts from the block totals.
             _ctx = bool(is_controlled)
             if _ctx not in block._dag_built_contexts and block._dag_node_indices:
-                _update_dag_variant_counts_proportional(
-                    block,
-                    is_controlled,
-                )
                 block._dag_built_contexts.add(_ctx)
         if cf._opt != 1:
             # Non-opt=1: add a coarse call-level DAG node per call.
-            # opt=1 accumulates fine-grained nodes during capture
-            # (via record_operation or _build_dag_from_ir), so
-            # replays must not append duplicate coarse nodes.
             dag = current_dag_context()
             if dag is not None:
                 extra = (
@@ -200,8 +181,6 @@ def _replay_hit(
                     if block and not _gates and block.original_gate_count
                     else len(_gates)
                 )
-                # Compute dual gate counts from block and controlled_block
-                _uc_gc, _cc_gc = _block_dual_gate_counts(block)
                 node_idx = dag.add_node(
                     cf._func.__name__,
                     qubit_set,
@@ -210,8 +189,6 @@ def _replay_hit(
                     depth=_compute_depth(_gates),
                     t_count=_compute_t_count(_gates),
                     controlled=is_controlled,
-                    uncontrolled_gate_count=_uc_gc,
-                    controlled_gate_count=_cc_gc,
                 )
                 # Store block ref for merge support (opt=2)
                 if block is not None:
@@ -235,7 +212,7 @@ def _capture_miss(
     """Handle a cache miss: capture, cache, and optionally build DAG."""
     from . import _build_qubit_set_numpy
 
-    result = cf._capture_and_cache_both(
+    result = cf._capture_and_cache(
         args,
         kwargs,
         quantum_args,
@@ -282,7 +259,6 @@ def _capture_miss(
                 if not _gates and block.original_gate_count
                 else len(_gates)
             )
-            _uc_gc, _cc_gc = _block_dual_gate_counts(block)
             node_idx = dag.add_node(
                 cf._func.__name__,
                 qubit_set,
@@ -291,8 +267,6 @@ def _capture_miss(
                 depth=_compute_depth(_gates),
                 t_count=_compute_t_count(_gates),
                 controlled=is_controlled,
-                uncontrolled_gate_count=_uc_gc,
-                controlled_gate_count=_cc_gc,
             )
             if block is not None:
                 dag._nodes[node_idx]._block_ref = block
@@ -365,7 +339,7 @@ def _parametric_call_impl(
     # --- State: Unknown (first call ever) ---
     if cf._parametric_safe is None and not cf._parametric_probed:
         # First capture -- store topology for later probe
-        result = cf._capture_and_cache_both(
+        result = cf._capture_and_cache(
             args,
             kwargs,
             quantum_args,
@@ -412,7 +386,7 @@ def _parametric_call_impl(
                 )
 
         # Different classical args -- run the structural probe
-        result = cf._capture_and_cache_both(
+        result = cf._capture_and_cache(
             args,
             kwargs,
             quantum_args,
@@ -442,7 +416,7 @@ def _parametric_call_impl(
             cf._cache.move_to_end(cache_key)
             block = cf._cache[cache_key]
             return cf._replay(block, quantum_args, kind="compiled_fn")
-        return cf._capture_and_cache_both(
+        return cf._capture_and_cache(
             args,
             kwargs,
             quantum_args,
@@ -460,7 +434,7 @@ def _parametric_call_impl(
         return cf._replay(block, quantum_args, kind="compiled_fn")
 
     # New classical value: capture to get correct gates and cache per-value
-    result = cf._capture_and_cache_both(
+    result = cf._capture_and_cache(
         args,
         kwargs,
         quantum_args,
@@ -482,79 +456,3 @@ def _parametric_call_impl(
             cf._parametric_block = None
 
     return result
-
-
-# ---------------------------------------------------------------------------
-# DAG variant count helpers
-# ---------------------------------------------------------------------------
-
-
-def _block_dual_gate_counts(block):
-    """Compute dual gate counts from a block and its controlled_block.
-
-    Returns (uncontrolled_gate_count, controlled_gate_count).
-    """
-    uc_gc = block.original_gate_count if block.original_gate_count else len(block.gates)
-    cc_gc = 0
-    cb = block.controlled_block
-    if cb is not None:
-        cc_gc = len(cb.gates) if cb.gates else (cb.original_gate_count or 0)
-    return uc_gc, cc_gc
-
-
-def _update_dag_variant_counts(block, is_controlled):
-    """Update existing DAG nodes with the missing variant's gate counts.
-
-    Used for opt=1 IR path when the function is called in a second
-    control context.  The IR entries store both sequence pointers, so
-    we can resolve both gate counts from any context.
-    """
-    from ..call_graph import _resolve_gate_count
-
-    dag = current_dag_context()
-    if dag is None:
-        return
-
-    for node_idx in block._dag_node_indices:
-        if node_idx >= len(dag._nodes):
-            continue
-        node = dag._nodes[node_idx]
-        # Re-resolve both counts from sequence pointers
-        if node.uncontrolled_seq and node.uncontrolled_gate_count == 0:
-            node.uncontrolled_gate_count = _resolve_gate_count(node.uncontrolled_seq)
-        if node.controlled_seq and node.controlled_gate_count == 0:
-            node.controlled_gate_count = _resolve_gate_count(node.controlled_seq)
-
-
-def _update_dag_variant_counts_proportional(block, is_controlled):
-    """Update existing DAG nodes with proportional gate counts for the other variant.
-
-    Used for opt=1 Toffoli mode (no IR) when the function is called in
-    a second control context.  Per-operation counts for the new context
-    are not available, so we proportionally distribute the block-level
-    total from the controlled/uncontrolled block across existing nodes.
-    """
-    dag = current_dag_context()
-    if dag is None:
-        return
-
-    uc_total, cc_total = _block_dual_gate_counts(block)
-
-    for node_idx in block._dag_node_indices:
-        if node_idx >= len(dag._nodes):
-            continue
-        node = dag._nodes[node_idx]
-        if is_controlled and node.controlled_gate_count == 0 and node.uncontrolled_gate_count > 0:
-            # Proportional estimate of controlled count
-            if uc_total > 0:
-                ratio = cc_total / uc_total
-                node.controlled_gate_count = max(1, int(node.uncontrolled_gate_count * ratio))
-        elif (
-            not is_controlled
-            and node.uncontrolled_gate_count == 0
-            and node.controlled_gate_count > 0
-        ):
-            # Proportional estimate of uncontrolled count
-            if cc_total > 0:
-                ratio = uc_total / cc_total
-                node.uncontrolled_gate_count = max(1, int(node.controlled_gate_count * ratio))

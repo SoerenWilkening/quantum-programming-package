@@ -442,15 +442,13 @@ class TestControlledReplayFreesTransients:
         # First call: capture (uncontrolled)
         add_fn(a, b)
 
-        # Verify transient_virtual_indices is propagated to controlled block
+        # Verify transient_virtual_indices is set on the captured block
         block = None
         for blk in add_fn._cache.values():
             block = blk
             break
         assert block is not None
-        assert block.controlled_block is not None
-        assert block.controlled_block.transient_virtual_indices == block.transient_virtual_indices
-        assert len(block.controlled_block.transient_virtual_indices) > 0
+        assert len(block.transient_virtual_indices) > 0
 
         # Second call: controlled replay inside a `with` block
         c = ql.qint(1, width=4)

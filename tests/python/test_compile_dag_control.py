@@ -1,10 +1,8 @@
 """Tests for opt=1 DAG-only mode control context recording.
 
-Phase 5, Step 5.3: Verify that opt=1 (DAG-only) mode respects control
-context.  The cached block records whether the call was controlled via
-``_captured_controlled``, and the first (capture) call handles control
-correctly by stripping the control stack and deriving a controlled
-variant.
+Verify that opt=1 (DAG-only) mode respects control context. The cached
+block records whether the call was controlled via ``_captured_controlled``,
+and each context captures its own block independently.
 
 Requirements: Quantum_Assembly-aql.3
 """
@@ -105,8 +103,8 @@ class TestOpt1DagRecordsControl:
 class TestOpt1CaptureRespectsControl:
     """First (capture) call in opt=1 mode handles control correctly."""
 
-    def test_opt1_capture_respects_control_stores_both(self):
-        """opt=1 first call inside with-block stores both variants."""
+    def test_opt1_capture_in_with_one_entry(self):
+        """opt=1 first call inside with-block stores one entry."""
 
         @ql.compile(opt=1)
         def inc(x):
@@ -120,13 +118,11 @@ class TestOpt1CaptureRespectsControl:
         with c:
             _ = inc(a)
 
-        # Cache should have one entry with both controlled and uncontrolled
+        # One cache entry for the controlled context
         assert len(inc._cache) == 1
-        block = list(inc._cache.values())[0]
-        assert block.controlled_block is not None
 
-    def test_opt1_capture_uncontrolled_then_controlled_replay(self):
-        """opt=1 capture uncontrolled, replay controlled uses correct variant."""
+    def test_opt1_capture_uncontrolled_then_controlled(self):
+        """opt=1 capture uncontrolled, then controlled creates two entries."""
 
         @ql.compile(opt=1)
         def inc(x):
@@ -140,12 +136,9 @@ class TestOpt1CaptureRespectsControl:
         # Capture uncontrolled
         a = ql.qint(0, width=2)
         _ = inc(a)
+        assert len(inc._cache) == 1
 
-        block = list(inc._cache.values())[0]
-        assert block.controlled_block is not None
-        assert block.controlled_block.control_virtual_idx is not None
-
-        # Replay controlled -- should not raise
+        # Controlled call -- should create separate cache entry
         c = ql.qbool(True)
         b = ql.qint(0, width=2)
         with c:
@@ -154,8 +147,8 @@ class TestOpt1CaptureRespectsControl:
         # Per-context cache: uncontrolled and controlled are separate entries
         assert len(inc._cache) == 2
 
-    def test_opt1_capture_in_with_strips_control(self):
-        """opt=1 first call inside with-block captures uncontrolled body."""
+    def test_opt1_no_controlled_block_attribute(self):
+        """opt=1 blocks do not have a controlled_block attribute."""
 
         @ql.compile(opt=1)
         def inc(x):
@@ -171,32 +164,4 @@ class TestOpt1CaptureRespectsControl:
             _ = inc(a)
 
         block = list(inc._cache.values())[0]
-        # The base block is uncontrolled (control_virtual_idx is None)
-        assert block.control_virtual_idx is None
-        # The controlled variant has control_virtual_idx set
-        assert block.controlled_block.control_virtual_idx is not None
-
-    def test_opt1_capture_controlled_block_has_gates(self):
-        """opt=1 capture produces a controlled block with gates."""
-
-        @ql.compile(opt=1)
-        def inc(x):
-            x += 1
-            return x
-
-        gc.collect()
-        ql.circuit()
-        ql.option("simulate", True)
-        c = ql.qbool(True)
-        a = ql.qint(0, width=2)
-        with c:
-            _ = inc(a)
-
-        block = list(inc._cache.values())[0]
-        ctrl_block = block.controlled_block
-        assert ctrl_block is not None
-        # Controlled block should have gates
-        assert len(ctrl_block.gates) > 0
-        # Each gate has one more control than the uncontrolled version
-        for ug, cg in zip(block.gates, ctrl_block.gates, strict=False):
-            assert cg["num_controls"] == ug["num_controls"] + 1
+        assert not hasattr(block, "controlled_block")

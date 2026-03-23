@@ -74,11 +74,9 @@ class _InverseCompiledFunc:
 
         quantum_args, classical_args, widths = self._original._classify_args(args, kwargs)
 
-        # Build cache key for the inverse cache.  The inverse always
-        # inverts the uncontrolled block and derives a controlled variant,
-        # so we use control_count=0 for looking up the original's cache
-        # but include the current control_count in the inv_cache key so
-        # replay selects the correct variant.
+        # Build cache key for the inverse cache.  The inverse inverts the
+        # uncontrolled block, so we use control_count=0 for looking up
+        # the original's cache.
         qubit_saving = _get_qubit_saving_mode()
         mode_flags = _get_mode_flags()
         if self._original._key_func:
@@ -127,15 +125,8 @@ class _InverseCompiledFunc:
                 return_is_param_index=block.return_is_param_index,
                 original_gate_count=block.original_gate_count,
             )
-            inverted_block.control_virtual_idx = None
             inverted_block.return_type = block.return_type
             inverted_block._return_qarray_element_widths = block._return_qarray_element_widths
-            # Derive controlled variant for the inverted block
-            try:
-                inverted_controlled = self._original._derive_controlled_block(inverted_block)
-            except Exception:
-                inverted_controlled = None
-            inverted_block.controlled_block = inverted_controlled
             self._inv_cache[cache_key] = inverted_block
 
         inv_block = self._inv_cache[cache_key]

@@ -1,9 +1,9 @@
 """Capture logic for compiled quantum functions.
 
 Contains standalone functions for gate capture: ``_capture``,
-``_capture_inner``, ``_capture_and_cache_both``, and
-``_derive_controlled_block``.  These are called by ``CompiledFunc``
-methods which delegate to them with ``self`` as the first argument.
+``_capture_inner``, and ``_capture_and_cache``.  These are called by
+``CompiledFunc`` methods which delegate to them with ``self`` as the
+first argument.
 """
 
 from .._core import (
@@ -66,7 +66,7 @@ def _capture_inner(cf, args, kwargs, quantum_args):
 
     The extracted gates are then normalised to uncontrolled form (any
     injected control qubit is stripped) before building the gate-level
-    cache, so ``_derive_controlled_block`` can re-add control correctly.
+    cache.
 
     Parameters
     ----------
@@ -198,8 +198,7 @@ def _capture_inner(cf, args, kwargs, quantum_args):
 
     # If the capture ran in a controlled context, the extracted gates
     # include the control qubit.  Strip it to get uncontrolled gates
-    # for the gate-level cache (controlled variant is derived later
-    # by _derive_controlled_block).
+    # for the gate-level cache.
     if is_controlled and control_physical_qubit is not None and raw_gates:
         raw_gates = _strip_control_qubit(raw_gates, control_physical_qubit)
 
@@ -333,7 +332,7 @@ def _capture_inner(cf, args, kwargs, quantum_args):
     return block
 
 
-def _capture_and_cache_both(
+def _capture_and_cache(
     cf,
     args,
     kwargs,
@@ -343,12 +342,10 @@ def _capture_and_cache_both(
     is_controlled,
     cache_key,
 ):
-    """Handle cache miss: capture uncontrolled, derive controlled, cache both.
+    """Handle cache miss: capture and cache a single block.
 
-    IR recording always happens with the control stack cleared (inside
-    ``_capture_inner``).  IR execution (``_execute_ir``) runs with
-    the original control stack intact, so the first call inside a
-    ``with`` block produces correctly controlled gates.
+    Each context (controlled vs uncontrolled) captures its own block
+    independently.  There is no derived controlled variant.
 
     Parameters
     ----------
@@ -369,20 +366,9 @@ def _capture_and_cache_both(
     """
     from . import _input_qubit_key
 
-    # _capture_inner handles control stack save/clear/restore internally:
-    # IR recording runs uncontrolled, IR execution sees the real stack.
     block = _capture(cf, args, kwargs, quantum_args)
 
-    # Derive controlled variant and attach to the same block
-    try:
-        controlled_block = _derive_controlled_block(cf, block)
-    except Exception:
-        # Fallback: re-capture in controlled mode (not expected with
-        # current gate set, but guards against future gate types)
-        controlled_block = _capture(cf, args, kwargs, quantum_args)
-    block.controlled_block = controlled_block
-
-    # Cache single entry (both variants stored on the block)
+    # Cache the block
     cf._cache[cache_key] = block
 
     # Evict oldest if over capacity
@@ -404,44 +390,3 @@ def _capture_and_cache_both(
         )
 
     return result
-
-
-def _derive_controlled_block(cf, uncontrolled_block):
-    """Create a controlled ``CompiledBlock`` from an uncontrolled one.
-
-    The control qubit uses virtual index 0 (reserved by
-    ``_build_virtual_mapping``).  ``total_virtual_qubits`` is the
-    same as the uncontrolled block since index 0 is already counted.
-
-    Parameters
-    ----------
-    cf : CompiledFunc
-        The compiled function instance (unused but kept for API consistency).
-    uncontrolled_block : CompiledBlock
-        The uncontrolled block to derive from.
-    """
-    from . import _derive_controlled_gates
-
-    controlled_gates = _derive_controlled_gates(
-        uncontrolled_block.gates,
-    )
-
-    controlled_block = CompiledBlock(
-        gates=controlled_gates,
-        total_virtual_qubits=uncontrolled_block.total_virtual_qubits,
-        param_qubit_ranges=list(uncontrolled_block.param_qubit_ranges),
-        internal_qubit_count=uncontrolled_block.internal_qubit_count,
-        return_qubit_range=uncontrolled_block.return_qubit_range,
-        return_is_param_index=uncontrolled_block.return_is_param_index,
-        original_gate_count=uncontrolled_block.original_gate_count,
-    )
-    controlled_block.control_virtual_idx = 0
-    controlled_block.return_type = uncontrolled_block.return_type
-    controlled_block._return_qarray_element_widths = (
-        uncontrolled_block._return_qarray_element_widths
-    )
-    # Share CallRecords so controlled replay also delegates to inner
-    # functions (inner functions handle their own control propagation).
-    controlled_block._call_records = uncontrolled_block._call_records
-    controlled_block.transient_virtual_indices = uncontrolled_block.transient_virtual_indices
-    return controlled_block

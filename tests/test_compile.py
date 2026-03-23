@@ -746,9 +746,8 @@ def test_replay_uses_optimized_gates():
     replay_gates = extract_gate_range(start2, end2)
 
     # Replay gate count must equal the optimised (cached) count for the
-    # uncontrolled variant.  Since _capture_and_cache_both caches both
-    # uncontrolled and controlled variants, optimized_gates sums across
-    # all entries.  We check the specific uncontrolled block's gate count.
+    # uncontrolled variant.  Each context captures its own block, so we
+    # check the specific uncontrolled block's gate count.
     # Cache key includes mode flags (FIX-04): (classical_args, widths, control, qubit_saving, arith_mode, cla_override, tradeoff)
     mode_flags = _get_mode_flags()
     unctrl_key = ((), (4,), 0, False) + mode_flags

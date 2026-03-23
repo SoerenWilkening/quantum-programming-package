@@ -3,10 +3,9 @@
 Verifies the acceptance criteria for Quantum_Assembly-6us:
 
 1. Captured block gates never reference virtual index 0.
-2. Controlled variant gates all have 0 in controls.
-3. Uncontrolled and controlled blocks have same total_virtual_qubits.
-4. param_qubit_ranges uses (start, end) tuples starting at 1.
-5. Replay inside with block produces different gates than outside.
+2. Controlled variant gates all have 0 in controls (via _derive_controlled_gates).
+3. param_qubit_ranges uses (start, end) tuples starting at 1.
+4. Replay inside with block produces different gates than outside.
 """
 
 import gc
@@ -106,10 +105,10 @@ class TestCapturedGatesNoIndex0:
 
 
 # ---------------------------------------------------------------------------
-# AC-2: Controlled variant gates all have 0 in controls
+# AC-2: _derive_controlled_gates prepends 0 in controls
 # ---------------------------------------------------------------------------
 class TestControlledGatesHaveIndex0:
-    """Every gate in the controlled block must include index 0 in controls."""
+    """Every gate derived via _derive_controlled_gates must include index 0 in controls."""
 
     def test_controlled_gates_all_have_0(self):
         """All controlled gates have virtual index 0 in their controls."""
@@ -126,10 +125,9 @@ class TestControlledGatesHaveIndex0:
         _ = inc(a)
 
         block = list(inc._cache.values())[0]
-        ctrl_block = block.controlled_block
-        assert ctrl_block is not None
+        ctrl_gates = _derive_controlled_gates(block.gates)
 
-        for gate in ctrl_block.gates:
+        for gate in ctrl_gates:
             assert 0 in gate["controls"], f"Controlled gate missing index 0 in controls: {gate}"
 
     def test_derive_controlled_gates_prepends_0(self):
@@ -165,83 +163,9 @@ class TestControlledGatesHaveIndex0:
         assert result[1]["num_controls"] == 1
         assert result[1]["controls"] == [0]
 
-    def test_controlled_block_control_virtual_idx_is_0(self):
-        """controlled_block.control_virtual_idx is exactly 0."""
-
-        @ql.compile
-        def inc(x):
-            x += 1
-            return x
-
-        gc.collect()
-        ql.circuit()
-        a = ql.qint(0, width=2)
-        _ = inc(a)
-
-        block = list(inc._cache.values())[0]
-        assert block.controlled_block.control_virtual_idx == 0
-
 
 # ---------------------------------------------------------------------------
-# AC-3: Uncontrolled and controlled blocks have same total_virtual_qubits
-# ---------------------------------------------------------------------------
-class TestSameTotalVirtualQubits:
-    """Both block variants must report the same total_virtual_qubits."""
-
-    def test_same_total_simple(self):
-        """Simple inc: both variants have equal total_virtual_qubits."""
-
-        @ql.compile
-        def inc(x):
-            x += 1
-            return x
-
-        gc.collect()
-        ql.circuit()
-        a = ql.qint(0, width=3)
-        _ = inc(a)
-
-        block = list(inc._cache.values())[0]
-        ctrl = block.controlled_block
-        assert block.total_virtual_qubits == ctrl.total_virtual_qubits
-
-    def test_same_total_two_args(self):
-        """Two-argument function: both variants have equal total_virtual_qubits."""
-
-        @ql.compile
-        def add(x, y):
-            x += y
-            return x
-
-        gc.collect()
-        ql.circuit()
-        a = ql.qint(0, width=3)
-        b = ql.qint(0, width=3)
-        _ = add(a, b)
-
-        block = list(add._cache.values())[0]
-        ctrl = block.controlled_block
-        assert block.total_virtual_qubits == ctrl.total_virtual_qubits
-
-    def test_uncontrolled_control_virtual_idx_is_none(self):
-        """Uncontrolled block has control_virtual_idx=None."""
-
-        @ql.compile
-        def inc(x):
-            x += 1
-            return x
-
-        gc.collect()
-        ql.circuit()
-        a = ql.qint(0, width=2)
-        _ = inc(a)
-
-        block = list(inc._cache.values())[0]
-        assert block.control_virtual_idx is None
-
-
-# ---------------------------------------------------------------------------
-# AC-4: param_qubit_ranges uses (start, end) tuples starting at 1
+# AC-3: param_qubit_ranges uses (start, end) tuples starting at 1
 # ---------------------------------------------------------------------------
 class TestParamQubitRangesFormat:
     """param_qubit_ranges must be list of (start, end) tuples beginning at 1."""
@@ -308,26 +232,9 @@ class TestParamQubitRangesFormat:
             assert isinstance(r, tuple), f"Expected tuple, got {type(r).__name__}"
             assert len(r) == 2, f"Expected 2-tuple, got length {len(r)}"
 
-    def test_controlled_block_same_param_ranges(self):
-        """Controlled block shares the same param_qubit_ranges."""
-
-        @ql.compile
-        def inc(x):
-            x += 1
-            return x
-
-        gc.collect()
-        ql.circuit()
-        a = ql.qint(0, width=3)
-        _ = inc(a)
-
-        block = list(inc._cache.values())[0]
-        ctrl = block.controlled_block
-        assert block.param_qubit_ranges == ctrl.param_qubit_ranges
-
 
 # ---------------------------------------------------------------------------
-# AC-5: Replay inside with block produces different gates than outside
+# AC-4: Replay inside with block produces different gates than outside
 # ---------------------------------------------------------------------------
 class TestReplayControlledVsUncontrolled:
     """Replay under control context must produce different (controlled) gates."""
@@ -369,34 +276,6 @@ class TestReplayControlledVsUncontrolled:
         assert controlled_count >= uncontrolled_count, (
             f"Controlled ({controlled_count}) should be >= uncontrolled ({uncontrolled_count})"
         )
-
-    def test_controlled_gates_in_block_differ(self):
-        """The controlled block's gate list differs from uncontrolled."""
-
-        @ql.compile
-        def inc(x):
-            x += 1
-            return x
-
-        gc.collect()
-        ql.circuit()
-        ql.option("simulate", True)
-        a = ql.qint(0, width=2)
-        _ = inc(a)
-
-        block = list(inc._cache.values())[0]
-        ctrl_block = block.controlled_block
-
-        # Same number of gates
-        assert len(block.gates) == len(ctrl_block.gates)
-
-        # But each controlled gate has one more control
-        for ug, cg in zip(block.gates, ctrl_block.gates, strict=False):
-            assert cg["num_controls"] == ug["num_controls"] + 1
-            # The extra control is index 0
-            assert cg["controls"][0] == 0
-            # Remaining controls match the uncontrolled gate
-            assert cg["controls"][1:] == ug["controls"]
 
     def test_replay_controlled_maps_index_0_to_control_qubit(self):
         """When replaying in a with block, virtual index 0 maps to the control qubit."""
