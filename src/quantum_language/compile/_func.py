@@ -309,7 +309,9 @@ class CompiledFunc:
         """Add a call node to *dag* representing this nested compiled call.
 
         Looks up the cached block for *cache_key* to obtain gate count,
-        depth, and T-count.  Creates a DAG node with ``is_call_node=True``.
+        depth, and T-count.  Also looks up the sibling cache entry (the
+        other calling context) to resolve both uncontrolled and controlled
+        costs.  Creates a DAG node with ``is_call_node=True``.
         """
         from . import _build_qubit_set_numpy
 
@@ -321,15 +323,43 @@ class CompiledFunc:
             _gc = block.original_gate_count if block.original_gate_count else len(block.gates)
             _depth = _compute_depth(block.gates)
             _t_count = _compute_t_count(block.gates)
+
+        # Look up the sibling cache entry (opposite calling context) to
+        # resolve the other variant's costs.
+        sibling_gc = 0
+        sibling_depth = 0
+        sibling_t_count = 0
+        for other_key, other_block in self._cache.items():
+            if other_key == cache_key:
+                continue
+            sibling_gc = (
+                other_block.original_gate_count
+                if other_block.original_gate_count
+                else len(other_block.gates)
+            )
+            sibling_depth = _compute_depth(other_block.gates)
+            sibling_t_count = _compute_t_count(other_block.gates)
+            break
+
         # Wrapper functions (those that only call other compiled functions
         # with no direct operations) have empty block.gates and
         # original_gate_count == 0.  Fall back to the inner call_graph
         # aggregate which correctly accounts for all nested calls.
-        if _gc == 0 and self._call_graph is not None and self._call_graph.node_count > 0:
+        _is_wrapper = _gc == 0 and self._call_graph is not None and self._call_graph.node_count > 0
+        if _is_wrapper:
             agg = self._call_graph.aggregate()
             _gc = agg["gates"]
             _depth = agg["depth"]
             _t_count = agg["t_count"]
+            # Use dual aggregate keys for wrapper functions
+            if is_controlled:
+                sibling_gc = agg.get("gates_uc", 0) or sibling_gc
+                sibling_depth = agg.get("depth_uc", 0) or sibling_depth
+                sibling_t_count = agg.get("t_count_uc", 0) or sibling_t_count
+            else:
+                sibling_gc = agg.get("gates_cc", 0) or sibling_gc
+                sibling_depth = agg.get("depth_cc", 0) or sibling_depth
+                sibling_t_count = agg.get("t_count_cc", 0) or sibling_t_count
 
         extra = None
         if block and block._capture_virtual_to_real:
@@ -337,13 +367,13 @@ class CompiledFunc:
         qubit_set, _ = _build_qubit_set_numpy(quantum_args, extra)
 
         if is_controlled:
-            uc_gc, cc_gc = 0, _gc
-            uc_depth, cc_depth = 0, _depth
-            uc_tc, cc_tc = 0, _t_count
+            uc_gc, cc_gc = sibling_gc, _gc
+            uc_depth, cc_depth = sibling_depth, _depth
+            uc_tc, cc_tc = sibling_t_count, _t_count
         else:
-            uc_gc, cc_gc = _gc, 0
-            uc_depth, cc_depth = _depth, 0
-            uc_tc, cc_tc = _t_count, 0
+            uc_gc, cc_gc = _gc, sibling_gc
+            uc_depth, cc_depth = _depth, sibling_depth
+            uc_tc, cc_tc = _t_count, sibling_t_count
 
         dag.add_node(
             self._func.__name__,
