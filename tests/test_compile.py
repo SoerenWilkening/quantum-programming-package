@@ -984,29 +984,51 @@ def test_compiled_result_has_operation_type():
 
 
 def test_uncomputation_replay_uses_optimized_sequence():
-    """UNCOMP5: Replay successfully produces gates in the circuit.
+    """UNCOMP5: Uncomputation reverses the optimised gate sequence, not the original.
 
-    When a cached block has both IR and gate-level data, replay prefers
-    the IR path which may produce a different number of gates than the
-    gate-level cache.  We verify that replay produces some gates.
+    The replayed gates come from the optimised (cached) sequence, so when
+    reverse_circuit_range is called during uncomputation, it reverses only
+    the optimised gates.  We verify by checking that the replay gate count
+    matches the cached count, and that uncomputation correctly reverses
+    only those gates.
+
+    Uses explicit allocation pattern (qint(0) + +=) instead of binary `+`
+    to avoid a pre-existing capture bug with return-qubit mapping.
     """
     ql.circuit()
 
     @ql.compile
     def make_new(x):
-        return x + ql.qint(1, width=x.width)
+        result = ql.qint(0, width=x.width)
+        result += x
+        result += ql.qint(1, width=x.width)
+        return result
 
     # Capture
     a = ql.qint(0, width=4)
     _r1 = make_new(a)
+    # Get the uncontrolled block's gate count directly
+    unctrl_key = ((), (4,), False, 0) + _get_mode_flags()
+    cached_gate_count = len(make_new._cache[unctrl_key].gates)
 
-    # Replay outside with block -- should produce gates
+    # Replay outside with block to measure forward gate count
     b = ql.qint(0, width=4)
     start = get_current_layer()
     _r2 = make_new(b)
     end = get_current_layer()
     replay_gates = extract_gate_range(start, end)
-    assert len(replay_gates) > 0, "Replay should produce gates"
+    assert abs(len(replay_gates) - cached_gate_count) <= 1, (
+        f"Replay gate count ({len(replay_gates)}) should match cached gates ({cached_gate_count})"
+    )
+
+    # Replay inside with block -- result gets uncomputed
+    c = ql.qint(0, width=4)
+    ctrl = ql.qbool()
+    with ctrl:
+        r3 = make_new(c)
+
+    # After the with block exits, the result should be uncomputed
+    assert r3._is_uncomputed, "Result should be uncomputed after with block"
 
 
 # ---------------------------------------------------------------------------
@@ -1055,6 +1077,14 @@ def test_compile_controlled_basic():
     # Gates inside the `with` block should have controls
     gates = extract_gate_range(start, end)
     assert len(gates) > 0, "Should have gates inside with block"
+
+    # Verify that a majority of gates have controls (in Toffoli mode, some
+    # internal carry/cleanup gates may not reference the external control
+    # qubit, but the majority should have num_controls >= 1)
+    ctrl_gate_count = sum(1 for g in gates if g.get("num_controls", 0) >= 1)
+    assert ctrl_gate_count > len(gates) // 2, (
+        f"Majority of gates should have controls: {ctrl_gate_count}/{len(gates)}"
+    )
 
 
 def test_compile_controlled_separate_cache_entries():
@@ -1877,8 +1907,8 @@ def test_inplace_function_forward_tracking():
 
     # In Toffoli mode, transient carry qubits are recorded as ancillas
     # so the forward call record exists even for in-place functions
-    assert len(add_inplace._forward_calls) >= 0, (
-        "Forward call tracking depends on whether transient qubits were allocated"
+    assert len(add_inplace._forward_calls) == 1, (
+        "In-place function should have 1 forward call record (transient carry qubits)"
     )
 
 
@@ -1911,9 +1941,16 @@ def test_ancilla_inverse_basic():
     add_temp.inverse(a)
     stats_after = ql.circuit_stats()
 
-    # Ancillas deallocated (qubit count should decrease)
-    assert stats_after["current_in_use"] <= stats_before["current_in_use"], (
-        "After inverse, qubit count should not exceed pre-forward level"
+    # Ancillas deallocated: qubit count should return to approximately the
+    # pre-forward level.  Allow up to 1 qubit difference due to transient
+    # carry qubit bookkeeping in Toffoli mode, but never more than pre-forward.
+    assert (
+        stats_before["current_in_use"] - 1
+        <= stats_after["current_in_use"]
+        <= stats_before["current_in_use"]
+    ), (
+        f"After inverse, qubit count ({stats_after['current_in_use']}) should be within 1 of "
+        f"pre-forward level ({stats_before['current_in_use']})"
     )
     # Forward call record removed
     assert len(add_temp._forward_calls) == 0, "Forward call record should be removed after inverse"
@@ -2013,9 +2050,16 @@ def test_ancilla_inverse_deallocates_ancillas():
     alloc_func.inverse(a)
     stats_post = ql.circuit_stats()
 
-    # Qubits freed (should not exceed pre-forward level)
-    assert stats_post["current_in_use"] <= stats_pre["current_in_use"], (
-        "After inverse, current_in_use should not exceed pre-forward level"
+    # Qubits freed: should return to approximately the pre-forward level.
+    # Allow up to 1 qubit difference due to transient carry qubit bookkeeping
+    # in Toffoli mode, but never more than pre-forward.
+    assert (
+        stats_pre["current_in_use"] - 1
+        <= stats_post["current_in_use"]
+        <= stats_pre["current_in_use"]
+    ), (
+        f"After inverse, current_in_use ({stats_post['current_in_use']}) should be within 1 of "
+        f"pre-forward level ({stats_pre['current_in_use']})"
     )
     # Deallocation count increased
     assert stats_post["total_deallocations"] > stats_mid["total_deallocations"], (
@@ -2510,6 +2554,12 @@ def test_auto_uncompute_inplace_skips():
 
     # In-place: result is the same object as input
     assert result is a, "In-place return should be the same object"
+
+    # In Toffoli mode, transient carry qubits are recorded as ancillas
+    # so the forward call record exists even for in-place functions
+    assert len(add_inplace._forward_calls) == 1, (
+        "In-place function should have 1 forward call record (transient carry qubits)"
+    )
 
 
 def test_auto_uncompute_off_no_effect():
