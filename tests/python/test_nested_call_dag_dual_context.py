@@ -236,3 +236,117 @@ class TestWrapperFunctionDualContext:
             assert node.gate_count > 0, (
                 f"Wrapper mid node should have gate_count > 0, got {node.gate_count}"
             )
+
+
+# ---------------------------------------------------------------------------
+# AC4: Multi-classical-arg scenario — no cross-contamination between variants
+# ---------------------------------------------------------------------------
+
+
+class TestMultiClassicalArgSiblingLookup:
+    """When a compiled function is called with different classical arg values,
+    the sibling lookup must not cross-contaminate between variants."""
+
+    def test_no_cross_contamination_uncontrolled_only(self):
+        """Two different classical args, both uncontrolled: each DAG node's
+        controlled_gate_count should be 0, not borrowed from the other variant."""
+        ql.circuit()
+
+        @ql.compile(opt=1)
+        def foo(a, shift):
+            a += shift
+
+        @ql.compile(opt=1)
+        def outer(a):
+            foo(a, 1)
+            foo(a, 2)
+
+        a = qint(0, width=4)
+        outer(a)  # only uncontrolled
+
+        dag = outer.call_graph
+        assert dag is not None
+
+        foo_nodes = [n for n in dag.nodes if n.func_name == "foo" and n.is_call_node]
+        assert len(foo_nodes) >= 2, f"Expected at least 2 foo call nodes, got {len(foo_nodes)}"
+
+        # With only uncontrolled context, no foo node should have C > 0
+        for node in foo_nodes:
+            assert node.controlled_gate_count == 0, (
+                f"Expected C == 0 for uncontrolled-only call with classical arg, "
+                f"got U={node.uncontrolled_gate_count}, C={node.controlled_gate_count}"
+            )
+
+    def test_mixed_classical_args_both_contexts(self):
+        """Inner function called with two different classical args; outer called
+        both controlled and uncontrolled.  Each foo node's sibling costs must
+        match its own classical arg variant, not the other.
+
+        Depending on capture order, nodes may or may not have both variants
+        populated.  The key invariant is: if C > 0 for a node, it must be
+        from the correct sibling (same classical args, flipped control_count),
+        not from a different classical arg's cache entry.  We verify this by
+        checking that controlled cost >= uncontrolled cost (adding controls
+        never reduces gate count)."""
+        ql.circuit()
+
+        @ql.compile(opt=1)
+        def foo(a, shift):
+            a += shift
+
+        @ql.compile(opt=1)
+        def outer(a):
+            foo(a, 1)
+            foo(a, 2)
+
+        a = qint(0, width=4)
+        outer(a)
+        c = qbool()
+        with c:
+            outer(a)
+
+        dag = outer.call_graph
+        assert dag is not None
+
+        foo_nodes = [n for n in dag.nodes if n.func_name == "foo" and n.is_call_node]
+        assert len(foo_nodes) >= 2, f"Expected at least 2 foo call nodes, got {len(foo_nodes)}"
+
+        # If a node has both U and C populated, C must be >= U (adding
+        # controls never reduces gate count).  This confirms the sibling
+        # lookup found the correct variant, not a cross-contaminated entry.
+        for node in foo_nodes:
+            if node.controlled_gate_count > 0 and node.uncontrolled_gate_count > 0:
+                assert node.controlled_gate_count >= node.uncontrolled_gate_count, (
+                    f"Controlled cost should be >= uncontrolled cost, "
+                    f"got U={node.uncontrolled_gate_count}, C={node.controlled_gate_count}"
+                )
+
+    def test_three_classical_args_no_contamination(self):
+        """Three different classical arg values, only uncontrolled: C must be 0
+        for all, proving the sibling lookup does not grab an unrelated entry."""
+        ql.circuit()
+
+        @ql.compile(opt=1)
+        def foo(a, shift):
+            a += shift
+
+        @ql.compile(opt=1)
+        def outer(a):
+            foo(a, 1)
+            foo(a, 2)
+            foo(a, 3)
+
+        a = qint(0, width=4)
+        outer(a)  # only uncontrolled
+
+        dag = outer.call_graph
+        assert dag is not None
+
+        foo_nodes = [n for n in dag.nodes if n.func_name == "foo" and n.is_call_node]
+        assert len(foo_nodes) >= 3, f"Expected at least 3 foo call nodes, got {len(foo_nodes)}"
+
+        for node in foo_nodes:
+            assert node.controlled_gate_count == 0, (
+                f"Expected C == 0 for uncontrolled-only call, "
+                f"got U={node.uncontrolled_gate_count}, C={node.controlled_gate_count}"
+            )

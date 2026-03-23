@@ -325,21 +325,24 @@ class CompiledFunc:
             _t_count = _compute_t_count(block.gates)
 
         # Look up the sibling cache entry (opposite calling context) to
-        # resolve the other variant's costs.
+        # resolve the other variant's costs.  Construct the sibling key by
+        # flipping the control_count component.  control_count is always at
+        # position len(cache_key) - 4 (just before the 3 mode_flags).
         sibling_gc = 0
         sibling_depth = 0
         sibling_t_count = 0
-        for other_key, other_block in self._cache.items():
-            if other_key == cache_key:
-                continue
+        cc_idx = len(cache_key) - 4
+        flipped_cc = 0 if cache_key[cc_idx] else 1
+        sibling_key = cache_key[:cc_idx] + (flipped_cc,) + cache_key[cc_idx + 1 :]
+        sibling_block = self._cache.get(sibling_key)
+        if sibling_block is not None:
             sibling_gc = (
-                other_block.original_gate_count
-                if other_block.original_gate_count
-                else len(other_block.gates)
+                sibling_block.original_gate_count
+                if sibling_block.original_gate_count
+                else len(sibling_block.gates)
             )
-            sibling_depth = _compute_depth(other_block.gates)
-            sibling_t_count = _compute_t_count(other_block.gates)
-            break
+            sibling_depth = _compute_depth(sibling_block.gates)
+            sibling_t_count = _compute_t_count(sibling_block.gates)
 
         # Wrapper functions (those that only call other compiled functions
         # with no direct operations) have empty block.gates and
