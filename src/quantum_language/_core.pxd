@@ -162,6 +162,13 @@ cdef extern from "comparison_ops.h":
 	# Width-parameterized comparison operations (Phase 12)
 	sequence_t *CQ_equal_width(int bits, int64_t value)
 	sequence_t *cCQ_equal_width(int bits, int64_t value)
+	# Borrow-ancilla lt/gt comparisons (Phase 11.5)
+	sequence_t *CQ_less_than(int bits, int64_t value)
+	sequence_t *cCQ_less_than(int bits, int64_t value)
+	sequence_t *CQ_greater_than(int bits, int64_t value)
+	sequence_t *cCQ_greater_than(int bits, int64_t value)
+	sequence_t *QQ_less_than(int bits)
+	sequence_t *cQQ_less_than(int bits)
 
 cdef extern from "LogicOperations.h":
 	# Legacy qbool operations
@@ -219,6 +226,7 @@ cdef extern from "execution.h":
 	void qubit_mapping(unsigned int qubit_arrray[], circuit_t *circ);
 	void run_instruction(sequence_t *res, const unsigned int qubit_array[], int invert, circuit_t *circ);
 	void reverse_circuit_range(circuit_t *circ, int start_layer, int end_layer);
+	void sequence_compute_total_gate_count(sequence_t *seq);
 	# Validated entry points for Cython boundary (Phase 84)
 	int validated_run_instruction(sequence_t *res, const unsigned int qubit_array[], int invert, circuit_t *circ);
 	int validated_reverse_circuit_range(circuit_t *circ, int start_layer, int end_layer);

@@ -301,27 +301,59 @@
 		if self is other:
 			return qbool(False)  # x < x is always false
 
-		# Compile-mode: record a single "lt" IR entry for the whole comparison
-		if _is_compile_mode():
+		# Compile-mode: record "lt" IR entry with sequence pointers (Phase 11.5)
+		# QFT mode only — Toffoli mode falls through to direct dispatch.
+		if _is_compile_mode() and _circ.arithmetic_mode != 1:
 			result = qbool()
 			self_offset = 64 - self.bits
-			regs = ((<qint>result).qubits[63],)
-			regs = regs + tuple(self.qubits[self_offset + i] for i in range(self.bits))
-			if isinstance(other, qint):
+			alloc = circuit_get_allocator(_circ)
+			if type(other) == int:
+				# CQ lt: sequence layout [0]=result, [1..bits]=A, [bits+1]=borrow
+				_uc_seq = CQ_less_than(self.bits, <int64_t>other)
+				_cc_seq = cCQ_less_than(self.bits, <int64_t>other)
+				# Allocate borrow ancilla for IR execution during capture
+				_lt_borrow = allocator_alloc(alloc, 1, True)
+				regs = ((<qint>result).qubits[63],)
+				regs = regs + tuple(self.qubits[self_offset + i] for i in range(self.bits))
+				regs = regs + (_lt_borrow,)
+				_record_instruction(
+					"lt", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+				)
+				allocator_free(alloc, _lt_borrow, 1)
+				result.add_dependency(self)
+				result.operation_type = 'LT'
+				self.history.add_blocker(result)
+				return result
+			elif type(other) == qint:
+				# QQ lt: sequence layout [0]=result, [1..bits]=A, [bits+1..2*bits]=B,
+				# [2*bits+1]=borrow, [2*bits+2]=zero_ext
+				_comp_bits = self.bits if self.bits >= (<qint>other).bits else (<qint>other).bits
+				_uc_seq = QQ_less_than(_comp_bits)
+				_cc_seq = cQQ_less_than(_comp_bits)
 				other_offset = 64 - (<qint>other).bits
+				# Allocate borrow + zero_ext ancilla for IR execution during capture
+				_lt_anc = allocator_alloc(alloc, 2, True)
+				regs = ((<qint>result).qubits[63],)
+				regs = regs + tuple(self.qubits[self_offset + i] for i in range(self.bits))
 				regs = regs + tuple(
 					(<qint>other).qubits[other_offset + i]
 					for i in range((<qint>other).bits)
 				)
-			_record_instruction("lt", regs)
-			result.add_dependency(self)
-			if isinstance(other, qint):
+				regs = regs + (_lt_anc, _lt_anc + 1)
+				_record_instruction(
+					"lt", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+				)
+				allocator_free(alloc, _lt_anc, 2)
+				result.add_dependency(self)
 				result.add_dependency(other)
-			result.operation_type = 'LT'
-			self.history.add_blocker(result)
-			if isinstance(other, qint):
+				result.operation_type = 'LT'
+				self.history.add_blocker(result)
 				(<qint>other).history.add_blocker(result)
-			return result
+				return result
 
 		# Handle qint operand: borrow-ancilla via (n+1)-bit QQ addition
 		if type(other) == qint:
@@ -582,27 +614,57 @@
 		if self is other:
 			return qbool(False)  # x > x is always false
 
-		# Compile-mode: record a single "gt" IR entry for the whole comparison
-		if _is_compile_mode():
+		# Compile-mode: record "gt" IR entry with sequence pointers (Phase 11.5)
+		# QFT mode only — Toffoli mode falls through to direct dispatch.
+		if _is_compile_mode() and _circ.arithmetic_mode != 1:
 			result = qbool()
-			regs = ((<qint>result).qubits[63],)
-			regs = regs + tuple(self.qubits[self_offset + i] for i in range(self_bits))
-			if isinstance(other, qint):
+			alloc = circuit_get_allocator(_circ)
+			if type(other) == int:
+				# gt CQ: a > value, uses CQ_greater_than = CQ_less_than(value+1)
+				_uc_seq = CQ_greater_than(self.bits, <int64_t>other)
+				_cc_seq = cCQ_greater_than(self.bits, <int64_t>other)
+				_gt_borrow = allocator_alloc(alloc, 1, True)
+				regs = ((<qint>result).qubits[63],)
+				regs = regs + tuple(self.qubits[self_offset + i] for i in range(self_bits))
+				regs = regs + (_gt_borrow,)
+				_record_instruction(
+					"gt", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+				)
+				allocator_free(alloc, _gt_borrow, 1)
+				result.add_dependency(self)
+				result.operation_type = 'GT'
+				self.history.add_blocker(result)
+				return result
+			elif type(other) == qint:
+				# gt QQ: a > b = b < a. Use QQ_less_than with swapped operands.
 				other_bits = (<qint>other).bits
 				other_offset = 64 - other_bits
+				_comp_bits = self_bits if self_bits >= other_bits else other_bits
+				_uc_seq = QQ_less_than(_comp_bits)
+				_cc_seq = cQQ_less_than(_comp_bits)
+				_gt_anc = allocator_alloc(alloc, 2, True)
+				# Swapped: A=other, B=self (since we want other < self)
+				regs = ((<qint>result).qubits[63],)
 				regs = regs + tuple(
 					(<qint>other).qubits[other_offset + i]
 					for i in range(other_bits)
 				)
-			_record_instruction("gt", regs)
-			result.add_dependency(self)
-			if isinstance(other, qint):
+				regs = regs + tuple(self.qubits[self_offset + i] for i in range(self_bits))
+				regs = regs + (_gt_anc, _gt_anc + 1)
+				_record_instruction(
+					"gt", regs,
+					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
+				)
+				allocator_free(alloc, _gt_anc, 2)
+				result.add_dependency(self)
 				result.add_dependency(other)
-			result.operation_type = 'GT'
-			self.history.add_blocker(result)
-			if isinstance(other, qint):
+				result.operation_type = 'GT'
+				self.history.add_blocker(result)
 				(<qint>other).history.add_blocker(result)
-			return result
+				return result
 
 		# Handle qint operand: a > b computed as b < a via borrow-ancilla
 		if type(other) == qint:

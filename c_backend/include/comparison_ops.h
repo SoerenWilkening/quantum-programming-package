@@ -45,17 +45,30 @@
 sequence_t *QQ_equal(int bits);
 
 /**
- * @brief Less-than comparison: A < B.
+ * @brief QQ less-than: result = (A < B).
  *
- * Uses subtraction and MSB check to determine if A < B.
- * Result is stored in a quantum boolean (single qubit).
+ * Borrow-ancilla pattern via (n+1)-bit QQ addition.
  *
- * @param bits Width of operands (1-64)
- * @return Cached sequence, NULL if invalid bits - DO NOT FREE
+ * Qubit layout:
+ *   [0]=result, [1..bits]=A, [bits+1..2*bits]=B,
+ *   [2*bits+1]=borrow, [2*bits+2]=zero_ext
  *
- * OWNERSHIP: Returns cached sequence - DO NOT FREE
+ * @param bits Width of operands (1-63)
+ * @return Fresh sequence. CALLER MUST FREE.
  */
 sequence_t *QQ_less_than(int bits);
+
+/**
+ * @brief Controlled QQ less-than: result = (A < B), controlled.
+ *
+ * Qubit layout:
+ *   [0]=result, [1..bits]=A, [bits+1..2*bits]=B,
+ *   [2*bits+1]=borrow, [2*bits+2]=zero_ext, [2*bits+3]=control
+ *
+ * @param bits Width of operands (1-63)
+ * @return Fresh sequence. CALLER MUST FREE.
+ */
+sequence_t *cQQ_less_than(int bits);
 
 /**
  * @brief Classical-quantum equality: A == value.
@@ -90,15 +103,57 @@ sequence_t *cCQ_equal_width(int bits, int64_t value);
 /**
  * @brief Classical-quantum less-than: A < value.
  *
- * Compares quantum register with classical integer value.
- * Width-parameterized for variable-width integers.
+ * Borrow-ancilla comparison: subtract, copy borrow, restore.
  *
- * @param bits Width of quantum operand (1-64)
+ * Qubit layout: [0]=result, [1..bits]=A, [bits+1]=borrow_ancilla
+ *
+ * @param bits Width of quantum operand (1-63)
  * @param value Classical value to compare against
- * @return Sequence for comparison
+ * @return Sequence for comparison, NULL on error
  *
  * OWNERSHIP: Caller owns returned sequence_t*
  */
 sequence_t *CQ_less_than(int bits, int64_t value);
+
+/**
+ * @brief Controlled classical-quantum less-than: A < value (controlled).
+ *
+ * Qubit layout: [0]=result, [1..bits]=A, [bits+1]=borrow, [bits+2]=control
+ *
+ * @param bits Width of quantum operand (1-63)
+ * @param value Classical value to compare against
+ * @return Sequence for controlled comparison, NULL on error
+ *
+ * OWNERSHIP: Caller owns returned sequence_t*
+ */
+sequence_t *cCQ_less_than(int bits, int64_t value);
+
+/**
+ * @brief Classical-quantum greater-than: A > value.
+ *
+ * Delegates to CQ_less_than(bits, value + 1).
+ *
+ * Qubit layout: [0]=result, [1..bits]=A, [bits+1]=borrow_ancilla
+ *
+ * @param bits Width of quantum operand (1-63)
+ * @param value Classical value to compare against
+ * @return Sequence for comparison, NULL on error
+ *
+ * OWNERSHIP: Caller owns returned sequence_t*
+ */
+sequence_t *CQ_greater_than(int bits, int64_t value);
+
+/**
+ * @brief Controlled classical-quantum greater-than: A > value (controlled).
+ *
+ * Qubit layout: [0]=result, [1..bits]=A, [bits+1]=borrow, [bits+2]=control
+ *
+ * @param bits Width of quantum operand (1-63)
+ * @param value Classical value to compare against
+ * @return Sequence for controlled comparison, NULL on error
+ *
+ * OWNERSHIP: Caller owns returned sequence_t*
+ */
+sequence_t *cCQ_greater_than(int bits, int64_t value);
 
 #endif // QUANTUM_COMPARISON_OPS_H

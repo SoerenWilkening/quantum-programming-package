@@ -225,8 +225,9 @@ def test_eq_int_records_ir():
 
 
 def test_lt_records_ir():
-    """(a < 5) in compile mode records an 'lt' IR entry."""
+    """(a < 5) in QFT compile mode records an 'lt' IR entry with sequences."""
     ql.circuit()
+    ql.option("fault_tolerant", False)
     a = ql.qint(3, width=4)
 
     @ql.compile
@@ -239,11 +240,14 @@ def test_lt_records_ir():
 
     lt_entries = [r for r in block._instruction_ir if r.name == "lt"]
     assert len(lt_entries) == 1
+    assert lt_entries[0].uncontrolled_seq != 0
+    assert lt_entries[0].controlled_seq != 0
 
 
 def test_gt_records_ir():
-    """(a > 2) in compile mode records a 'gt' IR entry."""
+    """(a > 2) in QFT compile mode records a 'gt' IR entry with sequences."""
     ql.circuit()
+    ql.option("fault_tolerant", False)
     a = ql.qint(5, width=4)
 
     @ql.compile
@@ -256,6 +260,8 @@ def test_gt_records_ir():
 
     gt_entries = [r for r in block._instruction_ir if r.name == "gt"]
     assert len(gt_entries) == 1
+    assert gt_entries[0].uncontrolled_seq != 0
+    assert gt_entries[0].controlled_seq != 0
 
 
 # ---------------------------------------------------------------------------

@@ -25,6 +25,8 @@ from ._core cimport (
     Q_and, CQ_and, Q_or, CQ_or, Q_xor,
     cQ_not,
     CQ_equal_width, cCQ_equal_width,
+    CQ_less_than, cCQ_less_than, CQ_greater_than, cCQ_greater_than,
+    QQ_less_than, cQQ_less_than,
     print_circuit as c_print_circuit,
     toffoli_mul_qq, toffoli_mul_cq, toffoli_cmul_qq, toffoli_cmul_cq,
     toffoli_divmod_cq, toffoli_divmod_qq,
