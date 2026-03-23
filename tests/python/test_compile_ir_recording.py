@@ -286,6 +286,26 @@ def test_and_qq_records_ir():
     and_entries = [r for r in block._instruction_ir if r.name == "and_qq"]
     assert len(and_entries) == 1
     assert and_entries[0].uncontrolled_seq != 0
+    assert and_entries[0].controlled_seq != 0
+
+
+def test_and_cq_records_ir():
+    """(a & 3) in compile mode records an 'and_cq' IR entry with both seqs."""
+    ql.circuit()
+    a = ql.qint(0b1101, width=4)
+
+    @ql.compile
+    def dummy(x):
+        return x
+
+    block = _make_block()
+    with dummy.compile_mode(block):
+        _ = a & 3
+
+    and_entries = [r for r in block._instruction_ir if r.name == "and_cq"]
+    assert len(and_entries) == 1
+    assert and_entries[0].uncontrolled_seq != 0
+    assert and_entries[0].controlled_seq != 0
 
 
 def test_or_qq_records_ir():
@@ -304,6 +324,27 @@ def test_or_qq_records_ir():
 
     or_entries = [r for r in block._instruction_ir if r.name == "or_qq"]
     assert len(or_entries) == 1
+    assert or_entries[0].uncontrolled_seq != 0
+    assert or_entries[0].controlled_seq != 0
+
+
+def test_or_cq_records_ir():
+    """(a | 3) in compile mode records an 'or_cq' IR entry with both seqs."""
+    ql.circuit()
+    a = ql.qint(0b1100, width=4)
+
+    @ql.compile
+    def dummy(x):
+        return x
+
+    block = _make_block()
+    with dummy.compile_mode(block):
+        _ = a | 3
+
+    or_entries = [r for r in block._instruction_ir if r.name == "or_cq"]
+    assert len(or_entries) == 1
+    assert or_entries[0].uncontrolled_seq != 0
+    assert or_entries[0].controlled_seq != 0
 
 
 def test_xor_records_ir():

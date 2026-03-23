@@ -22,7 +22,7 @@ from ._core cimport (
     qubit_allocator_t,
     CQ_add, QQ_add, cCQ_add, cQQ_add,
     CQ_mul, QQ_mul, cCQ_mul, cQQ_mul,
-    Q_and, CQ_and, Q_or, CQ_or, Q_xor,
+    Q_and, CQ_and, cQ_and, cCQ_and, Q_or, CQ_or, cQ_or, cCQ_or, Q_xor,
     cQ_not,
     CQ_equal_width, cCQ_equal_width,
     CQ_less_than, cCQ_less_than, CQ_greater_than, cCQ_greater_than,

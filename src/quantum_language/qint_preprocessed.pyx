@@ -22,7 +22,7 @@ from ._core cimport (
     qubit_allocator_t,
     CQ_add, QQ_add, cCQ_add, cQQ_add,
     CQ_mul, QQ_mul, cCQ_mul, cQQ_mul,
-    Q_and, CQ_and, Q_or, CQ_or, Q_xor,
+    Q_and, CQ_and, cQ_and, cCQ_and, Q_or, CQ_or, cQ_or, cCQ_or, Q_xor,
     cQ_not,
     CQ_equal_width, cCQ_equal_width,
     CQ_less_than, cCQ_less_than, CQ_greater_than, cCQ_greater_than,
@@ -2777,15 +2777,19 @@ cdef class qint(circuit):
 				)
 			if type(other) == int:
 				_uc_seq = CQ_and(result_bits, other)
+				_cc_seq = cCQ_and(result_bits, other)
 				_record_instruction(
 					"and_cq", regs,
 					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 				)
 			else:
 				_uc_seq = Q_and(result_bits)
+				_cc_seq = cQ_and(result_bits)
 				_record_instruction(
 					"and_qq", regs,
 					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 				)
 			self.history.add_blocker(result)
 			if type(other) != int and isinstance(other, qint):
@@ -3040,15 +3044,19 @@ cdef class qint(circuit):
 				)
 			if type(other) == int:
 				_uc_seq = CQ_or(result_bits, other)
+				_cc_seq = cCQ_or(result_bits, other)
 				_record_instruction(
 					"or_cq", regs,
 					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 				)
 			else:
 				_uc_seq = Q_or(result_bits)
+				_cc_seq = cQ_or(result_bits)
 				_record_instruction(
 					"or_qq", regs,
 					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 				)
 			self.history.add_blocker(result)
 			if type(other) != int and isinstance(other, qint):

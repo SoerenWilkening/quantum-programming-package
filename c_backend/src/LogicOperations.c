@@ -3,6 +3,7 @@
 //
 
 #include "LogicOperations.h"
+#include "execution.h"
 
 sequence_t *void_seq() {
     // OWNERSHIP: No sequence returned
@@ -1064,6 +1065,7 @@ sequence_t *Q_and(int bits) {
         ccx(&seq->seq[0][i], i, bits + i, 2 * bits + i);
     }
 
+    sequence_compute_total_gate_count(seq);
     return seq;
 }
 
@@ -1139,6 +1141,7 @@ sequence_t *CQ_and(int bits, int64_t value) {
     }
 
     free(bin);
+    sequence_compute_total_gate_count(seq);
     return seq;
 }
 
@@ -1229,6 +1232,7 @@ sequence_t *Q_or(int bits) {
         ccx(&seq->seq[2][i], i, bits + i, 2 * bits + i);
     }
 
+    sequence_compute_total_gate_count(seq);
     return seq;
 }
 
@@ -1309,6 +1313,7 @@ sequence_t *CQ_or(int bits, int64_t value) {
     }
 
     free(bin);
+    sequence_compute_total_gate_count(seq);
     return seq;
 }
 
@@ -1377,6 +1382,7 @@ sequence_t *cQ_and(int bits) {
         mcx(&seq->seq[i][0], i, controls, 3);
     }
 
+    sequence_compute_total_gate_count(seq);
     return seq;
 }
 
@@ -1493,6 +1499,7 @@ sequence_t *cCQ_and(int bits, int64_t value) {
     }
 
     free(bin);
+    sequence_compute_total_gate_count(seq);
     return seq;
 }
 
@@ -1580,6 +1587,7 @@ sequence_t *cQ_or(int bits) {
         layer++;
     }
 
+    sequence_compute_total_gate_count(seq);
     return seq;
 }
 
@@ -1658,5 +1666,6 @@ sequence_t *cCQ_or(int bits, int64_t value) {
     }
 
     free(bin);
+    sequence_compute_total_gate_count(seq);
     return seq;
 }

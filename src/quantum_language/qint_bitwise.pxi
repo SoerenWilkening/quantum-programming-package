@@ -76,15 +76,19 @@
 				)
 			if type(other) == int:
 				_uc_seq = CQ_and(result_bits, other)
+				_cc_seq = cCQ_and(result_bits, other)
 				_record_instruction(
 					"and_cq", regs,
 					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 				)
 			else:
 				_uc_seq = Q_and(result_bits)
+				_cc_seq = cQ_and(result_bits)
 				_record_instruction(
 					"and_qq", regs,
 					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 				)
 			self.history.add_blocker(result)
 			if type(other) != int and isinstance(other, qint):
@@ -339,15 +343,19 @@
 				)
 			if type(other) == int:
 				_uc_seq = CQ_or(result_bits, other)
+				_cc_seq = cCQ_or(result_bits, other)
 				_record_instruction(
 					"or_cq", regs,
 					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 				)
 			else:
 				_uc_seq = Q_or(result_bits)
+				_cc_seq = cQ_or(result_bits)
 				_record_instruction(
 					"or_qq", regs,
 					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
+					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 				)
 			self.history.add_blocker(result)
 			if type(other) != int and isinstance(other, qint):
