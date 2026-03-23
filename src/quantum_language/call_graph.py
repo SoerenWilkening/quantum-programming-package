@@ -689,6 +689,9 @@ class CallGraphDAG:
         # Edges (iterate by index to handle multi-edges correctly)
         for eidx in self._dag.edge_indices():
             src, tgt = self._dag.get_edge_endpoints_by_index(eidx)
+            # Skip edges referencing merged nodes (no corresponding node definition)
+            if self._nodes[src]._merged or self._nodes[tgt]._merged:
+                continue
             edge_data = self._dag.get_edge_data_by_index(eidx)
             if isinstance(edge_data, dict):
                 etype = edge_data.get("type")

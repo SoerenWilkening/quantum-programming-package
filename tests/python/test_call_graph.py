@@ -153,13 +153,15 @@ class TestAggregate:
     def test_empty_dag(self):
         dag = CallGraphDAG()
         result = dag.aggregate()
-        assert result == {"gates": 0, "depth": 0, "qubits": 0, "t_count": 0}
+        expected = {"gates": 0, "depth": 0, "qubits": 0, "t_count": 0}
+        assert result.items() >= expected.items()
 
     def test_single_node(self):
         dag = CallGraphDAG()
         dag.add_node("f", {0, 1, 2}, 10, (), depth=5, t_count=3)
         result = dag.aggregate()
-        assert result == {"gates": 10, "depth": 5, "qubits": 3, "t_count": 3}
+        expected = {"gates": 10, "depth": 5, "qubits": 3, "t_count": 3}
+        assert result.items() >= expected.items()
 
     def test_two_nodes_same_parallel_group(self):
         """Two nodes sharing qubits: gates summed, depth=max, qubits=union, t_count summed."""
@@ -705,13 +707,17 @@ class TestDot:
             t_count=3,
             uncontrolled_gate_count=42,
             controlled_gate_count=30,
+            uncontrolled_depth=5,
+            controlled_depth=4,
+            uncontrolled_t_count=3,
+            controlled_t_count=2,
         )
         dot = dag.to_dot()
         assert "my_func" in dot
         assert "gates: 42 / 30" in dot
-        assert "depth: 5" in dot
+        assert "depth: 5 / 4" in dot
         assert "qubits: 3" in dot
-        assert "T-count: 3" in dot
+        assert "T-count: 3 / 2" in dot
 
     def test_exec_edge_in_dot(self):
         dag = CallGraphDAG()
@@ -776,8 +782,28 @@ class TestReport:
 
     def test_report_totals_row(self):
         dag = CallGraphDAG()
-        dag.add_node("f", {0, 1}, 10, (), depth=3, t_count=1)
-        dag.add_node("g", {1, 2}, 8, (), depth=5, t_count=2)
+        dag.add_node(
+            "f",
+            {0, 1},
+            10,
+            (),
+            depth=3,
+            t_count=1,
+            uncontrolled_gate_count=10,
+            uncontrolled_depth=3,
+            uncontrolled_t_count=1,
+        )
+        dag.add_node(
+            "g",
+            {1, 2},
+            8,
+            (),
+            depth=5,
+            t_count=2,
+            uncontrolled_gate_count=8,
+            uncontrolled_depth=5,
+            uncontrolled_t_count=2,
+        )
         report = dag.report()
         assert "TOTAL" in report
         # Aggregate: gates=18, depth=5 (same group), qubits=3, t_count=3
