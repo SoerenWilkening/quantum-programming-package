@@ -1311,3 +1311,352 @@ sequence_t *CQ_or(int bits, int64_t value) {
     free(bin);
     return seq;
 }
+
+// ======================================================
+// Controlled Width-Parameterized AND Operations
+// ======================================================
+
+sequence_t *cQ_and(int bits) {
+    // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
+    //
+    // Controlled width-parameterized quantum-quantum AND operation.
+    // Adds one external control qubit to every gate in Q_and.
+    // Each Toffoli (2-controlled X) becomes a 3-controlled X (MCX).
+    // Gates are sequential since they share the common control qubit.
+    //
+    // Qubit layout:
+    // - [0, bits-1]: Output ancilla (pre-initialized to |0>)
+    // - [bits, 2*bits-1]: Operand A
+    // - [2*bits, 3*bits-1]: Operand B
+    // - [3*bits]: External control qubit
+    //
+    // Result: output[i] = A[i] AND B[i] when control is |1>
+
+    // Bounds check: valid widths are 1-64
+    if (bits < 1 || bits > 64) {
+        return NULL;
+    }
+
+    sequence_t *seq = malloc(sizeof(sequence_t));
+    if (seq == NULL) {
+        return NULL;
+    }
+
+    // Each MCX gate gets its own layer (sequential due to shared control)
+    seq->used_layer = bits;
+    seq->num_layer = bits;
+    seq->gates_per_layer = calloc(bits, sizeof(num_t));
+    if (seq->gates_per_layer == NULL) {
+        free(seq);
+        return NULL;
+    }
+    seq->seq = calloc(bits, sizeof(gate_t *));
+    if (seq->seq == NULL) {
+        free(seq->gates_per_layer);
+        free(seq);
+        return NULL;
+    }
+    for (int i = 0; i < bits; ++i) {
+        seq->seq[i] = calloc(1, sizeof(gate_t));
+        if (seq->seq[i] == NULL) {
+            for (int j = 0; j < i; ++j) {
+                free(seq->seq[j]);
+            }
+            free(seq->seq);
+            free(seq->gates_per_layer);
+            free(seq);
+            return NULL;
+        }
+    }
+
+    qubit_t ext_ctrl = 3 * bits;
+    for (int i = 0; i < bits; i++) {
+        seq->gates_per_layer[i] = 1;
+        // 3-controlled X: target = i, controls = {bits+i, 2*bits+i, ext_ctrl}
+        qubit_t controls[3] = {bits + i, 2 * bits + i, ext_ctrl};
+        mcx(&seq->seq[i][0], i, controls, 3);
+    }
+
+    return seq;
+}
+
+sequence_t *cCQ_and(int bits, int64_t value) {
+    // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
+    //
+    // Controlled width-parameterized classical-quantum AND operation.
+    // Adds one external control qubit to every gate in CQ_and.
+    // Each CNOT becomes a Toffoli (CCX).
+    // Gates are sequential since they share the common control qubit.
+    //
+    // Qubit layout:
+    // - [0, bits-1]: Output ancilla (pre-initialized to |0>)
+    // - [bits, 2*bits-1]: Quantum operand
+    // - [2*bits]: External control qubit
+    //
+    // Result: output[i] = classical_bit[i] AND quantum_bit[i] when control is |1>
+
+    // Bounds check: valid widths are 1-64
+    if (bits < 1 || bits > 64) {
+        return NULL;
+    }
+
+    // Convert classical value to binary
+    int *bin = two_complement(value, bits);
+    if (bin == NULL) {
+        return NULL;
+    }
+
+    // Count active bits (where classical value is 1)
+    int active_bits = 0;
+    for (int i = 0; i < bits; i++) {
+        if (bin[bits - 1 - i] == 1) {
+            active_bits++;
+        }
+    }
+
+    // Handle edge case: no active bits
+    if (active_bits == 0) {
+        free(bin);
+        sequence_t *seq = malloc(sizeof(sequence_t));
+        if (seq == NULL) {
+            return NULL;
+        }
+        seq->used_layer = 0;
+        seq->num_layer = 1;
+        seq->gates_per_layer = calloc(1, sizeof(num_t));
+        if (seq->gates_per_layer == NULL) {
+            free(seq);
+            return NULL;
+        }
+        seq->seq = calloc(1, sizeof(gate_t *));
+        if (seq->seq == NULL) {
+            free(seq->gates_per_layer);
+            free(seq);
+            return NULL;
+        }
+        seq->seq[0] = calloc(1, sizeof(gate_t));
+        if (seq->seq[0] == NULL) {
+            free(seq->seq);
+            free(seq->gates_per_layer);
+            free(seq);
+            return NULL;
+        }
+        seq->gates_per_layer[0] = 0;
+        return seq;
+    }
+
+    int num_layers = active_bits;
+    sequence_t *seq = malloc(sizeof(sequence_t));
+    if (seq == NULL) {
+        free(bin);
+        return NULL;
+    }
+
+    seq->used_layer = num_layers;
+    seq->num_layer = num_layers;
+    seq->gates_per_layer = calloc(num_layers, sizeof(num_t));
+    if (seq->gates_per_layer == NULL) {
+        free(bin);
+        free(seq);
+        return NULL;
+    }
+    seq->seq = calloc(num_layers, sizeof(gate_t *));
+    if (seq->seq == NULL) {
+        free(seq->gates_per_layer);
+        free(bin);
+        free(seq);
+        return NULL;
+    }
+    for (int i = 0; i < num_layers; ++i) {
+        seq->seq[i] = calloc(1, sizeof(gate_t));
+        if (seq->seq[i] == NULL) {
+            for (int j = 0; j < i; ++j) {
+                free(seq->seq[j]);
+            }
+            free(seq->seq);
+            free(seq->gates_per_layer);
+            free(bin);
+            free(seq);
+            return NULL;
+        }
+    }
+
+    qubit_t ext_ctrl = 2 * bits;
+    int layer = 0;
+    for (int i = 0; i < bits; i++) {
+        if (bin[bits - 1 - i] == 1) {
+            seq->gates_per_layer[layer] = 1;
+            // Toffoli: target = i, control1 = bits+i, control2 = ext_ctrl
+            ccx(&seq->seq[layer][0], i, bits + i, ext_ctrl);
+            layer++;
+        }
+    }
+
+    free(bin);
+    return seq;
+}
+
+// ======================================================
+// Controlled Width-Parameterized OR Operations
+// ======================================================
+
+sequence_t *cQ_or(int bits) {
+    // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
+    //
+    // Controlled width-parameterized quantum-quantum OR operation.
+    // Adds one external control qubit to every gate in Q_or.
+    // Q_or has 3 phases: CNOT from A, CNOT from B, Toffoli from A,B.
+    // Controlled: CNOTs become Toffolis, Toffolis become MCX(3).
+    // All gates sequential since they share the common control qubit.
+    //
+    // Qubit layout:
+    // - [0, bits-1]: Output ancilla (pre-initialized to |0>)
+    // - [bits, 2*bits-1]: Operand A
+    // - [2*bits, 3*bits-1]: Operand B
+    // - [3*bits]: External control qubit
+    //
+    // Result: output[i] = A[i] OR B[i] when control is |1>
+
+    // Bounds check: valid widths are 1-64
+    if (bits < 1 || bits > 64) {
+        return NULL;
+    }
+
+    sequence_t *seq = malloc(sizeof(sequence_t));
+    if (seq == NULL) {
+        return NULL;
+    }
+
+    // 3 * bits layers: bits Toffolis (phase 1) + bits Toffolis (phase 2) + bits MCX(3) (phase 3)
+    int total_layers = 3 * bits;
+    seq->used_layer = total_layers;
+    seq->num_layer = total_layers;
+    seq->gates_per_layer = calloc(total_layers, sizeof(num_t));
+    if (seq->gates_per_layer == NULL) {
+        free(seq);
+        return NULL;
+    }
+    seq->seq = calloc(total_layers, sizeof(gate_t *));
+    if (seq->seq == NULL) {
+        free(seq->gates_per_layer);
+        free(seq);
+        return NULL;
+    }
+    for (int i = 0; i < total_layers; ++i) {
+        seq->seq[i] = calloc(1, sizeof(gate_t));
+        if (seq->seq[i] == NULL) {
+            for (int j = 0; j < i; ++j) {
+                free(seq->seq[j]);
+            }
+            free(seq->seq);
+            free(seq->gates_per_layer);
+            free(seq);
+            return NULL;
+        }
+    }
+
+    qubit_t ext_ctrl = 3 * bits;
+    int layer = 0;
+
+    // Phase 1: Controlled CNOT from A to output -> Toffoli(output[i], A[i], ext_ctrl)
+    for (int i = 0; i < bits; i++) {
+        seq->gates_per_layer[layer] = 1;
+        ccx(&seq->seq[layer][0], i, bits + i, ext_ctrl);
+        layer++;
+    }
+
+    // Phase 2: Controlled CNOT from B to output -> Toffoli(output[i], B[i], ext_ctrl)
+    for (int i = 0; i < bits; i++) {
+        seq->gates_per_layer[layer] = 1;
+        ccx(&seq->seq[layer][0], i, 2 * bits + i, ext_ctrl);
+        layer++;
+    }
+
+    // Phase 3: Controlled Toffoli from A,B to output -> MCX(output[i], {A[i], B[i], ext_ctrl})
+    for (int i = 0; i < bits; i++) {
+        seq->gates_per_layer[layer] = 1;
+        qubit_t controls[3] = {bits + i, 2 * bits + i, ext_ctrl};
+        mcx(&seq->seq[layer][0], i, controls, 3);
+        layer++;
+    }
+
+    return seq;
+}
+
+sequence_t *cCQ_or(int bits, int64_t value) {
+    // OWNERSHIP: Caller owns returned sequence_t*, must free gates_per_layer, seq arrays, and seq
+    //
+    // Controlled width-parameterized classical-quantum OR operation.
+    // Adds one external control qubit to every gate in CQ_or.
+    // X gates (for classical 1) become CX, CNOT gates (for classical 0) become Toffoli.
+    // All gates sequential since they share the common control qubit.
+    //
+    // Qubit layout:
+    // - [0, bits-1]: Output ancilla (pre-initialized to |0>)
+    // - [bits, 2*bits-1]: Quantum operand
+    // - [2*bits]: External control qubit
+    //
+    // Result: output[i] = classical_bit[i] OR quantum_bit[i] when control is |1>
+
+    // Bounds check: valid widths are 1-64
+    if (bits < 1 || bits > 64) {
+        return NULL;
+    }
+
+    // Convert classical value to binary
+    int *bin = two_complement(value, bits);
+    if (bin == NULL) {
+        return NULL;
+    }
+
+    sequence_t *seq = malloc(sizeof(sequence_t));
+    if (seq == NULL) {
+        free(bin);
+        return NULL;
+    }
+
+    // Each bit produces one gate in its own layer (sequential due to shared control)
+    seq->used_layer = bits;
+    seq->num_layer = bits;
+    seq->gates_per_layer = calloc(bits, sizeof(num_t));
+    if (seq->gates_per_layer == NULL) {
+        free(bin);
+        free(seq);
+        return NULL;
+    }
+    seq->seq = calloc(bits, sizeof(gate_t *));
+    if (seq->seq == NULL) {
+        free(seq->gates_per_layer);
+        free(bin);
+        free(seq);
+        return NULL;
+    }
+    for (int i = 0; i < bits; ++i) {
+        seq->seq[i] = calloc(1, sizeof(gate_t));
+        if (seq->seq[i] == NULL) {
+            for (int j = 0; j < i; ++j) {
+                free(seq->seq[j]);
+            }
+            free(seq->seq);
+            free(seq->gates_per_layer);
+            free(bin);
+            free(seq);
+            return NULL;
+        }
+    }
+
+    qubit_t ext_ctrl = 2 * bits;
+    for (int i = 0; i < bits; i++) {
+        seq->gates_per_layer[i] = 1;
+        if (bin[bits - 1 - i] == 1) {
+            // Classical 1: X becomes CX(output[i], ext_ctrl)
+            cx(&seq->seq[i][0], i, ext_ctrl);
+        } else {
+            // Classical 0: CNOT becomes Toffoli(output[i], quantum[i], ext_ctrl)
+            ccx(&seq->seq[i][0], i, bits + i, ext_ctrl);
+        }
+    }
+
+    free(bin);
+    return seq;
+}

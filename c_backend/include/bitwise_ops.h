@@ -130,6 +130,39 @@ sequence_t *Q_and(int bits);
  */
 sequence_t *CQ_and(int bits, int64_t value);
 
+/**
+ * @brief Controlled bitwise AND using sequential 3-controlled X gates.
+ *
+ * Adds one external control qubit to Q_and. Each Toffoli becomes MCX(3).
+ * Circuit depth: O(bits) - sequential MCX gates.
+ *
+ * @param bits Width of operands (1-64)
+ * @return Dynamically allocated sequence - CALLER MUST FREE
+ *
+ * Qubit layout: [0, bits-1] = result, [bits, 2*bits-1] = A,
+ *               [2*bits, 3*bits-1] = B, [3*bits] = control
+ *
+ * OWNERSHIP: Returns dynamically allocated sequence - CALLER MUST FREE
+ */
+sequence_t *cQ_and(int bits);
+
+/**
+ * @brief Controlled classical-quantum AND using sequential Toffoli gates.
+ *
+ * Adds one external control qubit to CQ_and. Each CNOT becomes Toffoli.
+ * Circuit depth: O(popcount(value)) - sequential Toffoli gates.
+ *
+ * @param bits Width of operands (1-64)
+ * @param value Classical value to AND with
+ * @return Dynamically allocated sequence - CALLER MUST FREE
+ *
+ * Qubit layout: [0, bits-1] = result, [bits, 2*bits-1] = quantum operand,
+ *               [2*bits] = control
+ *
+ * OWNERSHIP: Returns dynamically allocated sequence - CALLER MUST FREE
+ */
+sequence_t *cCQ_and(int bits, int64_t value);
+
 // ======================================================
 // Width-parameterized OR operations
 // ======================================================
@@ -166,5 +199,40 @@ sequence_t *Q_or(int bits);
  * OWNERSHIP: Returns dynamically allocated sequence - CALLER MUST FREE
  */
 sequence_t *CQ_or(int bits, int64_t value);
+
+/**
+ * @brief Controlled bitwise OR using sequential Toffoli and MCX gates.
+ *
+ * Adds one external control qubit to Q_or. CNOTs become Toffolis,
+ * Toffolis become MCX(3).
+ * Circuit depth: O(3*bits) - sequential gates across three phases.
+ *
+ * @param bits Width of operands (1-64)
+ * @return Dynamically allocated sequence - CALLER MUST FREE
+ *
+ * Qubit layout: [0, bits-1] = result, [bits, 2*bits-1] = A,
+ *               [2*bits, 3*bits-1] = B, [3*bits] = control
+ *
+ * OWNERSHIP: Returns dynamically allocated sequence - CALLER MUST FREE
+ */
+sequence_t *cQ_or(int bits);
+
+/**
+ * @brief Controlled classical-quantum OR using sequential CX and Toffoli gates.
+ *
+ * Adds one external control qubit to CQ_or. X gates become CX,
+ * CNOT gates become Toffoli.
+ * Circuit depth: O(bits) - sequential gates.
+ *
+ * @param bits Width of operands (1-64)
+ * @param value Classical value to OR with
+ * @return Dynamically allocated sequence - CALLER MUST FREE
+ *
+ * Qubit layout: [0, bits-1] = result, [bits, 2*bits-1] = quantum operand,
+ *               [2*bits] = control
+ *
+ * OWNERSHIP: Returns dynamically allocated sequence - CALLER MUST FREE
+ */
+sequence_t *cCQ_or(int bits, int64_t value);
 
 #endif // QUANTUM_BITWISE_OPS_H

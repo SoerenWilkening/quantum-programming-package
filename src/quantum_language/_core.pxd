@@ -155,8 +155,12 @@ cdef extern from "bitwise_ops.h":
 	sequence_t *cQ_xor(int bits)
 	sequence_t *Q_and(int bits)
 	sequence_t *CQ_and(int bits, int64_t value)
+	sequence_t *cQ_and(int bits)
+	sequence_t *cCQ_and(int bits, int64_t value)
 	sequence_t *Q_or(int bits)
 	sequence_t *CQ_or(int bits, int64_t value)
+	sequence_t *cQ_or(int bits)
+	sequence_t *cCQ_or(int bits, int64_t value)
 
 cdef extern from "comparison_ops.h":
 	# Width-parameterized comparison operations (Phase 12)
