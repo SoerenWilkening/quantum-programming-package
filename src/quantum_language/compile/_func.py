@@ -23,6 +23,8 @@ from .._core import (
 )
 from ..call_graph import (
     CallGraphDAG,
+    _compute_depth,
+    _compute_t_count,
     current_dag_context,
     pop_dag_context,
     push_dag_context,
@@ -209,6 +211,16 @@ class CompiledFunc:
         # DAG building (opt != 3)
         _building_dag = self._opt != 3
         _is_top_level_dag = False
+        # When this is a nested compiled-function call and an outer DAG
+        # context exists, temporarily pop the outer DAG so that inner
+        # operations (record_operation calls) do not pollute the outer
+        # function's DAG.  After the inner call completes, restore the
+        # outer DAG and add a single call node representing this invocation.
+        _outer_dag = None
+        if _building_dag and _nested_call_record is not None:
+            _outer_dag = current_dag_context()
+            if _outer_dag is not None:
+                pop_dag_context()
         if _building_dag:
             ctx = current_dag_context()
             if ctx is None:
@@ -244,6 +256,16 @@ class CompiledFunc:
                     # freeze immediately (graph is rebuilt each call).
                     if self._opt != 1:
                         self._call_graph.freeze()
+            # Restore the outer DAG context and add a call node for this
+            # nested compiled-function invocation.
+            if _outer_dag is not None:
+                push_dag_context(_outer_dag)
+                self._add_nested_call_dag_node(
+                    _outer_dag,
+                    quantum_args,
+                    cache_key,
+                    is_controlled,
+                )
 
         # Record the layer range and total gate count delta of the inner
         # call so the outer capture can exclude these gates from its own block.
@@ -281,6 +303,54 @@ class CompiledFunc:
             mode_flags,
             cache_key,
             _building_dag,
+        )
+
+    def _add_nested_call_dag_node(self, dag, quantum_args, cache_key, is_controlled):
+        """Add a call node to *dag* representing this nested compiled call.
+
+        Looks up the cached block for *cache_key* to obtain gate count,
+        depth, and T-count.  Creates a DAG node with ``is_call_node=True``.
+        """
+        from . import _build_qubit_set_numpy
+
+        block = self._cache.get(cache_key)
+        _gc = 0
+        _depth = 0
+        _t_count = 0
+        if block is not None:
+            _gc = block.original_gate_count if block.original_gate_count else len(block.gates)
+            _depth = _compute_depth(block.gates)
+            _t_count = _compute_t_count(block.gates)
+
+        extra = None
+        if block and block._capture_virtual_to_real:
+            extra = block._capture_virtual_to_real.values()
+        qubit_set, _ = _build_qubit_set_numpy(quantum_args, extra)
+
+        if is_controlled:
+            uc_gc, cc_gc = 0, _gc
+            uc_depth, cc_depth = 0, _depth
+            uc_tc, cc_tc = 0, _t_count
+        else:
+            uc_gc, cc_gc = _gc, 0
+            uc_depth, cc_depth = _depth, 0
+            uc_tc, cc_tc = _t_count, 0
+
+        dag.add_node(
+            self._func.__name__,
+            qubit_set,
+            _gc,
+            cache_key,
+            depth=_depth,
+            t_count=_t_count,
+            controlled=is_controlled,
+            is_call_node=True,
+            uncontrolled_gate_count=uc_gc,
+            controlled_gate_count=cc_gc,
+            uncontrolled_depth=uc_depth,
+            controlled_depth=cc_depth,
+            uncontrolled_t_count=uc_tc,
+            controlled_t_count=cc_tc,
         )
 
     def _classify_args(self, args, kwargs):

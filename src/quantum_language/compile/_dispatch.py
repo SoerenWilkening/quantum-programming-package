@@ -317,6 +317,12 @@ def _capture_miss(
                                 new_controlled=is_controlled,
                             )
                             break
+            elif _building_dag and block._call_records:
+                # Nested compiled function calls: call nodes were added
+                # to the outer DAG by __call__ via _add_nested_call_dag_node.
+                # Mark the context as built to prevent replay duplication.
+                block._dag_built_contexts.add(_ctx)
+                block._dag_built = True
     elif _building_dag and block is not None:
         # Non-opt=1: add a coarse call-level DAG node on capture miss
         # so that per-context cache entries (controlled vs uncontrolled)
