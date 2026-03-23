@@ -122,8 +122,8 @@ static void copy_remap_layers(sequence_t *dst, int *dst_layer, const sequence_t 
             if (extra_ctrl >= 0) {
                 if (dg->NumControls < MAXCONTROLS) {
                     dg->Control[dg->NumControls] = (qubit_t)extra_ctrl;
-                }
-                dg->NumControls++;
+                    dg->NumControls++;
+                } /* else: control overflow -- gate already at max controls */
             }
             dst->gates_per_layer[dl]++;
         }
@@ -177,8 +177,8 @@ static void copy_remap_layers_inverse(sequence_t *dst, int *dst_layer, const seq
             if (extra_ctrl >= 0) {
                 if (dg->NumControls < MAXCONTROLS) {
                     dg->Control[dg->NumControls] = (qubit_t)extra_ctrl;
-                }
-                dg->NumControls++;
+                    dg->NumControls++;
+                } /* else: control overflow -- gate already at max controls */
             }
             dst->gates_per_layer[dl]++;
         }

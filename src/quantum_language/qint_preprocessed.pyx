@@ -4055,10 +4055,18 @@ cdef class qint(circuit):
 		# Compile-mode: record "lt" IR entry with sequence pointers (Phase 11.5)
 		# QFT mode only — Toffoli mode falls through to direct dispatch.
 		if _is_compile_mode() and _circ.arithmetic_mode != 1:
-			result = qbool()
 			self_offset = 64 - self.bits
 			alloc = circuit_get_allocator(_circ)
 			if type(other) == int:
+				# Classical overflow checks (must match non-compile path)
+				max_val = (1 << self_bits) - 1 if self_bits < 64 else (1 << 63) - 1
+				if other < 0:
+					return qbool(False)
+				if other == 0:
+					return qbool(False)
+				if other > max_val:
+					return qbool(True)
+				result = qbool()
 				# CQ lt: sequence layout [0]=result, [1..bits]=A, [bits+1]=borrow
 				_uc_seq = CQ_less_than(self.bits, <int64_t>other)
 				_cc_seq = cCQ_less_than(self.bits, <int64_t>other)
@@ -4078,27 +4086,38 @@ cdef class qint(circuit):
 				self.history.add_blocker(result)
 				return result
 			elif type(other) == qint:
-				# QQ lt: sequence layout [0]=result, [1..bits]=A, [bits+1..2*bits]=B,
-				# [2*bits+1]=borrow, [2*bits+2]=zero_ext
+				# QQ lt: sequence layout [0]=result, [1.._comp_bits]=A,
+				# [_comp_bits+1..2*_comp_bits]=B, [2*_comp_bits+1]=borrow,
+				# [2*_comp_bits+2]=zero_ext
+				# Total abstract qubits: 2*_comp_bits + 3
 				_comp_bits = self.bits if self.bits >= (<qint>other).bits else (<qint>other).bits
 				_uc_seq = QQ_less_than(_comp_bits)
 				_cc_seq = cQQ_less_than(_comp_bits)
 				other_offset = 64 - (<qint>other).bits
-				# Allocate borrow + zero_ext ancilla for IR execution during capture
-				_lt_anc = allocator_alloc(alloc, 2, True)
+				# Pad slots needed for shorter operand + borrow + zero_ext
+				_self_pad = _comp_bits - self.bits
+				_other_pad = _comp_bits - (<qint>other).bits
+				_lt_anc = allocator_alloc(alloc, 2 + _self_pad + _other_pad, True)
+				result = qbool()
 				regs = ((<qint>result).qubits[63],)
+				# A: self qubits padded to _comp_bits with zero-init ancilla
 				regs = regs + tuple(self.qubits[self_offset + i] for i in range(self.bits))
+				for _p in range(_self_pad):
+					regs = regs + (_lt_anc + 2 + _p,)
+				# B: other qubits padded to _comp_bits with zero-init ancilla
 				regs = regs + tuple(
 					(<qint>other).qubits[other_offset + i]
 					for i in range((<qint>other).bits)
 				)
+				for _p in range(_other_pad):
+					regs = regs + (_lt_anc + 2 + _self_pad + _p,)
 				regs = regs + (_lt_anc, _lt_anc + 1)
 				_record_instruction(
 					"lt", regs,
 					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
 					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 				)
-				allocator_free(alloc, _lt_anc, 2)
+				allocator_free(alloc, _lt_anc, 2 + _self_pad + _other_pad)
 				result.add_dependency(self)
 				result.add_dependency(other)
 				result.operation_type = 'LT'
@@ -4368,9 +4387,15 @@ cdef class qint(circuit):
 		# Compile-mode: record "gt" IR entry with sequence pointers (Phase 11.5)
 		# QFT mode only — Toffoli mode falls through to direct dispatch.
 		if _is_compile_mode() and _circ.arithmetic_mode != 1:
-			result = qbool()
 			alloc = circuit_get_allocator(_circ)
 			if type(other) == int:
+				# Classical overflow checks (must match non-compile path)
+				max_val = (1 << self_bits) - 1 if self_bits < 64 else (1 << 63) - 1
+				if other < 0:
+					return qbool(True)
+				if other >= max_val:
+					return qbool(False)
+				result = qbool()
 				# gt CQ: a > value, uses CQ_greater_than = CQ_less_than(value+1)
 				_uc_seq = CQ_greater_than(self.bits, <int64_t>other)
 				_cc_seq = cCQ_greater_than(self.bits, <int64_t>other)
@@ -4390,26 +4415,39 @@ cdef class qint(circuit):
 				return result
 			elif type(other) == qint:
 				# gt QQ: a > b = b < a. Use QQ_less_than with swapped operands.
+				# Qubit layout: [0]=result, [1.._comp_bits]=A(=other),
+				# [_comp_bits+1..2*_comp_bits]=B(=self), [2*_comp_bits+1]=borrow,
+				# [2*_comp_bits+2]=zero_ext
 				other_bits = (<qint>other).bits
 				other_offset = 64 - other_bits
 				_comp_bits = self_bits if self_bits >= other_bits else other_bits
 				_uc_seq = QQ_less_than(_comp_bits)
 				_cc_seq = cQQ_less_than(_comp_bits)
-				_gt_anc = allocator_alloc(alloc, 2, True)
+				# Pad slots for shorter operand + borrow + zero_ext
+				_other_pad = _comp_bits - other_bits
+				_self_pad = _comp_bits - self_bits
+				_gt_anc = allocator_alloc(alloc, 2 + _other_pad + _self_pad, True)
+				result = qbool()
 				# Swapped: A=other, B=self (since we want other < self)
 				regs = ((<qint>result).qubits[63],)
+				# A: other qubits padded to _comp_bits
 				regs = regs + tuple(
 					(<qint>other).qubits[other_offset + i]
 					for i in range(other_bits)
 				)
+				for _p in range(_other_pad):
+					regs = regs + (_gt_anc + 2 + _p,)
+				# B: self qubits padded to _comp_bits
 				regs = regs + tuple(self.qubits[self_offset + i] for i in range(self_bits))
+				for _p in range(_self_pad):
+					regs = regs + (_gt_anc + 2 + _other_pad + _p,)
 				regs = regs + (_gt_anc, _gt_anc + 1)
 				_record_instruction(
 					"gt", regs,
 					uncontrolled_seq=<unsigned long long>_uc_seq if _uc_seq != NULL else 0,
 					controlled_seq=<unsigned long long>_cc_seq if _cc_seq != NULL else 0,
 				)
-				allocator_free(alloc, _gt_anc, 2)
+				allocator_free(alloc, _gt_anc, 2 + _other_pad + _self_pad)
 				result.add_dependency(self)
 				result.add_dependency(other)
 				result.operation_type = 'GT'
