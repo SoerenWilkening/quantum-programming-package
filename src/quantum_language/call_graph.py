@@ -929,6 +929,8 @@ def record_operation(
     *,
     gate_count: int = 0,
     sequence_ptr: int = 0,
+    uncontrolled_seq: int = 0,
+    controlled_seq: int = 0,
     invert: bool = False,
     controlled: bool = False,
     depth: int = 0,
@@ -959,6 +961,12 @@ def record_operation(
     sequence_ptr : int
         C pointer to the ``sequence_t`` (cast to Python int via
         ``<unsigned long long>``).  Default 0 means pointer not captured.
+    uncontrolled_seq : int
+        Pointer to the uncontrolled ``sequence_t`` variant (as Python int).
+        Used for DAG traversal execution (Step 12.5).  Default 0.
+    controlled_seq : int
+        Pointer to the controlled ``sequence_t`` variant (as Python int).
+        Used for DAG traversal execution (Step 12.5).  Default 0.
     invert : bool
         Whether this is an inverse (adjoint) operation.
     controlled : bool
@@ -1050,6 +1058,8 @@ def record_operation(
         uncontrolled_t_count=uc_tc,
         controlled_t_count=cc_tc,
         sequence_ptr=sequence_ptr,
+        uncontrolled_seq=uncontrolled_seq,
+        controlled_seq=controlled_seq,
         qubit_mapping=qubit_mapping,
         operation_type=operation_type,
         invert=invert,

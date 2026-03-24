@@ -69,11 +69,16 @@
 					range_counts = circuit_gate_counts_range(_circ, layer_before, _circ.used_layer)
 				else:
 					range_counts.t_count = 0
+				# Generate base sequences for DAG metadata
+				_toff_uc = toffoli_CQ_add(self_bits, classical_value)
+				_toff_cc = toffoli_cCQ_add(self_bits, classical_value)
 				_record_operation(
 					"add_cq",
 					tuple(self_qa[i] for i in range(self_bits))
 					+ ((control_qubit,) if _controlled else ()),
 					gate_count=gc_delta,
+					uncontrolled_seq=<unsigned long long>_toff_uc if _toff_uc != NULL else 0,
+					controlled_seq=<unsigned long long>_toff_cc if _toff_cc != NULL else 0,
 					invert=bool(invert),
 					controlled=bool(_controlled),
 					depth=_circ.used_layer - layer_before,
@@ -155,12 +160,17 @@
 				range_counts = circuit_gate_counts_range(_circ, layer_before, _circ.used_layer)
 			else:
 				range_counts.t_count = 0
+			# Generate base sequences for DAG metadata
+			_toff_uc = toffoli_QQ_add(result_bits)
+			_toff_cc = toffoli_cQQ_add(result_bits)
 			_record_operation(
 				"add_qq",
 				tuple(self_qa[i] for i in range(self_bits))
 				+ tuple(other_qa[i] for i in range(other_bits))
 				+ ((control_qubit,) if _controlled else ()),
 				gate_count=gc_delta,
+				uncontrolled_seq=<unsigned long long>_toff_uc if _toff_uc != NULL else 0,
+				controlled_seq=<unsigned long long>_toff_cc if _toff_cc != NULL else 0,
 				invert=bool(invert),
 				controlled=bool(_controlled),
 				depth=_circ.used_layer - layer_before,

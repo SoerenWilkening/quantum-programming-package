@@ -149,9 +149,10 @@ def _capture_inner(cf, args, kwargs, quantum_args):
     # Execute the recorded IR to produce gates in the circuit.
     # In QFT mode, _execute_ir checks the (now-restored) control
     # stack and uses controlled sequences when inside a with block.
-    # In Toffoli mode, _instruction_ir is empty (Toffoli dispatch
-    # emitted gates directly), so this is a no-op.
-    _execute_ir(ir_block)
+    # In Toffoli mode, operations recorded directly to the DAG via
+    # _record_operation without execution -- skip _execute_ir.
+    if not _is_toffoli:
+        _execute_ir(ir_block)
 
     # Record end layer
     end_layer = get_current_layer()
