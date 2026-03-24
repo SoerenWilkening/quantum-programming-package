@@ -69,15 +69,6 @@
 					range_counts = circuit_gate_counts_range(_circ, layer_before, _circ.used_layer)
 				else:
 					range_counts.t_count = 0
-				# Toffoli mode: use actual gc_delta for the current context.
-				# The sibling context's count is filled by _merge_dual_context_nodes
-				# when the function is captured in both contexts.
-				if _controlled:
-					_uc_gc_add = 0
-					_cc_gc_add = gc_delta
-				else:
-					_uc_gc_add = gc_delta
-					_cc_gc_add = 0
 				_record_operation(
 					"add_cq",
 					tuple(self_qa[i] for i in range(self_bits))
@@ -87,8 +78,6 @@
 					controlled=bool(_controlled),
 					depth=_circ.used_layer - layer_before,
 					t_count=range_counts.t_count,
-					uncontrolled_gate_count=_uc_gc_add,
-					controlled_gate_count=_cc_gc_add,
 				)
 				return self
 
@@ -111,11 +100,6 @@
 				range_counts = circuit_gate_counts_range(_circ, layer_before, _circ.used_layer)
 			else:
 				range_counts.t_count = 0
-			# Resolve both UC/CC gate counts from sequence generators
-			_uc_seq_add = CQ_add(self_bits, classical_value)
-			_cc_seq_add = cCQ_add(self_bits, classical_value)
-			_uc_gc_add = <int>_uc_seq_add.total_gate_count if _uc_seq_add != NULL else 0
-			_cc_gc_add = <int>_cc_seq_add.total_gate_count if _cc_seq_add != NULL else 0
 			_record_operation(
 				"add_cq",
 				tuple(qa[i] for i in range(pos)),
@@ -125,8 +109,6 @@
 				controlled=bool(_controlled),
 				depth=_circ.used_layer - layer_before,
 				t_count=range_counts.t_count,
-				uncontrolled_gate_count=_uc_gc_add,
-				controlled_gate_count=_cc_gc_add,
 			)
 			return self
 
@@ -171,13 +153,6 @@
 				range_counts = circuit_gate_counts_range(_circ, layer_before, _circ.used_layer)
 			else:
 				range_counts.t_count = 0
-			# Toffoli mode: use actual gc_delta for the current context.
-			if _controlled:
-				_uc_gc_add = 0
-				_cc_gc_add = gc_delta
-			else:
-				_uc_gc_add = gc_delta
-				_cc_gc_add = 0
 			_record_operation(
 				"add_qq",
 				tuple(self_qa[i] for i in range(self_bits))
@@ -188,8 +163,6 @@
 				controlled=bool(_controlled),
 				depth=_circ.used_layer - layer_before,
 				t_count=range_counts.t_count,
-				uncontrolled_gate_count=_uc_gc_add,
-				controlled_gate_count=_cc_gc_add,
 			)
 			return self
 
@@ -214,11 +187,6 @@
 			range_counts = circuit_gate_counts_range(_circ, layer_before, _circ.used_layer)
 		else:
 			range_counts.t_count = 0
-		# Resolve both UC/CC gate counts from sequence generators
-		_uc_seq_add = QQ_add(result_bits)
-		_cc_seq_add = cQQ_add(result_bits)
-		_uc_gc_add = <int>_uc_seq_add.total_gate_count if _uc_seq_add != NULL else 0
-		_cc_gc_add = <int>_cc_seq_add.total_gate_count if _cc_seq_add != NULL else 0
 		_record_operation(
 			"add_qq",
 			tuple(qa[i] for i in range(pos + (1 if _controlled else 0))),
@@ -228,8 +196,6 @@
 			controlled=bool(_controlled),
 			depth=_circ.used_layer - layer_before,
 			t_count=range_counts.t_count,
-			uncontrolled_gate_count=_uc_gc_add,
-			controlled_gate_count=_cc_gc_add,
 		)
 		return self
 
