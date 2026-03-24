@@ -3137,7 +3137,7 @@ cdef class qint(circuit):
 				gc_before_or = (<circuit_s*>_circuit).gate_count
 				layer_before_or = (<circuit_s*>_circuit).used_layer
 				for i in range(result_bits):
-					_out_qubit = qubit_array[i]
+					_out_qubit = result.qubits[result_offset + i]
 					if ((<int64_t>other) >> i) & 1:
 						# 1 OR x = 1, so controlled: CX(result, ctrl)
 						# Use cQ_not(1) sequence: layout [ctrl, target]
@@ -3146,8 +3146,6 @@ cdef class qint(circuit):
 						arr = qubit_array
 						seq = cQ_not(1)
 						run_instruction(seq, &arr[0], False, _circuit)
-						# Restore qubit_array[0] for next iteration
-						qubit_array[0] = result.qubits[result_offset]
 					else:
 						# 0 OR x = x, so controlled: CCX(result, quantum, ctrl)
 						_q_qubit = qubit_array[result_bits + i]

@@ -98,6 +98,64 @@ class TestControlledOrCQ:
             f"Controlled OR cq should produce gates: before={gc_before}, after={gc_after}"
         )
 
+    def test_multibit_cq_or_scales_with_set_bits(self):
+        """Controlled CQ OR with value=3 (bits 0,1 set) on 2-bit register.
+
+        Each set bit produces CX gates targeting a distinct result qubit.
+        Gate count for value=3 (2 set bits) must be 2x value=1 (1 set bit).
+        This catches the qubit array corruption bug where bit 0 overwrites
+        qubit_array entries and subsequent iterations target the wrong qubit.
+        """
+        # Single set bit: value=1 on 1-bit register
+        ql.circuit()
+        a1 = ql.qint(0, width=1)
+        ctrl1 = ql.qbool(True)
+        gc0 = ql.get_gate_count()
+        with ctrl1:
+            _ = a1 | 1
+        gc_one_bit = ql.get_gate_count() - gc0
+
+        # Two set bits: value=3 on 2-bit register
+        ql.circuit()
+        a2 = ql.qint(0, width=2)
+        ctrl2 = ql.qbool(True)
+        gc0 = ql.get_gate_count()
+        with ctrl2:
+            _ = a2 | 3
+        gc_two_bits = ql.get_gate_count() - gc0
+
+        assert gc_two_bits == 2 * gc_one_bit, (
+            f"CQ OR with 2 set bits should produce exactly 2x gates of 1 set bit: "
+            f"got {gc_two_bits} vs 2*{gc_one_bit}={2 * gc_one_bit}"
+        )
+
+    def test_multibit_cq_or_distinct_targets(self):
+        """Controlled CQ OR value=3 targets distinct result qubits.
+
+        Verifies that more gates are generated for value=3 (2 set bits)
+        than value=1 (1 set bit) on the same width register, confirming
+        each set bit targets a different qubit.
+        """
+        ql.circuit()
+        a1 = ql.qint(0, width=2)
+        ctrl1 = ql.qbool(True)
+        gc0 = ql.get_gate_count()
+        with ctrl1:
+            _ = a1 | 1
+        gc_val1 = ql.get_gate_count() - gc0
+
+        ql.circuit()
+        a2 = ql.qint(0, width=2)
+        ctrl2 = ql.qbool(True)
+        gc0 = ql.get_gate_count()
+        with ctrl2:
+            _ = a2 | 3
+        gc_val3 = ql.get_gate_count() - gc0
+
+        assert gc_val3 > gc_val1, (
+            f"CQ OR with value=3 should produce more gates than value=1: got {gc_val3} vs {gc_val1}"
+        )
+
 
 class TestControlledXorQQ:
     """Controlled quantum-quantum XOR via CCX decomposition."""
