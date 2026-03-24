@@ -248,9 +248,21 @@ def _toffoli_and(ctrl1_qubit, ctrl2_qubit):
         Freshly allocated AND-ancilla qbool with CCX applied.
     """
     from .qbool import qbool as _qbool
+    from .call_graph import record_operation as _record_op
     ancilla = _qbool()
     ancilla_qubit = ancilla.qubits[63]
     emit_ccx(ancilla_qubit, ctrl1_qubit, ctrl2_qubit)
+    # AND = 1 CCX (Toffoli) = 1 gate, 1 depth, 7 T-gates.
+    # emit_ccx uses add_gate (not run_instruction) so get_gate_count()
+    # does not see it — hardcode the known cost.
+    _record_op(
+        "and",
+        (ancilla_qubit, ctrl1_qubit, ctrl2_qubit),
+        gate_count=1,
+        controlled=False,
+        depth=1,
+        t_count=7,
+    )
     return ancilla
 
 
@@ -266,8 +278,18 @@ def _uncompute_toffoli_and(ancilla, ctrl1_qubit, ctrl2_qubit):
     ctrl2_qubit : int
         Second control qubit index
     """
+    from .call_graph import record_operation as _record_op
     ancilla_qubit = ancilla.qubits[63]
     emit_ccx(ancilla_qubit, ctrl1_qubit, ctrl2_qubit)  # CCX is self-adjoint
+    _record_op(
+        "and",
+        (ancilla_qubit, ctrl1_qubit, ctrl2_qubit),
+        gate_count=1,
+        controlled=False,
+        invert=True,
+        depth=1,
+        t_count=7,
+    )
     ancilla._is_uncomputed = True  # Prevent __del__ double-uncomputation
     from ._core import _deallocate_qubits
     _deallocate_qubits(ancilla.allocated_start, 1)

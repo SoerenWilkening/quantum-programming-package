@@ -275,11 +275,12 @@ class CallGraphDAG:
     edge construction, parallel group detection, and graph immutability.
     """
 
-    def __init__(self):
+    def __init__(self, func_name: str = ""):
         self._dag: rx.PyDAG = rx.PyDAG()
         self._nodes: list[DAGNode] = []
         self._qubit_last_node: dict[int, int] = {}
         self._frozen: bool = False
+        self.func_name: str = func_name
 
     # -- Node management ----------------------------------------------------
 
@@ -528,45 +529,13 @@ class CallGraphDAG:
     # -- Call-node sibling backfill ------------------------------------------
 
     def backfill_call_node_siblings(self):
-        """Fill in missing sibling costs on call nodes.
+        """No-op.  Sibling backfill is disabled with calling-context semantics.
 
-        After a compiled function's capture completes, the inner functions'
-        caches may have both controlled and uncontrolled entries.  This method
-        iterates call nodes that are missing one side's costs and resolves them
-        from the inner function's cache.
+        Each context (uncontrolled / controlled) populates only its own
+        side.  The other side is left at 0, meaning the report only shows
+        sections for contexts that were actually captured.
         """
-        for node in self._nodes:
-            if not node.is_call_node or node._merged:
-                continue
-            cf = node._compiled_func_ref
-            if cf is None or not node.cache_key:
-                continue
-            # Skip if both sides already populated
-            if node.uncontrolled_gate_count and node.controlled_gate_count:
-                continue
-            # Construct sibling key by flipping control_count
-            cache_key = node.cache_key
-            cc_idx = len(cache_key) - 4
-            flipped_cc = 0 if cache_key[cc_idx] else 1
-            sibling_key = cache_key[:cc_idx] + (flipped_cc,) + cache_key[cc_idx + 1 :]
-            sibling_block = cf._cache.get(sibling_key)
-            if sibling_block is None:
-                continue
-            sibling_gc = (
-                sibling_block.original_gate_count
-                if sibling_block.original_gate_count
-                else len(sibling_block.gates)
-            )
-            sibling_depth = _compute_depth(sibling_block.gates)
-            sibling_t_count = _compute_t_count(sibling_block.gates)
-            if not node.uncontrolled_gate_count:
-                node.uncontrolled_gate_count = sibling_gc
-                node.uncontrolled_depth = sibling_depth
-                node.uncontrolled_t_count = sibling_t_count
-            elif not node.controlled_gate_count:
-                node.controlled_gate_count = sibling_gc
-                node.controlled_depth = sibling_depth
-                node.controlled_t_count = sibling_t_count
+        pass
 
     # -- Aggregate metrics ---------------------------------------------------
 
@@ -654,88 +623,61 @@ class CallGraphDAG:
 
     # -- DOT export ---------------------------------------------------------
 
-    def to_dot(self, *, file_prefix: str | None = None) -> str:
-        """Return a DOT-language string representing the call graph.
-
-        Nodes are rendered as boxes with multi-line labels showing function
-        name, gate count, depth, qubit count, and T-count. Execution-order
-        edges are solid arrows labeled "exec". When multiple parallel
-        groups exist, each group is wrapped in a ``subgraph cluster_N``
-        with dotted border.
+    def to_dot(self, *, file_prefix: str | None = None, context: str = "uncontrolled") -> str:
+        """Return a DOT-language string for one calling context.
 
         Parameters
         ----------
         file_prefix : str or None
-            When provided, each node includes a ``URL`` attribute pointing
-            to ``{file_prefix}_{func_name}.png``, enabling hyperlinked
-            navigation to per-function sub-diagrams in rendered SVGs/PDFs.
+            When provided, each node includes a ``URL`` attribute.
+        context : str
+            ``"uncontrolled"`` or ``"controlled"`` — selects which
+            context's nodes and metrics to render.
 
         Returns
         -------
         str
             Valid DOT string starting with ``digraph CallGraph {``.
         """
+        is_cc = context == "controlled"
+        gate_attr = "controlled_gate_count" if is_cc else "uncontrolled_gate_count"
+        depth_attr = "controlled_depth" if is_cc else "uncontrolled_depth"
+        t_attr = "controlled_t_count" if is_cc else "uncontrolled_t_count"
+
+        # Filter to nodes that have values for this context
+        visible = {
+            idx
+            for idx, nd in enumerate(self._nodes)
+            if not nd._merged and getattr(nd, gate_attr, 0)
+        }
+
         lines: list[str] = []
         lines.append("digraph CallGraph {")
         lines.append("  rankdir=TB;")
+        lines.append(f'  label="{context}";')
         lines.append('  node [shape=box, fontname="Courier"];')
-
-        groups = self.parallel_groups()
-        # Build node -> group mapping
-        node_to_group: dict[int, int] = {}
-        for gi, group in enumerate(groups):
-            for idx in group:
-                node_to_group[idx] = gi
-
-        use_clusters = len(groups) > 1
 
         def _node_label(idx: int) -> str:
             nd = self._nodes[idx]
             name = nd.func_name.replace('"', '\\"')
-            dual_gates = _format_dual(nd.uncontrolled_gate_count, nd.controlled_gate_count)
-            dual_depth = _format_dual(nd.uncontrolled_depth, nd.controlled_depth)
-            dual_t = _format_dual(nd.uncontrolled_t_count, nd.controlled_t_count)
-            return (
-                f"{name}\\n"
-                f"gates: {dual_gates}\\n"
-                f"depth: {dual_depth}\\n"
-                f"qubits: {len(nd.qubit_set)}\\n"
-                f"T-count: {dual_t}"
-            )
+            g = getattr(nd, gate_attr, 0)
+            d = getattr(nd, depth_attr, 0)
+            t = getattr(nd, t_attr, 0)
+            return f"{name}\\ngates: {g}\\ndepth: {d}\\nqubits: {len(nd.qubit_set)}\\nT-count: {t}"
 
-        def _node_url(idx: int) -> str:
-            nd = self._nodes[idx]
-            name = nd.func_name.replace(" ", "_")
-            return f"{file_prefix}_{name}.png"
-
-        def _emit_node(idx: int) -> str:
+        for idx in sorted(visible):
             nd = self._nodes[idx]
             url_attr = ""
             if file_prefix is not None:
-                url_attr = f', URL="{_node_url(idx)}"'
-            if nd.is_call_node:
-                return f'  n{idx} [label="{_node_label(idx)}", style=dashed{url_attr}];'
-            return f'  n{idx} [label="{_node_label(idx)}"{url_attr}];'
+                fname = nd.func_name.replace(" ", "_")
+                url_attr = f', URL="{file_prefix}_{fname}.png"'
+            style = ", style=dashed" if nd.is_call_node else ""
+            lines.append(f'  n{idx} [label="{_node_label(idx)}"{style}{url_attr}];')
 
-        if use_clusters:
-            for gi, group in enumerate(groups):
-                lines.append(f"  subgraph cluster_{gi} {{")
-                lines.append("    style=dotted;")
-                lines.append(f'    label="Group {gi}";')
-                for idx in sorted(group):
-                    if not self._nodes[idx]._merged:
-                        lines.append(f"  {_emit_node(idx)}")
-                lines.append("  }")
-        else:
-            for idx in range(len(self._nodes)):
-                if not self._nodes[idx]._merged:
-                    lines.append(_emit_node(idx))
-
-        # Edges (iterate by index to handle multi-edges correctly)
+        # Edges between visible nodes only
         for eidx in self._dag.edge_indices():
             src, tgt = self._dag.get_edge_endpoints_by_index(eidx)
-            # Skip edges referencing merged nodes (no corresponding node definition)
-            if self._nodes[src]._merged or self._nodes[tgt]._merged:
+            if src not in visible or tgt not in visible:
                 continue
             edge_data = self._dag.get_edge_data_by_index(eidx)
             if isinstance(edge_data, dict):
@@ -751,11 +693,12 @@ class CallGraphDAG:
     # -- Compilation report --------------------------------------------------
 
     def report(self) -> str:
-        """Return a formatted compilation report string.
+        """Return a formatted compilation report with separate U/C sections.
 
-        The report includes a header with the top-level function name,
-        a table with per-node stats (Name, Gates, Depth, Qubits, T-count,
-        Group), and an aggregate totals footer row.
+        Shows an uncontrolled section (nodes with uc values) and a
+        controlled section (nodes with cc values) independently, since
+        the two contexts can have different DAG structures (e.g., AND
+        nodes only exist in the controlled context).
 
         Returns
         -------
@@ -765,83 +708,64 @@ class CallGraphDAG:
         if not self._nodes:
             return "Compilation Report: (empty)\n\nNo nodes."
 
-        top_name = self._nodes[0].func_name
-        groups = self.parallel_groups()
-        node_to_group: dict[int, int] = {}
-        for gi, group in enumerate(groups):
-            for idx in group:
-                node_to_group[idx] = gi
+        top_name = self.func_name or self._nodes[0].func_name
+        active = [n for n in self._nodes if not n._merged]
 
-        agg = self.aggregate()
+        # Split nodes by context
+        uc_nodes = [n for n in active if n.uncontrolled_gate_count]
+        cc_nodes = [n for n in active if n.controlled_gate_count]
 
         lines: list[str] = []
+
+        def _section(label, nodes, gate_attr, depth_attr, t_attr):
+            header = (
+                f"{'Name':<20s} | {'Gates':>8s} | {'Depth':>8s} | {'Qubits':>8s} | {'T-count':>8s}"
+            )
+            sep = "-" * len(header)
+            lines.append(f"  {label}:")
+            lines.append(f"  {header}")
+            lines.append(f"  {sep}")
+            total_g = 0
+            total_t = 0
+            for nd in nodes:
+                g = getattr(nd, gate_attr)
+                d = getattr(nd, depth_attr)
+                t = getattr(nd, t_attr)
+                total_g += g
+                total_t += t
+                row = (
+                    f"  {nd.func_name:<20s} | {g:>8d} | {d:>8d} | {len(nd.qubit_set):>8d} | {t:>8d}"
+                )
+                lines.append(row)
+            lines.append(f"  {sep}")
+            total_d = max((getattr(n, depth_attr) for n in nodes), default=0)
+            total_q = len(set().union(*(n.qubit_set for n in nodes))) if nodes else 0
+            totals = (
+                f"  {'TOTAL':<20s} | {total_g:>8d} | {total_d:>8d} | {total_q:>8d} | {total_t:>8d}"
+            )
+            lines.append(totals)
+
         lines.append(f"Compilation Report: {top_name}")
-        lines.append("")
 
-        # Column widths: Name=20, Gates(U/C)=15, Depth(U/C)=15, Qubits=8, T-count(U/C)=15, Group=8
-        header = (
-            f"{'Name':<20s} | {'Gates (U/C)':>15s} | {'Depth (U/C)':>15s} | "
-            f"{'Qubits':>8s} | {'T-count (U/C)':>15s} | {'Group':>8s}"
-        )
-        sep = "-" * len(header)
-        lines.append(header)
-        lines.append(sep)
-
-        for idx, nd in enumerate(self._nodes):
-            if nd._merged:
-                continue
-            grp = node_to_group.get(idx, 0)
-            dual_gates = _format_dual(nd.uncontrolled_gate_count, nd.controlled_gate_count)
-            dual_depth = _format_dual(nd.uncontrolled_depth, nd.controlled_depth)
-            dual_t = _format_dual(nd.uncontrolled_t_count, nd.controlled_t_count)
-            row = (
-                f"{nd.func_name:<20s} | {dual_gates:>15s} | {dual_depth:>15s} | "
-                f"{len(nd.qubit_set):>8d} | {dual_t:>15s} | {grp:>8d}"
-            )
-            lines.append(row)
-
-        lines.append(sep)
-        dual_gates_total = _format_dual(agg["gates_uc"], agg["gates_cc"])
-        dual_depth_total = _format_dual(agg["depth_uc"], agg["depth_cc"])
-        dual_t_total = _format_dual(agg["t_count_uc"], agg["t_count_cc"])
-        totals = (
-            f"{'TOTAL':<20s} | {dual_gates_total:>15s} | {dual_depth_total:>15s} | "
-            f"{agg['qubits']:>8d} | {dual_t_total:>15s} | {'-':>8s}"
-        )
-        lines.append(totals)
-
-        # Hierarchical breakdown: show own vs referenced gates when call
-        # nodes or call edges are present.
-        call_node_indices = [
-            i for i, nd in enumerate(self._nodes) if nd.is_call_node and not nd._merged
-        ]
-        cedges = self.call_edges()
-        if call_node_indices or cedges:
+        if uc_nodes:
             lines.append("")
-            lines.append("Hierarchical Breakdown:")
-
-            # Identify own-gate nodes vs call-reference nodes
-            own_gates = sum(
-                nd.gate_count
-                for i, nd in enumerate(self._nodes)
-                if not nd.is_call_node and not nd._merged
+            _section(
+                "Uncontrolled",
+                uc_nodes,
+                "uncontrolled_gate_count",
+                "uncontrolled_depth",
+                "uncontrolled_t_count",
             )
-            ref_gates = sum(
-                nd.gate_count
-                for i, nd in enumerate(self._nodes)
-                if nd.is_call_node and not nd._merged
-            )
-            lines.append(f"  Own gates:        {own_gates}")
-            lines.append(f"  Referenced gates:  {ref_gates}")
-            lines.append(f"  Total:            {own_gates + ref_gates}")
 
-            if cedges:
-                lines.append("")
-                lines.append("  Call relationships:")
-                for src, tgt in cedges:
-                    src_name = self._nodes[src].func_name
-                    tgt_name = self._nodes[tgt].func_name
-                    lines.append(f"    {src_name} -> {tgt_name}")
+        if cc_nodes:
+            lines.append("")
+            _section(
+                "Controlled",
+                cc_nodes,
+                "controlled_gate_count",
+                "controlled_depth",
+                "controlled_t_count",
+            )
 
         return "\n".join(lines)
 
@@ -890,6 +814,15 @@ Used during @ql.compile execution to track the active DAG for
 operation recording.
 """
 
+_calling_context_stack: list[tuple[bool, int]] = []
+"""Stack tracking the calling context of each enclosing compiled function.
+
+Each entry is ``(is_controlled, control_depth)`` where *control_depth* is
+the ``len(_control_stack)`` at the time the function was entered.  This
+allows ``record_operation`` to distinguish internal control (from ``with c:``
+inside the function) from external control (from the calling context).
+"""
+
 
 def push_dag_context(dag: CallGraphDAG) -> None:
     """Push a DAG context onto the builder stack.
@@ -926,6 +859,35 @@ def current_dag_context() -> CallGraphDAG | None:
     if not _dag_builder_stack:
         return None
     return _dag_builder_stack[-1]
+
+
+def push_calling_context(is_controlled: bool, control_depth: int) -> None:
+    """Push the calling context for the current compiled function.
+
+    Parameters
+    ----------
+    is_controlled : bool
+        Whether the function was called in a controlled context.
+    control_depth : int
+        ``len(_control_stack)`` at entry time.  Used to distinguish
+        internal control (from ``with c:`` inside the function body)
+        from external control (from the calling context).
+    """
+    _calling_context_stack.append((is_controlled, control_depth))
+
+
+def pop_calling_context() -> tuple[bool, int] | None:
+    """Pop the calling context stack."""
+    if not _calling_context_stack:
+        return None
+    return _calling_context_stack.pop()
+
+
+def current_calling_context() -> tuple[bool, int] | None:
+    """Return the calling context ``(is_controlled, control_depth)``, or None."""
+    if not _calling_context_stack:
+        return None
+    return _calling_context_stack[-1]
 
 
 # ---------------------------------------------------------------------------
@@ -999,27 +961,47 @@ def record_operation(
     qubit_mapping = tuple(qubit_indices)
     qubit_set = frozenset(qubit_mapping)
 
-    # When explicit dual counts are provided, use them directly.
-    # Otherwise fall back to single-sided assignment from gate_count.
-    uc_gc = uncontrolled_gate_count
-    cc_gc = controlled_gate_count
-    if uc_gc == 0 and cc_gc == 0:
-        if controlled:
-            cc_gc = gate_count
-        else:
-            uc_gc = gate_count
+    # Determine internal control: compare current control depth with the
+    # baseline at function entry.  Internal control means the operation is
+    # inside a ``with c:`` block WITHIN the function body, independent of
+    # any control from the calling context.
+    ctx = current_calling_context()
+    ctx_is_controlled = False
+    baseline_depth = 0
+    if ctx is not None:
+        ctx_is_controlled, baseline_depth = ctx
 
-    # Depth and T-count remain single-sided (reflecting the actual
-    # execution context) until a future issue adds dual resolution.
-    if controlled:
+    # Import here to avoid circular dependency at module level
+    from ._core import _get_control_stack
+
+    current_ctrl_depth = len(_get_control_stack())
+    has_internal_control = controlled and (current_ctrl_depth > baseline_depth)
+
+    # Prefix "c_" for internally controlled ops (reflects source-level
+    # control, regardless of calling context).  Ops that pass
+    # controlled=False (e.g., AND/uncompute-AND) are never prefixed.
+    node_name = operation_type
+    if has_internal_control:
+        node_name = "c_" + operation_type
+
+    # U/C assignment is based on the CALLING CONTEXT (whether the
+    # enclosing compiled function was called controlled), NOT on whether
+    # this individual operation is internally controlled.
+    # U = cost when enclosing function is called uncontrolled.
+    # C = cost when enclosing function is called controlled.
+    # Only populate the side that was actually captured — no sibling
+    # lookup.  The other side stays 0 and won't appear in reports.
+    if ctx_is_controlled:
+        uc_gc, cc_gc = 0, gate_count
         uc_depth, cc_depth = 0, depth
         uc_tc, cc_tc = 0, t_count
     else:
+        uc_gc, cc_gc = gate_count, 0
         uc_depth, cc_depth = depth, 0
         uc_tc, cc_tc = t_count, 0
 
     node_idx = dag.add_node(
-        operation_type,
+        node_name,
         qubit_set,
         gate_count,
         (),  # cache_key -- not applicable for primitives

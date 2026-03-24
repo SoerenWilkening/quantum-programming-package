@@ -16,6 +16,7 @@ from .._compile_state import (
     _set_active_compile_block,
 )
 from .._core import (
+    _get_control_stack,
     _get_controlled,
     _get_qubit_saving_mode,
     get_current_layer,
@@ -26,7 +27,9 @@ from ..call_graph import (
     _compute_depth,
     _compute_t_count,
     current_dag_context,
+    pop_calling_context,
     pop_dag_context,
+    push_calling_context,
     push_dag_context,
 )
 from ._block import (
@@ -211,6 +214,23 @@ class CompiledFunc:
         # DAG building (opt != 3)
         _building_dag = self._opt != 3
         _is_top_level_dag = False
+        _pushed_calling_ctx = False
+
+        # Determine if this call has internal control relative to the
+        # outer function (i.e., is called inside a ``with c:`` block in
+        # the outer function's source).  Compare the current control
+        # depth with the outer function's baseline.
+        _has_internal_control = False
+        if _building_dag:
+            from ..call_graph import current_calling_context as _cur_cc
+
+            _outer_ctx = _cur_cc()
+            if _outer_ctx is not None:
+                _, _outer_baseline = _outer_ctx
+                _has_internal_control = len(_get_control_stack()) > _outer_baseline
+            else:
+                _has_internal_control = is_controlled
+
         # When this is a nested compiled-function call and an outer DAG
         # context exists, temporarily pop the outer DAG so that inner
         # operations (record_operation calls) do not pollute the outer
@@ -227,9 +247,16 @@ class CompiledFunc:
                 # Top-level call: create fresh DAG (or reuse for opt=1
                 # which accumulates nodes across calls for DAG-only mode)
                 if self._opt != 1 or self._call_graph is None:
-                    self._call_graph = CallGraphDAG()
+                    self._call_graph = CallGraphDAG(func_name=self._func.__name__)
                 push_dag_context(self._call_graph)
                 _is_top_level_dag = True
+            # Push calling context so record_operation knows whether the
+            # enclosing function was called controlled or uncontrolled.
+            # Include the control depth baseline so internal control
+            # (from ``with c:`` inside the function) can be distinguished
+            # from external control (from the calling context).
+            push_calling_context(is_controlled, len(_get_control_stack()))
+            _pushed_calling_ctx = True
 
         try:
             result = self._call_inner(
@@ -246,6 +273,9 @@ class CompiledFunc:
                 _building_dag,
             )
         finally:
+            # Pop calling context before restoring outer DAG
+            if _pushed_calling_ctx:
+                pop_calling_context()
             if _is_top_level_dag:
                 pop_dag_context()
                 if self._call_graph is not None:
@@ -268,6 +298,7 @@ class CompiledFunc:
                     quantum_args,
                     cache_key,
                     is_controlled,
+                    _has_internal_control,
                 )
 
         # Record the layer range and total gate count delta of the inner
@@ -308,13 +339,24 @@ class CompiledFunc:
             _building_dag,
         )
 
-    def _add_nested_call_dag_node(self, dag, quantum_args, cache_key, is_controlled):
+    def _add_nested_call_dag_node(
+        self, dag, quantum_args, cache_key, is_controlled, has_internal_control=False
+    ):
         """Add a call node to *dag* representing this nested compiled call.
 
-        Looks up the cached block for *cache_key* to obtain gate count,
-        depth, and T-count.  Also looks up the sibling cache entry (the
-        other calling context) to resolve both uncontrolled and controlled
-        costs.  Creates a DAG node with ``is_call_node=True``.
+        With calling-context semantics:
+        - U = this call's actual cost (cost when enclosing function is uncontrolled)
+        - C = cost with one more control (cost when enclosing function is controlled)
+        - For calls without internal control, C = sibling variant's cost.
+        - For calls with internal control, C = 0 (doubly-controlled unknown).
+        - Name is prefixed with "c_" when has_internal_control is True.
+
+        Parameters
+        ----------
+        has_internal_control : bool
+            Whether this call is inside a ``with c:`` block in the outer
+            function's source code.  Determined by comparing control stack
+            depth with the outer function's baseline.
         """
         from . import _build_qubit_set_numpy
 
@@ -327,26 +369,6 @@ class CompiledFunc:
             _depth = _compute_depth(block.gates)
             _t_count = _compute_t_count(block.gates)
 
-        # Look up the sibling cache entry (opposite calling context) to
-        # resolve the other variant's costs.  Construct the sibling key by
-        # flipping the control_count component.  control_count is always at
-        # position len(cache_key) - 4 (just before the 3 mode_flags).
-        sibling_gc = 0
-        sibling_depth = 0
-        sibling_t_count = 0
-        cc_idx = len(cache_key) - 4
-        flipped_cc = 0 if cache_key[cc_idx] else 1
-        sibling_key = cache_key[:cc_idx] + (flipped_cc,) + cache_key[cc_idx + 1 :]
-        sibling_block = self._cache.get(sibling_key)
-        if sibling_block is not None:
-            sibling_gc = (
-                sibling_block.original_gate_count
-                if sibling_block.original_gate_count
-                else len(sibling_block.gates)
-            )
-            sibling_depth = _compute_depth(sibling_block.gates)
-            sibling_t_count = _compute_t_count(sibling_block.gates)
-
         # Wrapper functions (those that only call other compiled functions
         # with no direct operations) have empty block.gates and
         # original_gate_count == 0.  Fall back to the inner call_graph
@@ -354,35 +376,43 @@ class CompiledFunc:
         _is_wrapper = _gc == 0 and self._call_graph is not None and self._call_graph.node_count > 0
         if _is_wrapper:
             agg = self._call_graph.aggregate()
-            _gc = agg["gates"]
-            _depth = agg["depth"]
-            _t_count = agg["t_count"]
-            # Use dual aggregate keys for wrapper functions
             if is_controlled:
-                sibling_gc = agg.get("gates_uc", 0) or sibling_gc
-                sibling_depth = agg.get("depth_uc", 0) or sibling_depth
-                sibling_t_count = agg.get("t_count_uc", 0) or sibling_t_count
+                _gc = agg.get("gates_cc", 0) or agg["gates"]
+                _depth = agg.get("depth_cc", 0) or agg["depth"]
+                _t_count = agg.get("t_count_cc", 0) or agg["t_count"]
             else:
-                sibling_gc = agg.get("gates_cc", 0) or sibling_gc
-                sibling_depth = agg.get("depth_cc", 0) or sibling_depth
-                sibling_t_count = agg.get("t_count_cc", 0) or sibling_t_count
+                _gc = agg.get("gates_uc", 0) or agg["gates"]
+                _depth = agg.get("depth_uc", 0) or agg["depth"]
+                _t_count = agg.get("t_count_uc", 0) or agg["t_count"]
 
         extra = None
         if block and block._capture_virtual_to_real:
             extra = block._capture_virtual_to_real.values()
         qubit_set, _ = _build_qubit_set_numpy(quantum_args, extra)
 
-        if is_controlled:
-            uc_gc, cc_gc = sibling_gc, _gc
-            uc_depth, cc_depth = sibling_depth, _depth
-            uc_tc, cc_tc = sibling_t_count, _t_count
+        # Determine if the OUTER function is called controlled so we put
+        # _gc on the correct side (U vs C).
+        from ..call_graph import current_calling_context as _cur_cc
+
+        _outer_ctx = _cur_cc()
+        _outer_is_controlled = _outer_ctx[0] if _outer_ctx else False
+
+        # Place cost on the correct side based on outer calling context.
+        # No sibling lookup — only populate the side that was actually captured.
+        if _outer_is_controlled:
+            cc_gc, cc_depth, cc_tc = _gc, _depth, _t_count
+            uc_gc, uc_depth, uc_tc = 0, 0, 0
         else:
-            uc_gc, cc_gc = _gc, sibling_gc
-            uc_depth, cc_depth = _depth, sibling_depth
-            uc_tc, cc_tc = _t_count, sibling_t_count
+            uc_gc, uc_depth, uc_tc = _gc, _depth, _t_count
+            cc_gc, cc_depth, cc_tc = 0, 0, 0
+
+        # Prefix name with "c_" for internally controlled calls
+        func_name = self._func.__name__
+        if has_internal_control:
+            func_name = "c_" + func_name
 
         node_idx = dag.add_node(
-            self._func.__name__,
+            func_name,
             qubit_set,
             _gc,
             cache_key,

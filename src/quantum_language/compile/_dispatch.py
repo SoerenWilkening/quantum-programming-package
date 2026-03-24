@@ -27,6 +27,13 @@ def _merge_dual_context_nodes(dag, old_indices, new_indices, new_controlled):
     marked ``_merged=True`` so they are skipped in ``report()`` and
     ``aggregate()``.
 
+    With calling-context semantics, U/C on each node represent the cost when
+    the enclosing function is called uncontrolled/controlled.  The merge copies
+    the new context's cost to the appropriate side of the old nodes.  When the
+    uncontrolled context is the new one, also update the old node's func_name
+    (only the uncontrolled capture correctly applies the "c_" prefix for
+    internally controlled operations).
+
     Parameters
     ----------
     dag : CallGraphDAG
@@ -38,7 +45,12 @@ def _merge_dual_context_nodes(dag, old_indices, new_indices, new_controlled):
     new_controlled : bool
         Whether the second context is the controlled context.
     """
-    n = min(len(old_indices), len(new_indices))
+    # Only merge when both captures produce the same number of nodes.
+    # When they differ (e.g., controlled context introduces AND nodes),
+    # keep all nodes from both captures — no positional merge.
+    if len(old_indices) != len(new_indices):
+        return
+    n = len(old_indices)
     for i in range(n):
         old_node = dag._nodes[old_indices[i]]
         new_node = dag._nodes[new_indices[i]]
@@ -56,6 +68,9 @@ def _merge_dual_context_nodes(dag, old_indices, new_indices, new_controlled):
                 old_node.uncontrolled_depth = new_node.uncontrolled_depth
             if new_node.uncontrolled_t_count and not old_node.uncontrolled_t_count:
                 old_node.uncontrolled_t_count = new_node.uncontrolled_t_count
+            # The uncontrolled capture has the correct "c_" prefix for
+            # internally controlled ops.  Update old node's name.
+            old_node.func_name = new_node.func_name
         new_node._merged = True
 
 
