@@ -81,6 +81,8 @@
 				controlled=bool(_controlled),
 				depth=(<circuit_s*>_circ).used_layer - layer_before_div,
 				t_count=range_counts_div.t_count,
+				is_composite=True,
+				op_params={"width": n, "value": int(divisor)},
 			)
 		elif type(divisor) == qint:
 			div_bits = (<qint>divisor).bits
@@ -108,6 +110,8 @@
 				controlled=bool(_controlled),
 				depth=(<circuit_s*>_circ).used_layer - layer_before_div,
 				t_count=range_counts_div.t_count,
+				is_composite=True,
+				op_params={"width": n, "divisor_width": div_bits},
 			)
 		else:
 			raise TypeError("Divisor must be int or qint")

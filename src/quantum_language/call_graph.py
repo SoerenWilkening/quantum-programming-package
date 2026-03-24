@@ -162,6 +162,16 @@ class DAGNode:
         Operation identifier (e.g. ``"add"``, ``"mul"``, ``"xor"``, ``"eq"``).
     invert : bool
         Whether this is an inverse (uncomputation) operation.
+    is_composite : bool
+        Whether this operation is a composite Toffoli dispatch that uses
+        multiple internal sequences (e.g., CLA + RCA fallback, ancilla
+        management).  Composite operations cannot be replayed via a single
+        ``run_instruction(sequence_ptr, qubit_mapping)`` call; the execution
+        phase must re-dispatch them using ``operation_type`` and ``op_params``.
+    op_params : dict
+        Operation-specific parameters needed for re-dispatch of composite
+        operations (e.g., ``{"width": 4, "value": 5}`` for ``add_cq``).
+        Empty dict for non-composite operations.
     """
 
     __slots__ = (
@@ -186,6 +196,8 @@ class DAGNode:
         "invert",
         "controlled",
         "is_call_node",
+        "is_composite",
+        "op_params",
         "_merged",
         "_block_ref",
         "_v2r_ref",
@@ -216,6 +228,8 @@ class DAGNode:
         invert: bool = False,
         controlled: bool = False,
         is_call_node: bool = False,
+        is_composite: bool = False,
+        op_params: dict | None = None,
     ):
         self.func_name = func_name
         self.qubit_set = frozenset(qubit_set)
@@ -238,6 +252,8 @@ class DAGNode:
         self.invert = invert
         self.controlled = controlled
         self.is_call_node = is_call_node
+        self.is_composite = is_composite
+        self.op_params = op_params if op_params is not None else {}
         self._merged = False  # True when this node was merged into another
         self._block_ref = None  # CompiledBlock ref for merge (opt=2)
         self._v2r_ref = None  # virtual-to-real mapping for merge (opt=2)
@@ -259,6 +275,8 @@ class DAGNode:
             parts.append(", invert=True")
         if self.controlled:
             parts.append(", controlled=True")
+        if self.is_composite:
+            parts.append(", composite=True")
         parts.append(")")
         return "".join(parts)
 
@@ -307,6 +325,8 @@ class CallGraphDAG:
         invert: bool = False,
         controlled: bool = False,
         is_call_node: bool = False,
+        is_composite: bool = False,
+        op_params: dict | None = None,
     ) -> int:
         """Add a node to the DAG.
 
@@ -353,6 +373,12 @@ class CallGraphDAG:
         is_call_node : bool
             Whether this node represents a hierarchical call reference
             (from a ``CallRecord``).
+        is_composite : bool
+            Whether this is a composite Toffoli dispatch operation that
+            uses multiple internal sequences.
+        op_params : dict or None
+            Operation-specific parameters for re-dispatch of composite
+            operations.
 
         Returns
         -------
@@ -389,6 +415,8 @@ class CallGraphDAG:
             invert=invert,
             controlled=controlled,
             is_call_node=is_call_node,
+            is_composite=is_composite,
+            op_params=op_params,
         )
         idx = self._dag.add_node(node)
         self._nodes.append(node)
@@ -907,6 +935,8 @@ def record_operation(
     t_count: int = 0,
     uncontrolled_gate_count: int = 0,
     controlled_gate_count: int = 0,
+    is_composite: bool = False,
+    op_params: dict | None = None,
 ) -> int | None:
     """Record a primitive operation (arithmetic/bitwise/comparison) on the DAG.
 
@@ -947,6 +977,14 @@ def record_operation(
         appropriate side based on *controlled*.
     controlled_gate_count : int
         Gate count for the controlled calling context.
+    is_composite : bool
+        Whether this is a composite Toffoli dispatch operation that uses
+        multiple internal sequences and cannot be replayed via a single
+        ``run_instruction``.  The execution phase must re-dispatch these
+        using ``operation_type`` and ``op_params``.
+    op_params : dict or None
+        Operation-specific parameters for re-dispatch of composite
+        operations (e.g., ``{"width": 4, "value": 5}`` for ``add_cq``).
 
     Returns
     -------
@@ -1018,6 +1056,8 @@ def record_operation(
         controlled=controlled,
         uncontrolled_gate_count=uc_gc,
         controlled_gate_count=cc_gc,
+        is_composite=is_composite,
+        op_params=op_params,
     )
 
     # Track node index on the active compile block so that _dispatch

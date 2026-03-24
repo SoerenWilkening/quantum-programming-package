@@ -1700,6 +1700,8 @@ cdef class qint(circuit):
 					controlled=bool(_controlled),
 					depth=_circ.used_layer - layer_before,
 					t_count=range_counts.t_count,
+					is_composite=True,
+					op_params={"width": self_bits, "value": int(classical_value)},
 				)
 				return self
 
@@ -1785,6 +1787,9 @@ cdef class qint(circuit):
 				controlled=bool(_controlled),
 				depth=_circ.used_layer - layer_before,
 				t_count=range_counts.t_count,
+				is_composite=True,
+				op_params={"self_width": self_bits, "other_width": other_bits,
+				           "result_width": result_bits},
 			)
 			return self
 
@@ -2393,6 +2398,9 @@ cdef class qint(circuit):
 					controlled=bool(_controlled),
 					depth=_circ.used_layer - layer_before_mul,
 					t_count=range_counts_mul.t_count,
+					is_composite=True,
+					op_params={"result_width": result_bits, "self_width": self_bits,
+					           "value": int(classical_value)},
 				)
 				return ret
 
@@ -2482,6 +2490,9 @@ cdef class qint(circuit):
 				controlled=bool(_controlled),
 				depth=_circ.used_layer - layer_before_mul,
 				t_count=range_counts_mul.t_count,
+				is_composite=True,
+				op_params={"result_width": result_bits, "self_width": self_bits,
+				           "other_width": other_bits},
 			)
 			return ret
 
@@ -2902,6 +2913,8 @@ cdef class qint(circuit):
 					controlled=bool(_controlled),
 					depth=(<circuit_s*>_circuit).used_layer - layer_before_and,
 					t_count=range_counts_and.t_count,
+					is_composite=True,
+					op_params={"width": result_bits},
 				)
 				_qm = tuple(qubit_array[i] for i in range(_total_and))
 				result.history.append(0, _qm)
@@ -3344,6 +3357,10 @@ cdef class qint(circuit):
 			controlled=bool(_controlled),
 			depth=(<circuit_s*>_circuit).used_layer - layer_before_xor,
 			t_count=range_counts_xor.t_count,
+			is_composite=True,
+			op_params={"result_width": result_bits, "self_width": self.bits,
+			           "other_width": (<qint>other).bits if type(other) != int else 0,
+			           "value": int(other) if type(other) == int else 0},
 		)
 
 		# Step 1.2: Record operation into result's per-variable history
@@ -3457,6 +3474,8 @@ cdef class qint(circuit):
 				controlled=bool(_controlled),
 				depth=(<circuit_s*>_circuit).used_layer - layer_before_ixor,
 				t_count=range_counts_ixor.t_count,
+				is_composite=True,
+				op_params={"width": self_bits, "value": int(other)},
 			)
 			# Step 6.4: Record history with kind for inverse cancellation
 			_ixor_qm = tuple(self.qubits[self_offset + i] for i in range(self_bits)) + (int(other),)
@@ -4763,6 +4782,8 @@ cdef class qint(circuit):
 				controlled=bool(_controlled),
 				depth=(<circuit_s*>_circ).used_layer - layer_before_div,
 				t_count=range_counts_div.t_count,
+				is_composite=True,
+				op_params={"width": n, "value": int(divisor)},
 			)
 		elif type(divisor) == qint:
 			div_bits = (<qint>divisor).bits
@@ -4790,6 +4811,8 @@ cdef class qint(circuit):
 				controlled=bool(_controlled),
 				depth=(<circuit_s*>_circ).used_layer - layer_before_div,
 				t_count=range_counts_div.t_count,
+				is_composite=True,
+				op_params={"width": n, "divisor_width": div_bits},
 			)
 		else:
 			raise TypeError("Divisor must be int or qint")

@@ -200,6 +200,8 @@
 					controlled=bool(_controlled),
 					depth=(<circuit_s*>_circuit).used_layer - layer_before_and,
 					t_count=range_counts_and.t_count,
+					is_composite=True,
+					op_params={"width": result_bits},
 				)
 				_qm = tuple(qubit_array[i] for i in range(_total_and))
 				result.history.append(0, _qm)
@@ -642,6 +644,10 @@
 			controlled=bool(_controlled),
 			depth=(<circuit_s*>_circuit).used_layer - layer_before_xor,
 			t_count=range_counts_xor.t_count,
+			is_composite=True,
+			op_params={"result_width": result_bits, "self_width": self.bits,
+			           "other_width": (<qint>other).bits if type(other) != int else 0,
+			           "value": int(other) if type(other) == int else 0},
 		)
 
 		# Step 1.2: Record operation into result's per-variable history
@@ -755,6 +761,8 @@
 				controlled=bool(_controlled),
 				depth=(<circuit_s*>_circuit).used_layer - layer_before_ixor,
 				t_count=range_counts_ixor.t_count,
+				is_composite=True,
+				op_params={"width": self_bits, "value": int(other)},
 			)
 			# Step 6.4: Record history with kind for inverse cancellation
 			_ixor_qm = tuple(self.qubits[self_offset + i] for i in range(self_bits)) + (int(other),)

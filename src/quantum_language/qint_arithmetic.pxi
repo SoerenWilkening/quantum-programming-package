@@ -78,6 +78,8 @@
 					controlled=bool(_controlled),
 					depth=_circ.used_layer - layer_before,
 					t_count=range_counts.t_count,
+					is_composite=True,
+					op_params={"width": self_bits, "value": int(classical_value)},
 				)
 				return self
 
@@ -163,6 +165,9 @@
 				controlled=bool(_controlled),
 				depth=_circ.used_layer - layer_before,
 				t_count=range_counts.t_count,
+				is_composite=True,
+				op_params={"self_width": self_bits, "other_width": other_bits,
+				           "result_width": result_bits},
 			)
 			return self
 
@@ -771,6 +776,9 @@
 					controlled=bool(_controlled),
 					depth=_circ.used_layer - layer_before_mul,
 					t_count=range_counts_mul.t_count,
+					is_composite=True,
+					op_params={"result_width": result_bits, "self_width": self_bits,
+					           "value": int(classical_value)},
 				)
 				return ret
 
@@ -860,6 +868,9 @@
 				controlled=bool(_controlled),
 				depth=_circ.used_layer - layer_before_mul,
 				t_count=range_counts_mul.t_count,
+				is_composite=True,
+				op_params={"result_width": result_bits, "self_width": self_bits,
+				           "other_width": other_bits},
 			)
 			return ret
 
