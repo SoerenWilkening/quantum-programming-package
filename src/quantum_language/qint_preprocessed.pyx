@@ -2781,7 +2781,7 @@ cdef class qint(circuit):
 			raise TypeError("Operand must be qint or int")
 
 		# Compile-mode: record IR entry, skip gate emission
-		if _is_compile_mode():
+		if _is_compile_mode() and _circ.arithmetic_mode != 1:
 			result = qint(width=result_bits)
 			result.add_dependency(self)
 			if type(other) != int:
@@ -3049,7 +3049,7 @@ cdef class qint(circuit):
 			raise TypeError("Operand must be qint or int")
 
 		# Compile-mode: record IR entry, skip gate emission
-		if _is_compile_mode():
+		if _is_compile_mode() and _circ.arithmetic_mode != 1:
 			result = qint(width=result_bits)
 			result.add_dependency(self)
 			if type(other) != int:
@@ -3355,7 +3355,7 @@ cdef class qint(circuit):
 			raise TypeError("Operand must be qint or int")
 
 		# Compile-mode: record IR entry, skip gate emission
-		if _is_compile_mode():
+		if _is_compile_mode() and _circ.arithmetic_mode != 1:
 			result = qint(width=result_bits)
 			result.add_dependency(self)
 			if type(other) != int:
@@ -3551,7 +3551,7 @@ cdef class qint(circuit):
 			(<qint>other)._check_not_uncomputed()
 
 		# Compile-mode: record IR entry, skip gate emission
-		if _is_compile_mode():
+		if _is_compile_mode() and _circ.arithmetic_mode != 1:
 			regs = tuple(self.qubits[self_offset + i] for i in range(self_bits))
 			if type(other) == int:
 				_uc_seq = Q_not(1)
@@ -3746,7 +3746,7 @@ cdef class qint(circuit):
 		self._check_not_uncomputed()
 
 		# Compile-mode: record IR entry, skip gate emission
-		if _is_compile_mode():
+		if _is_compile_mode() and _circ.arithmetic_mode != 1:
 			self_offset = 64 - self.bits
 			regs = tuple(self.qubits[self_offset + i] for i in range(self.bits))
 			_uc_seq = Q_not(self.bits)
