@@ -3026,9 +3026,11 @@ cdef class qint(circuit):
 		cdef int result_bits
 		cdef int self_offset, result_offset, other_offset
 		cdef int classical_width
+		cdef int i
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _circuit_initialized = _get_circuit_initialized()
 		cdef bint _controlled = _get_controlled()
+		cdef size_t gc_before_or, gc_delta_or
 		cdef unsigned int layer_before_or
 		cdef gate_counts_t range_counts_or
 
@@ -3125,7 +3127,51 @@ cdef class qint(circuit):
 			# Classical-quantum OR
 			# CQ_or expects: [0:bits] = output, [bits:2*bits] = quantum operand
 			if _controlled:
-				raise NotImplementedError("Controlled classical-quantum OR not yet supported")
+				# Controlled CQ OR: decompose C-CQ_or into CCX/CX gates.
+				# For each bit i:
+				#   if classical_bit=1: CX(result[i], ctrl)  (controlled X)
+				#   if classical_bit=0: CCX(result[i], quantum[i], ctrl)  (controlled CNOT)
+				_control_bool = _get_control_bool()
+				_ctrl_qubit = (<qint>_control_bool).qubits[63]
+				from quantum_language._gates import emit_ccx as _emit_ccx
+				gc_before_or = (<circuit_s*>_circuit).gate_count
+				layer_before_or = (<circuit_s*>_circuit).used_layer
+				for i in range(result_bits):
+					_out_qubit = qubit_array[i]
+					if ((<int64_t>other) >> i) & 1:
+						# 1 OR x = 1, so controlled: CX(result, ctrl)
+						# Use cQ_not(1) sequence: layout [ctrl, target]
+						qubit_array[0] = _ctrl_qubit
+						qubit_array[1] = _out_qubit
+						arr = qubit_array
+						seq = cQ_not(1)
+						run_instruction(seq, &arr[0], False, _circuit)
+						# Restore qubit_array[0] for next iteration
+						qubit_array[0] = result.qubits[result_offset]
+					else:
+						# 0 OR x = x, so controlled: CCX(result, quantum, ctrl)
+						_q_qubit = qubit_array[result_bits + i]
+						_emit_ccx(_out_qubit, _q_qubit, _ctrl_qubit)
+				gc_delta_or = (<circuit_s*>_circuit).gate_count - gc_before_or
+				if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_or:
+					range_counts_or = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_or, (<circuit_s*>_circuit).used_layer)
+				else:
+					range_counts_or.t_count = 0
+				_total_or = 2 * result_bits
+				_record_operation(
+					"or",
+					tuple(qubit_array[i] for i in range(_total_or)),
+					gate_count=gc_delta_or,
+					controlled=bool(_controlled),
+					depth=(<circuit_s*>_circuit).used_layer - layer_before_or,
+					t_count=range_counts_or.t_count,
+					is_composite=True,
+					op_params={"width": result_bits, "value": int(other)},
+				)
+				_qm = tuple(qubit_array[i] for i in range(_total_or))
+				result.history.append(0, _qm)
+				self.history.add_blocker(result)
+				return result
 			else:
 				seq = CQ_or(result_bits, other)
 		else:
@@ -3138,7 +3184,59 @@ cdef class qint(circuit):
 				qubit_array[2*result_bits + (<qint>other).bits:3*result_bits] = _other_pad_qint.qubits[64 - _other_pad:64]
 
 			if _controlled:
-				raise NotImplementedError("Controlled quantum-quantum OR not yet supported")
+				# Controlled QQ OR: OR = A XOR B XOR (A AND B).
+				# Decompose each phase with control qubit:
+				#   Phase 1: CCX(result[i], A[i], ctrl)  (controlled CNOT)
+				#   Phase 2: CCX(result[i], B[i], ctrl)  (controlled CNOT)
+				#   Phase 3: C-CCX(result[i], A[i], B[i], ctrl)  (decomposed via ancilla)
+				_control_bool = _get_control_bool()
+				_ctrl_qubit = (<qint>_control_bool).qubits[63]
+				from quantum_language._gates import emit_ccx as _emit_ccx
+				from quantum_language.qbool import qbool as _qbool_cls
+				gc_before_or = (<circuit_s*>_circuit).gate_count
+				layer_before_or = (<circuit_s*>_circuit).used_layer
+				_or_ancilla = _qbool_cls()
+				_anc_qubit = _or_ancilla.qubits[63]
+				for i in range(result_bits):
+					_a_qubit = qubit_array[result_bits + i]
+					_b_qubit = qubit_array[2 * result_bits + i]
+					_out_qubit = qubit_array[i]
+					# Phase 1: controlled result ^= A
+					_emit_ccx(_out_qubit, _a_qubit, _ctrl_qubit)
+					# Phase 2: controlled result ^= B
+					_emit_ccx(_out_qubit, _b_qubit, _ctrl_qubit)
+					# Phase 3: controlled result ^= (A AND B)
+					# C-CCX decomposition:
+					_emit_ccx(_anc_qubit, _a_qubit, _ctrl_qubit)
+					_emit_ccx(_out_qubit, _anc_qubit, _b_qubit)
+					_emit_ccx(_anc_qubit, _a_qubit, _ctrl_qubit)
+				# Free ancilla
+				_or_ancilla._is_uncomputed = True
+				_or_ancilla.allocated_qubits = False
+				from ._core import _deallocate_qubits
+				_deallocate_qubits(_or_ancilla.allocated_start, 1)
+				gc_delta_or = (<circuit_s*>_circuit).gate_count - gc_before_or
+				if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_or:
+					range_counts_or = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_or, (<circuit_s*>_circuit).used_layer)
+				else:
+					range_counts_or.t_count = 0
+				_total_or = 3 * result_bits
+				_record_operation(
+					"or",
+					tuple(qubit_array[i] for i in range(_total_or)),
+					gate_count=gc_delta_or,
+					controlled=bool(_controlled),
+					depth=(<circuit_s*>_circuit).used_layer - layer_before_or,
+					t_count=range_counts_or.t_count,
+					is_composite=True,
+					op_params={"width": result_bits},
+				)
+				_qm = tuple(qubit_array[i] for i in range(_total_or))
+				result.history.append(0, _qm)
+				self.history.add_blocker(result)
+				if type(other) != int and isinstance(other, qint):
+					(<qint>other).history.add_blocker(result)
+				return result
 			else:
 				seq = Q_or(result_bits)
 
@@ -3315,40 +3413,62 @@ cdef class qint(circuit):
 		# First, copy self to result by XORing self into result (result starts at 0)
 		# CYT-03: Replace slice with explicit loop for memory view optimization
 		result_qubits = result.qubits
-		for i in range(self.bits):
-			qubit_array[i] = result_qubits[result_offset + i]
-		for i in range(self.bits):
-			qubit_array[self.bits + i] = self.qubits[self_offset + i]
-		arr = qubit_array
-		seq = Q_xor(self.bits)  # XOR self into result (copying self to result)
-		run_instruction(seq, &arr[0], False, _circuit)
 
-		# Now XOR other into result
-		if type(other) == int:
-			if _controlled:
-				raise NotImplementedError("Controlled classical-quantum XOR not yet supported")
+		if _controlled:
+			# Controlled XOR: use CCX (Toffoli) gates instead of CNOT.
+			# Step 1: controlled copy self into result
+			# Step 2: controlled XOR other into result
+			_control_bool = _get_control_bool()
+			_ctrl_qubit = (<qint>_control_bool).qubits[63]
+			from quantum_language._gates import emit_ccx as _emit_ccx
+			# Step 1: controlled copy self to result
+			for i in range(self.bits):
+				_emit_ccx(result_qubits[result_offset + i], self.qubits[self_offset + i], _ctrl_qubit)
+			# Step 2: controlled XOR other into result
+			if type(other) == int:
+				# CQ: for each set bit, controlled X = CX(result, ctrl)
+				for i in range(result_bits):
+					if ((<int64_t>other) >> i) & 1:
+						qubit_array[0] = _ctrl_qubit
+						qubit_array[1] = result_qubits[64 - result_bits + i]
+						arr = qubit_array
+						seq = cQ_not(1)
+						run_instruction(seq, &arr[0], False, _circuit)
 			else:
+				# QQ: for each bit, CCX(result, other, ctrl)
+				other_offset = 64 - (<qint>other).bits
+				other_qubits = (<qint>other).qubits
+				for i in range((<qint>other).bits):
+					_emit_ccx(result_qubits[result_offset + i], other_qubits[other_offset + i], _ctrl_qubit)
+		else:
+			for i in range(self.bits):
+				qubit_array[i] = result_qubits[result_offset + i]
+			for i in range(self.bits):
+				qubit_array[self.bits + i] = self.qubits[self_offset + i]
+			arr = qubit_array
+			seq = Q_xor(self.bits)  # XOR self into result (copying self to result)
+			run_instruction(seq, &arr[0], False, _circuit)
+
+			# Now XOR other into result
+			if type(other) == int:
 				for i in range(result_bits):
 					if (other >> i) & 1:
 						qubit_array[0] = result_qubits[64 - result_bits + i]
 						arr = qubit_array
 						seq = Q_not(1)
 						run_instruction(seq, &arr[0], False, _circuit)
-		else:
-			other_offset = 64 - (<qint>other).bits
-			for i in range((<qint>other).bits):
-				qubit_array[i] = result_qubits[result_offset + i]
-			other_qubits = (<qint>other).qubits
-			for i in range((<qint>other).bits):
-				qubit_array[(<qint>other).bits + i] = other_qubits[other_offset + i]
-
-			if _controlled:
-				raise NotImplementedError("Controlled quantum-quantum XOR not yet supported")
 			else:
+				other_offset = 64 - (<qint>other).bits
+				for i in range((<qint>other).bits):
+					qubit_array[i] = result_qubits[result_offset + i]
+				other_qubits = (<qint>other).qubits
+				for i in range((<qint>other).bits):
+					qubit_array[(<qint>other).bits + i] = other_qubits[other_offset + i]
+
 				seq = Q_xor((<qint>other).bits)
 
-			arr = qubit_array
-			run_instruction(seq, &arr[0], False, _circuit)
+				arr = qubit_array
+				run_instruction(seq, &arr[0], False, _circuit)
 
 		# Record XOR operation on the DAG
 		gc_delta_xor = (<circuit_s*>_circuit).gate_count - gc_before_xor
@@ -3423,6 +3543,9 @@ cdef class qint(circuit):
 		cdef size_t gc_before_ixor, gc_delta_ixor
 		cdef unsigned int layer_before_ixor
 		cdef gate_counts_t range_counts_ixor
+		cdef int _c_other_bits
+		cdef int _c_other_offset
+		cdef unsigned int[:] _c_other_qubits
 
 		# Phase 18: Check for use-after-uncompute
 		self._check_not_uncomputed()
@@ -3460,18 +3583,27 @@ cdef class qint(circuit):
 			return self
 
 		if type(other) == int:
-			if _controlled:
-				raise NotImplementedError("Controlled classical-quantum XOR not yet supported")
-
-			# CQ path: for each set bit in classical value, apply Q_not(1)
+			# CQ path: for each set bit in classical value, apply X (or CX if controlled)
 			gc_before_ixor = (<circuit_s*>_circuit).gate_count
 			layer_before_ixor = (<circuit_s*>_circuit).used_layer
-			for i in range(self_bits):
-				if ((<int64_t>other) >> i) & 1:
-					qubit_array[0] = self.qubits[self_offset + i]
-					arr = qubit_array
-					seq = Q_not(1)
-					run_instruction(seq, &arr[0], False, _circuit)
+			if _controlled:
+				# Controlled CQ IXOR: for each set bit, apply CX(target, ctrl)
+				_control_bool = _get_control_bool()
+				_ctrl_qubit = (<qint>_control_bool).qubits[63]
+				for i in range(self_bits):
+					if ((<int64_t>other) >> i) & 1:
+						qubit_array[0] = _ctrl_qubit
+						qubit_array[1] = self.qubits[self_offset + i]
+						arr = qubit_array
+						seq = cQ_not(1)
+						run_instruction(seq, &arr[0], False, _circuit)
+			else:
+				for i in range(self_bits):
+					if ((<int64_t>other) >> i) & 1:
+						qubit_array[0] = self.qubits[self_offset + i]
+						arr = qubit_array
+						seq = Q_not(1)
+						run_instruction(seq, &arr[0], False, _circuit)
 			gc_delta_ixor = (<circuit_s*>_circuit).gate_count - gc_before_ixor
 			if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_ixor:
 				range_counts_ixor = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_ixor, (<circuit_s*>_circuit).used_layer)
@@ -3496,7 +3628,46 @@ cdef class qint(circuit):
 			raise TypeError("Operand must be qint or int")
 
 		if _controlled:
-			raise NotImplementedError("Controlled quantum-quantum XOR not yet supported")
+			# Controlled QQ IXOR: use CCX (Toffoli) gates instead of CNOT.
+			# Each CNOT(target, source) becomes CCX(target, source, ctrl).
+			_control_bool = _get_control_bool()
+			_ctrl_qubit = (<qint>_control_bool).qubits[63]
+			from quantum_language._gates import emit_ccx as _emit_ccx
+
+			# Step 6.2: Blocker insertion — source operand references dest
+			if other is not self:
+				(<qint>other).history.add_blocker(self)
+
+			_c_other_bits = (<qint>other).bits
+			_c_other_offset = 64 - _c_other_bits
+			_c_other_qubits = (<qint>other).qubits
+			xor_bits = self_bits if self_bits < _c_other_bits else _c_other_bits
+
+			gc_before_ixor = (<circuit_s*>_circuit).gate_count
+			layer_before_ixor = (<circuit_s*>_circuit).used_layer
+			for i in range(xor_bits):
+				_emit_ccx(self.qubits[self_offset + i], _c_other_qubits[_c_other_offset + i], _ctrl_qubit)
+			gc_delta_ixor = (<circuit_s*>_circuit).gate_count - gc_before_ixor
+			if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_ixor:
+				range_counts_ixor = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_ixor, (<circuit_s*>_circuit).used_layer)
+			else:
+				range_counts_ixor.t_count = 0
+			_record_operation(
+				"ixor_qq",
+				tuple(self.qubits[self_offset + i] for i in range(xor_bits))
+				+ tuple(_c_other_qubits[_c_other_offset + i] for i in range(xor_bits)),
+				gate_count=gc_delta_ixor,
+				controlled=bool(_controlled),
+				depth=(<circuit_s*>_circuit).used_layer - layer_before_ixor,
+				t_count=range_counts_ixor.t_count,
+				is_composite=True,
+				op_params={"width": xor_bits},
+			)
+			# Step 6.4: Record history with kind for inverse cancellation
+			_ixor_qm = tuple(self.qubits[self_offset + i] for i in range(xor_bits)) \
+				+ tuple(_c_other_qubits[_c_other_offset + i] for i in range(xor_bits))
+			self.history.append(0, _ixor_qm, kind='xor')
+			return self
 
 		# Step 6.2: Blocker insertion — source operand references dest
 		if other is not self:
