@@ -4,10 +4,10 @@ Covers issue Quantum_Assembly-5c2: DSL operators (+=, -=, <, &, etc.)
 record InstructionRecord entries when compile-mode is active, without
 calling run_instruction (no gates emitted to circuit).
 
-Note: Arithmetic IR recording for add/sub/mul only happens in QFT mode
-(fault_tolerant=False). In Toffoli mode (default), arithmetic ops bypass IR
-recording and emit gates directly through the Toffoli dispatch path.
-Bitwise (AND, OR, NOT) and comparison (EQ) operations record IR in all modes.
+Note: IR recording for arithmetic and bitwise ops only happens in QFT mode
+(fault_tolerant=False). In Toffoli mode (default), both arithmetic and bitwise
+ops bypass IR recording and emit gates directly through the Toffoli dispatch
+path. Comparison (EQ) operations record IR in all modes.
 """
 
 import quantum_language as ql
@@ -271,8 +271,9 @@ def test_gt_records_ir():
 
 
 def test_and_qq_records_ir():
-    """(a & b) in compile mode records an 'and_qq' IR entry."""
+    """(a & b) in QFT compile mode records an 'and_qq' IR entry."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
     a = ql.qint(0b1101, width=4)
     b = ql.qint(0b1011, width=4)
 
@@ -291,8 +292,9 @@ def test_and_qq_records_ir():
 
 
 def test_and_cq_records_ir():
-    """(a & 3) in compile mode records an 'and_cq' IR entry with both seqs."""
+    """(a & 3) in QFT compile mode records an 'and_cq' IR entry with both seqs."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
     a = ql.qint(0b1101, width=4)
 
     @ql.compile
@@ -310,8 +312,9 @@ def test_and_cq_records_ir():
 
 
 def test_or_qq_records_ir():
-    """(a | b) in compile mode records an 'or_qq' IR entry."""
+    """(a | b) in QFT compile mode records an 'or_qq' IR entry."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
     a = ql.qint(0b1100, width=4)
     b = ql.qint(0b0011, width=4)
 
@@ -330,8 +333,9 @@ def test_or_qq_records_ir():
 
 
 def test_or_cq_records_ir():
-    """(a | 3) in compile mode records an 'or_cq' IR entry with both seqs."""
+    """(a | 3) in QFT compile mode records an 'or_cq' IR entry with both seqs."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
     a = ql.qint(0b1100, width=4)
 
     @ql.compile
@@ -349,8 +353,9 @@ def test_or_cq_records_ir():
 
 
 def test_xor_records_ir():
-    """(a ^ b) in compile mode records a 'xor' IR entry."""
+    """(a ^ b) in QFT compile mode records a 'xor' IR entry."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
     a = ql.qint(0b1100, width=4)
     b = ql.qint(0b0110, width=4)
 
@@ -367,8 +372,9 @@ def test_xor_records_ir():
 
 
 def test_ixor_int_records_ir():
-    """a ^= 5 in compile mode records an 'ixor_cq' IR entry."""
+    """a ^= 5 in QFT compile mode records an 'ixor_cq' IR entry."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
     a = ql.qint(0, width=4)
 
     @ql.compile
@@ -384,8 +390,9 @@ def test_ixor_int_records_ir():
 
 
 def test_ixor_qq_records_ir():
-    """a ^= b in compile mode records an 'ixor_qq' IR entry."""
+    """a ^= b in QFT compile mode records an 'ixor_qq' IR entry."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
     a = ql.qint(0, width=4)
     b = ql.qint(3, width=4)
 
@@ -402,8 +409,9 @@ def test_ixor_qq_records_ir():
 
 
 def test_not_records_ir():
-    """~a in compile mode records a 'not' IR entry."""
+    """~a in QFT compile mode records a 'not' IR entry."""
     ql.circuit()
+    ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
     a = ql.qint(0b1010, width=4)
 
     @ql.compile
@@ -459,3 +467,160 @@ def test_each_ir_entry_has_valid_sequence():
         assert rec.uncontrolled_seq != 0 or rec.controlled_seq != 0, (
             f"IR entry '{rec.name}' has no valid sequence_t"
         )
+
+
+# ---------------------------------------------------------------------------
+# Toffoli-mode compile: bitwise ops emit gates, not silently dropped
+# (regression tests for Quantum_Assembly-cak)
+# ---------------------------------------------------------------------------
+
+
+def test_not_toffoli_compile_emits_gates():
+    """~a in Toffoli compile mode emits gates (not silently dropped)."""
+    ql.circuit()
+    # Default is fault_tolerant=True (Toffoli mode)
+    a = ql.qint(5, width=4)
+
+    @ql.compile
+    def dummy(x):
+        return x
+
+    block = _make_block()
+    gc_before = ql.get_gate_count()
+    with dummy.compile_mode(block):
+        _ = ~a  # noqa: F841
+    gc_after = ql.get_gate_count()
+
+    # Gates must be emitted (not zero = not silently dropped)
+    assert gc_after > gc_before, "NOT in Toffoli compile mode emitted 0 gates (silently dropped)"
+    # No IR entries recorded in Toffoli mode
+    not_entries = [r for r in block._instruction_ir if r.name == "not"]
+    assert len(not_entries) == 0
+
+
+def test_ixor_int_toffoli_compile_emits_gates():
+    """a ^= 3 in Toffoli compile mode emits gates (not silently dropped)."""
+    ql.circuit()
+    a = ql.qint(0, width=4)
+
+    @ql.compile
+    def dummy(x):
+        return x
+
+    block = _make_block()
+    gc_before = ql.get_gate_count()
+    with dummy.compile_mode(block):
+        a ^= 3
+    gc_after = ql.get_gate_count()
+
+    assert gc_after > gc_before, (
+        "IXOR(int) in Toffoli compile mode emitted 0 gates (silently dropped)"
+    )
+    ixor_entries = [r for r in block._instruction_ir if r.name == "ixor_cq"]
+    assert len(ixor_entries) == 0
+
+
+def test_ixor_qq_toffoli_compile_emits_gates():
+    """a ^= b in Toffoli compile mode emits gates (not silently dropped)."""
+    ql.circuit()
+    a = ql.qint(0, width=4)
+    b = ql.qint(3, width=4)
+
+    @ql.compile
+    def dummy(x):
+        return x
+
+    block = _make_block()
+    gc_before = ql.get_gate_count()
+    with dummy.compile_mode(block):
+        a ^= b
+    gc_after = ql.get_gate_count()
+
+    assert gc_after > gc_before, (
+        "IXOR(qq) in Toffoli compile mode emitted 0 gates (silently dropped)"
+    )
+
+
+def test_not_toffoli_compile_matches_uncompiled():
+    """~a gate count in Toffoli compile mode matches uncompiled execution."""
+    # Uncompiled baseline
+    ql.circuit()
+    a = ql.qint(5, width=4)
+    gc_before = ql.get_gate_count()
+    _ = ~a  # noqa: F841
+    gc_uncompiled = ql.get_gate_count() - gc_before
+
+    # Compiled (Toffoli mode)
+    ql.circuit()
+    a2 = ql.qint(5, width=4)
+
+    @ql.compile
+    def dummy(x):
+        return x
+
+    block = _make_block()
+    gc_before = ql.get_gate_count()
+    with dummy.compile_mode(block):
+        _ = ~a2  # noqa: F841
+    gc_compiled = ql.get_gate_count() - gc_before
+
+    assert gc_compiled == gc_uncompiled, (
+        f"Compiled gate count ({gc_compiled}) != uncompiled ({gc_uncompiled})"
+    )
+
+
+def test_or_toffoli_compile_emits_gates():
+    """(a | b) in Toffoli compile mode emits gates (not silently dropped)."""
+    ql.circuit()
+    a = ql.qint(3, width=4)
+    b = ql.qint(5, width=4)
+
+    @ql.compile
+    def dummy(x):
+        return x
+
+    block = _make_block()
+    gc_before = ql.get_gate_count()
+    with dummy.compile_mode(block):
+        _ = a | b
+    gc_after = ql.get_gate_count()
+
+    assert gc_after > gc_before, "OR in Toffoli compile mode emitted 0 gates (silently dropped)"
+
+
+def test_and_toffoli_compile_emits_gates():
+    """(a & b) in Toffoli compile mode emits gates (not silently dropped)."""
+    ql.circuit()
+    a = ql.qint(3, width=4)
+    b = ql.qint(5, width=4)
+
+    @ql.compile
+    def dummy(x):
+        return x
+
+    block = _make_block()
+    gc_before = ql.get_gate_count()
+    with dummy.compile_mode(block):
+        _ = a & b
+    gc_after = ql.get_gate_count()
+
+    assert gc_after > gc_before, "AND in Toffoli compile mode emitted 0 gates (silently dropped)"
+
+
+def test_xor_toffoli_compile_emits_gates():
+    """(a ^ b) in Toffoli compile mode emits gates (not silently dropped)."""
+    ql.circuit()
+    a = ql.qint(3, width=4)
+    b = ql.qint(5, width=4)
+
+    @ql.compile
+    def dummy(x):
+        return x
+
+    block = _make_block()
+    gc_before = ql.get_gate_count()
+    with dummy.compile_mode(block):
+        _ = a ^ b
+    gc_after = ql.get_gate_count()
+
+    assert gc_after > gc_before, "XOR in Toffoli compile mode emitted 0 gates (silently dropped)"

@@ -4,6 +4,10 @@ Covers issue Quantum_Assembly-bl0.4: AND and OR compile-mode IR entries
 now pass controlled_seq (cCQ_and, cQ_and, cCQ_or, cQ_or) to
 _record_instruction.
 
+Note: IR recording for bitwise ops only happens in QFT mode
+(fault_tolerant=False). In Toffoli mode (default), bitwise ops bypass IR
+recording and emit gates directly.
+
 Acceptance criteria:
 - AND IR entry has non-zero controlled_seq
 - OR IR entry has non-zero controlled_seq
@@ -41,6 +45,7 @@ class TestAndOrIRControlledSeq:
     def test_and_qq_has_controlled_seq(self):
         """and_qq IR entry has non-zero controlled_seq."""
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
         a = ql.qint(3, width=3)
         b = ql.qint(5, width=3)
 
@@ -60,6 +65,7 @@ class TestAndOrIRControlledSeq:
     def test_and_cq_has_controlled_seq(self):
         """and_cq IR entry has non-zero controlled_seq."""
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
         a = ql.qint(3, width=3)
 
         @ql.compile
@@ -78,6 +84,7 @@ class TestAndOrIRControlledSeq:
     def test_or_qq_has_controlled_seq(self):
         """or_qq IR entry has non-zero controlled_seq."""
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
         a = ql.qint(3, width=3)
         b = ql.qint(5, width=3)
 
@@ -97,6 +104,7 @@ class TestAndOrIRControlledSeq:
     def test_or_cq_has_controlled_seq(self):
         """or_cq IR entry has non-zero controlled_seq."""
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
         a = ql.qint(3, width=3)
 
         @ql.compile
@@ -115,6 +123,7 @@ class TestAndOrIRControlledSeq:
     def test_and_controlled_seq_differs_from_uncontrolled(self):
         """AND controlled_seq pointer differs from uncontrolled_seq."""
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
         a = ql.qint(3, width=3)
         b = ql.qint(5, width=3)
 
@@ -134,6 +143,7 @@ class TestAndOrIRControlledSeq:
     def test_or_controlled_seq_differs_from_uncontrolled(self):
         """OR controlled_seq pointer differs from uncontrolled_seq."""
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
         a = ql.qint(3, width=3)
         b = ql.qint(5, width=3)
 
@@ -164,6 +174,7 @@ class TestDagAndOrGateCounts:
         from quantum_language.call_graph import _resolve_gate_count
 
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
         a = ql.qint(3, width=3)
         b = ql.qint(5, width=3)
 
@@ -186,6 +197,7 @@ class TestDagAndOrGateCounts:
         from quantum_language.call_graph import _resolve_gate_count
 
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
         a = ql.qint(3, width=3)
         b = ql.qint(5, width=3)
 
@@ -208,6 +220,7 @@ class TestDagAndOrGateCounts:
         from quantum_language.call_graph import _resolve_gate_count
 
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
         a = ql.qint(3, width=3)
 
         @ql.compile
@@ -229,6 +242,7 @@ class TestDagAndOrGateCounts:
         from quantum_language.call_graph import _resolve_gate_count
 
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
         a = ql.qint(3, width=3)
 
         @ql.compile
@@ -259,6 +273,7 @@ class TestZeroValueEdgeCases:
         from quantum_language.call_graph import _resolve_gate_count
 
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
         a = ql.qint(3, width=3)
 
         @ql.compile
@@ -281,6 +296,7 @@ class TestZeroValueEdgeCases:
         from quantum_language.call_graph import _resolve_gate_count
 
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for bitwise IR recording
         a = ql.qint(3, width=3)
 
         @ql.compile
