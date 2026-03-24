@@ -2760,10 +2760,7 @@ cdef class qint(circuit):
 			raise TypeError("Operand must be qint or int")
 
 		# Compile-mode: record IR entry, skip gate emission
-		# In Toffoli mode for quantum-quantum AND, bypass IR since the
-		# direct path supports controlled (CCX decomposition).
-		# Classical-quantum AND lacks controlled support, so keep IR.
-		if _is_compile_mode() and ((<circuit_s*>_circuit).arithmetic_mode != 1 or type(other) == int):
+		if _is_compile_mode():
 			result = qint(width=result_bits)
 			result.add_dependency(self)
 			if type(other) != int:
@@ -3551,8 +3548,7 @@ cdef class qint(circuit):
 		self._check_not_uncomputed()
 
 		# Compile-mode: record IR entry, skip gate emission
-		# Only for QFT mode — Toffoli mode falls through to direct dispatch
-		if _is_compile_mode() and (<circuit_s*>_circuit).arithmetic_mode != 1:
+		if _is_compile_mode():
 			self_offset = 64 - self.bits
 			regs = tuple(self.qubits[self_offset + i] for i in range(self.bits))
 			_uc_seq = Q_not(self.bits)
@@ -3869,8 +3865,7 @@ cdef class qint(circuit):
 				return qbool(False)
 
 			# Compile-mode: record IR entry, skip gate emission
-			# Only for QFT mode — Toffoli mode falls through to direct dispatch
-			if _is_compile_mode() and (<circuit_s*>_circuit).arithmetic_mode != 1:
+			if _is_compile_mode():
 				result = qbool()
 				_uc_seq = CQ_equal_width(self.bits, other)
 				_cc_seq = cCQ_equal_width(self.bits, other)

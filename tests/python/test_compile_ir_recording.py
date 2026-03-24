@@ -4,9 +4,10 @@ Covers issue Quantum_Assembly-5c2: DSL operators (+=, -=, <, &, etc.)
 record InstructionRecord entries when compile-mode is active, without
 calling run_instruction (no gates emitted to circuit).
 
-Note: Arithmetic IR recording only happens in QFT mode (fault_tolerant=False).
-In Toffoli mode (default), arithmetic ops bypass IR recording and emit gates
-directly through the Toffoli dispatch path, producing correct gate types.
+Note: Arithmetic IR recording for add/sub/mul only happens in QFT mode
+(fault_tolerant=False). In Toffoli mode (default), arithmetic ops bypass IR
+recording and emit gates directly through the Toffoli dispatch path.
+Bitwise (AND, OR, NOT) and comparison (EQ) operations record IR in all modes.
 """
 
 import quantum_language as ql

@@ -163,10 +163,14 @@ class TestSequenceCountMatchesExecution:
         assert gc_nosim == gc_sim
 
     def test_bitwise_and_both_positive(self):
-        """AND operation: both modes produce positive gate counts."""
-        # Note: AND has a pre-existing discrepancy between simulate and
-        # non-simulate modes due to how Q_and sequences count multi-qubit
-        # gates vs their decomposed forms. Both should be positive.
+        """AND operation: both modes produce positive gate counts.
+
+        Known discrepancy: non-simulate uses total_gate_count from Q_and
+        sequence metadata which counts multi-qubit gates as single gates,
+        while simulate mode decomposes them, producing a 2x factor
+        (e.g., 3 vs 6 for 3-bit AND). This is a pre-existing difference
+        in how gates_per_layer counts vs simulation-time decomposition.
+        """
         ql.circuit()
         ql.option("fault_tolerant", True)
         ql.option("simulate", False)
@@ -182,8 +186,64 @@ class TestSequenceCountMatchesExecution:
         _ = a & b
         gc_sim = ql.get_gate_count()
 
-        assert gc_nosim > 0
-        assert gc_sim > 0
+        assert gc_nosim > 0, f"AND non-simulate gate count should be > 0, got {gc_nosim}"
+        assert gc_sim > 0, f"AND simulate gate count should be > 0, got {gc_sim}"
+        # Document the known discrepancy: simulate decomposes multi-qubit gates
+        assert gc_sim >= gc_nosim, (
+            f"AND simulate count ({gc_sim}) should be >= non-simulate ({gc_nosim})"
+        )
+
+    def test_bitwise_or_both_positive(self):
+        """OR operation: both modes produce positive gate counts.
+
+        Same discrepancy as AND: non-simulate total_gate_count counts
+        multi-qubit gates as single gates, simulate decomposes them.
+        """
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        ql.option("simulate", False)
+        a = ql.qint(0, width=3)
+        b = ql.qint(0, width=3)
+        _ = a | b
+        gc_nosim = ql.get_gate_count()
+
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        a = ql.qint(0, width=3)
+        b = ql.qint(0, width=3)
+        _ = a | b
+        gc_sim = ql.get_gate_count()
+
+        assert gc_nosim > 0, f"OR non-simulate gate count should be > 0, got {gc_nosim}"
+        assert gc_sim > 0, f"OR simulate gate count should be > 0, got {gc_sim}"
+        # Document the known discrepancy: simulate decomposes multi-qubit gates
+        assert gc_sim >= gc_nosim, (
+            f"OR simulate count ({gc_sim}) should be >= non-simulate ({gc_nosim})"
+        )
+
+    def test_comparison_eq_both_positive(self):
+        """EQ comparison: both modes produce positive gate counts.
+
+        Known discrepancy: non-simulate total_gate_count from CQ_equal_width
+        may overcount relative to simulate mode (e.g., 14 vs 10 for 4-bit EQ)
+        because the sequence metadata includes ancilla management gates that
+        simulation optimizes away.
+        """
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        ql.option("simulate", False)
+        a = ql.qint(0, width=4)
+        _ = a == 3
+        gc_nosim = ql.get_gate_count()
+
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        a = ql.qint(0, width=4)
+        _ = a == 3
+        gc_sim = ql.get_gate_count()
+
+        assert gc_nosim > 0, f"EQ non-simulate gate count should be > 0, got {gc_nosim}"
+        assert gc_sim > 0, f"EQ simulate gate count should be > 0, got {gc_sim}"
 
     def test_not_count_matches_simulate(self):
         """NOT operation: non-simulate count matches simulate count."""

@@ -109,8 +109,7 @@
 				return qbool(False)
 
 			# Compile-mode: record IR entry, skip gate emission
-			# Only for QFT mode — Toffoli mode falls through to direct dispatch
-			if _is_compile_mode() and (<circuit_s*>_circuit).arithmetic_mode != 1:
+			if _is_compile_mode():
 				result = qbool()
 				_uc_seq = CQ_equal_width(self.bits, other)
 				_cc_seq = cCQ_equal_width(self.bits, other)
