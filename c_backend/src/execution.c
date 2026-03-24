@@ -29,10 +29,17 @@ void run_instruction(sequence_t *res, const qubit_t qubit_array[], int invert, c
     if (res == NULL)
         return;
 
-    // Fast path: count gates without building the circuit
+    // Fast path: count gates without building the circuit.
+    // Uses pre-computed total_gate_count (set at sequence creation) for O(1)
+    // instead of iterating layers. Falls back to per-layer sum if
+    // total_gate_count was not computed (legacy sequences).
     if (!circ->simulate) {
-        for (int layer_index = 0; layer_index < res->used_layer; ++layer_index) {
-            circ->gate_count += res->gates_per_layer[layer_index];
+        if (res->total_gate_count > 0) {
+            circ->gate_count += res->total_gate_count;
+        } else {
+            for (int layer_index = 0; layer_index < res->used_layer; ++layer_index) {
+                circ->gate_count += res->gates_per_layer[layer_index];
+            }
         }
         return;
     }

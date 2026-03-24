@@ -44,7 +44,6 @@
 		cdef bint _controlled = _get_controlled()
 		cdef object _control_bool = _get_control_bool()
 		cdef qubit_allocator_t *alloc
-		cdef size_t gc_before_eq, gc_delta_eq
 		cdef unsigned int layer_before_eq
 		cdef gate_counts_t range_counts_eq
 
@@ -110,7 +109,8 @@
 				return qbool(False)
 
 			# Compile-mode: record IR entry, skip gate emission
-			if _is_compile_mode():
+			# Only for QFT mode — Toffoli mode falls through to direct dispatch
+			if _is_compile_mode() and (<circuit_s*>_circuit).arithmetic_mode != 1:
 				result = qbool()
 				_uc_seq = CQ_equal_width(self.bits, other)
 				_cc_seq = cCQ_equal_width(self.bits, other)
@@ -183,10 +183,8 @@
 							qubit_array[start + i] = and_anc_start + i
 
 			arr = qubit_array
-			gc_before_eq = (<circuit_s*>_circuit).gate_count
 			layer_before_eq = (<circuit_s*>_circuit).used_layer
 			run_instruction(seq, &arr[0], False, _circuit)
-			gc_delta_eq = (<circuit_s*>_circuit).gate_count - gc_before_eq
 			if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_eq:
 				range_counts_eq = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_eq, (<circuit_s*>_circuit).used_layer)
 			else:
@@ -195,7 +193,7 @@
 				"eq_cq",
 				tuple(qubit_array[i] for i in range(start)),
 				sequence_ptr=<unsigned long long>seq,
-				gate_count=gc_delta_eq,
+				gate_count=seq.total_gate_count,
 				controlled=bool(_controlled),
 				depth=(<circuit_s*>_circuit).used_layer - layer_before_eq,
 				t_count=range_counts_eq.t_count,

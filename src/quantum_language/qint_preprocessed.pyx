@@ -2760,7 +2760,10 @@ cdef class qint(circuit):
 			raise TypeError("Operand must be qint or int")
 
 		# Compile-mode: record IR entry, skip gate emission
-		if _is_compile_mode():
+		# In Toffoli mode for quantum-quantum AND, bypass IR since the
+		# direct path supports controlled (CCX decomposition).
+		# Classical-quantum AND lacks controlled support, so keep IR.
+		if _is_compile_mode() and ((<circuit_s*>_circuit).arithmetic_mode != 1 or type(other) == int):
 			result = qint(width=result_bits)
 			result.add_dependency(self)
 			if type(other) != int:
@@ -2914,10 +2917,8 @@ cdef class qint(circuit):
 				seq = Q_and(result_bits)
 
 		arr = qubit_array
-		gc_before_and = (<circuit_s*>_circuit).gate_count
 		layer_before_and = (<circuit_s*>_circuit).used_layer
 		run_instruction(seq, &arr[0], False, _circuit)
-		gc_delta_and = (<circuit_s*>_circuit).gate_count - gc_before_and
 		if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_and:
 			range_counts_and = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_and, (<circuit_s*>_circuit).used_layer)
 		else:
@@ -2926,7 +2927,7 @@ cdef class qint(circuit):
 			"and",
 			tuple(qubit_array[i] for i in range(3 * result_bits if type(other) != int else 2 * result_bits)),
 			sequence_ptr=<unsigned long long>seq,
-			gate_count=gc_delta_and,
+			gate_count=seq.total_gate_count,
 			controlled=bool(_controlled),
 			depth=(<circuit_s*>_circuit).used_layer - layer_before_and,
 			t_count=range_counts_and.t_count,
@@ -3008,7 +3009,6 @@ cdef class qint(circuit):
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _circuit_initialized = _get_circuit_initialized()
 		cdef bint _controlled = _get_controlled()
-		cdef size_t gc_before_or, gc_delta_or
 		cdef unsigned int layer_before_or
 		cdef gate_counts_t range_counts_or
 
@@ -3123,10 +3123,8 @@ cdef class qint(circuit):
 				seq = Q_or(result_bits)
 
 		arr = qubit_array
-		gc_before_or = (<circuit_s*>_circuit).gate_count
 		layer_before_or = (<circuit_s*>_circuit).used_layer
 		run_instruction(seq, &arr[0], False, _circuit)
-		gc_delta_or = (<circuit_s*>_circuit).gate_count - gc_before_or
 		if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_or:
 			range_counts_or = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_or, (<circuit_s*>_circuit).used_layer)
 		else:
@@ -3135,7 +3133,7 @@ cdef class qint(circuit):
 			"or",
 			tuple(qubit_array[i] for i in range(3 * result_bits if type(other) != int else 2 * result_bits)),
 			sequence_ptr=<unsigned long long>seq,
-			gate_count=gc_delta_or,
+			gate_count=seq.total_gate_count,
 			controlled=bool(_controlled),
 			depth=(<circuit_s*>_circuit).used_layer - layer_before_or,
 			t_count=range_counts_or.t_count,
@@ -3495,10 +3493,8 @@ cdef class qint(circuit):
 
 		arr = qubit_array
 		seq = Q_xor(xor_bits)
-		gc_before_ixor = (<circuit_s*>_circuit).gate_count
 		layer_before_ixor = (<circuit_s*>_circuit).used_layer
 		run_instruction(seq, &arr[0], False, _circuit)
-		gc_delta_ixor = (<circuit_s*>_circuit).gate_count - gc_before_ixor
 		if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_ixor:
 			range_counts_ixor = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_ixor, (<circuit_s*>_circuit).used_layer)
 		else:
@@ -3507,7 +3503,7 @@ cdef class qint(circuit):
 			"ixor_qq",
 			tuple(qubit_array[i] for i in range(2 * xor_bits)),
 			sequence_ptr=<unsigned long long>seq,
-			gate_count=gc_delta_ixor,
+			gate_count=seq.total_gate_count,
 			controlled=bool(_controlled),
 			depth=(<circuit_s*>_circuit).used_layer - layer_before_ixor,
 			t_count=range_counts_ixor.t_count,
@@ -3548,7 +3544,6 @@ cdef class qint(circuit):
 		cdef circuit_t *_circuit = <circuit_t*><unsigned long long>_get_circuit()
 		cdef bint _controlled = _get_controlled()
 		cdef object _control_bool = _get_control_bool()
-		cdef size_t gc_before_not, gc_delta_not
 		cdef unsigned int layer_before_not
 		cdef gate_counts_t range_counts_not
 
@@ -3556,7 +3551,8 @@ cdef class qint(circuit):
 		self._check_not_uncomputed()
 
 		# Compile-mode: record IR entry, skip gate emission
-		if _is_compile_mode():
+		# Only for QFT mode — Toffoli mode falls through to direct dispatch
+		if _is_compile_mode() and (<circuit_s*>_circuit).arithmetic_mode != 1:
 			self_offset = 64 - self.bits
 			regs = tuple(self.qubits[self_offset + i] for i in range(self.bits))
 			_uc_seq = Q_not(self.bits)
@@ -3586,10 +3582,8 @@ cdef class qint(circuit):
 			seq = Q_not(self.bits)
 
 		arr = qubit_array
-		gc_before_not = (<circuit_s*>_circuit).gate_count
 		layer_before_not = (<circuit_s*>_circuit).used_layer
 		run_instruction(seq, &arr[0], False, _circuit)
-		gc_delta_not = (<circuit_s*>_circuit).gate_count - gc_before_not
 		if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_not:
 			range_counts_not = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_not, (<circuit_s*>_circuit).used_layer)
 		else:
@@ -3598,7 +3592,7 @@ cdef class qint(circuit):
 			"not",
 			tuple(qubit_array[i] for i in range(self.bits + (1 if _controlled else 0))),
 			sequence_ptr=<unsigned long long>seq,
-			gate_count=gc_delta_not,
+			gate_count=seq.total_gate_count,
 			controlled=bool(_controlled),
 			depth=(<circuit_s*>_circuit).used_layer - layer_before_not,
 			t_count=range_counts_not.t_count,
@@ -3810,7 +3804,6 @@ cdef class qint(circuit):
 		cdef bint _controlled = _get_controlled()
 		cdef object _control_bool = _get_control_bool()
 		cdef qubit_allocator_t *alloc
-		cdef size_t gc_before_eq, gc_delta_eq
 		cdef unsigned int layer_before_eq
 		cdef gate_counts_t range_counts_eq
 
@@ -3876,7 +3869,8 @@ cdef class qint(circuit):
 				return qbool(False)
 
 			# Compile-mode: record IR entry, skip gate emission
-			if _is_compile_mode():
+			# Only for QFT mode — Toffoli mode falls through to direct dispatch
+			if _is_compile_mode() and (<circuit_s*>_circuit).arithmetic_mode != 1:
 				result = qbool()
 				_uc_seq = CQ_equal_width(self.bits, other)
 				_cc_seq = cCQ_equal_width(self.bits, other)
@@ -3949,10 +3943,8 @@ cdef class qint(circuit):
 							qubit_array[start + i] = and_anc_start + i
 
 			arr = qubit_array
-			gc_before_eq = (<circuit_s*>_circuit).gate_count
 			layer_before_eq = (<circuit_s*>_circuit).used_layer
 			run_instruction(seq, &arr[0], False, _circuit)
-			gc_delta_eq = (<circuit_s*>_circuit).gate_count - gc_before_eq
 			if (<circuit_s*>_circuit).simulate and (<circuit_s*>_circuit).used_layer > layer_before_eq:
 				range_counts_eq = circuit_gate_counts_range(<circuit_s*>_circuit, layer_before_eq, (<circuit_s*>_circuit).used_layer)
 			else:
@@ -3961,7 +3953,7 @@ cdef class qint(circuit):
 				"eq_cq",
 				tuple(qubit_array[i] for i in range(start)),
 				sequence_ptr=<unsigned long long>seq,
-				gate_count=gc_delta_eq,
+				gate_count=seq.total_gate_count,
 				controlled=bool(_controlled),
 				depth=(<circuit_s*>_circuit).used_layer - layer_before_eq,
 				t_count=range_counts_eq.t_count,
