@@ -2122,3 +2122,131 @@ code), ~+420 LOC tests.
 - Compiled function wrapping nested compiled functions (including zero-arg pattern) produces gate counts equal to the uncompiled equivalent.
 - `@ql.compile def main(): walk_step(config, registers)` works without crashing.
 - DAG report shows accurate per-context metrics without estimation or derivation.
+
+---
+
+## Phase 11 — Calling-Context DAG Semantics
+
+Rework DAG U/C semantics so that the controlled/uncontrolled split reflects the
+**calling context** of the enclosing compiled function, not whether individual
+operations are internally controlled. Show separate report/DOT sections per
+context. Track AND operations from nested `with` blocks as DAG nodes.
+
+### Step 11.1: Core calling-context infrastructure ✅
+
+**Goal**: Add calling-context stack, update `record_operation` and
+`_add_nested_call_dag_node` to use calling context for U/C assignment. Add
+internal-control detection via control-depth baseline comparison. Prefix
+operation names with `c_` only for internal control.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/call_graph.py` | [MOD] Add `_calling_context_stack`, `push/pop/current_calling_context`. Rewrite `record_operation` U/C logic. Disable `backfill_call_node_siblings`. | ~+60 |
+| `src/quantum_language/compile/_func.py` | [MOD] Push/pop calling context in `__call__`. Compute `_has_internal_control` from control depth. Rewrite `_add_nested_call_dag_node` — no sibling lookup, use outer calling context for U/C. | ~+40 |
+| `src/quantum_language/compile/_dispatch.py` | [MOD] Skip merge when node counts differ. Copy `func_name` from uncontrolled capture in merge. | ~+10 |
+
+**DEP**: None (builds on Phase 10)
+
+---
+
+### Step 11.2: AND operations as DAG nodes ✅
+
+**Goal**: Track `_toffoli_and` / `_uncompute_toffoli_and` (nested `with` block
+control merging) as DAG nodes so the controlled context's cost accounts for
+them.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/_gates.pyx` | [MOD] Add `record_operation("and", ...)` calls in `_toffoli_and` and `_uncompute_toffoli_and`. `controlled=False`, `gate_count=1`, `t_count=7`. | ~+20 |
+
+**DEP**: Step 11.1
+
+---
+
+### Step 11.3: Separate report and DOT sections ✅
+
+**Goal**: `report()` and `to_dot()` show independent Uncontrolled / Controlled
+sections, since the two contexts can have different DAG structures (AND nodes
+only exist in controlled). Store `func_name` on `CallGraphDAG`.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/call_graph.py` | [MOD] Rewrite `report()` with `_section()` helper. Rewrite `to_dot()` with `context` parameter. Add `func_name` to `CallGraphDAG.__init__`. | ~+60 |
+| `src/quantum_language/compile/_func.py` | [MOD] Pass `func_name=self._func.__name__` to `CallGraphDAG()`. | ~+1 |
+
+**DEP**: Step 11.1
+
+---
+
+### Step 11.4: Arithmetic operations — calling-context cleanup
+
+**Goal**: Simplify `_record_operation` calls in `qint_arithmetic.pxi`. Remove
+the `if _controlled: _uc=0/_cc=gc else: _uc=gc/_cc=0` blocks — `record_operation`
+now handles U/C via the calling context stack automatically.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/qint_arithmetic.pxi` | [MOD] Simplify `_record_operation` calls for `add_qq`, `mul_cq`, `mul_qq`. Remove `_uc_gc`/`_cc_gc` variables in Toffoli path. Just pass `gate_count=gc_delta`. | ~-30 |
+
+**Tests** (`tests/python/test_dag_calling_context.py` [NEW]):
+- `test_add_qq_uc_cc` — quantum-quantum add in uncontrolled/controlled contexts
+- `test_mul_cq_uc_cc` — classical multiply in uncontrolled/controlled contexts
+- `test_mul_qq_uc_cc` — quantum-quantum multiply
+
+**DEP**: Step 11.1
+
+---
+
+### Step 11.5: Bitwise operations — calling-context cleanup
+
+**Goal**: Same simplification for all bitwise operations.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/qint_bitwise.pxi` | [MOD] Simplify `_record_operation` calls for `xor`, `and`, `or`, `not`, `lshift`, `rshift`, `rlshift`. Remove Toffoli-path `_uc/_cc` if/else blocks. | ~-40 |
+
+**Tests** (append to `tests/python/test_dag_calling_context.py`):
+- `test_xor_uc_cc` — XOR in uncontrolled/controlled contexts
+- `test_and_or_uc_cc` — AND/OR bitwise ops
+- `test_shift_uc_cc` — left/right shift ops
+
+**DEP**: Step 11.1
+
+---
+
+### Step 11.6: Division and comparison operations — calling-context cleanup
+
+**Goal**: Same simplification for division and comparison operations.
+
+| File | Action | ~LOC |
+|------|--------|------|
+| `src/quantum_language/qint_division.pxi` | [MOD] Simplify `_record_operation` calls for `div`, `mod`. | ~-10 |
+| `src/quantum_language/qint_comparison.pxi` | [MOD] Simplify `_record_operation` calls for comparison ops. | ~-5 |
+
+**Tests** (append to `tests/python/test_dag_calling_context.py`):
+- `test_div_mod_uc_cc` — division/modulo in uncontrolled/controlled contexts
+- `test_comparison_uc_cc` — comparison ops (eq, lt, gt, etc.)
+
+**DEP**: Step 11.1
+
+---
+
+### Phase 11 Summary
+
+| Step | What | ~LOC delta | DEP |
+|------|------|------------|-----|
+| 11.1 ✅ | Core calling-context infrastructure | ~+110 | None |
+| 11.2 ✅ | AND operations as DAG nodes | ~+20 | 11.1 |
+| 11.3 ✅ | Separate report/DOT sections | ~+60 | 11.1 |
+| 11.4 | Arithmetic ops cleanup | ~-30 | 11.1 |
+| 11.5 | Bitwise ops cleanup | ~-40 | 11.1 |
+| 11.6 | Division/comparison ops cleanup | ~-15 | 11.1 |
+
+**Net**: ~+105 LOC implementation, ~+200 LOC tests.
+
+**Key properties**:
+- DAG U/C reflects calling context, not internal control state.
+- Controlled context shows AND nodes from nested `with` blocks.
+- All integer operations (arithmetic, bitwise, division, comparison) use consistent calling-context tracking.
+- Report shows separate sections per context with correct totals.
+- R7.13 fulfilled: all integer operations use calling-context DAG tracking.
