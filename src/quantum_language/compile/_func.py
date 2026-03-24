@@ -251,6 +251,9 @@ class CompiledFunc:
                 if self._call_graph is not None:
                     if self._opt == 2:
                         self._apply_merge()
+                    # Backfill call nodes whose sibling context wasn't
+                    # available at creation time but is now cached.
+                    self._call_graph.backfill_call_node_siblings()
                     # opt=1 accumulates nodes across calls, so do not
                     # freeze the DAG after each call.  Other opt levels
                     # freeze immediately (graph is rebuilt each call).
@@ -378,7 +381,7 @@ class CompiledFunc:
             uc_depth, cc_depth = _depth, sibling_depth
             uc_tc, cc_tc = _t_count, sibling_t_count
 
-        dag.add_node(
+        node_idx = dag.add_node(
             self._func.__name__,
             qubit_set,
             _gc,
@@ -394,6 +397,8 @@ class CompiledFunc:
             uncontrolled_t_count=uc_tc,
             controlled_t_count=cc_tc,
         )
+        # Store ref so backfill_call_node_siblings can resolve sibling costs
+        dag._nodes[node_idx]._compiled_func_ref = self
 
     def _classify_args(self, args, kwargs):
         """Separate quantum and classical arguments."""

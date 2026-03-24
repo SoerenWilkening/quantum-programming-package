@@ -190,6 +190,7 @@ class DAGNode:
         "_block_ref",
         "_v2r_ref",
         "_qubit_array",
+        "_compiled_func_ref",
     )
 
     def __init__(
@@ -240,6 +241,7 @@ class DAGNode:
         self._merged = False  # True when this node was merged into another
         self._block_ref = None  # CompiledBlock ref for merge (opt=2)
         self._v2r_ref = None  # virtual-to-real mapping for merge (opt=2)
+        self._compiled_func_ref = None  # CompiledFunc ref for call-node backfill
         # Pre-compute bitmask from qubit_set (Python int for >64 qubit support)
         bitmask = 0
         for q in qubit_set:
@@ -522,6 +524,49 @@ class CallGraphDAG:
                     g.add_edge(i, j, w)
         components = rx.connected_components(g)
         return [sorted(comp) for comp in components if len(comp) > 1]
+
+    # -- Call-node sibling backfill ------------------------------------------
+
+    def backfill_call_node_siblings(self):
+        """Fill in missing sibling costs on call nodes.
+
+        After a compiled function's capture completes, the inner functions'
+        caches may have both controlled and uncontrolled entries.  This method
+        iterates call nodes that are missing one side's costs and resolves them
+        from the inner function's cache.
+        """
+        for node in self._nodes:
+            if not node.is_call_node or node._merged:
+                continue
+            cf = node._compiled_func_ref
+            if cf is None or not node.cache_key:
+                continue
+            # Skip if both sides already populated
+            if node.uncontrolled_gate_count and node.controlled_gate_count:
+                continue
+            # Construct sibling key by flipping control_count
+            cache_key = node.cache_key
+            cc_idx = len(cache_key) - 4
+            flipped_cc = 0 if cache_key[cc_idx] else 1
+            sibling_key = cache_key[:cc_idx] + (flipped_cc,) + cache_key[cc_idx + 1 :]
+            sibling_block = cf._cache.get(sibling_key)
+            if sibling_block is None:
+                continue
+            sibling_gc = (
+                sibling_block.original_gate_count
+                if sibling_block.original_gate_count
+                else len(sibling_block.gates)
+            )
+            sibling_depth = _compute_depth(sibling_block.gates)
+            sibling_t_count = _compute_t_count(sibling_block.gates)
+            if not node.uncontrolled_gate_count:
+                node.uncontrolled_gate_count = sibling_gc
+                node.uncontrolled_depth = sibling_depth
+                node.uncontrolled_t_count = sibling_t_count
+            elif not node.controlled_gate_count:
+                node.controlled_gate_count = sibling_gc
+                node.controlled_depth = sibling_depth
+                node.controlled_t_count = sibling_t_count
 
     # -- Aggregate metrics ---------------------------------------------------
 
