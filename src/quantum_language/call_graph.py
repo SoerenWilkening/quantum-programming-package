@@ -830,6 +830,124 @@ class CallGraphDAG:
     def __repr__(self) -> str:
         return f"CallGraphDAG(nodes={len(self._nodes)}, edges={len(self._dag.edge_list())})"
 
+    # -- DAG traversal execution --------------------------------------------
+
+    def execute(self, controlled=False, control_qubit=None):
+        """Traverse the DAG in topological order and execute each node.
+
+        For each node, selects the appropriate sequence pointer based on
+        the control context and calls ``_run_instruction_py`` to replay
+        the captured operation.  Call nodes with ``_compiled_func_ref``
+        recurse into the inner function's DAG.
+
+        Parameters
+        ----------
+        controlled : bool
+            Whether execution is in a controlled context.  When True,
+            uses ``controlled_seq`` and appends *control_qubit* to
+            registers.
+        control_qubit : int or None
+            Physical index of the control qubit.  Required when
+            *controlled* is True.
+
+        Returns
+        -------
+        int
+            Total number of nodes executed.
+        """
+        return execute_dag(self, controlled=controlled, control_qubit=control_qubit)
+
+
+# ---------------------------------------------------------------------------
+# DAG traversal execution (Step 12.5)
+# ---------------------------------------------------------------------------
+
+
+def execute_dag(dag, controlled=False, control_qubit=None):
+    """Traverse a CallGraphDAG in topological order and execute each node.
+
+    For non-composite nodes with a valid sequence pointer, calls
+    ``_run_instruction_py(seq_ptr, qubit_mapping, invert)`` to replay
+    the captured operation.  For call nodes with a ``_compiled_func_ref``
+    that has its own ``_call_graph``, recurses into the inner DAG.
+
+    Control context is maintained from node metadata: when *controlled*
+    is True, the controlled sequence variant is preferred and the
+    *control_qubit* is appended to the register tuple.
+
+    Parameters
+    ----------
+    dag : CallGraphDAG
+        The DAG to traverse.
+    controlled : bool
+        Whether execution is in a controlled context.
+    control_qubit : int or None
+        Physical index of the control qubit when *controlled* is True.
+
+    Returns
+    -------
+    int
+        Total number of nodes executed.
+    """
+    from ._core import _run_instruction_py
+
+    if not dag._nodes:
+        return 0
+
+    # Topological sort gives execution order respecting dependencies
+    topo_order = rx.topological_sort(dag._dag)
+
+    executed = 0
+    for node_idx in topo_order:
+        node = dag._nodes[node_idx]
+
+        # Skip merged nodes
+        if node._merged:
+            continue
+
+        # Call nodes: recurse into inner function's DAG if available
+        if node.is_call_node and node._compiled_func_ref is not None:
+            inner_func = node._compiled_func_ref
+            inner_dag = getattr(inner_func, "_call_graph", None)
+            if inner_dag is not None and inner_dag.node_count > 0:
+                executed += execute_dag(
+                    inner_dag,
+                    controlled=controlled,
+                    control_qubit=control_qubit,
+                )
+                continue
+
+        # Composite nodes cannot be replayed via a single
+        # run_instruction call -- skip them for now.  Future work
+        # will re-dispatch using operation_type and op_params.
+        if node.is_composite:
+            continue
+
+        # Select sequence pointer based on control context
+        if controlled and node.controlled_seq != 0:
+            seq_ptr = node.controlled_seq
+        elif node.uncontrolled_seq != 0:
+            seq_ptr = node.uncontrolled_seq
+        elif node.sequence_ptr != 0:
+            seq_ptr = node.sequence_ptr
+        else:
+            # No valid sequence pointer -- nothing to execute
+            continue
+
+        # Build register tuple from qubit_mapping
+        regs = node.qubit_mapping
+        if not regs:
+            continue
+
+        # Append control qubit when in controlled context
+        if controlled and control_qubit is not None:
+            regs = tuple(regs) + (control_qubit,)
+
+        _run_instruction_py(seq_ptr, tuple(regs), int(node.invert))
+        executed += 1
+
+    return executed
+
 
 # ---------------------------------------------------------------------------
 # Builder stack (module-level, mirrors _capture_depth pattern)
