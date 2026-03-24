@@ -1,8 +1,13 @@
-"""Tests for calling-context DAG tracking of division and comparison ops.
+"""Tests for calling-context DAG tracking of bitwise, division, and comparison ops.
 
-Issue: Quantum_Assembly-n9l (Step 11.6)
+Issues:
+- Quantum_Assembly-9p6 (Step 11.5) — bitwise operations
+- Quantum_Assembly-n9l (Step 11.6) — division and comparison operations
 
 Tests:
+- test_xor_uc_cc — XOR in uncontrolled/controlled contexts
+- test_and_or_uc_cc — AND/OR bitwise ops
+- test_shift_uc_cc — left/right shift ops
 - test_div_mod_uc_cc — division/modulo in uncontrolled/controlled contexts
 - test_comparison_uc_cc — comparison ops (eq, lt, gt, etc.)
 """
@@ -263,3 +268,367 @@ class TestComparisonUcCc:
         assert len(dag.nodes) > 0, "Expected DAG nodes from QQ ge comparison"
         total_uc = sum(n.uncontrolled_gate_count for n in dag.nodes)
         assert total_uc > 0, "Expected non-zero UC gate count from ge"
+
+
+# ---------------------------------------------------------------------------
+# test_xor_uc_cc — XOR calling-context DAG tracking
+# ---------------------------------------------------------------------------
+
+
+class TestXorUcCc:
+    """XOR operations track UC/CC gate counts via calling context."""
+
+    def test_xor_qq_uncontrolled(self):
+        """(a ^ b) uncontrolled: xor node has UC > 0, CC == 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            b = qint(3, width=4)
+            _ = a ^ b
+        finally:
+            pop_dag_context()
+        xor_nodes = [n for n in dag.nodes if n.operation_type == "xor"]
+        assert len(xor_nodes) > 0, "Expected at least one xor node"
+        for node in xor_nodes:
+            assert node.uncontrolled_gate_count > 0
+            assert node.controlled_gate_count == 0
+
+    def test_xor_qq_uc_matches_gc(self):
+        """UC gate count matches actual gate_count for xor."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            b = qint(3, width=4)
+            _ = a ^ b
+        finally:
+            pop_dag_context()
+        xor_nodes = [n for n in dag.nodes if n.operation_type == "xor"]
+        for node in xor_nodes:
+            assert node.uncontrolled_gate_count == node.gate_count
+
+    def test_xor_cq_uncontrolled(self):
+        """(a ^ 5) uncontrolled: xor node has UC > 0, CC == 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(7, width=4)
+            _ = a ^ 5
+        finally:
+            pop_dag_context()
+        xor_nodes = [n for n in dag.nodes if n.operation_type == "xor"]
+        assert len(xor_nodes) > 0, "Expected at least one xor node"
+        for node in xor_nodes:
+            assert node.uncontrolled_gate_count > 0
+            assert node.controlled_gate_count == 0
+
+    def test_ixor_cq_uncontrolled(self):
+        """(a ^= 5) uncontrolled: ixor_cq node has UC > 0, CC == 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(7, width=4)
+            a ^= 5
+        finally:
+            pop_dag_context()
+        ixor_nodes = [n for n in dag.nodes if n.operation_type == "ixor_cq"]
+        assert len(ixor_nodes) > 0, "Expected at least one ixor_cq node"
+        for node in ixor_nodes:
+            assert node.uncontrolled_gate_count > 0
+            assert node.controlled_gate_count == 0
+
+    def test_ixor_qq_uncontrolled(self):
+        """(a ^= b) uncontrolled: ixor_qq node has UC > 0, CC == 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            b = qint(3, width=4)
+            a ^= b
+        finally:
+            pop_dag_context()
+        ixor_nodes = [n for n in dag.nodes if n.operation_type == "ixor_qq"]
+        assert len(ixor_nodes) > 0, "Expected at least one ixor_qq node"
+        for node in ixor_nodes:
+            assert node.uncontrolled_gate_count > 0
+            assert node.controlled_gate_count == 0
+
+    def test_xor_no_dash_dash(self):
+        """report() does not show '- / -' for xor operations."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            b = qint(3, width=4)
+            _ = a ^ b
+        finally:
+            pop_dag_context()
+        report = dag.report()
+        lines = report.split("\n")
+        for line in lines:
+            if "xor" in line.lower() and "TOTAL" not in line and "---" not in line:
+                assert "- / -" not in line, f"report() shows '- / -' for xor: {line}"
+
+
+# ---------------------------------------------------------------------------
+# test_and_or_uc_cc — AND/OR calling-context DAG tracking
+# ---------------------------------------------------------------------------
+
+
+class TestAndOrUcCc:
+    """AND and OR operations track UC/CC gate counts via calling context."""
+
+    def test_and_qq_uncontrolled(self):
+        """(a & b) uncontrolled: and node has UC > 0, CC == 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            b = qint(3, width=4)
+            _ = a & b
+        finally:
+            pop_dag_context()
+        and_nodes = [n for n in dag.nodes if n.operation_type == "and"]
+        assert len(and_nodes) > 0, "Expected at least one and node"
+        for node in and_nodes:
+            assert node.uncontrolled_gate_count > 0
+            assert node.controlled_gate_count == 0
+
+    def test_and_qq_uc_matches_gc(self):
+        """UC gate count matches actual gate_count for and."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            b = qint(3, width=4)
+            _ = a & b
+        finally:
+            pop_dag_context()
+        and_nodes = [n for n in dag.nodes if n.operation_type == "and"]
+        for node in and_nodes:
+            assert node.uncontrolled_gate_count == node.gate_count
+
+    def test_and_cq_uncontrolled(self):
+        """(a & 5) uncontrolled: and node has UC > 0, CC == 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(7, width=4)
+            _ = a & 5
+        finally:
+            pop_dag_context()
+        and_nodes = [n for n in dag.nodes if n.operation_type == "and"]
+        assert len(and_nodes) > 0, "Expected at least one and node"
+        for node in and_nodes:
+            assert node.uncontrolled_gate_count > 0
+            assert node.controlled_gate_count == 0
+
+    def test_or_qq_uncontrolled(self):
+        """(a | b) uncontrolled: or node has UC > 0, CC == 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            b = qint(3, width=4)
+            _ = a | b
+        finally:
+            pop_dag_context()
+        or_nodes = [n for n in dag.nodes if n.operation_type == "or"]
+        assert len(or_nodes) > 0, "Expected at least one or node"
+        for node in or_nodes:
+            assert node.uncontrolled_gate_count > 0
+            assert node.controlled_gate_count == 0
+
+    def test_or_qq_uc_matches_gc(self):
+        """UC gate count matches actual gate_count for or."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            b = qint(3, width=4)
+            _ = a | b
+        finally:
+            pop_dag_context()
+        or_nodes = [n for n in dag.nodes if n.operation_type == "or"]
+        for node in or_nodes:
+            assert node.uncontrolled_gate_count == node.gate_count
+
+    def test_or_cq_uncontrolled(self):
+        """(a | 3) uncontrolled: or node has UC > 0, CC == 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            _ = a | 3
+        finally:
+            pop_dag_context()
+        or_nodes = [n for n in dag.nodes if n.operation_type == "or"]
+        assert len(or_nodes) > 0, "Expected at least one or node"
+        for node in or_nodes:
+            assert node.uncontrolled_gate_count > 0
+            assert node.controlled_gate_count == 0
+
+    def test_not_uncontrolled(self):
+        """~a uncontrolled: not node has UC > 0, CC == 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            _ = ~a
+        finally:
+            pop_dag_context()
+        not_nodes = [n for n in dag.nodes if n.operation_type == "not"]
+        assert len(not_nodes) > 0, "Expected at least one not node"
+        for node in not_nodes:
+            assert node.uncontrolled_gate_count > 0
+            assert node.controlled_gate_count == 0
+
+    def test_not_uc_matches_gc(self):
+        """UC gate count matches actual gate_count for not."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            _ = ~a
+        finally:
+            pop_dag_context()
+        not_nodes = [n for n in dag.nodes if n.operation_type == "not"]
+        for node in not_nodes:
+            assert node.uncontrolled_gate_count == node.gate_count
+
+    def test_not_controlled(self):
+        """~a inside with block: not node has controlled=True."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            b = qint(0, width=4)
+            cond = a == 5
+            with cond:
+                _ = ~b
+        finally:
+            pop_dag_context()
+        not_nodes = [n for n in dag.nodes if n.operation_type == "not"]
+        ctrl_not = [n for n in not_nodes if n.controlled]
+        assert len(ctrl_not) > 0, "Expected controlled not node"
+
+    def test_and_or_no_dash_dash(self):
+        """report() does not show '- / -' for and/or operations."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(5, width=4)
+            b = qint(3, width=4)
+            _ = a & b
+            _ = a | b
+        finally:
+            pop_dag_context()
+        report = dag.report()
+        lines = report.split("\n")
+        for line in lines:
+            if (
+                ("and" in line.lower() or "or" in line.lower())
+                and "TOTAL" not in line
+                and "---" not in line
+            ):
+                assert "- / -" not in line, f"report() shows '- / -' for and/or: {line}"
+
+
+# ---------------------------------------------------------------------------
+# test_shift_uc_cc — left/right shift calling-context DAG tracking
+# ---------------------------------------------------------------------------
+
+
+class TestShiftUcCc:
+    """Shift operations track UC/CC gate counts via calling context."""
+
+    def test_lshift_uncontrolled(self):
+        """(a << 2) uncontrolled: produces DAG nodes with UC > 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(3, width=4)
+            _ = a << 2
+        finally:
+            pop_dag_context()
+        assert len(dag.nodes) > 0, "Expected DAG nodes from lshift"
+        total_uc = sum(n.uncontrolled_gate_count for n in dag.nodes)
+        assert total_uc > 0, "Expected non-zero UC gate count from lshift"
+
+    def test_rshift_uncontrolled(self):
+        """(a >> 2) uncontrolled: produces DAG nodes with UC > 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(7, width=4)
+            _ = a >> 1
+        finally:
+            pop_dag_context()
+        assert len(dag.nodes) > 0, "Expected DAG nodes from rshift"
+        total_uc = sum(n.uncontrolled_gate_count for n in dag.nodes)
+        assert total_uc > 0, "Expected non-zero UC gate count from rshift"
+
+    def test_lshift_no_cc(self):
+        """Left shift uncontrolled: all CC == 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(3, width=4)
+            _ = a << 1
+        finally:
+            pop_dag_context()
+        total_cc = sum(n.controlled_gate_count for n in dag.nodes)
+        assert total_cc == 0, "Expected CC == 0 for uncontrolled lshift"
+
+    def test_rshift_no_cc(self):
+        """Right shift uncontrolled: all CC == 0."""
+        ql.circuit()
+        ql.option("fault_tolerant", True)
+        dag = CallGraphDAG()
+        push_dag_context(dag)
+        try:
+            a = qint(7, width=4)
+            _ = a >> 1
+        finally:
+            pop_dag_context()
+        total_cc = sum(n.controlled_gate_count for n in dag.nodes)
+        assert total_cc == 0, "Expected CC == 0 for uncontrolled rshift"

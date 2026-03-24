@@ -2239,7 +2239,7 @@ now handles U/C via the calling context stack automatically.
 | 11.2 ✅ | AND operations as DAG nodes | ~+20 | 11.1 |
 | 11.3 ✅ | Separate report/DOT sections | ~+60 | 11.1 |
 | 11.4 | Arithmetic ops cleanup | ~-30 | 11.1 |
-| 11.5 | Bitwise ops cleanup | ~-40 | 11.1 |
+| 11.5 ✅ | Bitwise ops cleanup | ~-40 | 11.1 |
 | 11.6 ✅ | Division/comparison ops cleanup | ~-15 | 11.1 |
 
 **Net**: ~+105 LOC implementation, ~+200 LOC tests.
