@@ -40,6 +40,7 @@
 		cdef size_t gc_before_div, gc_delta_div
 		cdef unsigned int layer_before_div
 		cdef gate_counts_t range_counts_div
+		cdef bint _controlled = _get_controlled()
 
 		# Extract dividend qubits (LSB-first for C convention)
 		# Python qint right-aligned layout: qubits[64-bits] = LSB (bit 0), qubits[63] = MSB
@@ -77,7 +78,7 @@
 				+ tuple(quotient_qa[i] for i in range(n))
 				+ tuple(remainder_qa[i] for i in range(n)),
 				gate_count=gc_delta_div,
-				controlled=False,
+				controlled=bool(_controlled),
 				depth=(<circuit_s*>_circ).used_layer - layer_before_div,
 				t_count=range_counts_div.t_count,
 			)
@@ -104,7 +105,7 @@
 				+ tuple(quotient_qa[i] for i in range(n))
 				+ tuple(remainder_qa[i] for i in range(n)),
 				gate_count=gc_delta_div,
-				controlled=False,
+				controlled=bool(_controlled),
 				depth=(<circuit_s*>_circ).used_layer - layer_before_div,
 				t_count=range_counts_div.t_count,
 			)

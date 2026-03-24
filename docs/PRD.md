@@ -52,7 +52,7 @@ Call graph-based compilation pipeline with accurate resource tracking.
 | R7.10 | Gate counts flow from C sequences through `_record_operation` into `DAGNode`. | **Done** |
 | R7.11 | Calling-context semantics: U/C columns reflect whether the enclosing function was called controlled, not internal control state. Separate report sections per context. | **Done** |
 | R7.12 | AND operations from nested `with` blocks tracked as DAG nodes (`and` with gate_count=1, t_count=7). | **Done** |
-| R7.13 | All integer operations (arithmetic, bitwise, division, comparison) use calling-context DAG tracking. | |
+| R7.13 | All integer operations (arithmetic, bitwise, division, comparison) use calling-context DAG tracking. | **Done** |
 
 #### R11: Automatic Uncomputation
 
