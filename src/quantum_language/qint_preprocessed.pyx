@@ -4063,7 +4063,8 @@ cdef class qint(circuit):
 				return qbool(False)
 
 			# Compile-mode: record IR entry, skip gate emission
-			if _is_compile_mode():
+			# QFT mode only — Toffoli mode falls through to direct dispatch.
+			if _is_compile_mode() and (<circuit_s*>_circuit).arithmetic_mode != 1:
 				result = qbool()
 				_uc_seq = CQ_equal_width(self.bits, other)
 				_cc_seq = cCQ_equal_width(self.bits, other)

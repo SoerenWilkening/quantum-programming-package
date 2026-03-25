@@ -4,10 +4,9 @@ Covers issue Quantum_Assembly-5c2: DSL operators (+=, -=, <, &, etc.)
 record InstructionRecord entries when compile-mode is active, without
 calling run_instruction (no gates emitted to circuit).
 
-Note: IR recording for arithmetic and bitwise ops only happens in QFT mode
-(fault_tolerant=False). In Toffoli mode (default), both arithmetic and bitwise
-ops bypass IR recording and emit gates directly through the Toffoli dispatch
-path. Comparison (EQ) operations record IR in all modes.
+Note: IR recording for arithmetic, bitwise, and comparison ops only happens in
+QFT mode (fault_tolerant=False). In Toffoli mode (default), all ops bypass IR
+recording and emit gates directly through the Toffoli dispatch path.
 """
 
 import quantum_language as ql
@@ -207,8 +206,9 @@ def test_mul_cq_records_ir():
 
 
 def test_eq_int_records_ir():
-    """(a == 5) in compile mode records an 'eq_cq' IR entry."""
+    """(a == 5) in QFT compile mode records an 'eq_cq' IR entry."""
     ql.circuit()
+    ql.option("fault_tolerant", False)
     a = ql.qint(5, width=4)
 
     @ql.compile
@@ -624,3 +624,54 @@ def test_xor_toffoli_compile_emits_gates():
     gc_after = ql.get_gate_count()
 
     assert gc_after > gc_before, "XOR in Toffoli compile mode emitted 0 gates (silently dropped)"
+
+
+def test_eq_toffoli_compile_emits_gates():
+    """(a == 5) in Toffoli compile mode emits gates (not silently dropped)."""
+    ql.circuit()
+    # Default is fault_tolerant=True (Toffoli mode)
+    a = ql.qint(3, width=4)
+
+    @ql.compile
+    def dummy(x):
+        return x
+
+    block = _make_block()
+    gc_before = ql.get_gate_count()
+    with dummy.compile_mode(block):
+        _ = a == 5
+    gc_after = ql.get_gate_count()
+
+    assert gc_after > gc_before, "EQ in Toffoli compile mode emitted 0 gates (silently dropped)"
+    # No IR entries recorded in Toffoli mode
+    eq_entries = [r for r in block._instruction_ir if r.name == "eq_cq"]
+    assert len(eq_entries) == 0
+
+
+def test_eq_toffoli_compile_nonzero_gates():
+    """(a == 5) in Toffoli compile mode emits a non-trivial number of gates."""
+    # Uncompiled baseline
+    ql.circuit()
+    a = ql.qint(3, width=4)
+    gc_before = ql.get_gate_count()
+    _ = a == 5
+    gc_uncompiled = ql.get_gate_count() - gc_before
+
+    # Compiled (Toffoli mode)
+    ql.circuit()
+    a2 = ql.qint(3, width=4)
+
+    @ql.compile
+    def dummy(x):
+        return x
+
+    block = _make_block()
+    gc_before = ql.get_gate_count()
+    with dummy.compile_mode(block):
+        _ = a2 == 5
+    gc_compiled = ql.get_gate_count() - gc_before
+
+    # The compiled count must be at least as large as uncompiled (gates not dropped)
+    assert gc_compiled >= gc_uncompiled, (
+        f"Compiled gate count ({gc_compiled}) < uncompiled ({gc_uncompiled})"
+    )
