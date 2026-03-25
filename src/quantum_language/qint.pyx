@@ -30,6 +30,7 @@ from ._core cimport (
     print_circuit as c_print_circuit,
     toffoli_mul_qq, toffoli_mul_cq, toffoli_cmul_qq, toffoli_cmul_cq,
     toffoli_divmod_cq, toffoli_divmod_qq,
+    toffoli_cdivmod_cq, toffoli_cdivmod_qq,
     toffoli_QQ_add, toffoli_CQ_add, toffoli_cQQ_add, toffoli_cCQ_add,
     toffoli_QQ_add_bk, toffoli_QQ_add_ks,
     toffoli_CQ_add_bk, toffoli_CQ_add_ks,

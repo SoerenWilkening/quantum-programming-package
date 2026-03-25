@@ -370,20 +370,11 @@ class TestToffoliQuantumModulo:
 class TestToffoliDivisionControlled:
     """Verify division inside `with ctrl:` block.
 
-    Currently xfail because _divmod_c does not check the controlled context
-    (_get_controlled). The C-level division always runs the uncontrolled
-    variant regardless of whether a `with ctrl:` block is active. This means
-    controlled division silently produces incorrect results (the division
-    runs unconditionally instead of being gated on the control qubit).
-
-    Phase 91: Updated reason from "controlled XOR not supported" to
-    "_divmod_c ignores controlled context".
+    _divmod_c now dispatches to toffoli_cdivmod_cq / toffoli_cdivmod_qq
+    when running inside a controlled context, matching the pattern used
+    by addition/subtraction/multiplication.
     """
 
-    @pytest.mark.xfail(
-        reason="Phase 91: _divmod_c ignores controlled context (always uncontrolled)",
-        strict=True,
-    )
     def test_controlled_div_active(self):
         """Controlled division with ctrl=|1> should produce correct quotient."""
         gc.collect()
@@ -401,13 +392,7 @@ class TestToffoliDivisionControlled:
         assert actual == 1, f"Expected 3//2=1, got {actual}"
 
     def test_controlled_div_inactive(self):
-        """Controlled division with ctrl=|0> should be no-op (quotient=0).
-
-        Phase 91: This test passes because when ctrl=|0>, the controlled
-        gates inside the division are no-ops, producing quotient=0. The
-        active test (ctrl=|1>) still fails because the C-level division
-        generates 0 instead of the expected quotient value.
-        """
+        """Controlled division with ctrl=|0> should be no-op (quotient=0)."""
         gc.collect()
         ql.circuit()
         _enable_toffoli()

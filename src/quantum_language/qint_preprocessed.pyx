@@ -30,6 +30,7 @@ from ._core cimport (
     print_circuit as c_print_circuit,
     toffoli_mul_qq, toffoli_mul_cq, toffoli_cmul_qq, toffoli_cmul_cq,
     toffoli_divmod_cq, toffoli_divmod_qq,
+    toffoli_cdivmod_cq, toffoli_cdivmod_qq,
     toffoli_QQ_add, toffoli_CQ_add, toffoli_cQQ_add, toffoli_cCQ_add,
     toffoli_QQ_add_bk, toffoli_QQ_add_ks,
     toffoli_CQ_add_bk, toffoli_CQ_add_ks,
@@ -4922,6 +4923,14 @@ cdef class qint(circuit):
 		cdef unsigned int layer_before_div
 		cdef gate_counts_t range_counts_div
 		cdef bint _controlled = _get_controlled()
+		cdef object _control_bool = _get_control_bool()
+		cdef unsigned int control_qubit = 0
+		cdef unsigned int[:] control_qubits
+
+		# Extract control qubit if controlled
+		if _controlled:
+			control_qubits = (<qint> _control_bool).qubits
+			control_qubit = control_qubits[63]
 
 		# Extract dividend qubits (LSB-first for C convention)
 		# Python qint right-aligned layout: qubits[64-bits] = LSB (bit 0), qubits[63] = MSB
@@ -4945,9 +4954,15 @@ cdef class qint(circuit):
 		if type(divisor) == int:
 			gc_before_div = (<circuit_s*>_circ).gate_count
 			layer_before_div = (<circuit_s*>_circ).used_layer
-			toffoli_divmod_cq(_circ, dividend_qa, n,
-			                  <int64_t>divisor,
-			                  quotient_qa, remainder_qa)
+			if _controlled:
+				toffoli_cdivmod_cq(_circ, dividend_qa, n,
+				                   <int64_t>divisor,
+				                   quotient_qa, remainder_qa,
+				                   control_qubit)
+			else:
+				toffoli_divmod_cq(_circ, dividend_qa, n,
+				                  <int64_t>divisor,
+				                  quotient_qa, remainder_qa)
 			gc_delta_div = (<circuit_s*>_circ).gate_count - gc_before_div
 			if (<circuit_s*>_circ).simulate and (<circuit_s*>_circ).used_layer > layer_before_div:
 				range_counts_div = circuit_gate_counts_range(<circuit_s*>_circ, layer_before_div, (<circuit_s*>_circ).used_layer)
@@ -4973,9 +4988,15 @@ cdef class qint(circuit):
 
 			gc_before_div = (<circuit_s*>_circ).gate_count
 			layer_before_div = (<circuit_s*>_circ).used_layer
-			toffoli_divmod_qq(_circ, dividend_qa, n,
-			                  divisor_qa, div_bits,
-			                  quotient_qa, remainder_qa)
+			if _controlled:
+				toffoli_cdivmod_qq(_circ, dividend_qa, n,
+				                   divisor_qa, div_bits,
+				                   quotient_qa, remainder_qa,
+				                   control_qubit)
+			else:
+				toffoli_divmod_qq(_circ, dividend_qa, n,
+				                  divisor_qa, div_bits,
+				                  quotient_qa, remainder_qa)
 			gc_delta_div = (<circuit_s*>_circ).gate_count - gc_before_div
 			if (<circuit_s*>_circ).simulate and (<circuit_s*>_circ).used_layer > layer_before_div:
 				range_counts_div = circuit_gate_counts_range(<circuit_s*>_circ, layer_before_div, (<circuit_s*>_circ).used_layer)
