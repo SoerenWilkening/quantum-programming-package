@@ -73,9 +73,12 @@ from .._compile_state import (  # noqa: E402 – after qint import is fine
 from ._func import CompiledFunc as CompiledFunc  # noqa: E402
 from ._func import compile as compile  # noqa: E402
 from ._inverse import _adjoint_gate as _adjoint_gate  # noqa: E402, F401
-from ._inverse import _AncillaInverseProxy as _AncillaInverseProxy  # noqa: E402
 from ._inverse import _inverse_gate_list as _inverse_gate_list  # noqa: E402, F401
-from ._inverse import _InverseCompiledFunc as _InverseCompiledFunc  # noqa: E402
+from ._inverse import _InverseProxy as _InverseProxy  # noqa: E402
+
+# Backward-compatible aliases
+_AncillaInverseProxy = _InverseProxy  # noqa: E402
+_InverseCompiledFunc = _InverseProxy  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # IR execution, DAG building, and call record replay (delegated to _ir module)

@@ -185,7 +185,7 @@ def _replay_hit(
     """Handle a cache hit: replay the cached block."""
     # Move to end (most recently used)
     cf._cache.move_to_end(cache_key)
-    _track_fwd = cf._inverse_func is not None
+    _track_fwd = cf._inverse_eager
     block = cf._cache[cache_key]
     result = cf._replay(block, quantum_args, track_forward=_track_fwd, kind="compiled_fn")
     # Credit gate count from the replayed block.  Per-context caching

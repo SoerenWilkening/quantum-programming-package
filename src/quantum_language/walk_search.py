@@ -27,7 +27,6 @@ import math
 from .walk_core import WalkConfig
 from .walk_registers import WalkRegisters
 
-
 # ------------------------------------------------------------------
 # Tree size computation
 # ------------------------------------------------------------------
@@ -56,19 +55,16 @@ def _max_walk_iterations(num_moves, max_depth):
 # ------------------------------------------------------------------
 
 
-def _validate_walk_args(is_marked, max_depth, num_moves, state,
-                        make_move, is_valid, max_iterations=None):
+def _validate_walk_args(
+    is_marked, max_depth, num_moves, state, make_move, is_valid, max_iterations=None
+):
     """Validate arguments for the walk() public API."""
     if is_marked is None:
         raise ValueError("is_marked must not be None")
     if not isinstance(max_depth, int):
-        raise TypeError(
-            f"max_depth must be an int, got {type(max_depth).__name__}"
-        )
+        raise TypeError(f"max_depth must be an int, got {type(max_depth).__name__}")
     if not isinstance(num_moves, int):
-        raise TypeError(
-            f"num_moves must be an int, got {type(num_moves).__name__}"
-        )
+        raise TypeError(f"num_moves must be an int, got {type(num_moves).__name__}")
     if max_depth < 1:
         raise ValueError(f"max_depth must be >= 1, got {max_depth}")
     if num_moves < 1:
@@ -81,14 +77,9 @@ def _validate_walk_args(is_marked, max_depth, num_moves, state,
         raise ValueError("is_valid must not be None")
     if max_iterations is not None:
         if not isinstance(max_iterations, int):
-            raise TypeError(
-                f"max_iterations must be an int, got "
-                f"{type(max_iterations).__name__}"
-            )
+            raise TypeError(f"max_iterations must be an int, got {type(max_iterations).__name__}")
         if max_iterations < 1:
-            raise ValueError(
-                f"max_iterations must be >= 1, got {max_iterations}"
-            )
+            raise ValueError(f"max_iterations must be >= 1, got {max_iterations}")
 
 
 # ------------------------------------------------------------------
@@ -96,8 +87,17 @@ def _validate_walk_args(is_marked, max_depth, num_moves, state,
 # ------------------------------------------------------------------
 
 
-def walk(is_marked, max_depth, num_moves, state, make_move, is_valid,
-         *, undo_move=None, max_iterations=None):
+def walk(
+    is_marked,
+    max_depth,
+    num_moves,
+    state,
+    make_move,
+    is_valid,
+    *,
+    undo_move=None,
+    max_iterations=None,
+):
     """Build a marked quantum walk configuration with allocated registers.
 
     Creates a :class:`WalkConfig` with ``is_marked`` set and allocates
@@ -137,7 +137,7 @@ def walk(is_marked, max_depth, num_moves, state, make_move, is_valid,
         Quantum predicate ``is_valid(state)`` returning ``qbool``.
     undo_move : callable, optional
         Explicit inverse of ``make_move``.  If not provided, the
-        diffusion falls back to ``make_move.adjoint``.
+        diffusion falls back to ``make_move.inverse``.
     max_iterations : int, optional
         Maximum walk step iterations (>= 1).  Auto-computed from
         tree size as ``ceil(sqrt(T / n))`` if not provided.
@@ -158,9 +158,9 @@ def walk(is_marked, max_depth, num_moves, state, make_move, is_valid,
         If ``max_depth``, ``num_moves``, or ``max_iterations`` are
         not int.
     """
-    _validate_walk_args(is_marked, max_depth, num_moves, state,
-                        make_move, is_valid,
-                        max_iterations=max_iterations)
+    _validate_walk_args(
+        is_marked, max_depth, num_moves, state, make_move, is_valid, max_iterations=max_iterations
+    )
 
     if max_iterations is None:
         max_iterations = _max_walk_iterations(num_moves, max_depth)

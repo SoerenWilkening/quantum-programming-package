@@ -3,7 +3,7 @@
 Contains the ``CompiledFunc`` wrapper returned by ``@ql.compile`` and
 the ``compile`` decorator factory.  Capture logic is in ``_capture``,
 replay logic in ``_replay``, IR execution in ``_ir``, inverse classes
-(``_InverseCompiledFunc``, ``_AncillaInverseProxy``) in ``_inverse``,
+(``_InverseProxy``) in ``_inverse``,
 call dispatch in ``_dispatch``, and cache registry in ``_registry``.
 """
 
@@ -104,7 +104,6 @@ class CompiledFunc:
         self._verify = verify
         self._optimize = optimize
         self._inverse_eager = inverse
-        self._inverse_func = None
         self._debug = debug
         self._parametric = parametric
         self._opt = opt
@@ -115,7 +114,6 @@ class CompiledFunc:
         self._call_graph = None
         self._forward_calls = {}
         self._inverse_proxy = None
-        self._adjoint_func = None
         self._stats = None
         self._total_hits = 0
         self._total_misses = 0
@@ -130,7 +128,7 @@ class CompiledFunc:
         register_compiled_func(self)
         # Eagerly create inverse wrapper when inverse=True
         if inverse:
-            self._inverse_func = _InverseCompiledFunc(self)
+            _ = self.inverse  # force lazy creation
 
     # -- compile-mode context manager ------------------------------------
 
@@ -556,17 +554,20 @@ class CompiledFunc:
 
     @property
     def inverse(self):
-        """Return an ``_AncillaInverseProxy`` for uncomputing a prior forward call."""
+        """Return an ``_InverseProxy`` for applying the inverse of this function.
+
+        The proxy auto-dispatches: if a forward-call record exists for
+        the input qubits, it reuses the original ancilla qubits and
+        deallocates them; otherwise it does a standalone adjoint replay.
+        """
         if self._inverse_proxy is None:
-            self._inverse_proxy = _AncillaInverseProxy(self)
+            self._inverse_proxy = _InverseProxy(self)
         return self._inverse_proxy
 
     @property
     def adjoint(self):
-        """Return an ``_InverseCompiledFunc`` for standalone adjoint replay."""
-        if self._adjoint_func is None:
-            self._adjoint_func = _InverseCompiledFunc(self)
-        return self._adjoint_func
+        """Alias for :attr:`inverse`."""
+        return self.inverse
 
     def _reset_for_circuit(self):
         """Reset cache for a new circuit while preserving parametric state."""
@@ -577,10 +578,8 @@ class CompiledFunc:
         # Preserve parametric state across circuits; only clear the block
         # reference since its cache entry is gone.
         self._parametric_block = None
-        if self._inverse_func is not None:
-            self._inverse_func._reset_for_circuit()
-        if self._adjoint_func is not None:
-            self._adjoint_func._reset_for_circuit()
+        if self._inverse_proxy is not None:
+            self._inverse_proxy._reset_for_circuit()
 
     def clear_cache(self):
         """Clear this function's compilation cache and parametric state."""
@@ -592,15 +591,149 @@ class CompiledFunc:
         self._parametric_probed = False
         self._parametric_safe = None
         self._parametric_first_classical = None
-        if self._inverse_func is not None:
-            self._inverse_func.clear_cache()
-        if self._adjoint_func is not None:
-            self._adjoint_func.clear_cache()
+        if self._inverse_proxy is not None:
+            self._inverse_proxy.clear_cache()
 
     @property
     def call_graph(self):
         """Return the CallGraphDAG from the most recent top-level call, or None."""
         return self._call_graph
+
+    def report(self):
+        """Return a compilation report grouped by compiled variant.
+
+        Each cache entry (unique classical args + control context) is
+        shown as a separate table section.
+
+        Returns
+        -------
+        str
+            Multi-line formatted report.
+        """
+        if not self._cache:
+            return f"Compilation Report: {self._func.__name__}\n\n  (not compiled yet)"
+
+        dag = self._call_graph
+        if dag is None:
+            return f"Compilation Report: {self._func.__name__}\n\n  (no call graph)"
+
+        header = f"{'Name':<20s} | {'Gates':>8s} | {'Depth':>8s} | {'Qubits':>8s} | {'T-count':>8s}"
+        sep = "-" * len(header)
+        lines = [f"Compilation Report: {self._func.__name__}"]
+
+        for cache_key, block in self._cache.items():
+            # Build section label
+            classical_args = cache_key[0] if cache_key else ()
+            is_ctrl = getattr(block, "_captured_controlled", False)
+            context = "Controlled" if is_ctrl else "Uncontrolled"
+            if classical_args:
+                args_str = ", ".join(str(a) for a in classical_args)
+                label = f"{context} ({args_str})"
+            else:
+                label = context
+
+            # Pick the right gate count attributes for this context
+            if is_ctrl:
+                g_attr = "controlled_gate_count"
+                d_attr = "controlled_depth"
+                t_attr = "controlled_t_count"
+            else:
+                g_attr = "uncontrolled_gate_count"
+                d_attr = "uncontrolled_depth"
+                t_attr = "uncontrolled_t_count"
+
+            # Collect all operations from DAG node indices.
+            # This includes both @ql.compile call nodes (make_move, foo)
+            # and built-in ops (eq_cq, add_cq) dispatched by the backend.
+            nodes = []
+            indices = block._dag_node_indices
+            if indices:
+                for idx in indices:
+                    if idx < len(dag._nodes):
+                        n = dag._nodes[idx]
+                        if getattr(n, g_attr, 0):
+                            nodes.append(n)
+
+            # For wrappers (no dag nodes), use call records instead.
+            if not nodes:
+                call_records = getattr(block, "_call_records", None)
+                if call_records:
+                    for cr in call_records:
+                        inner = cr.compiled_func_ref
+                        if inner is None:
+                            continue
+                        inner_block = inner._cache.get(cr.cache_key)
+                        if inner_block is None:
+                            continue
+                        name = inner._func.__name__
+                        gc = (
+                            inner_block.original_gate_count
+                            if inner_block.original_gate_count
+                            else len(inner_block.gates)
+                        )
+                        inner_dag = inner._call_graph
+                        if gc == 0 and inner_dag is not None:
+                            agg = inner_dag.aggregate()
+                            if is_ctrl:
+                                gc = agg.get("gates_cc", 0) or agg.get("gates", 0)
+                                tc = agg.get("t_count_cc", 0) or agg.get("t_count", 0)
+                            else:
+                                gc = agg.get("gates_uc", 0) or agg.get("gates", 0)
+                                tc = agg.get("t_count_uc", 0) or agg.get("t_count", 0)
+                        else:
+                            tc = _compute_t_count(inner_block.gates)
+                        if gc:
+                            nodes.append(_ReportRow(name, gc, 0, set(), tc))
+
+            if not nodes:
+                continue
+
+            lines.append("")
+            lines.append(f"  {label}:")
+            lines.append(f"  {header}")
+            lines.append(f"  {sep}")
+            total_g = 0
+            total_t = 0
+            for nd in nodes:
+                g = getattr(nd, g_attr, 0) if hasattr(nd, g_attr) else nd.gate_count
+                d = getattr(nd, d_attr, 0) if hasattr(nd, d_attr) else nd.depth
+                t = getattr(nd, t_attr, 0) if hasattr(nd, t_attr) else nd.t_count
+                qs = nd.qubit_set if hasattr(nd, "qubit_set") else set()
+                total_g += g
+                total_t += t
+                lines.append(f"  {nd.func_name:<20s} | {g:>8d} | {d:>8d} | {len(qs):>8d} | {t:>8d}")
+            lines.append(f"  {sep}")
+            total_d = max(
+                (getattr(n, d_attr, 0) if hasattr(n, d_attr) else n.depth for n in nodes),
+                default=0,
+            )
+            total_q = (
+                len(
+                    set().union(
+                        *(n.qubit_set for n in nodes if hasattr(n, "qubit_set") and n.qubit_set)
+                    )
+                )
+                if nodes
+                else 0
+            )
+            lines.append(
+                f"  {'TOTAL':<20s} | {total_g:>8d} | {total_d:>8d} | {total_q:>8d} | {total_t:>8d}"
+            )
+
+        return "\n".join(lines)
+
+
+class _ReportRow:
+    """Lightweight stand-in for a DAGNode in report tables."""
+
+    __slots__ = ("func_name", "gate_count", "depth", "qubit_set", "t_count")
+
+    def __init__(self, func_name, gate_count, depth, qubit_set, t_count):
+        self.func_name = func_name
+        self.gate_count = gate_count
+        self.depth = depth
+        self.qubit_set = qubit_set
+        self.t_count = t_count
 
     def __repr__(self):
         return f"<CompiledFunc {self._func.__name__}>"
@@ -609,7 +742,7 @@ class CompiledFunc:
 # ---------------------------------------------------------------------------
 # Inverse classes (delegated to _inverse module)
 # ---------------------------------------------------------------------------
-from ._inverse import _AncillaInverseProxy, _InverseCompiledFunc  # noqa: E402
+from ._inverse import _InverseProxy  # noqa: E402
 
 
 # ---------------------------------------------------------------------------

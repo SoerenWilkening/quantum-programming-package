@@ -12,7 +12,7 @@ For each move index i in 0 .. num_moves - 1:
     2. Evaluate is_valid(state) -- returns a qbool
     3. Controlled on the validity flag: count += 1
     4. Uncompute is_valid (automatic via history graph or adjoint)
-    5. Undo the move via undo_move(state, i) or make_move.adjoint(state, i)
+    5. Undo the move via undo_move(state, i) or make_move.inverse(state, i)
 
 After the loop, ``count_reg`` holds the number of valid children for
 each basis state of ``state``.  The state register is restored to its
@@ -31,7 +31,7 @@ def _get_undo_fn(config):
     """Determine the undo function for make_move.
 
     Uses ``config.undo_move`` if set, otherwise falls back to
-    ``config.make_move.adjoint``.
+    ``config.make_move.inverse``.
 
     Parameters
     ----------
@@ -46,12 +46,12 @@ def _get_undo_fn(config):
     Raises
     ------
     AttributeError
-        If neither ``undo_move`` nor ``make_move.adjoint`` is available.
+        If neither ``undo_move`` nor ``make_move.inverse`` is available.
     """
-    undo = getattr(config, 'undo_move', None)
+    undo = getattr(config, "undo_move", None)
     if undo is not None:
         return undo
-    return config.make_move.adjoint
+    return config.make_move.inverse
 
 
 def count_valid_children(config, count_reg):
@@ -63,7 +63,7 @@ def count_valid_children(config, count_reg):
     of valid children and ``config.state`` is unchanged.
 
     The undo is performed by ``config.undo_move(state, i)`` if available,
-    otherwise by ``config.make_move.adjoint(state, i)``.
+    otherwise by ``config.make_move.inverse(state, i)``.
 
     Parameters
     ----------
@@ -159,9 +159,7 @@ def _validate_config(config):
         If ``make_move``, ``is_valid``, or ``state`` is None.
     """
     if not isinstance(config, WalkConfig):
-        raise TypeError(
-            f"config must be a WalkConfig, got {type(config).__name__}"
-        )
+        raise TypeError(f"config must be a WalkConfig, got {type(config).__name__}")
     if config.make_move is None:
         raise ValueError("config.make_move must not be None")
     if config.is_valid is None:

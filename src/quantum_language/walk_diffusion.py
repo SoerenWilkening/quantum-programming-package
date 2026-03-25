@@ -146,7 +146,7 @@ def _evaluate_validity(config):
 
     undo = config.undo_move
     if undo is None:
-        undo = config.make_move.adjoint
+        undo = config.make_move.inverse
 
     validity = []
     for i in range(num_moves):
@@ -312,7 +312,7 @@ def walk_diffusion(
         Maximum number of moves (branching factor) at any node.
     undo_move : callable, optional
         Explicit inverse of ``make_move``.  If not provided, the
-        counting module falls back to ``make_move.adjoint``.
+        counting module falls back to ``make_move.inverse``.
     max_depth : int, optional
         Tree depth (used for root angle computation).  Default is 1.
     is_root : bool, optional

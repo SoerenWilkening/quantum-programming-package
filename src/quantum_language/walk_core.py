@@ -19,9 +19,9 @@ References
 """
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
-
+from typing import Any
 
 # ------------------------------------------------------------------
 # Register width helpers
@@ -233,7 +233,7 @@ class WalkConfig:
         classical move index.
     undo_move : callable, optional
         Explicit inverse of ``make_move``.  If not provided, the counting
-        module falls back to ``make_move.adjoint``.
+        module falls back to ``make_move.inverse``.
     is_valid : callable, optional
         Quantum predicate returning ``qbool``.
     is_marked : callable, optional
@@ -253,11 +253,11 @@ class WalkConfig:
 
     max_depth: int
     num_moves: int
-    make_move: Optional[Callable] = None
-    undo_move: Optional[Callable] = None
-    is_valid: Optional[Callable] = None
-    is_marked: Optional[Callable] = None
-    state: Optional[Any] = None
+    make_move: Callable | None = None
+    undo_move: Callable | None = None
+    is_valid: Callable | None = None
+    is_marked: Callable | None = None
+    state: Any | None = None
 
     # Derived (computed in __post_init__)
     bw: int = field(init=False)
@@ -266,21 +266,13 @@ class WalkConfig:
 
     def __post_init__(self):
         if not isinstance(self.max_depth, int):
-            raise TypeError(
-                f"max_depth must be an int, got {type(self.max_depth).__name__}"
-            )
+            raise TypeError(f"max_depth must be an int, got {type(self.max_depth).__name__}")
         if not isinstance(self.num_moves, int):
-            raise TypeError(
-                f"num_moves must be an int, got {type(self.num_moves).__name__}"
-            )
+            raise TypeError(f"num_moves must be an int, got {type(self.num_moves).__name__}")
         if self.max_depth < 1:
-            raise ValueError(
-                f"max_depth must be >= 1, got {self.max_depth}"
-            )
+            raise ValueError(f"max_depth must be >= 1, got {self.max_depth}")
         if self.num_moves < 1:
-            raise ValueError(
-                f"num_moves must be >= 1, got {self.num_moves}"
-            )
+            raise ValueError(f"num_moves must be >= 1, got {self.num_moves}")
 
         self.bw = branch_width(self.num_moves)
         self.cw = count_width(self.num_moves)

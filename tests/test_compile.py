@@ -2173,7 +2173,7 @@ def test_double_forward_raises_error():
 
 
 def test_inverse_without_forward_raises_error():
-    """Error: f.inverse(x) without prior f(x) raises ValueError."""
+    """f.inverse(x) without prior f(x) uses standalone path (no error)."""
     ql.circuit()
 
     @ql.compile
@@ -2183,12 +2183,12 @@ def test_inverse_without_forward_raises_error():
         return t
 
     a = ql.qint(3, width=4)
-    with pytest.raises(ValueError, match="No prior forward call"):
-        op.inverse(a)
+    # Unified inverse falls through to standalone adjoint replay
+    op.inverse(a)
 
 
-def test_double_inverse_raises_error():
-    """Error: f.inverse(x) twice for same forward call raises error."""
+def test_double_inverse_no_error():
+    """f.inverse(x) twice: first uses ancilla path, second uses standalone."""
     ql.circuit()
 
     @ql.compile
@@ -2199,9 +2199,8 @@ def test_double_inverse_raises_error():
 
     a = ql.qint(3, width=4)
     op(a)
-    op.inverse(a)
-    with pytest.raises(ValueError, match="No prior forward call"):
-        op.inverse(a)  # Already inversed
+    op.inverse(a)  # Ancilla path: deallocates
+    op.inverse(a)  # Standalone path: fresh ancillas
 
 
 # ---------------------------------------------------------------------------
