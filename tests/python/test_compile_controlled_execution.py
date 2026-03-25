@@ -122,6 +122,7 @@ class TestIREntryBothSequences:
     def test_eq_cq_has_both_seqs(self):
         """Comparison IR entry has both seq types."""
         ql.circuit()
+        ql.option("fault_tolerant", False)  # QFT mode for IR recording
         a = ql.qint(5, width=4)
 
         @ql.compile
