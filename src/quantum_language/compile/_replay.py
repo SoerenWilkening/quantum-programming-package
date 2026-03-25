@@ -257,12 +257,7 @@ def _replay(cf, block, quantum_args, track_forward=True, kind=None):
     # virtual_to_real mapping to replay adjoint gates.
     if track_forward and block.internal_qubit_count > 0:
         input_key = _input_qubit_key(quantum_args)
-        if input_key in cf._forward_calls:
-            raise ValueError(
-                f"Compiled function '{cf._func.__name__}' already has an uninverted "
-                f"forward call with these input qubits. Call {cf._func.__name__}.inverse() first."
-            )
-        cf._forward_calls[input_key] = AncillaRecord(
+        record = AncillaRecord(
             ancilla_qubits=ancilla_qubits,
             virtual_to_real=dict(virtual_to_real),
             block=block,
@@ -270,6 +265,12 @@ def _replay(cf, block, quantum_args, track_forward=True, kind=None):
             if (block.return_qubit_range is not None and block.return_is_param_index is None)
             else None,
         )
+        # Use a stack (list) per key so multiple forward calls with the
+        # same physical qubits can coexist (e.g. is_valid called in a
+        # loop over moves).  Inverse pops LIFO.
+        if input_key not in cf._forward_calls:
+            cf._forward_calls[input_key] = []
+        cf._forward_calls[input_key].append(record)
 
     return result
 

@@ -87,8 +87,9 @@ class _InverseProxy:
         quantum_args, _, _ = self._cf._classify_args(args, kwargs)
         input_key = _input_qubit_key(quantum_args)
 
-        record = self._cf._forward_calls.get(input_key)
-        if record is not None:
+        records = self._cf._forward_calls.get(input_key)
+        if records:
+            record = records[-1]  # LIFO: most recent forward call
             return self._ancilla_path(quantum_args, input_key, record)
         else:
             return self._standalone_path(args, kwargs, quantum_args)
@@ -144,8 +145,12 @@ class _InverseProxy:
             record.return_qint._is_uncomputed = True
             record.return_qint.allocated_qubits = False
 
-        # Remove forward call record
-        del self._cf._forward_calls[input_key]
+        # Remove forward call record (pop from stack)
+        records = self._cf._forward_calls.get(input_key)
+        if records:
+            records.pop()
+            if not records:
+                del self._cf._forward_calls[input_key]
 
         return None
 
@@ -189,7 +194,11 @@ class _InverseProxy:
                     _set_control_stack(saved_stack)
                 # Remove any forward call record created as side-effect
                 input_key = _input_qubit_key(quantum_args)
-                self._cf._forward_calls.pop(input_key, None)
+                records = self._cf._forward_calls.get(input_key)
+                if records:
+                    records.pop()
+                    if not records:
+                        del self._cf._forward_calls[input_key]
 
             block = self._cf._cache[original_key]
             inverted_gates = _inverse_gate_list(block.gates)
@@ -214,7 +223,11 @@ class _InverseProxy:
         # Clear any stale forward-call record (e.g. from a prior forward
         # call whose ancillas were already freed by qubit saving).
         input_key = _input_qubit_key(quantum_args)
-        self._cf._forward_calls.pop(input_key, None)
+        records = self._cf._forward_calls.get(input_key)
+        if records:
+            records.pop()
+            if not records:
+                del self._cf._forward_calls[input_key]
 
         return result
 

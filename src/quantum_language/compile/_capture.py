@@ -248,8 +248,13 @@ def _capture_inner(cf, args, kwargs, quantum_args):
                 return_is_param_index = param_idx
                 break
 
-        # Map return qubits to virtual namespace
+        # Map return qubits to virtual namespace (add missing ones first,
+        # e.g. in tracking-only mode where raw_gates is empty)
         if ret_indices:
+            for r in ret_indices:
+                if r not in real_to_virtual:
+                    real_to_virtual[r] = total_virtual
+                    total_virtual += 1
             virt_ret = [real_to_virtual[r] for r in ret_indices]
             return_range = (min(virt_ret), len(ret_indices))
     elif isinstance(result, qint):
@@ -262,7 +267,12 @@ def _capture_inner(cf, args, kwargs, quantum_args):
                 return_is_param_index = param_idx
                 break
 
-        # Map return qubits to virtual namespace
+        # Map return qubits to virtual namespace (add missing ones first,
+        # e.g. in tracking-only mode where raw_gates is empty)
+        for r in ret_indices:
+            if r not in real_to_virtual:
+                real_to_virtual[r] = total_virtual
+                total_virtual += 1
         virt_ret = [real_to_virtual[r] for r in ret_indices]
         return_range = (min(virt_ret), result.width)
 
@@ -396,7 +406,7 @@ def _capture_and_cache(
     capture_ancillas = block._capture_ancilla_qubits or []
     if capture_ancillas:
         input_key = _input_qubit_key(quantum_args)
-        cf._forward_calls[input_key] = AncillaRecord(
+        record = AncillaRecord(
             ancilla_qubits=capture_ancillas,
             virtual_to_real=block._capture_virtual_to_real or {},
             block=block,
@@ -404,5 +414,8 @@ def _capture_and_cache(
             if (block.return_qubit_range is not None and block.return_is_param_index is None)
             else None,
         )
+        if input_key not in cf._forward_calls:
+            cf._forward_calls[input_key] = []
+        cf._forward_calls[input_key].append(record)
 
     return result
