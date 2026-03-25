@@ -32,15 +32,6 @@
     {
       "angle": 1.0,
       "controls": [
-        0
-      ],
-      "num_controls": 1,
-      "target": 8,
-      "type": 0
-    },
-    {
-      "angle": 1.0,
-      "controls": [
         1
       ],
       "num_controls": 1,
@@ -50,19 +41,28 @@
     {
       "angle": 1.0,
       "controls": [
-        2
+        3
       ],
       "num_controls": 1,
-      "target": 10,
+      "target": 11,
       "type": 0
     },
     {
       "angle": 1.0,
       "controls": [
-        3
+        0
       ],
       "num_controls": 1,
-      "target": 11,
+      "target": 8,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        2
+      ],
+      "num_controls": 1,
+      "target": 10,
       "type": 0
     },
     {

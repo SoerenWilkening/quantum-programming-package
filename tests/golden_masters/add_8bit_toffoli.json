@@ -64,15 +64,6 @@
     {
       "angle": 1.0,
       "controls": [
-        2
-      ],
-      "num_controls": 1,
-      "target": 18,
-      "type": 0
-    },
-    {
-      "angle": 1.0,
-      "controls": [
         3
       ],
       "num_controls": 1,
@@ -86,6 +77,24 @@
       ],
       "num_controls": 1,
       "target": 20,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        7
+      ],
+      "num_controls": 1,
+      "target": 23,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        2
+      ],
+      "num_controls": 1,
+      "target": 18,
       "type": 0
     },
     {
@@ -109,15 +118,6 @@
     {
       "angle": 1.0,
       "controls": [
-        7
-      ],
-      "num_controls": 1,
-      "target": 23,
-      "type": 0
-    },
-    {
-      "angle": 1.0,
-      "controls": [
         8
       ],
       "num_controls": 1,
@@ -131,15 +131,6 @@
       ],
       "num_controls": 1,
       "target": 17,
-      "type": 0
-    },
-    {
-      "angle": 1.0,
-      "controls": [
-        10
-      ],
-      "num_controls": 1,
-      "target": 18,
       "type": 0
     },
     {
@@ -163,24 +154,6 @@
     {
       "angle": 1.0,
       "controls": [
-        13
-      ],
-      "num_controls": 1,
-      "target": 21,
-      "type": 0
-    },
-    {
-      "angle": 1.0,
-      "controls": [
-        14
-      ],
-      "num_controls": 1,
-      "target": 22,
-      "type": 0
-    },
-    {
-      "angle": 1.0,
-      "controls": [
         15
       ],
       "num_controls": 1,
@@ -194,6 +167,33 @@
       ],
       "num_controls": 1,
       "target": 24,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        10
+      ],
+      "num_controls": 1,
+      "target": 18,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        13
+      ],
+      "num_controls": 1,
+      "target": 21,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        14
+      ],
+      "num_controls": 1,
+      "target": 22,
       "type": 0
     },
     {
@@ -527,5 +527,5 @@
     }
   ],
   "total_gates": 58,
-  "total_layers": 39
+  "total_layers": 38
 }

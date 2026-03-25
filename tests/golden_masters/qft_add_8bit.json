@@ -64,15 +64,6 @@
     {
       "angle": 1.0,
       "controls": [
-        2
-      ],
-      "num_controls": 1,
-      "target": 18,
-      "type": 0
-    },
-    {
-      "angle": 1.0,
-      "controls": [
         3
       ],
       "num_controls": 1,
@@ -91,6 +82,24 @@
     {
       "angle": 1.0,
       "controls": [
+        7
+      ],
+      "num_controls": 1,
+      "target": 23,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
+        2
+      ],
+      "num_controls": 1,
+      "target": 18,
+      "type": 0
+    },
+    {
+      "angle": 1.0,
+      "controls": [
         5
       ],
       "num_controls": 1,
@@ -104,15 +113,6 @@
       ],
       "num_controls": 1,
       "target": 22,
-      "type": 0
-    },
-    {
-      "angle": 1.0,
-      "controls": [
-        7
-      ],
-      "num_controls": 1,
-      "target": 23,
       "type": 0
     },
     {
@@ -1057,5 +1057,5 @@
     }
   ],
   "total_gates": 122,
-  "total_layers": 40
+  "total_layers": 39
 }

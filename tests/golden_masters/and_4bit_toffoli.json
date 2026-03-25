@@ -28,48 +28,8 @@
       "num_controls": 0,
       "target": 5,
       "type": 0
-    },
-    {
-      "angle": 1.0,
-      "controls": [
-        0,
-        4
-      ],
-      "num_controls": 2,
-      "target": 8,
-      "type": 0
-    },
-    {
-      "angle": 1.0,
-      "controls": [
-        1,
-        5
-      ],
-      "num_controls": 2,
-      "target": 9,
-      "type": 0
-    },
-    {
-      "angle": 1.0,
-      "controls": [
-        2,
-        6
-      ],
-      "num_controls": 2,
-      "target": 10,
-      "type": 0
-    },
-    {
-      "angle": 1.0,
-      "controls": [
-        3,
-        7
-      ],
-      "num_controls": 2,
-      "target": 11,
-      "type": 0
     }
   ],
-  "total_gates": 8,
-  "total_layers": 2
+  "total_gates": 4,
+  "total_layers": 1
 }
