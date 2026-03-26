@@ -9,6 +9,13 @@ import pytest
 import quantum_language as ql
 
 
+@pytest.fixture(autouse=True)
+def _fresh_circuit():
+    """Reset circuit before every test to prevent memory accumulation."""
+    ql.circuit()
+    yield
+
+
 class TestCircuitAPI:
     """Test circuit class public API."""
 
@@ -300,13 +307,13 @@ class TestQintModAPI:
         y = x * 3
         assert isinstance(y, ql.qint_mod)
 
-    def test_qint_mod_mul_qint_mod_not_implemented(self):
-        """qint_mod * qint_mod raises NotImplementedError (known limitation)."""
-        x = ql.qint_mod(5, N=17)
-        y = ql.qint_mod(3, N=17)
-        with pytest.raises(NotImplementedError) as excinfo:
-            _ = x * y
-        assert "qint_mod * int" in str(excinfo.value)  # Error message is actionable
+    def test_qint_mod_mul_qint_mod(self):
+        """qint_mod * qint_mod returns qint_mod (QQ modular multiplication)."""
+        x = ql.qint_mod(5, N=7)
+        y = ql.qint_mod(3, N=7)
+        z = x * y
+        assert isinstance(z, ql.qint_mod)
+        assert z.modulus == 7
 
     def test_qint_mod_mismatched_moduli(self):
         """Operations with different moduli raise ValueError."""
@@ -320,8 +327,8 @@ class TestModuleFunctions:
     """Test module-level functions."""
 
     def test_array_creates_list_of_qint(self):
-        """array(n) creates list of n qints."""
-        arr = ql.array(5)
+        """array([values]) creates qarray of qints."""
+        arr = ql.array([0, 0, 0, 0, 0])
         assert len(arr) == 5
         assert all(isinstance(x, ql.qint) for x in arr)
 
@@ -332,10 +339,9 @@ class TestModuleFunctions:
         assert all(isinstance(x, ql.qint) for x in arr)
 
     def test_array_2d(self):
-        """array((rows, cols)) creates 2D array."""
-        arr = ql.array((2, 3))
-        assert len(arr) == 2
-        assert len(arr[0]) == 3
+        """array(dim=(rows, cols)) creates 2D qarray."""
+        arr = ql.array(dim=(2, 3))
+        assert arr.shape == (2, 3)
 
     def test_circuit_stats(self):
         """circuit_stats() returns dict with allocation info."""
