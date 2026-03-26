@@ -138,6 +138,16 @@ def _run_inverted_on_circuit(seq_ptr, qubit_mapping, int num_ancilla=0):
 
 	run_instruction(_seq, _qa, True, _circ)
 
+	# Record uncomputation in the DAG (no-op outside @ql.compile capture)
+	_record_operation(
+		"uncompute",
+		tuple(qubit_mapping),
+		gate_count=_seq.total_gate_count,
+		sequence_ptr=seq_ptr,
+		invert=True,
+		controlled=False,
+	)
+
 	# Free ancilla after inverse call
 	if num_ancilla > 0 and _anc_start != <unsigned int>(-1):
 		_alloc = circuit_get_allocator(<circuit_s*>_circ)

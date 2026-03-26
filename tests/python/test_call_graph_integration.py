@@ -17,7 +17,6 @@ from quantum_language.call_graph import (
     push_dag_context,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -177,8 +176,7 @@ class TestMixedOperationsDirect:
         assert len(nodes) > 0
         for node in nodes:
             assert node.gate_count > 0, (
-                f"Node {node.operation_type} has gate_count={node.gate_count}, "
-                "expected > 0"
+                f"Node {node.operation_type} has gate_count={node.gate_count}, expected > 0"
             )
 
     def test_all_nodes_reachable(self):
@@ -356,9 +354,7 @@ class TestCompileMixedOperations:
         mul_nodes = [n for n in nodes if "mul" in n.operation_type]
         assert len(mul_nodes) > 0, "Expected at least one mul operation node"
         for node in mul_nodes:
-            assert node.gate_count > 0, (
-                f"mul node gate_count should be > 0, got {node.gate_count}"
-            )
+            assert node.gate_count > 0, f"mul node gate_count should be > 0, got {node.gate_count}"
 
     def test_comparison_gate_counts(self):
         """Comparison with DAG context produces DAG nodes with
@@ -368,7 +364,7 @@ class TestCompileMixedOperations:
         push_dag_context(dag)
         try:
             a = qint(3, width=4)
-            _ = (a == 5)
+            _ = a == 5
         finally:
             pop_dag_context()
 
@@ -376,9 +372,7 @@ class TestCompileMixedOperations:
         eq_nodes = [n for n in nodes if "eq" in n.operation_type]
         assert len(eq_nodes) > 0, "Expected at least one eq operation node"
         for node in eq_nodes:
-            assert node.gate_count > 0, (
-                f"eq node gate_count should be > 0, got {node.gate_count}"
-            )
+            assert node.gate_count > 0, f"eq node gate_count should be > 0, got {node.gate_count}"
 
     def test_mixed_all_operation_types(self):
         """Addition, multiplication, and comparison together produce
@@ -391,7 +385,7 @@ class TestCompileMixedOperations:
             b = qint(3, width=4)
             a += 1
             b *= 2
-            _ = (a == 3)
+            _ = a == 3
             a += b
         finally:
             pop_dag_context()
@@ -515,9 +509,7 @@ class TestNoOverlapEdges:
         for eidx in dag.dag.edge_indices():
             edata = dag.dag.get_edge_data_by_index(eidx)
             if isinstance(edata, dict):
-                assert edata.get("type") != "overlap", (
-                    f"Found unexpected overlap edge: {edata}"
-                )
+                assert edata.get("type") != "overlap", f"Found unexpected overlap edge: {edata}"
 
     def test_all_edges_are_execution_order(self):
         """Every edge in the DAG is of type 'execution_order'."""
@@ -563,9 +555,7 @@ class TestNoWrapperNodes:
         assert dag is not None
         # All nodes should be operation nodes (have operation_type set)
         for node in dag.nodes:
-            assert node.operation_type, (
-                f"Found node without operation_type: {node}"
-            )
+            assert node.operation_type, f"Found node without operation_type: {node}"
 
 
 # ---------------------------------------------------------------------------
@@ -583,11 +573,11 @@ class TestEndToEnd:
 
         @ql.compile(opt=1)
         def complex_fn(x, y):
-            x += 1          # add on x register
-            y *= 2          # mul on y register (independent)
-            _ = (x == 3)    # comparison on x register
-            x += y          # merge: touches both registers
-            x += 3          # add on (now-merged) registers
+            x += 1  # add on x register
+            y *= 2  # mul on y register (independent)
+            _ = x == 3  # comparison on x register
+            x += y  # merge: touches both registers
+            x += 3  # add on (now-merged) registers
             return x
 
         a = qint(3, width=4)
@@ -597,9 +587,11 @@ class TestEndToEnd:
         dag = complex_fn.call_graph
         assert dag is not None
 
-        # 1. Correct number of operation nodes (add, mul, eq, add_qq, add_cq)
+        # 1. Correct number of operation nodes (add, mul, eq, add_qq, add_cq, uncompute)
+        # The comparison `x == 3` creates a temporary qbool whose auto-uncomputation
+        # is now recorded as an "uncompute" DAG node.
         nodes = _op_nodes(dag)
-        assert len(nodes) == 5, f"Expected 5 operation nodes, got {len(nodes)}"
+        assert len(nodes) == 6, f"Expected 6 operation nodes, got {len(nodes)}"
 
         # 2. All gate counts non-zero
         for node in nodes:
@@ -617,9 +609,7 @@ class TestEndToEnd:
 
         # 5. Edge structure: at least some execution-order edges
         edges = _exec_edges(dag)
-        assert len(edges) >= 2, (
-            f"Expected at least 2 execution-order edges, got {len(edges)}"
-        )
+        assert len(edges) >= 2, f"Expected at least 2 execution-order edges, got {len(edges)}"
 
         # 6. No overlap edges
         for eidx in dag.dag.edge_indices():
