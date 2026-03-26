@@ -842,6 +842,11 @@ sequence_t *toffoli_cQQ_add_ks(int bits) {
  * @return Fresh sequence, or NULL for bits < 2 or allocation failure
  */
 sequence_t *toffoli_cCQ_add_bk(int bits, int64_t value) {
+    /* BUG: Phase F sum extraction produces incorrect results for the
+     * controlled CQ BK CLA path.  Disabled until fixed — falls through
+     * to the working CDKM (RCA) implementation.  See test_cla_bk_algorithm
+     * TestBKControlledCQAdd for the failing test case. */
+    return NULL;
     if (bits < 2 || bits > 64)
         return NULL;
 

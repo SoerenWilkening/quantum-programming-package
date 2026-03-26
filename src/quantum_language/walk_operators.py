@@ -158,7 +158,6 @@ def build_R_A(config, registers):
         If arguments are wrong type.
     """
     _validate_operator_args(config, registers)
-
     for depth in range(0, config.max_depth + 1, 2):
         if depth == config.max_depth:
             continue  # Root always belongs to R_B
@@ -196,7 +195,6 @@ def build_R_B(config, registers):
         If arguments are wrong type.
     """
     _validate_operator_args(config, registers)
-
     for depth in range(1, config.max_depth + 1, 2):
         _apply_local_diffusion(config, registers, depth)
 

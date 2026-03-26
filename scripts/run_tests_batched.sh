@@ -11,8 +11,14 @@
 set -euo pipefail
 
 TESTDIR="tests/python"
-PYTEST_ARGS="${PYTEST_ARGS:---tb=short -q}"
 BATCH_SIZE="${BATCH_SIZE:-5}"  # number of test files per subprocess
+
+# Build pytest args array — supports PYTEST_ARGS env var with proper quoting
+if [[ -n "${PYTEST_ARGS:-}" ]]; then
+    eval "PYTEST_ARGS_ARRAY=($PYTEST_ARGS)"
+else
+    PYTEST_ARGS_ARRAY=(--tb=short -q)
+fi
 
 if [ $# -gt 0 ]; then
     files=("$@")
@@ -32,7 +38,7 @@ for ((i = 0; i < total; i += BATCH_SIZE)); do
     batch=("${files[@]:i:BATCH_SIZE}")
     batch_desc=$(printf '%s ' "${batch[@]}" | sed 's|tests/python/||g')
 
-    if python3 -m pytest ${PYTEST_ARGS} "${batch[@]}" 2>&1; then
+    if python3 -m pytest "${PYTEST_ARGS_ARRAY[@]}" "${batch[@]}" 2>&1; then
         passed=$((passed + ${#batch[@]}))
     else
         exit_code=$?
@@ -40,7 +46,7 @@ for ((i = 0; i < total; i += BATCH_SIZE)); do
             echo ""
             echo "FATAL: batch killed by OOM (exit 137). Retrying files individually..."
             for f in "${batch[@]}"; do
-                if python3 -m pytest ${PYTEST_ARGS} "$f" 2>&1; then
+                if python3 -m pytest "${PYTEST_ARGS_ARRAY[@]}" "$f" 2>&1; then
                     passed=$((passed + 1))
                 else
                     inner_exit=$?
