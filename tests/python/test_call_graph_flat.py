@@ -11,7 +11,6 @@ import quantum_language as ql
 from quantum_language import qint
 from quantum_language.call_graph import CallGraphDAG
 
-
 # ---------------------------------------------------------------------------
 # No wrapper node
 # ---------------------------------------------------------------------------
@@ -58,7 +57,7 @@ class TestNoWrapperNode:
         assert len(op_nodes) == dag.node_count
 
     def test_no_wrapper_nested_compile(self):
-        """Nested compiled calls produce flat operation nodes, no wrappers."""
+        """Nested compiled calls produce call nodes and operation nodes, no wrappers."""
         ql.circuit()
 
         @ql.compile(opt=1)
@@ -76,10 +75,11 @@ class TestNoWrapperNode:
         outer(a)
         dag = outer.call_graph
         assert dag is not None
-        # All nodes should be operations (no wrapper for inner or outer)
+        # Every node should be either an operation or a call node
         for node in dag.nodes:
-            assert node.operation_type != "", (
-                f"Found wrapper node: {node.func_name!r}"
+            assert node.operation_type != "" or node.is_call_node, (
+                f"Found wrapper node: {node.func_name!r} "
+                f"(op_type={node.operation_type!r}, is_call={node.is_call_node})"
             )
 
 
@@ -107,9 +107,7 @@ class TestNoCallEdgeType:
         for eidx in dag.dag.edge_indices():
             edata = dag.dag.get_edge_data_by_index(eidx)
             if isinstance(edata, dict):
-                assert edata.get("type") != "call", (
-                    f"Found unexpected 'call' edge: {edata}"
-                )
+                assert edata.get("type") != "call", f"Found unexpected 'call' edge: {edata}"
 
     def test_no_call_edge_type_nested(self):
         """Nested compiled functions have no call edges."""
@@ -132,9 +130,7 @@ class TestNoCallEdgeType:
         for eidx in dag.dag.edge_indices():
             edata = dag.dag.get_edge_data_by_index(eidx)
             if isinstance(edata, dict):
-                assert edata.get("type") != "call", (
-                    f"Found unexpected 'call' edge: {edata}"
-                )
+                assert edata.get("type") != "call", f"Found unexpected 'call' edge: {edata}"
 
     def test_no_call_edge_unit_level(self):
         """Direct add_node() calls never produce call edges."""
@@ -190,6 +186,4 @@ class TestReportShowsOperations:
         assert dag is not None
         # All nodes in the DAG should have non-empty operation_type
         for node in dag.nodes:
-            assert node.operation_type, (
-                f"Node {node.func_name!r} has empty operation_type"
-            )
+            assert node.operation_type, f"Node {node.func_name!r} has empty operation_type"

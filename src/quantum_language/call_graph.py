@@ -394,6 +394,16 @@ class CallGraphDAG:
             raise RuntimeError(
                 "Cannot add node to frozen CallGraphDAG. The graph is immutable after capture."
             )
+        # Default uncontrolled metrics to the base metrics when not
+        # explicitly provided, so that nodes added with only gate_count /
+        # depth / t_count are still visible in reports and DOT output.
+        if not uncontrolled_gate_count and gate_count:
+            uncontrolled_gate_count = gate_count
+        if not uncontrolled_depth and depth:
+            uncontrolled_depth = depth
+        if not uncontrolled_t_count and t_count:
+            uncontrolled_t_count = t_count
+
         node = DAGNode(
             func_name,
             qubit_set,
@@ -667,16 +677,16 @@ class CallGraphDAG:
         str
             Valid DOT string starting with ``digraph CallGraph {``.
         """
-        is_cc = context == "controlled"
-        gate_attr = "controlled_gate_count" if is_cc else "uncontrolled_gate_count"
-        depth_attr = "controlled_depth" if is_cc else "uncontrolled_depth"
-        t_attr = "controlled_t_count" if is_cc else "uncontrolled_t_count"
-
-        # Filter to nodes that have values for this context
+        # Filter to nodes that have values for at least one context
         visible = {
             idx
             for idx, nd in enumerate(self._nodes)
-            if not nd._merged and getattr(nd, gate_attr, 0)
+            if not nd._merged
+            and (
+                nd.gate_count
+                or getattr(nd, "uncontrolled_gate_count", 0)
+                or getattr(nd, "controlled_gate_count", 0)
+            )
         }
 
         lines: list[str] = []
@@ -685,22 +695,51 @@ class CallGraphDAG:
         lines.append(f'  label="{context}";')
         lines.append('  node [shape=box, fontname="Courier"];')
 
+        def _fmt(uc_val: int, cc_val: int) -> str:
+            """Format a metric as 'uc / cc' when both exist, else just the value."""
+            if uc_val and cc_val:
+                return f"{uc_val} / {cc_val}"
+            return str(uc_val or cc_val)
+
         def _node_label(idx: int) -> str:
             nd = self._nodes[idx]
             name = nd.func_name.replace('"', '\\"')
-            g = getattr(nd, gate_attr, 0)
-            d = getattr(nd, depth_attr, 0)
-            t = getattr(nd, t_attr, 0)
-            return f"{name}\\ngates: {g}\\ndepth: {d}\\nqubits: {len(nd.qubit_set)}\\nT-count: {t}"
+            uc_g = getattr(nd, "uncontrolled_gate_count", 0)
+            cc_g = getattr(nd, "controlled_gate_count", 0)
+            uc_d = getattr(nd, "uncontrolled_depth", 0)
+            cc_d = getattr(nd, "controlled_depth", 0)
+            uc_t = getattr(nd, "uncontrolled_t_count", 0)
+            cc_t = getattr(nd, "controlled_t_count", 0)
+            return (
+                f"{name}\\ngates: {_fmt(uc_g, cc_g)}\\n"
+                f"depth: {_fmt(uc_d, cc_d)}\\n"
+                f"qubits: {len(nd.qubit_set)}\\n"
+                f"T-count: {_fmt(uc_t, cc_t)}"
+            )
 
-        for idx in sorted(visible):
+        # Group visible nodes into parallel clusters
+        groups = self.parallel_groups()
+        visible_groups = [sorted(g & visible) for g in groups if g & visible]
+
+        def _render_node(idx: int, indent: str = "  ") -> str:
             nd = self._nodes[idx]
             url_attr = ""
             if file_prefix is not None:
                 fname = nd.func_name.replace(" ", "_")
                 url_attr = f', URL="{file_prefix}_{fname}.png"'
             style = ", style=dashed" if nd.is_call_node else ""
-            lines.append(f'  n{idx} [label="{_node_label(idx)}"{style}{url_attr}];')
+            return f'{indent}n{idx} [label="{_node_label(idx)}"{style}{url_attr}];'
+
+        if len(visible_groups) > 1:
+            for ci, grp in enumerate(visible_groups):
+                lines.append(f"  subgraph cluster_{ci} {{")
+                lines.append(f'    label="group {ci}";')
+                for idx in grp:
+                    lines.append(_render_node(idx, indent="    "))
+                lines.append("  }")
+        else:
+            for idx in sorted(visible):
+                lines.append(_render_node(idx))
 
         # Edges between visible nodes only
         for eidx in self._dag.edge_indices():
@@ -745,9 +784,17 @@ class CallGraphDAG:
 
         lines: list[str] = []
 
+        # Build node-to-group mapping for report
+        groups = self.parallel_groups()
+        _node_to_group: dict[int, int] = {}
+        for gi, grp in enumerate(groups):
+            for nidx in grp:
+                _node_to_group[nidx] = gi
+
         def _section(label, nodes, gate_attr, depth_attr, t_attr):
             header = (
-                f"{'Name':<20s} | {'Gates':>8s} | {'Depth':>8s} | {'Qubits':>8s} | {'T-count':>8s}"
+                f"{'Name':<20s} | {'Gates':>8s} | {'Depth':>8s} | "
+                f"{'Qubits':>8s} | {'T-count':>8s} | {'Group':>5s}"
             )
             sep = "-" * len(header)
             lines.append(f"  {label}:")
@@ -761,15 +808,19 @@ class CallGraphDAG:
                 t = getattr(nd, t_attr)
                 total_g += g
                 total_t += t
+                nidx = self._nodes.index(nd)
+                grp_id = _node_to_group.get(nidx, 0)
                 row = (
-                    f"  {nd.func_name:<20s} | {g:>8d} | {d:>8d} | {len(nd.qubit_set):>8d} | {t:>8d}"
+                    f"  {nd.func_name:<20s} | {g:>8d} | {d:>8d} | "
+                    f"{len(nd.qubit_set):>8d} | {t:>8d} | {grp_id:>5d}"
                 )
                 lines.append(row)
             lines.append(f"  {sep}")
             total_d = max((getattr(n, depth_attr) for n in nodes), default=0)
             total_q = len(set().union(*(n.qubit_set for n in nodes))) if nodes else 0
             totals = (
-                f"  {'TOTAL':<20s} | {total_g:>8d} | {total_d:>8d} | {total_q:>8d} | {total_t:>8d}"
+                f"  {'TOTAL':<20s} | {total_g:>8d} | {total_d:>8d} | "
+                f"{total_q:>8d} | {total_t:>8d} |"
             )
             lines.append(totals)
 
@@ -794,6 +845,31 @@ class CallGraphDAG:
                 "controlled_depth",
                 "controlled_t_count",
             )
+
+        # Hierarchical breakdown when call nodes are present
+        call_nodes = [n for n in active if n.is_call_node]
+        if call_nodes:
+            lines.append("")
+            lines.append("  Hierarchical Breakdown:")
+            own_gates = sum(n.gate_count for n in active if not n.is_call_node)
+            ref_gates = sum(n.gate_count for n in call_nodes)
+            total_gates = own_gates + ref_gates
+
+            def _hier_line(label: str, value: int) -> str:
+                pad = max(18 - len(label), 2)
+                return f"  {label}{' ' * pad}{value}"
+
+            lines.append(_hier_line("Own gates:", own_gates))
+            lines.append(_hier_line("Referenced gates:", ref_gates))
+            lines.append(_hier_line("Total:", total_gates))
+            # Show call relationships
+            for eidx in self._dag.edge_indices():
+                src, tgt = self._dag.get_edge_endpoints_by_index(eidx)
+                edata = self._dag.get_edge_data_by_index(eidx)
+                if isinstance(edata, dict) and edata.get("type") == "call":
+                    src_name = self._nodes[src].func_name
+                    tgt_name = self._nodes[tgt].func_name
+                    lines.append(f"  {src_name} -> {tgt_name}")
 
         return "\n".join(lines)
 

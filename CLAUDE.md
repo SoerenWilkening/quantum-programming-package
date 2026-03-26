@@ -210,6 +210,9 @@ ql.option('tradeoff', 'min_qubits')   # Use ripple-carry (fewer qubits)
 ## Development Notes
 
 - Always read relevant files before making changes
-- Run tests after making modifications: `pytest tests/python/ -v`
+- **Run tests in batches** to avoid OOM in the Docker sandbox (665 MB limit):
+  - Full suite: `bash scripts/run_tests_batched.sh`
+  - Specific files: `pytest tests/python/test_foo.py tests/python/test_bar.py -v`
+  - **Never run** `pytest tests/python/` as a single process — it will OOM (exit 137)
 - Follow existing code style (C: LLVM style, Python: PEP 8)
 - The C backend is in `Backend/src/`, Python frontend in `src/quantum_language/`

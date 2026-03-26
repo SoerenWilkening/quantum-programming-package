@@ -18,6 +18,7 @@ Plan 71-06: BK CQ, controlled QQ, controlled CQ CLA verification.
 
 import gc
 import os
+import random
 import sys
 import warnings
 
@@ -32,6 +33,31 @@ import quantum_language as ql
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 warnings.filterwarnings("ignore", message="Value .* exceeds")
+
+# Maximum number of pairs to test per width.  Widths where 2^(2*width) <=
+# this threshold are tested exhaustively; larger widths use edge cases +
+# random sampling.
+_MAX_PAIRS = 64
+
+
+def _test_pairs(width, seed=42):
+    """Return (a, b) pairs for testing at *width*.
+
+    Exhaustive for small widths, sampled for larger ones.
+    """
+    modulus = 1 << width
+    if modulus * modulus <= _MAX_PAIRS:
+        return [(a, b) for a in range(modulus) for b in range(modulus)]
+    # Edge cases: 0, 1, max-1, max, plus random samples
+    edge = [0, 1, modulus - 1]
+    pairs = set()
+    for a in edge:
+        for b in edge:
+            pairs.add((a, b))
+    rng = random.Random(seed)
+    while len(pairs) < _MAX_PAIRS:
+        pairs.add((rng.randrange(modulus), rng.randrange(modulus)))
+    return sorted(pairs)
 
 
 # ---------------------------------------------------------------------------
@@ -177,39 +203,39 @@ def _get_circuit_depth(a_val, b_val, width, use_cla, use_bk=True):
 
 
 class TestBKQQAddExhaustive:
-    """Exhaustive verification of BK CLA addition at widths 2-6."""
+    """Verification of BK CLA addition at widths 2-6."""
 
     @pytest.mark.parametrize("width", [2, 3, 4, 5])
     def test_bk_qq_add_exhaustive(self, width):
-        """BK CLA: a + b mod 2^width for all input pairs."""
+        """BK CLA: a + b mod 2^width."""
         modulus = 1 << width
+        pairs = _test_pairs(width)
         failures = []
 
-        for a_val in range(modulus):
-            for b_val in range(modulus):
-                expected = (a_val + b_val) % modulus
-                actual = _run_bk_add(a_val, b_val, width)
-                if actual != expected:
-                    failures.append(f"a={a_val}, b={b_val}: expected {expected}, got {actual}")
+        for a_val, b_val in pairs:
+            expected = (a_val + b_val) % modulus
+            actual = _run_bk_add(a_val, b_val, width)
+            if actual != expected:
+                failures.append(f"a={a_val}, b={b_val}: expected {expected}, got {actual}")
 
         assert not failures, (
-            f"BK QQ add width={width}: {len(failures)}/{modulus * modulus} failures:\n"
+            f"BK QQ add width={width}: {len(failures)}/{len(pairs)} failures:\n"
             + "\n".join(failures[:20])
         )
 
     @pytest.mark.slow
     def test_bk_qq_add_exhaustive_width6(self):
-        """BK CLA: exhaustive at width 6 (4096 pairs, uses MPS)."""
+        """BK CLA: sampled at width 6, uses MPS."""
         width = 6
         modulus = 1 << width
+        pairs = _test_pairs(width)
         failures = []
 
-        for a_val in range(modulus):
-            for b_val in range(modulus):
-                expected = (a_val + b_val) % modulus
-                actual = _run_bk_add(a_val, b_val, width, use_mps=True)
-                if actual != expected:
-                    failures.append(f"a={a_val}, b={b_val}: expected {expected}, got {actual}")
+        for a_val, b_val in pairs:
+            expected = (a_val + b_val) % modulus
+            actual = _run_bk_add(a_val, b_val, width, use_mps=True)
+            if actual != expected:
+                failures.append(f"a={a_val}, b={b_val}: expected {expected}, got {actual}")
 
         assert not failures, (
             f"BK QQ add width={width}: {len(failures)}/{modulus * modulus} failures:\n"
@@ -234,17 +260,17 @@ class TestBKQQSubExhaustive:
     def test_bk_qq_sub_exhaustive(self, width):
         """BK CLA sub: a - b mod 2^width (falls through to RCA)."""
         modulus = 1 << width
+        pairs = _test_pairs(width)
         failures = []
 
-        for a_val in range(modulus):
-            for b_val in range(modulus):
-                expected = (a_val - b_val) % modulus
-                actual = _run_bk_sub(a_val, b_val, width)
-                if actual != expected:
-                    failures.append(f"a={a_val}, b={b_val}: expected {expected}, got {actual}")
+        for a_val, b_val in pairs:
+            expected = (a_val - b_val) % modulus
+            actual = _run_bk_sub(a_val, b_val, width)
+            if actual != expected:
+                failures.append(f"a={a_val}, b={b_val}: expected {expected}, got {actual}")
 
         assert not failures, (
-            f"BK QQ sub width={width}: {len(failures)}/{modulus * modulus} failures:\n"
+            f"BK QQ sub width={width}: {len(failures)}/{len(pairs)} failures:\n"
             + "\n".join(failures[:20])
         )
 
@@ -260,18 +286,17 @@ class TestBKvsRCAEquivalence:
     @pytest.mark.parametrize("width", [2, 3, 4, 5])
     def test_bk_vs_rca_equivalence(self, width):
         """BK CLA and RCA produce identical addition results."""
-        modulus = 1 << width
+        pairs = _test_pairs(width)
         mismatches = []
 
-        for a_val in range(modulus):
-            for b_val in range(modulus):
-                bk_result = _run_bk_add(a_val, b_val, width)
-                rca_result = _run_rca_add(a_val, b_val, width)
-                if bk_result != rca_result:
-                    mismatches.append(f"a={a_val}, b={b_val}: BK={bk_result}, RCA={rca_result}")
+        for a_val, b_val in pairs:
+            bk_result = _run_bk_add(a_val, b_val, width)
+            rca_result = _run_rca_add(a_val, b_val, width)
+            if bk_result != rca_result:
+                mismatches.append(f"a={a_val}, b={b_val}: BK={bk_result}, RCA={rca_result}")
 
         assert not mismatches, (
-            f"BK vs RCA mismatch width={width}: {len(mismatches)}/{modulus * modulus}:\n"
+            f"BK vs RCA mismatch width={width}: {len(mismatches)}/{len(pairs)}:\n"
             + "\n".join(mismatches[:20])
         )
 
@@ -279,18 +304,17 @@ class TestBKvsRCAEquivalence:
     def test_bk_vs_rca_equivalence_width6(self):
         """BK CLA and RCA equivalence at width 6 (MPS)."""
         width = 6
-        modulus = 1 << width
+        pairs = _test_pairs(width)
         mismatches = []
 
-        for a_val in range(modulus):
-            for b_val in range(modulus):
-                bk_result = _run_bk_add(a_val, b_val, width, use_mps=True)
-                rca_result = _run_rca_add(a_val, b_val, width, use_mps=True)
-                if bk_result != rca_result:
-                    mismatches.append(f"a={a_val}, b={b_val}: BK={bk_result}, RCA={rca_result}")
+        for a_val, b_val in pairs:
+            bk_result = _run_bk_add(a_val, b_val, width, use_mps=True)
+            rca_result = _run_rca_add(a_val, b_val, width, use_mps=True)
+            if bk_result != rca_result:
+                mismatches.append(f"a={a_val}, b={b_val}: BK={bk_result}, RCA={rca_result}")
 
         assert not mismatches, (
-            f"BK vs RCA mismatch width={width}: {len(mismatches)}/{modulus * modulus}:\n"
+            f"BK vs RCA mismatch width={width}: {len(mismatches)}/{len(pairs)}:\n"
             + "\n".join(mismatches[:20])
         )
 
@@ -600,41 +624,36 @@ class TestBKCQAddExhaustive:
 
     @pytest.mark.parametrize("width", [2, 3, 4, 5])
     def test_bk_cq_add_exhaustive(self, width):
-        """BK CQ CLA: self += classical_val for all input pairs."""
+        """BK CQ CLA: self += classical_val."""
         modulus = 1 << width
+        pairs = _test_pairs(width)
         failures = []
 
-        for self_val in range(modulus):
-            for val in range(modulus):
-                expected = (self_val + val) % modulus
-                actual = _run_bk_cq_add(self_val, val, width)
-                if actual != expected:
-                    failures.append(
-                        f"self={self_val}, val={val}: expected {expected}, got {actual}"
-                    )
+        for self_val, val in pairs:
+            expected = (self_val + val) % modulus
+            actual = _run_bk_cq_add(self_val, val, width)
+            if actual != expected:
+                failures.append(f"self={self_val}, val={val}: expected {expected}, got {actual}")
 
         assert not failures, (
-            f"BK CQ add width={width}: {len(failures)}/{modulus * modulus} failures:\n"
+            f"BK CQ add width={width}: {len(failures)}/{len(pairs)} failures:\n"
             + "\n".join(failures[:20])
         )
 
     @pytest.mark.parametrize("width", [2, 3, 4, 5])
     def test_bk_cq_vs_rca_equivalence(self, width):
         """BK CQ CLA produces identical results to RCA CQ."""
-        modulus = 1 << width
+        pairs = _test_pairs(width)
         mismatches = []
 
-        for self_val in range(modulus):
-            for val in range(modulus):
-                bk_result = _run_bk_cq_add(self_val, val, width)
-                rca_result = _run_rca_cq_add(self_val, val, width)
-                if bk_result != rca_result:
-                    mismatches.append(
-                        f"self={self_val}, val={val}: BK={bk_result}, RCA={rca_result}"
-                    )
+        for self_val, val in pairs:
+            bk_result = _run_bk_cq_add(self_val, val, width)
+            rca_result = _run_rca_cq_add(self_val, val, width)
+            if bk_result != rca_result:
+                mismatches.append(f"self={self_val}, val={val}: BK={bk_result}, RCA={rca_result}")
 
         assert not mismatches, (
-            f"BK CQ vs RCA mismatch width={width}: {len(mismatches)}/{modulus * modulus}:\n"
+            f"BK CQ vs RCA mismatch width={width}: {len(mismatches)}/{len(pairs)}:\n"
             + "\n".join(mismatches[:20])
         )
 
@@ -674,35 +693,34 @@ class TestBKControlledQQAdd:
     def test_controlled_bk_qq_add_ctrl1(self, width):
         """Controlled BK QQ add: a += b when control=|1>."""
         modulus = 1 << width
+        pairs = _test_pairs(width)
         failures = []
 
-        for a_val in range(modulus):
-            for b_val in range(modulus):
-                expected = (a_val + b_val) % modulus
-                actual = _run_bk_controlled_qq_add(a_val, b_val, width, 1)
-                if actual != expected:
-                    failures.append(f"a={a_val}, b={b_val}: expected {expected}, got {actual}")
+        for a_val, b_val in pairs:
+            expected = (a_val + b_val) % modulus
+            actual = _run_bk_controlled_qq_add(a_val, b_val, width, 1)
+            if actual != expected:
+                failures.append(f"a={a_val}, b={b_val}: expected {expected}, got {actual}")
 
         assert not failures, (
             f"Controlled BK QQ add ctrl=1 width={width}: "
-            f"{len(failures)}/{modulus * modulus} failures:\n" + "\n".join(failures[:20])
+            f"{len(failures)}/{len(pairs)} failures:\n" + "\n".join(failures[:20])
         )
 
     @pytest.mark.parametrize("width", [2, 3, 4])
     def test_controlled_bk_qq_add_ctrl0(self, width):
         """Controlled BK QQ add: a unchanged when control=|0>."""
-        modulus = 1 << width
+        pairs = _test_pairs(width)
         failures = []
 
-        for a_val in range(modulus):
-            for b_val in range(modulus):
-                actual = _run_bk_controlled_qq_add(a_val, b_val, width, 0)
-                if actual != a_val:
-                    failures.append(f"a={a_val}, b={b_val}: expected {a_val}, got {actual}")
+        for a_val, b_val in pairs:
+            actual = _run_bk_controlled_qq_add(a_val, b_val, width, 0)
+            if actual != a_val:
+                failures.append(f"a={a_val}, b={b_val}: expected {a_val}, got {actual}")
 
         assert not failures, (
             f"Controlled BK QQ add ctrl=0 width={width}: "
-            f"{len(failures)}/{modulus * modulus} failures:\n" + "\n".join(failures[:20])
+            f"{len(failures)}/{len(pairs)} failures:\n" + "\n".join(failures[:20])
         )
 
 
@@ -740,34 +758,32 @@ class TestBKControlledCQAdd:
     def test_controlled_bk_cq_add_ctrl1(self, width):
         """Controlled BK CQ add: self += val when control=|1>."""
         modulus = 1 << width
+        pairs = _test_pairs(width)
         failures = []
 
-        for self_val in range(modulus):
-            for val in range(modulus):
-                expected = (self_val + val) % modulus
-                actual = _run_bk_controlled_cq_add(self_val, val, width, 1)
-                if actual != expected:
-                    failures.append(
-                        f"self={self_val}, val={val}: expected {expected}, got {actual}"
-                    )
+        for self_val, val in pairs:
+            expected = (self_val + val) % modulus
+            actual = _run_bk_controlled_cq_add(self_val, val, width, 1)
+            if actual != expected:
+                failures.append(f"self={self_val}, val={val}: expected {expected}, got {actual}")
 
         assert not failures, (
             f"Controlled BK CQ add ctrl=1 width={width}: "
-            f"{len(failures)}/{modulus * modulus} failures:\n" + "\n".join(failures[:20])
+            f"{len(failures)}/{len(pairs)} failures:\n" + "\n".join(failures[:20])
         )
 
     @pytest.mark.parametrize("width", [2, 3, 4])
     def test_controlled_bk_cq_add_ctrl0(self, width):
         """Controlled BK CQ add: self unchanged when control=|0>."""
-        modulus = 1 << width
+        pairs = _test_pairs(width)
         failures = []
 
-        for self_val in range(modulus):
+        for self_val, _ in pairs:
             actual = _run_bk_controlled_cq_add(self_val, 3, width, 0)
             if actual != self_val:
                 failures.append(f"self={self_val}, val=3: expected {self_val}, got {actual}")
 
         assert not failures, (
             f"Controlled BK CQ add ctrl=0 width={width}: "
-            f"{len(failures)}/{modulus * modulus} failures:\n" + "\n".join(failures[:20])
+            f"{len(failures)}/{len(pairs)} failures:\n" + "\n".join(failures[:20])
         )

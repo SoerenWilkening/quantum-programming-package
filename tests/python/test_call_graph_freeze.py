@@ -13,7 +13,6 @@ import quantum_language as ql
 from quantum_language import qint
 from quantum_language.call_graph import CallGraphDAG
 
-
 # ---------------------------------------------------------------------------
 # Freeze mechanism unit tests
 # ---------------------------------------------------------------------------
@@ -117,8 +116,8 @@ class TestReadAfterFreeze:
 class TestFreezeIntegration:
     """Integration tests: DAG is frozen after first compilation."""
 
-    def test_graph_frozen_after_capture(self):
-        """After first call to @ql.compile(opt=1), the DAG is frozen."""
+    def test_graph_not_frozen_after_opt1_capture(self):
+        """opt=1 DAGs are not frozen (they accumulate across calls)."""
         ql.circuit()
 
         @ql.compile(opt=1)
@@ -130,7 +129,7 @@ class TestFreezeIntegration:
         inc(a)
         dag = inc.call_graph
         assert dag is not None
-        assert dag.frozen
+        assert not dag.frozen
 
     def test_replay_no_mutation(self):
         """Compile fn, call it again, assert node count unchanged."""
@@ -174,11 +173,26 @@ class TestFreezeIntegration:
 
         assert edges_before == edges_after
 
-    def test_frozen_after_default_opt(self):
-        """@ql.compile (bare) also freezes the DAG after capture."""
+    def test_not_frozen_after_default_opt(self):
+        """@ql.compile (bare) defaults to opt=1, which does not freeze."""
         ql.circuit()
 
         @ql.compile
+        def inc(x):
+            x += 1
+            return x
+
+        a = qint(3, width=4)
+        inc(a)
+        dag = inc.call_graph
+        assert dag is not None
+        assert not dag.frozen
+
+    def test_frozen_after_opt0(self):
+        """@ql.compile(opt=0) freezes the DAG after capture."""
+        ql.circuit()
+
+        @ql.compile(opt=0)
         def inc(x):
             x += 1
             return x

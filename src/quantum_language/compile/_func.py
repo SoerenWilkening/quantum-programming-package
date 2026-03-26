@@ -291,13 +291,17 @@ class CompiledFunc:
             # nested compiled-function invocation.
             if _outer_dag is not None:
                 push_dag_context(_outer_dag)
-                self._add_nested_call_dag_node(
+                call_node_idx = self._add_nested_call_dag_node(
                     _outer_dag,
                     quantum_args,
                     cache_key,
                     is_controlled,
                     _has_internal_control,
                 )
+                # Register the call node in the parent block so the report
+                # includes nested compiled calls alongside IR operations.
+                if parent_block is not None and call_node_idx is not None:
+                    parent_block._dag_node_indices.append(call_node_idx)
 
         # Record the layer range and total gate count delta of the inner
         # call so the outer capture can exclude these gates from its own block.
@@ -427,6 +431,7 @@ class CompiledFunc:
         )
         # Store ref so backfill_call_node_siblings can resolve sibling costs
         dag._nodes[node_idx]._compiled_func_ref = self
+        return node_idx
 
     def _classify_args(self, args, kwargs):
         """Separate quantum and classical arguments."""

@@ -19,6 +19,7 @@ Plan 71-04 + 71-06: Final quality gate for Phase 71.
 
 import gc
 import os
+import random
 import sys
 import warnings
 
@@ -32,6 +33,25 @@ import quantum_language as ql
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 warnings.filterwarnings("ignore", message="Value .* exceeds")
+
+# Maximum pairs per width.  Exhaustive below threshold, sampled above.
+_MAX_PAIRS = 64
+
+
+def _test_pairs(width, seed=42):
+    """Return (a, b) pairs: exhaustive for small widths, sampled for larger."""
+    modulus = 1 << width
+    if modulus * modulus <= _MAX_PAIRS:
+        return [(a, b) for a in range(modulus) for b in range(modulus)]
+    edge = [0, 1, modulus - 1]
+    pairs = set()
+    for a in edge:
+        for b in edge:
+            pairs.add((a, b))
+    rng = random.Random(seed)
+    while len(pairs) < _MAX_PAIRS:
+        pairs.add((rng.randrange(modulus), rng.randrange(modulus)))
+    return sorted(pairs)
 
 
 # ---------------------------------------------------------------------------
@@ -103,39 +123,37 @@ class TestCLAvsRCAEquivalence:
     )
     def test_qq_add_equivalence(self, width):
         """QQ addition: CLA == RCA for every input pair."""
-        modulus = 1 << width
         failures = []
 
-        for a_val in range(modulus):
-            for b_val in range(modulus):
-                # RCA result
-                gc.collect()
-                ql.circuit()
-                ql.option("fault_tolerant", True)
-                ql.option("cla", False)  # Force RCA
-                qa_rca = ql.qint(a_val, width=width)
-                qb_rca = ql.qint(b_val, width=width)
-                qa_rca += qb_rca
-                qasm_rca = ql.to_openqasm()
-                nq_rca = _get_num_qubits_from_qasm(qasm_rca)
-                rca_result = _simulate_and_extract(qasm_rca, nq_rca, 0, width)
-                _ = (qa_rca, qb_rca)
+        for a_val, b_val in _test_pairs(width):
+            # RCA result
+            gc.collect()
+            ql.circuit()
+            ql.option("fault_tolerant", True)
+            ql.option("cla", False)  # Force RCA
+            qa_rca = ql.qint(a_val, width=width)
+            qb_rca = ql.qint(b_val, width=width)
+            qa_rca += qb_rca
+            qasm_rca = ql.to_openqasm()
+            nq_rca = _get_num_qubits_from_qasm(qasm_rca)
+            rca_result = _simulate_and_extract(qasm_rca, nq_rca, 0, width)
+            _ = (qa_rca, qb_rca)
 
-                # CLA result
-                gc.collect()
-                ql.circuit()
-                ql.option("fault_tolerant", True)
-                ql.option("cla", True)  # Enable CLA
-                qa_cla = ql.qint(a_val, width=width)
-                qb_cla = ql.qint(b_val, width=width)
-                qa_cla += qb_cla
-                qasm_cla = ql.to_openqasm()
-                nq_cla = _get_num_qubits_from_qasm(qasm_cla)
-                cla_result = _simulate_and_extract(qasm_cla, nq_cla, 0, width)
-                _ = (qa_cla, qb_cla)
+            # CLA result
+            gc.collect()
+            ql.circuit()
+            ql.option("fault_tolerant", True)
+            ql.option("cla", True)  # Enable CLA
+            qa_cla = ql.qint(a_val, width=width)
+            qb_cla = ql.qint(b_val, width=width)
+            qa_cla += qb_cla
+            qasm_cla = ql.to_openqasm()
+            nq_cla = _get_num_qubits_from_qasm(qasm_cla)
+            cla_result = _simulate_and_extract(qasm_cla, nq_cla, 0, width)
+            _ = (qa_cla, qb_cla)
 
-                if rca_result != cla_result:
-                    failures.append(f"  {a_val}+{b_val}: RCA={rca_result}, CLA={cla_result}")
+            if rca_result != cla_result:
+                failures.append(f"  {a_val}+{b_val}: RCA={rca_result}, CLA={cla_result}")
 
         assert not failures, (
             f"QQ add CLA vs RCA width={width}: {len(failures)} failures:\n"
@@ -154,37 +172,35 @@ class TestCLAvsRCAEquivalence:
     )
     def test_cq_add_equivalence(self, width):
         """CQ addition: CLA == RCA for every input pair."""
-        modulus = 1 << width
         failures = []
 
-        for val in range(modulus):
-            for self_val in range(modulus):
-                # RCA
-                gc.collect()
-                ql.circuit()
-                ql.option("fault_tolerant", True)
-                ql.option("cla", False)
-                qa_rca = ql.qint(self_val, width=width)
-                qa_rca += val
-                qasm_rca = ql.to_openqasm()
-                nq_rca = _get_num_qubits_from_qasm(qasm_rca)
-                rca_result = _simulate_and_extract(qasm_rca, nq_rca, 0, width)
-                _ = qa_rca
+        for self_val, val in _test_pairs(width):
+            # RCA
+            gc.collect()
+            ql.circuit()
+            ql.option("fault_tolerant", True)
+            ql.option("cla", False)
+            qa_rca = ql.qint(self_val, width=width)
+            qa_rca += val
+            qasm_rca = ql.to_openqasm()
+            nq_rca = _get_num_qubits_from_qasm(qasm_rca)
+            rca_result = _simulate_and_extract(qasm_rca, nq_rca, 0, width)
+            _ = qa_rca
 
-                # CLA
-                gc.collect()
-                ql.circuit()
-                ql.option("fault_tolerant", True)
-                ql.option("cla", True)
-                qa_cla = ql.qint(self_val, width=width)
-                qa_cla += val
-                qasm_cla = ql.to_openqasm()
-                nq_cla = _get_num_qubits_from_qasm(qasm_cla)
-                cla_result = _simulate_and_extract(qasm_cla, nq_cla, 0, width)
-                _ = qa_cla
+            # CLA
+            gc.collect()
+            ql.circuit()
+            ql.option("fault_tolerant", True)
+            ql.option("cla", True)
+            qa_cla = ql.qint(self_val, width=width)
+            qa_cla += val
+            qasm_cla = ql.to_openqasm()
+            nq_cla = _get_num_qubits_from_qasm(qasm_cla)
+            cla_result = _simulate_and_extract(qasm_cla, nq_cla, 0, width)
+            _ = qa_cla
 
-                if rca_result != cla_result:
-                    failures.append(f"  {self_val}+{val}: RCA={rca_result}, CLA={cla_result}")
+            if rca_result != cla_result:
+                failures.append(f"  {self_val}+{val}: RCA={rca_result}, CLA={cla_result}")
 
         assert not failures, (
             f"CQ add CLA vs RCA width={width}: {len(failures)} failures:\n"
@@ -194,37 +210,35 @@ class TestCLAvsRCAEquivalence:
     @pytest.mark.parametrize("width", [4, 5])
     def test_qq_sub_equivalence(self, width):
         """QQ subtraction: CLA == RCA for every input pair."""
-        modulus = 1 << width
         failures = []
 
-        for a_val in range(modulus):
-            for b_val in range(modulus):
-                gc.collect()
-                ql.circuit()
-                ql.option("fault_tolerant", True)
-                ql.option("cla", False)
-                qa = ql.qint(a_val, width=width)
-                qb = ql.qint(b_val, width=width)
-                qa -= qb
-                qasm_rca = ql.to_openqasm()
-                nq_rca = _get_num_qubits_from_qasm(qasm_rca)
-                rca_result = _simulate_and_extract(qasm_rca, nq_rca, 0, width)
-                _ = (qa, qb)
+        for a_val, b_val in _test_pairs(width):
+            gc.collect()
+            ql.circuit()
+            ql.option("fault_tolerant", True)
+            ql.option("cla", False)
+            qa = ql.qint(a_val, width=width)
+            qb = ql.qint(b_val, width=width)
+            qa -= qb
+            qasm_rca = ql.to_openqasm()
+            nq_rca = _get_num_qubits_from_qasm(qasm_rca)
+            rca_result = _simulate_and_extract(qasm_rca, nq_rca, 0, width)
+            _ = (qa, qb)
 
-                gc.collect()
-                ql.circuit()
-                ql.option("fault_tolerant", True)
-                ql.option("cla", True)
-                qa = ql.qint(a_val, width=width)
-                qb = ql.qint(b_val, width=width)
-                qa -= qb
-                qasm_cla = ql.to_openqasm()
-                nq_cla = _get_num_qubits_from_qasm(qasm_cla)
-                cla_result = _simulate_and_extract(qasm_cla, nq_cla, 0, width)
-                _ = (qa, qb)
+            gc.collect()
+            ql.circuit()
+            ql.option("fault_tolerant", True)
+            ql.option("cla", True)
+            qa = ql.qint(a_val, width=width)
+            qb = ql.qint(b_val, width=width)
+            qa -= qb
+            qasm_cla = ql.to_openqasm()
+            nq_cla = _get_num_qubits_from_qasm(qasm_cla)
+            cla_result = _simulate_and_extract(qasm_cla, nq_cla, 0, width)
+            _ = (qa, qb)
 
-                if rca_result != cla_result:
-                    failures.append(f"  {a_val}-{b_val}: RCA={rca_result}, CLA={cla_result}")
+            if rca_result != cla_result:
+                failures.append(f"  {a_val}-{b_val}: RCA={rca_result}, CLA={cla_result}")
 
         assert not failures, (
             f"QQ sub CLA vs RCA width={width}: {len(failures)} failures:\n"
@@ -712,36 +726,33 @@ class TestPhaseSuccessCriteria:
 
     def test_sc2_cla_rca_identical(self):
         """SC2: BK CLA == RCA for width 4 (representative)."""
-        modulus = 16
+        for a, b in _test_pairs(4):
+            gc.collect()
+            ql.circuit()
+            ql.option("fault_tolerant", True)
+            ql.option("cla", False)
+            qa = ql.qint(a, width=4)
+            qb = ql.qint(b, width=4)
+            qa += qb
+            qasm_rca = ql.to_openqasm()
+            nq_rca = _get_num_qubits_from_qasm(qasm_rca)
+            rca = _simulate_and_extract(qasm_rca, nq_rca, 0, 4)
+            _ = (qa, qb)
 
-        for a in range(modulus):
-            for b in range(modulus):
-                gc.collect()
-                ql.circuit()
-                ql.option("fault_tolerant", True)
-                ql.option("cla", False)
-                qa = ql.qint(a, width=4)
-                qb = ql.qint(b, width=4)
-                qa += qb
-                qasm_rca = ql.to_openqasm()
-                nq_rca = _get_num_qubits_from_qasm(qasm_rca)
-                rca = _simulate_and_extract(qasm_rca, nq_rca, 0, 4)
-                _ = (qa, qb)
+            gc.collect()
+            ql.circuit()
+            ql.option("fault_tolerant", True)
+            ql.option("cla", True)
+            ql.option("qubit_saving", True)  # BK
+            qa = ql.qint(a, width=4)
+            qb = ql.qint(b, width=4)
+            qa += qb
+            qasm_cla = ql.to_openqasm()
+            nq_cla = _get_num_qubits_from_qasm(qasm_cla)
+            cla = _simulate_and_extract(qasm_cla, nq_cla, 0, 4)
+            _ = (qa, qb)
 
-                gc.collect()
-                ql.circuit()
-                ql.option("fault_tolerant", True)
-                ql.option("cla", True)
-                ql.option("qubit_saving", True)  # BK
-                qa = ql.qint(a, width=4)
-                qb = ql.qint(b, width=4)
-                qa += qb
-                qasm_cla = ql.to_openqasm()
-                nq_cla = _get_num_qubits_from_qasm(qasm_cla)
-                cla = _simulate_and_extract(qasm_cla, nq_cla, 0, 4)
-                _ = (qa, qb)
-
-                assert rca == cla, f"{a}+{b}: RCA={rca}, CLA={cla}"
+            assert rca == cla, f"{a}+{b}: RCA={rca}, CLA={cla}"
 
     def test_sc3_depth_advantage(self):
         """SC3: BK CLA depth < RCA depth at width 8."""

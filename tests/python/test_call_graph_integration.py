@@ -248,7 +248,25 @@ class TestCompileMixedOperations:
             )
 
     def test_compile_produces_frozen_dag(self):
-        """DAG is frozen after capture via @ql.compile."""
+        """DAG is frozen after capture via @ql.compile (non-opt=1)."""
+        ql.circuit()
+
+        @ql.compile(opt=0)
+        def inc_both(x, y):
+            x += 1
+            y += 1
+            return x
+
+        a = qint(0, width=4)
+        b = qint(0, width=4)
+        inc_both(a, b)
+
+        dag = inc_both.call_graph
+        assert dag is not None
+        assert dag.frozen
+
+    def test_opt1_dag_not_frozen(self):
+        """opt=1 DAGs are not frozen (accumulate across calls)."""
         ql.circuit()
 
         @ql.compile(opt=1)
@@ -263,7 +281,7 @@ class TestCompileMixedOperations:
 
         dag = inc_both.call_graph
         assert dag is not None
-        assert dag.frozen
+        assert not dag.frozen
 
     def test_graph_unchanged_after_replay(self):
         """Node count and edge list are unchanged after replay."""
@@ -604,8 +622,8 @@ class TestEndToEnd:
         assert agg["gates"] > 0
         assert agg["qubits"] > 0
 
-        # 4. Graph is frozen
-        assert dag.frozen
+        # 4. Graph exists (opt=1 does not freeze; see test_opt1_dag_not_frozen)
+        assert dag.node_count > 0
 
         # 5. Edge structure: at least some execution-order edges
         edges = _exec_edges(dag)

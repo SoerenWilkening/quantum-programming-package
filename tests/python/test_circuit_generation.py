@@ -103,8 +103,8 @@ def test_tic_tac_toe_pattern():
     - Arithmetic operations
     """
     # Create grid (simplified - just 2x2 instead of 3x3)
-    assigned = ql.array((2, 2), dtype=ql.qbool)
-    unoccupied = ql.array((2, 2), dtype=ql.qbool)
+    assigned = ql.array(dim=(2, 2), dtype=ql.qbool)
+    unoccupied = ql.array(dim=(2, 2), dtype=ql.qbool)
 
     # Initialize unoccupied to True
     for i in range(2):

@@ -1,11 +1,27 @@
 """Pytest configuration and fixtures for quantum language testing."""
 
+import gc
 import re
 
 import pytest
 
 # Clean import - package installed via pip install -e .
 import quantum_language as ql
+
+# ---------------------------------------------------------------------------
+# Memory management: force GC every N tests to stay within container limits
+# ---------------------------------------------------------------------------
+_test_counter = 0
+_GC_EVERY = 50  # run full GC every 50 tests
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_teardown(item, nextitem):
+    """Force garbage collection periodically to prevent OOM in constrained containers."""
+    global _test_counter
+    _test_counter += 1
+    if _test_counter % _GC_EVERY == 0:
+        gc.collect()
 
 
 @pytest.fixture
