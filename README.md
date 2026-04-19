@@ -280,6 +280,14 @@ matrix = ql.array((3, 3))  # 3x3 matrix of qint()
 matrix[0][0] = ql.qint(5, width=8)
 ```
 
+### Quantum walk skill
+Using /quantum-walk in a Claude code session, Claude automatically generates the script for general quantum walks, based on a discussion with the user about the problem
+
+<video width="640" height="360" controls>
+  <source src="quantum_walk.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
 ## Performance
 
 **Benchmark: 16-bit Quantum Adder**
@@ -323,18 +331,6 @@ Contributions welcome! Areas for improvement:
 - More quantum algorithms (Grover, phase estimation)
 - Alternative output formats (Quil, QASM 3.0)
 - Quantum control flow constructs (if/else, loops)
-
-### Git Flow Workflow
-
-This project uses **Git Flow** for version control:
-
-```
-main ─────●─────────────●─────────────●───── (releases only)
-          │             │             │
-develop ──┴──●──●──●────┴──●──●──●────┴───── (integration)
-             │     │          │
-feature/* ───┴─────┴──────────┴────────────── (your work)
-```
 
 **For contributors:**
 
