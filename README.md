@@ -281,12 +281,11 @@ matrix[0][0] = ql.qint(5, width=8)
 ```
 
 ### Quantum walk skill
-Using /quantum-walk in a Claude code session, Claude automatically generates the script for general quantum walks, based on a discussion with the user about the problem
+Using /quantum-walk in a Claude code session, Claude automatically generates the script for general quantum walks, based on a discussion with the user about the problem.
 
-<video width="640" height="360" controls>
-  <source src="quantum_walk.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+
+
+
 
 ## Performance
 
